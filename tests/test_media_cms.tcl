@@ -13,6 +13,7 @@ namespace eval ::mediaCmsTest {
         cmsTest eval {namespace eval ::util {proc source {args} {}}}
         # The headless interpreter has no options persistence service.
         cmsTest eval {namespace eval ::options {proc hookWriter {args} {}}}
+        cmsTest eval [list source [file join $sourceDir actions.tcl]]
         cmsTest eval [list source [file join $sourceDir app-media.tcl]]
     }
 

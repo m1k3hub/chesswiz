@@ -223,7 +223,7 @@ tcltest::test plan-accept-runs-all-steps {three calls run in order after one con
 		set ::scidb::test::plan::Queue [list \
 			[::scidb::test::plan::reply [::scidb::test::plan::calls \
 				{test.plan.one test.plan.two test.plan.three}]] \
-			[::scidb::test::plan::prose "all three done"]]
+			[::scidb::test::plan::prose "ok three"]]
 		set ::scidb::test::plan::ConfirmAnswer 1
 		set done [::scidb::test::plan::Run "run the three steps"]
 		set plan [::scidb::test::plan::event plan]
@@ -239,7 +239,9 @@ tcltest::test plan-accept-runs-all-steps {three calls run in order after one con
 		::scidb::test::plan::forget test.plan.one test.plan.two test.plan.three
 		set result
 	}
-} -result {1 {one two three} 1 2 {all three done} 1 1 0 0}
+} -result {1 {one two three} 1 2 {ok one
+ok two
+ok three} 1 1 0 0}
 
 tcltest::test plan-decline-runs-nothing {declining the plan runs no handler} -body {
 	::scidb::test::plan::isolated {
@@ -292,11 +294,12 @@ tcltest::test plan-failure-stops-the-chain {a failing step keeps the earlier eff
 		}
 		set result [list $done $::scidb::test::plan::Ran \
 			[string match {*Stopped at step 2*} [::scidb::test::plan::event error]] \
-			$skipped $::action::PlanGate]
+			$skipped $::action::PlanGate \
+            [string match {*remaining step could not be completed*} [dict get [lindex $::application::assistant::Priv(messages) end] content]]]
 		::scidb::test::plan::forget test.plan.one test.plan.bad test.plan.three
 		set result
 	}
-} -result {1 {one bad} 1 1 0}
+} -result {1 {one bad} 1 1 0 1}
 
 # ----------------------------------------------------------------------
 # A step that ends in a dialog pauses the chain until it closes.
@@ -329,7 +332,7 @@ tcltest::test plan-async-step-is-awaited {a Later step parks the chain until Res
 		set ::scidb::test::plan::Queue [list \
 			[::scidb::test::plan::reply [::scidb::test::plan::calls \
 				{test.plan.slow test.plan.next}]] \
-			[::scidb::test::plan::prose "async done"]]
+			[::scidb::test::plan::prose "late result for slow"]]
 		set done [::scidb::test::plan::Run "run the async steps"]
 		set gap [expr {[lindex $::scidb::test::plan::Times 1] - [lindex $::scidb::test::plan::Times 0]}]
 		set result [list $done $::scidb::test::plan::Ran [expr {$gap >= 100}] \
@@ -337,7 +340,8 @@ tcltest::test plan-async-step-is-awaited {a Later step parks the chain until Res
 		::scidb::test::plan::forget test.plan.slow test.plan.next
 		set result
 	}
-} -result {1 {slow next} 1 {async done}}
+} -result {1 {slow next} 1 {late result for slow
+ok next}}
 
 # ----------------------------------------------------------------------
 # Too many rounds.
@@ -355,5 +359,21 @@ tcltest::test plan-too-many-rounds {the round limit stops with a plain message} 
 		set result
 	}
 } -result {1 8 8 1}
+
+tcltest::test plan-withdrawn-window-does-not-pause {a hidden utility window cannot park the next tool} -body {
+	set before [::application::assistant::PlanWindows]
+	toplevel .planHidden
+	wm withdraw .planHidden
+	set ::scidb::test::plan::HiddenExpired 0
+	set timer [after 200 {
+		set ::scidb::test::plan::HiddenExpired 1
+		destroy .planHidden
+	}]
+	::application::assistant::PlanWaitForDialog $before
+	set result [list $::scidb::test::plan::HiddenExpired [winfo exists .planHidden]]
+	after cancel $timer
+	catch {destroy .planHidden}
+	set result
+} -result {0 1}
 
 tcltest::cleanupTests

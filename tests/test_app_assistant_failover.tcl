@@ -56,11 +56,17 @@ tcltest::test assistant-attempt-deadline {each attempt is bounded, shorter deadl
 	array set ::ai::provider::Config $savedConfig
 } -result {30000 120000 75 0}
 
-tcltest::test assistant-unavailable-status {provider details stay out of the short unavailable status} -body {
+tcltest::test assistant-unavailable-status {provider details stay out of the short unavailable status} -setup {
+ set savedPriv [array get ::application::assistant::Priv]
+ array set ::application::assistant::Priv {observer {} turnResults {} internalReplies {} resultFacts {} lastFacts {} turnRefusal {} prohibitedAnalysis 0}
+} -body {
 	::application::assistant::clear
 	::application::assistant::Finish {ok 0 down 1 summary {Gemini: HTTP 503} error {very long service diagnostics}} 0
 	set text [$::application::assistant::Priv(text) get 1.0 end]
 	list [string match {*Gemini: HTTP 503*} $text] [string match {*very long service diagnostics*} $text]
+} -cleanup {
+ array unset ::application::assistant::Priv
+ array set ::application::assistant::Priv $savedPriv
 } -result {1 0}
 
 tcltest::cleanupTests

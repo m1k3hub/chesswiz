@@ -1694,6 +1694,30 @@ proc ::scidb::test::dlgplace::nativeMinimum {dlg} {
     puts "W9H native=$frame overlap=$measured minimum=$minimum candidates=$areas"
     require [expr {$measured == $minimum}] "native overlap $measured != minimum $minimum"
 }
+proc ::scidb::test::dlgplace::pairReady {dialogs} {
+    set deadline [expr {[clock milliseconds]+5000}]
+    set previous {}
+    set stableSince [clock milliseconds]
+    while {[clock milliseconds] < $deadline} {
+        # A playing video continuously queues events. An unbounded update
+        # can stay inside placement callbacks forever and defeat this
+        # fixture's five-second deadline. Yield to a timer instead.
+        waitFor 1
+        set state [list [::scidb::tk::wm frame .application] [boardRect]]
+        foreach dialog $dialogs { lappend state [::scidb::tk::wm frame $dialog] }
+        set pending $::application::Vars(loading)
+        foreach variable {::application::board::Vars(after) ::application::reflow::S(afterId)} {
+            if {[info exists $variable] && [set $variable] ne {} && ![catch {after info [set $variable]}]} {set pending 1}
+        }
+        if {$pending || $state ne $previous} {
+            set stableSince [clock milliseconds]
+            set previous $state
+        } elseif {[clock milliseconds]-$stableSince >= 200} {return}
+        waitFor 20
+    }
+    error {dialog deadline fixture did not settle within 5 seconds}
+}
+
 tcltest::test dlg-w9h-native-deadline {Engine Match native minimum and single settled replan by 500ms} -setup {
     ::scidb::test::dlgplace::setupBoard
     catch {wm minsize .application 1 1}
@@ -1709,6 +1733,7 @@ tcltest::test dlg-w9h-native-deadline {Engine Match native minimum and single se
         restore {wm attributes .application -zoomed 0}
         resize {wm geometry .application [::scidb::test::dlgplace::fitGeometry 0.96 0.88]}
     } {
+        ::scidb::test::dlgplace::pairReady [list $dlg]
         set seq $::util::place::BesideRecordSeq
         set start [clock milliseconds]
         eval $script
@@ -1773,6 +1798,10 @@ tcltest::test dlg-w9i-unmap-during-plan {helper returns a plan when a pending un
     ::scidb::test::dlgplace::realCleanup
 } -result {0 center}
 
+# Start each deadline measurement from a settled fixture. Under host load,
+# an elapsed sleep does not establish that the WM/board have consumed their
+# queued work. This wait is bounded and precedes the measured user trigger.
+
 # Exercise the reported pair after both dialogs have measured native frames.
 tcltest::test dlg-w9i-pair-deadline {both playing dialogs record and settle before 500ms} -setup {
     ::scidb::test::dlgplace::setupBoard
@@ -1792,6 +1821,7 @@ tcltest::test dlg-w9i-pair-deadline {both playing dialogs record and settle befo
         restore {wm attributes .application -zoomed 0}
         resize {wm geometry .application [::scidb::test::dlgplace::fitGeometry 0.93 0.90]}
     } {
+        ::scidb::test::dlgplace::pairReady $ds
         set seq $::util::place::BesideRecordSeq
         set start [clock milliseconds]
         eval $script

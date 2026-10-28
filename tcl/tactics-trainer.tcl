@@ -257,6 +257,7 @@ proc ::tactics::render {} {
     set selected ""
     if {$session eq ""} { return }
     set c [Body].board
+    if {![winfo exists $c]} { return }
     $c delete all
     set cell [expr {[$c cget -width] / 8}]
     set row 0
@@ -322,4 +323,41 @@ proc ::tactics::open {{parent .application}} {
     grid [Body].score -row 5 -column 0 -columnspan 3 -pady 1
     # Keep the main board visible and register for subsequent layout changes.
     ::util::place::besideBoard .tactics $parent
+}
+
+# Dialog-free counterpart of the puzzle controls. Parsing and chess facts stay
+# in the same native-backed trainer functions used by the visible window.
+proc ::tactics::runOperation {arguments} {
+    variable puzzles; variable queue; variable session; variable move
+    switch -- [dict get $arguments operation] {
+        open {
+            set filename [dict get $arguments filename]
+            if {$filename eq ""} { return [open .application] }
+            set loaded [loadPGN $filename]
+            if {$session ne "" && [dict get $session state] eq "playing"} { finish failed }
+            set puzzles $loaded; set queue [ordered $puzzles]; set session {}
+            next
+        }
+        move {
+            set san [dict get $arguments move]
+            if {$san eq ""} { return [open .application] }
+            if {$session eq ""} { error "no puzzle is active" }
+            set move $san
+            submit
+        }
+        retry {
+            if {$session eq "" || [dict get $session state] ne "wrong"} { error "no wrong move to retry" }
+            retry
+        }
+        solution {
+            if {$session eq ""} { error "no puzzle is active" }
+            showSolution
+        }
+        next {
+            if {![llength $puzzles]} { error "no puzzles loaded" }
+            next
+        }
+        status { return $session }
+    }
+    return $session
 }

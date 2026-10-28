@@ -4596,7 +4596,7 @@ proc TraverseFolders {w} {
 }
 
 
-proc DeleteFile {w} {
+proc DeleteFile {w {confirmed 0}} {
 	variable [namespace parent]::${w}::Vars
 
 	set t $Vars(widget:list:file)
@@ -4674,7 +4674,7 @@ proc DeleteFile {w} {
 	set fmt [Tr ${which}($type,$mode)]
 	set msg [format $fmt [file tail $dest]]
 	foreach item [$t item children root] { $t item state set $item {!hilite} }
-	set reply [::dialog::question -parent $Vars(widget:main) -message $msg -default no]
+	if {$confirmed} { set reply yes } else { set reply [::dialog::question -parent $Vars(widget:main) -message $msg -default no] }
 	after idle [list [namespace parent]::Stimulate $w]
 
 	if {$reply ne "yes" } {
@@ -4756,17 +4756,22 @@ proc GetCurrentSelection {w} {
 # }
 
 
-proc RenameFile {w} {
+proc RenameFile {w {name ""}} {
 	variable [namespace parent]::${w}::Vars
 
 	lassign [GetCurrentSelection $w] type sel Vars(edit:file)
 	if {$type eq "folder" || ![[namespace parent]::CheckIfInUse $w $Vars(edit:file) rename]} {
+        if {$name ne ""} {
+            set result [FinishRenameFile $w $sel $name 1]
+            RefreshFileList $w
+            return $result
+        }
 		OpenEdit $w $sel rename
 	}
 }
 
 
-proc DuplicateFile {w} {
+proc DuplicateFile {w {name ""}} {
 	variable [namespace parent]::DuplicateFileSizeLimit
 	variable [namespace parent]::${w}::Vars
 
@@ -4778,6 +4783,11 @@ proc DuplicateFile {w} {
 		return
 	}
 	set Vars(edit:file) $file
+    if {$name ne ""} {
+        set result [FinishDuplicateFile $w 0 $name 1]
+        RefreshFileList $w
+        return $result
+    }
 	set dir [file dirname $file]
 	set newFile [file join $dir [format [Tr CopyOf] [file tail $file]]]
 	while {[file exists $newFile]} {
@@ -4818,8 +4828,15 @@ proc DuplicateFile {w} {
 }
 
 
-proc NewFolder {w} {
+proc NewFolder {w {name ""}} {
 	variable [namespace parent]::${w}::Vars
+    if {$name ne ""} {
+        set folder [file join $Vars(folder) $name]
+        if {[file exists $folder]} { error "folder already exists" }
+        file mkdir $folder
+        RefreshFileList $w
+        return $folder
+    }
 
 	lassign [GetCurrentSelection $w] _ _ Vars(edit:file)
 	set t $Vars(widget:list:file)
@@ -4934,7 +4951,7 @@ proc FinishEdit {w} {
 }
 
 
-proc FinishRenameFile {w sel name} {
+proc FinishRenameFile {w sel name {direct 0}} {
 	variable [namespace parent]::${w}::Vars
 
 	set name [string trim $name]
@@ -4954,6 +4971,7 @@ proc FinishRenameFile {w sel name} {
 	if {![[namespace parent]::CheckPath $w $name]} { return $oldName }
 
 	if {[file exists $newName]} {
+		if {$direct} { error [format [Tr CannotRename] $name] }
 		::dialog::error -parent $Vars(widget:main) -message [format [Tr CannotRename] $name]
 		return $oldName
 	}
@@ -4993,6 +5011,7 @@ proc FinishRenameFile {w sel name} {
 			set msg [Tr ErrorRenaming($type)]
 			set msg [string map [list %old [file tail $old] %new [file tail $new]] $msg]
 		}
+		if {$direct} { error $msg }
 		::dialog::error -parent $Vars(widget:main) -message $msg
 		return $oldName
 	}
@@ -5001,7 +5020,7 @@ proc FinishRenameFile {w sel name} {
 }
 
 
-proc FinishDuplicateFile {w sel name} {
+proc FinishDuplicateFile {w sel name {direct 0}} {
 	variable [namespace parent]::${w}::Vars
 
 	set name [string trim $name]
@@ -5029,12 +5048,14 @@ proc FinishDuplicateFile {w sel name} {
 
 	if {[llength $files] == 0} {
 		set msg [format [Tr InvalidFileExt] $name]
+		if {$direct} { error $msg }
 		::dialog::error -parent $Vars(widget:main) -message $msg
 		return $srcFile
 	}
 
 	foreach {_ f} $files {
 		if {[file exists $f]} {
+			if {$direct} { error [format [Tr CannotCopy] [file tail $f]] }
 			::dialog::error -parent $Vars(widget:main) -message [format [Tr CannotCopy] [file tail $f]]
 			return $srcFile
 		}
@@ -5063,8 +5084,9 @@ proc FinishDuplicateFile {w sel name} {
 				destroy $dlg
 				set msg [format [Tr CopyFailed] [file tail $f]]
 				foreach f $newFiles { catch { file delete -force $f } }
-				::dialog::error -parent $Vars(widget:main) -message $msg
 				[namespace parent]::unbusy $dlg
+				if {$direct} { error $msg }
+				::dialog::error -parent $Vars(widget:main) -message $msg
 				return $srcFile
 			} else {
 				catch { ::platform::sys::touch $g }

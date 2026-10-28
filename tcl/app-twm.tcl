@@ -721,6 +721,26 @@ proc deleteLayout {twm name parent layoutVariant} {
 		return 0
 	}
 
+	return [deleteNamedLayout $twm $name $layoutVariant]
+}
+
+
+# Dialog-free persistence helpers shared by the assistant and native dialogs.
+# Names are basenames, never paths (including on the other supported OS).
+proc checkLayoutName {name} {
+	if {[string trim $name] eq "" || $name in {. ..} ||
+		[regexp {[\\/:*?"<>|\x00-\x1f]} $name] || [string index $name end] in {. { }}} {
+		error "invalid layout name"
+	}
+	return $name
+}
+
+
+proc deleteNamedLayout {twm name layoutVariant} {
+	variable [namespace parent]::Vars
+	variable Options
+	variable layoutVariants
+	checkLayoutName $name
 	set id $Vars($twm:id)
 	set filename [makeFilename $id $layoutVariant $name]
 	file delete $filename
@@ -1177,6 +1197,7 @@ proc makeLayoutMenu {twm menu {w ""}} {
 			::theme::configureRadioEntry $menu.size
 		}
 	}
+	if {[llength [info commands ::menu::WireLayoutMenu]]} { ::menu::WireLayoutMenu $twm $menu }
 }
 
 
@@ -1725,6 +1746,27 @@ proc RenameLayout {twm oldName parent - - names} {
 		if {[string length $oldName]} { set name_ "" }
 		return 0
 	}
+	return [renameNamedLayout $twm $oldName $newName 1]
+}
+
+
+proc renameNamedLayout {twm oldName newName {overwrite 0}} {
+	variable [namespace parent]::Vars
+	variable layoutVariants
+	variable Options
+	checkLayoutName $oldName
+	checkLayoutName $newName
+	if {$oldName eq $newName} { return 1 }
+	set id $Vars($twm:id)
+	set found 0
+	# Check every target before moving any variant.
+	foreach v $layoutVariants {
+		if {[file exists [makeFilename $id $v $oldName]]} { set found 1 }
+		if {!$overwrite && [file exists [makeFilename $id $v $newName]]} {
+			error "layout already exists; supply overwrite true: $newName"
+		}
+	}
+	if {!$found} { error "layout does not exist: $oldName" }
 
 	foreach layoutVariant $layoutVariants {
 		set source [makeFilename $id $layoutVariant $oldName]
@@ -1744,6 +1786,29 @@ proc RenameLayout {twm oldName parent - - names} {
 		set Options($id:layout:name) $newName
 	}
 	return 1
+}
+
+
+proc saveNamedLayout {twm name {overwrite 0}} {
+	variable [namespace parent]::Vars
+	variable Options
+	checkLayoutName $name
+	set id $Vars($twm:id)
+	set variant [CurrentLayoutVariant $id]
+	set variants [list $variant]
+	if {$variant ne "normal" && ![file exists [makeFilename $id normal $name]]} {
+		set variants [linsert $variants 0 normal]
+	}
+	foreach v $variants {
+		if {!$overwrite && [file exists [makeFilename $id $v $name]]} {
+			error "layout already exists; supply overwrite true: $name"
+		}
+	}
+	foreach v $variants {
+		if {![WriteLayout $twm $id $name $v]} { error "could not save layout: $name" }
+	}
+	set Options($id:layout:name) $name
+	return $name
 }
 
 

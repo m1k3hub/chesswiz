@@ -57,6 +57,8 @@ proc ::scidb::test::whylose::stub {name args body} {
 }
 proc ::scidb::test::whylose::setup {} {
 	captureAsync
+	# Engine/prose tests supply a covered request; missing coverage is tested separately.
+	stub ::ai::systemone::chooseManySync {args} {return {coverage supported}}
 	variable plies
 	variable transcript {}
 	variable searches {}
@@ -203,11 +205,14 @@ tcltest::test whylose-black {auto selects Black from result; signs and numbering
 	list [string match {*1...e5*Black*slightly better to slightly worse*} $text] [string match {*preferred 1...Nc3*} $text] [string match {*3.e4*} $text]
 } -cleanup {::scidb::test::whylose::cleanup} -result {1 1 0}
 
-tcltest::test whylose-prose {normal model final is delivered after async analysis} -setup {
+tcltest::test whylose-prose {async analysis uses deterministic coaching instead of an unsupported definite claim} -setup {
 	::scidb::test::whylose::setup
-} -body {::scidb::test::whylose::run white {The main turning point was 3.e4.}} -cleanup {
+} -body {
+    set text [::scidb::test::whylose::run white {The main turning point was 3.e4.}]
+    list [expr {$text eq [::application::assistant::ResultFactsProse $::application::assistant::Priv(resultFacts)]}] [string match {*main turning point was*} $text]
+} -cleanup {
 	::scidb::test::whylose::cleanup
-} -result {The main turning point was 3.e4.}
+} -result {1 0}
 
 tcltest::test whylose-engine-failure {engine failure still yields partial facts and a written answer} -setup {
 	::scidb::test::whylose::setup

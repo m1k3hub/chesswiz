@@ -236,17 +236,18 @@ tcltest::test engines-analysis-waits {engine_analysis with seconds answers later
 	set messages $::application::assistant::Priv(messages)
 	set tool [lindex $messages end-1]
 	set facts [dict get $tool content]
-	# An empty model answer must fall back to the actual tool result, rather
-	# than supply a chess verdict unrelated to the engine's current score.
+	# The transcript hides protocol chatter. An empty model answer must
+	# return the complete engine result verbatim, including its score and
+	# PV, without inventing an assessment or replacing it with a refusal.
+	set expected $facts
 	list $waiting \
 		[lmap message $messages { dict get $message role }] \
 		[dict get $tool tool_name] \
 		[string match "Board position: *depth*" $facts] \
-		[expr {0 <= [string first "engine_analysis: (working...)" $text]
-			&& [string first "engine_analysis: (working...)" $text]
-			< [string first "engine_analysis: $facts" $text]}] \
-		[expr {[dict get [lindex $messages end] content]
-			eq "The model returned no explanation. Here is what the tool found:\n$facts"}]
+		[expr {[string first "engine_analysis: (working...)" $text] < 0
+			&& [string first "engine_analysis: $facts" $text] < 0}] \
+		[expr {[dict get [lindex $messages end] content] eq $expected
+			&& [string first $expected $text] >= 0}]
 } -cleanup {
 	array set $cfg $saved
 	::application::assistant::clear

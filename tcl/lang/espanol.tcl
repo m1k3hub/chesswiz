@@ -3686,4 +3686,9 @@
 ::context::mc::c12_paste_game "Partida"
 ::context::mc::c12_merge_game "Partida"
 
+### application::assistant::panel ###################################
+::application::assistant::panel::mc::StartupGreeting	"Puedo manejar Chesswiz por usted. Elija una sugerencia abajo o pregunte con sus propias palabras."
+::application::assistant::panel::mc::Hide	"Ocultar"
+::application::assistant::panel::mc::NoModelHint	"Todav\u00eda no hay un modelo conectado. Abra Herramientas > Elegir modelo\u2026 para conectar uno; las sugerencias de arriba funcionan sin \u00e9l."
+
 # vi:set ts=3 sw=3:

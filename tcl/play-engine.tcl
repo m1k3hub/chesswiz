@@ -1134,6 +1134,7 @@ proc ::playengine::NewGame {} {
 
 proc ::playengine::Status {text} {
 	variable Priv
+	set Priv(statusText) $text
 	if {[DialogExists]} {
 		$Priv(widget:status) configure -text $text
 	}

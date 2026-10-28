@@ -39,6 +39,7 @@ tcltest::test media-no-guessed-timing {missing timestamps never advance the boar
 # app-media registers its options writer at source time; this headless
 # interpreter has no options persistence service.
 syncTest eval {namespace eval ::options {proc hookWriter {args} {}}}
+syncTest eval [list source [file join [file dirname $syncSource] actions.tcl]]
 syncTest eval [list source [file join [file dirname $syncSource] app-media.tcl]]
 syncTest eval {
     namespace eval ::application::media {

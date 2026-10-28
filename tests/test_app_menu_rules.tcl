@@ -330,7 +330,7 @@ tcltest::test rules-pane-and-report {R12 floating pane and R13 absent report sur
 	# R13: the report surface is absent when the module is absent.
 	::capability::Override report 0
 	lappend result [::context::Visible c9.report.font [dict create paneUid report]]
-	lappend result [::context::Visible c9.report.print [dict create paneUid report]]
+	lappend result [::context::Visible c9.report.size [dict create paneUid report]]
 	::capability::ClearOverrides
 	lappend result [::context::Visible c9.report.font [dict create paneUid report]]
 	puts "  R12/R13 [join $result { }]"
@@ -438,6 +438,7 @@ tcltest::test rules-module-absent-all-surfaces {no surface shows an action of an
 	puts "VAL-RULE-003: [llength [dict keys $::capability::Modules]] declared modules, [llength $rows] gated rows in [llength $modules] modules, [llength $leaks] leaks"
 	foreach l $leaks { puts "  LEAK [join $l { }]" }
 	list [llength $leaks] [llength $rows]
-} -result {0 44}
+# Approved unsupported-leaf removal leaves 43 gated rows; zero leaks remains mandatory.
+} -result {0 43}
 
 tcltest::cleanupTests

@@ -748,15 +748,21 @@ proc ::menu::Register {id label {accel ""} {visible ""} {enabled ""} {order ""}}
 		if {$accel ne ""} { dict set rec keys [list {} $accel] }
 		if {$visible ne ""} { dict set rec visible $visible }
 		if {$enabled ne ""} { dict set rec enabled $enabled }
+		if {$id eq "app-quit"} { dict set rec confirm 1 }
 		dict set ::action::Registry $id $rec
 		return
 	}
+	# Quitting loses the open databases and the session; a click asks
+	# nothing, but the assistant route (direct call or run_action) must
+	# have the user's go-ahead.
+	set confirm [expr {$id eq "app-quit" ? 1 : 0}]
 	::action::register $id [dict create \
 		label    $label \
 		object   {} \
 		args     {} \
 		handler  [list ::menu::Invoke $id] \
 		what     $label \
+		confirm  $confirm \
 		ai       0 \
 		keys     [list {} $accel] \
 		menu     $order \
@@ -1404,10 +1410,132 @@ proc ::menu::TogglePaneId {suffix} {
 	if {![PaneOpenable $suffix]} { return "error: [PaneReason $suffix]" }
 	set uid [PaneLayoutUid $suffix]
 	if {$uid eq ""} { return 0 }
+	# The assistant panel remembers whether it should appear at startup:
+	# hiding it (View > Panes, one-click Hide) clears the option, reopening
+	# it sets the option again (VAL-AI-011).
+	if {$suffix eq "assistant"} {
+		catch { ::application::assistant::panel::SetEnabled [expr {![PaneChecked $suffix]}] }
+	}
 	set result [TogglePane $twm $uid]
 	update idletasks
 	SyncPaneCheck $suffix
 	return $result
+}
+
+# Dynamic values are arguments, rather than scripts stored in the registry.
+# Register before any menu is opened so the assistant can use these directly.
+proc ::menu::RegisterDynamicActions {} {
+	foreach {id label spec} {
+		menu.view.theme {Set interface theme} {{name {type string required 1 description {Installed theme name}}}}
+		menu.view.colors {Set interface color scheme} {{name {type string enum {dark lite} required 1}}}
+		menu.view.icon_size {Set toolbar icon size} {{name {type string enum {small medium large} required 1}}}
+		menu.view.language {Set interface language} {{name {type string required 1 description {Language name or language code}}}}
+		menu.view.layout.fold {Fold or unfold all titlebars} {{fold {type boolean required 1}}}
+		menu.view.layout.pane {Toggle layout pane} {{uid {type string required 1 description {Layout pane identifier}}}}
+		menu.view.layout.load {Restore named layout} {{name {type string required 1}}}
+		menu.view.layout.arrow_size {Set docking arrow size} {{pixels {type integer enum {16 24 32} required 1}}}
+		menu.view.layout.docking {Show docking points} {{show {type boolean required 1}}}
+	} {
+		if {[dict exists $::action::Registry $id]} { continue }
+		::action::register $id [dict create label $label object {} args $spec \
+			handler [list ::menu::RunDynamic $id] what $label doc $label \
+			ai 0 operator 1 dropdown 09.950]
+	}
+}
+
+proc ::menu::RunDynamic {id arguments} {
+	switch -- $id {
+		menu.view.colors { set ::colors::Scheme [dict get $arguments name]; return $::colors::Scheme }
+		menu.view.icon_size { set ::toolbar::Options(icons:size) [dict get $arguments name]; return $::toolbar::Options(icons:size) }
+		menu.view.layout.arrow_size { set ::twm::Options(cross:size) [dict get $arguments pixels]; return $::twm::Options(cross:size) }
+		menu.view.theme {
+			set name [dict get $arguments name]
+			if {$name ni [ttk::style theme names] || $name eq "classic"} { return "error: unknown theme '$name'" }
+			::theme::setTheme $name
+			return [::theme::currentTheme]
+		}
+		menu.view.language {
+			set name [dict get $arguments name]
+			set valid 0
+			foreach language $::i18n::languages {
+				if {$name in [lrange $language 0 1]} { set valid 1; break }
+			}
+			if {!$valid} { return "error: unknown language '$name'" }
+			return [SwitchLanguage $name]
+		}
+	}
+	set twm [CurrentTWM]
+	if {$twm eq ""} { return "error: no layout selected" }
+	switch -- $id {
+		menu.view.layout.fold {
+			set selector [expr {[dict get $arguments fold] ? "!flat" : "flat"}]
+			set frames [$twm collect $selector]
+			if {[llength $frames]} { $twm togglebar {*}$frames }
+			return [llength $frames]
+		}
+		menu.view.layout.pane {
+			set uid [dict get $arguments uid]
+			set layoutId $::application::Vars($twm:id)
+			array set opts $::application::Vars($layoutId:init:options)
+			if {$uid ni [$twm leaves] && ![info exists opts($uid)]} { return "error: unknown pane '$uid'" }
+			::application::twm::ChangeState $twm $uid
+			return [$twm isdocked $uid]
+		}
+		menu.view.layout.load {
+			set name [dict get $arguments name]
+			set layoutId $::application::Vars($twm:id)
+			if {$name ni [::application::twm::glob $layoutId]} { return "error: unknown layout '$name'" }
+			return [::application::twm::loadLayout $twm $name]
+		}
+		menu.view.layout.docking {
+			set layoutId $::application::Vars($twm:id)
+			set ::application::twm::Options($layoutId:docking:showall) [dict get $arguments show]
+			::application::twm::ShowAllDockingPoints $twm
+			return [dict get $arguments show]
+		}
+	}
+	return "error: unknown display operation"
+}
+
+# Preserve the native layout builder's labels, check variables and state.
+# Only replace recognised callbacks; unknown operations stay visible to the
+# strict coverage walk, rather than being silently classified as mapped.
+proc ::menu::WireLayoutMenu {twm menu} {
+	set n [$menu index end]
+	if {$n eq "none"} { return }
+	for {set i 0} {$i <= $n} {incr i} {
+		set type [$menu type $i]
+		if {$type eq "cascade"} {
+			WireLayoutMenu $twm [$menu entrycget $i -menu]
+			continue
+		}
+		if {$type ni {command checkbutton radiobutton}} { continue }
+		set cmd [$menu entrycget $i -command]
+		if {[lindex $cmd 0] eq "::namespace" && [lindex $cmd 1] eq "inscope"} { set cmd [lindex $cmd 3] }
+		set op [namespace tail [lindex $cmd 0]]
+		set action ""
+		if {$type eq "radiobutton" && [$menu entrycget $i -variable] eq "::twm::Options(cross:size)"} {
+			set action [list ::action::run menu.view.layout.arrow_size [dict create pixels [$menu entrycget $i -value]]]
+		}
+		switch -- $op {
+			togglebar {
+				if {[lindex $cmd 0] ne $twm} { continue }
+			}
+			ChangeState { set action [list ::action::run menu.view.layout.pane [dict create uid [lindex $cmd 2]]] }
+			loadLayout { set action [list ::action::run menu.view.layout.load [dict create name [lindex $cmd 2]]] }
+			SaveLayout { set action [list ::action::run menu.view.layout.save] }
+			open { if {[lindex $cmd 0] eq "::application::layout::open"} { set action [list ::action::run menu.view.layout.manage] } }
+			ShowAllDockingPoints {
+				set var [$menu entrycget $i -variable]
+				set action [format {::action::run menu.view.layout.docking [dict create show $%s]} $var]
+			}
+		}
+		if {[lindex $cmd 0] eq $twm && [lindex $cmd 1] eq "togglebar" && $type eq "command"} {
+			set fold [expr {[string trim [$menu entrycget $i -label]] eq $::application::twm::mc::FoldAllTitleBars}]
+			set action [list ::action::run menu.view.layout.fold [dict create fold $fold]]
+		}
+		if {$action ne ""} { $menu entryconfigure $i -command $action }
+	}
 }
 
 proc ::menu::FillTheme {menu} {
@@ -1420,7 +1548,7 @@ proc ::menu::FillTheme {menu} {
 		lassign [AmpText $style] text ul
 		$menu add radiobutton -label $text -underline $ul \
 			-variable ::menu::Theme -value $style \
-			-command [list ::theme::setTheme $style]
+			-command [list ::action::run menu.view.theme [dict create name $style]]
 		::theme::configureRadioEntry $menu
 	}
 }
@@ -1428,11 +1556,13 @@ proc ::menu::FillTheme {menu} {
 proc ::menu::FillColors {menu} {
 	lassign [AmpText [set ::menu::mc::OrdinaryMonitor]] text ul
 	$menu add radiobutton -label $text -underline $ul \
-		-variable ::colors::Scheme -value dark
+		-variable ::colors::Scheme -value dark \
+		-command [list ::action::run menu.view.colors {name dark}]
 	::theme::configureRadioEntry $menu
 	lassign [AmpText [set ::menu::mc::HighQualityMonitor]] text ul
 	$menu add radiobutton -label $text -underline $ul \
-		-variable ::colors::Scheme -value lite
+		-variable ::colors::Scheme -value lite \
+		-command [list ::action::run menu.view.colors {name lite}]
 	::theme::configureRadioEntry $menu
 }
 
@@ -1441,7 +1571,8 @@ proc ::menu::FillIconSize {menu} {
 		set var ::toolbar::mc::[string toupper $size 0 0]
 		lassign [AmpText [set $var]] text ul
 		$menu add radiobutton -label $text -underline $ul \
-			-variable ::toolbar::Options(icons:size) -value $size
+			-variable ::toolbar::Options(icons:size) -value $size \
+			-command [list ::action::run menu.view.icon_size [dict create name $size]]
 		::theme::configureRadioEntry $menu
 	}
 }
@@ -1453,7 +1584,7 @@ proc ::menu::FillLanguage {menu} {
 			set flag $::country::icon::flag([set ::mc::langToCountry([set ::mc::lang$lang])])
 			lassign [AmpText $lang] text ul
 			$menu add command -label $text -underline $ul -image $flag -compound left \
-				-command [list ::menu::SwitchLanguage $lang]
+				-command [list ::action::run menu.view.language [dict create name $lang]]
 		}
 	}
 }
@@ -1617,6 +1748,36 @@ proc ::menu::DumpNodes {menu nodes indent topLevel} {
 # and the old widget paths resolve to real actions.
 # ----------------------------------------------------------------------
 proc ::menu::RegisterExtras {} {
+	::inventoryaction::Register
+	if {[dict exists $::action::Registry app-fullscreen]} {
+		dict set ::action::Registry app-fullscreen args {{state {type enum default toggle enum {toggle on off} description {Use off to exit fullscreen, on to enter, or toggle}}}}
+		dict set ::action::Registry app-fullscreen schema {}
+		dict set ::action::Registry app-fullscreen handler {::menu::Invoke app-fullscreen}
+	}
+	if {![dict exists $::action::Registry help.close]} {
+		::action::register help.close [dict create label "Close Help" what "Close Help" object {} ai 1 \
+			doc "Close the Help window after reading the manual." \
+			purpose "Close the Help window after reading the manual." \
+			when "Use this after reading a manual page to return to the main application." \
+			examples {{Close the manual window} {Dismiss Help and return to my game}} \
+			args {} handler ::menu::CloseHelp]
+	}
+	if {![dict exists $::action::Registry view.dialog.close]} {
+		::action::register view.dialog.close [dict create label "Close dialog" what "Close dialog" object {} ai 1 \
+			doc "Close a named information or preferences dialog. Unsaved form fields are discarded." \
+			args {{dialog {type enum required 1 enum {about correspondence crosstable engine_dictionary iccf keyboard pgn player_dictionary review_engine}}}} \
+			handler ::menu::CloseNamedDialog]
+	}
+	RegisterDynamicActions
+	foreach operation {rename delete} {
+		if {[dict exists $::action::Registry layout.$operation]} { continue }
+		::action::register layout.$operation [dict create \
+			label "[string totitle $operation] saved layout" object {} ai 1 confirm 1 \
+			what "$operation saved layout" \
+			args {{name {type string required 1}} {new_name {type string default {}}} {overwrite {type boolean default 0}}} \
+			doc "[string totitle $operation] a saved layout by name without opening the layout manager." \
+			handler [list ::menu::RunNamedLayoutMutation $operation]]
+	}
 	Register view.pane_zoom "Maximise / Restore Pane" "Ctrl+Shift+Z" "" "" "00.001"
 	Register view.focus_zoom "Focus follows size" "" "" "" "00.002"
 	Register view.focus_ratio "Zoom ratio" "" "" "" "00.003"
@@ -1738,8 +1899,440 @@ proc ::menu::FocusText {} {
 	return $w
 }
 
+# Explicit operation adapters: the same menu action collects omitted input
+# interactively, or executes supplied input through the existing native APIs.
+proc ::menu::OperationKind {id} {
+	switch -- $id {
+		menu.file.new.normal - menu.file.new.three - menu.file.new.crazy -
+		menu.file.new.variants - c4.new.scid - c4.new.pgn { return new }
+		menu.file.open - c4.open_database { return open }
+		menu.file.import.pgn - menu.file.import.db - c4.import.pgn { return import }
+		menu.file.export.pgn - menu.file.export.html - c4.export.pgn { return export }
+		menu.db.search.plain { return search }
+		menu.view.layout.save - menu.view.layout.save_as { return layout-save }
+		menu.view.layout.manage { return layout-manage }
+		menu.edit.keyboard { return keyboard }
+		menu.edit.preferences.pgn { return pgn-options }
+		app-log { return log }
+		menu.tools.engine_console { return engine-log }
+		menu.tools.book { return book }
+		menu.training.endgame { return endgame }
+		menu.training.tactics { return tactics }
+		menu.training.repertoire { return repertoire }
+        menu.training.play_engine { return play-engine }
+        menu.training.engine_match { return engine-match }
+        menu.analysis.game_review { return game-review }
+        menu.analysis.review_engine { return review-engine }
+        menu.tools.iccf { return iccf-settings }
+        menu.tools.download { return download }
+        menu.training.training_set { return training-set }
+        menu.tools.player_card { return private-card }
+        menu.tools.correspondence { return correspondence }
+        menu.analysis.compare_engines { return comparison }
+        menu.analysis.engines { return engine-admin }
+	}
+	return ""
+}
+
+proc ::menu::OperationSpec {id} {
+	set kind [OperationKind $id]
+    if {$kind eq "comparison"} {
+        return {
+            {operation {type enum default {} enum {{} start stop close status}}}
+            {engines {type array default {}}}
+            {seconds {type integer default 10 range {1 600}}}
+        }
+    }
+    if {$kind eq "engine-admin"} {
+        return {
+            {operation {type enum default {} enum {{} list add update delete clear_usage webpage close}}}
+            {engine {type string default {}}}
+            {filename {type string default {} description {Engine executable for add}}}
+            {name {type string required 0}}
+            {directory {type string required 0}}
+            {logo {type string required 0}}
+            {parameters {type string required 0}}
+            {webpage {type string required 0}}
+            {email {type string required 0}}
+            {country {type string required 0}}
+            {discard {type boolean required 0 description {Explicitly discard unsaved administration form fields when closing}}}
+        }
+    }
+    if {$kind eq "correspondence"} {
+        return {
+            {operation {type enum default {} enum {{} refresh sync open}}}
+            {number {type integer default 0 range {0 100000000}}}
+            {filter {type enum default all enum {all ongoing finished}}}
+        }
+    }
+    if {$kind eq "private-card"} {
+        set spec {
+            {operation {type enum default {} enum {{} list get save delete lookup rating_fill new_draft close} description {rating_fill returns draft and filled fields using supplied name/FideID and fields, preserving nonempty values without saving; new_draft returns blank fields and clears an active form without saving.}}}
+            {name {type string default {}}}
+            {photo {type string default {} description {Image filename to copy when saving}}}
+        }
+        foreach field $::playercard::PrivateFields {
+            if {$field eq "Name"} { continue }
+            set type string
+            if {$field eq "Me"} { set type boolean }
+            lappend spec [list $field [list type $type required 0]]
+        }
+        return $spec
+    }
+    if {$kind eq "training-set"} {
+        return {
+            {operation {type enum default {} enum {{} start status cancel}}}
+            {patterns {type array default {}}}
+            {player {type string default {}}}
+            {max {type integer default 20 range {1 1000}}}
+            {scan {type integer default 300 range {1 10000}}}
+            {depth {type integer default 14 range {1 64}}}
+            {filename {type string default {}}}
+        }
+    }
+    if {$kind eq "download"} {
+        return {
+            {operation {type enum default {} enum {{} start cancel status}}}
+            {source {type enum default twic enum {twic lichess study broadcast player url}}}
+            {base {type string default {}}}
+            {issues {type integer default 1 range {1 100}}}
+            {lichess {type string default {}}}
+            {studies {type string default {}}}
+            {broadcast {type string default {}}}
+            {refresh {type integer default 0 range {0 1440}}}
+            {url {type string default {}}}
+            {site {type enum default Lichess enum {Lichess Chess.com}}}
+            {player {type string default {}}}
+            {months {type integer default 1 range {1 120}}}
+        }
+    }
+    if {$kind eq "review-engine"} {
+        return {
+            {operation {type enum default {} enum {{} list select status}}}
+            {engine {type string default {} description {Configured UCI engine name; empty selects the bundled engine}}}
+        }
+    }
+    if {$kind eq "iccf-settings"} {
+        return {
+            {operation {type enum default {} enum {{} save status}}}
+            {username {type string default {}}}
+            {password {type string default {}}}
+            {endpoint {type string default {} description {XFCC endpoint; empty retains the existing endpoint}}}
+        }
+    }
+    if {$kind eq "game-review"} {
+        return {
+            {operation {type enum default {} enum {{} start cancel status}}}
+            {depth {type integer default 12 range {1 64}}}
+        }
+    }
+    if {$kind eq "play-engine"} {
+        return {
+            {operation {type enum default {} enum {{} start move resign offer_draw takeback close status}}}
+            {engine {type string default {} description {Configured engine name}}}
+            {move {type string default {} description {Legal SAN move for the user}}}
+            {color {type enum default white enum {white black random}}}
+            {minutes {type integer default 10 range {0 180}}}
+            {increment {type integer default 2 range {0 60}}}
+            {movetime {type integer default 1000 range {1 600000}}}
+            {elo {type integer default 1600 range {0 4000}}}
+            {skill {type integer default 5 range {0 20}}}
+        }
+    }
+    if {$kind eq "engine-match"} {
+        return {
+            {operation {type enum default {} enum {{} open start close status}}}
+            {mode {type enum default match enum {match gauntlet}}}
+            {engines {type array default {} description {Configured engine names; two for a match}}}
+            {games {type integer default 2 range {2 1000}}}
+            {minutes {type integer default 5 range {0 180}}}
+            {increment {type integer default 2 range {0 60}}}
+            {movetime {type integer default 1000 range {1 600000}}}
+            {suite {type string default {}}}
+            {suite_plies {type integer default 10 range {1 40}}}
+            {base {type string default {} description {Writable destination database; empty uses the game clipboard}}}
+            {tablebase {type boolean default 1}}
+            {online {type boolean default 0}}
+        }
+    }
+	if {$kind eq "repertoire"} {
+		return {
+			{operation {type enum default {} enum {{} open start move grade stop close status}}}
+			{base {type string default {} description {Open source database; empty uses the current game}}}
+			{side {type enum default white enum {white black}}}
+			{variant {type string default Normal}}
+			{move {type string default {} description {Answer in SAN}}}
+			{grade {type integer default 2 range {1 3} description {1 Hard, 2 Good, 3 Easy}}}
+		}
+	}
+	if {$kind eq "tactics"} {
+		return {
+			{operation {type enum default {} enum {{} open move retry solution next status}}}
+			{filename {type string default {} description {FEN-based puzzle PGN file}}}
+			{move {type string default {} description {SAN or UCI move}}}
+		}
+	}
+	if {$kind eq "keyboard"} {
+		return {
+			{operation {type enum default {} enum {{} list set reset reset_all}}}
+			{action {type string default {} description {Key-editor action id}}}
+			{key {type string default {} description {Key specification such as Control-Shift-F12}}}
+		}
+	}
+	if {$kind eq "pgn-options"} {
+		set fields {}
+		foreach field $::export::Fields(pgn) {
+			if {$field eq "use_chessbase_format"} { set field compatibility_format }
+			lappend fields $field
+		}
+		return [list \
+			{operation {type enum default {} enum {{} list set reset}}} \
+			[list option [list type enum default {} enum [linsert $fields 0 {}]]] \
+			{value {type boolean default 1}}]
+	}
+	if {$kind in {log engine-log}} {
+		return {{operation {type enum default {} enum {{} clear close}}}}
+	}
+	if {$kind eq "endgame"} {
+		return {
+			{operation {type enum default {} enum {{} catalog status start move retry continue give_up next close} description {Endgame session operation; omit to open the ending chooser}}}
+			{ending {type string default {} description {Catalog ending id for start; use catalog to list ids}}}
+			{index {type integer default 0 range {0 10000} description {Zero-based position within the ending}}}
+			{move {type string default {} description {Legal SAN move for the user's turn}}}
+		}
+	}
+	if {$kind eq "book"} {
+		return {
+			{operation {type enum default {} enum {{} open new save add add_last remove reweight create close} description {Book operation; omit to open the book editor}}}
+			{filename {type string default {} description {Book file for open, new or create}}}
+			{move {type string default {} description {SAN move for add, remove or reweight}}}
+			{weight {type integer default 1 range {0 65535}}}
+			{overwrite {type boolean default 0}}
+			{plies {type integer default 40 range {1 10000}}}
+			{min_games {type integer default 1 range {1 1000000}}}
+			{weight_mode {type enum default frequency enum {frequency score}}}
+		}
+	}
+	if {$kind in {layout-save layout-manage}} {
+		set spec {
+			{name {type string default {} description {Saved layout name; omit to collect it in the dialog}}}
+			{overwrite {type boolean default 0 description {Allow replacing an existing layout}}}
+		}
+		if {$kind eq "layout-manage"} {
+			lappend spec {operation {type enum default {} enum {{} list rename delete load replace link} description {List, rename, delete, load, replace or link saved layouts; omit to open the manager}}}
+			lappend spec {new_name {type string default {} description {New name for the rename operation}}}
+			lappend spec {link {type string default {} description {Board layout to link; empty unlinks the layout}}}
+		}
+		return $spec
+	}
+	if {$kind eq "search"} { return [dict get [::action::get search_games] args] }
+	if {$kind eq ""} { return {} }
+	return {
+		{filename {type string default {} description {File to create, open, import or export; omit to choose in a dialog}}}
+		{encoding {type string default utf-8 description {Text encoding for database creation and export}}}
+		{overwrite {type boolean default 0 description {Allow replacing an existing export file}}}
+	}
+}
+
+proc ::menu::OperationSupplied {id arguments} {
+	if {[OperationKind $id] in {endgame tactics repertoire keyboard pgn-options log engine-log play-engine engine-match game-review review-engine iccf-settings download training-set private-card correspondence comparison engine-admin}} {
+		return [expr {[dict exists $arguments operation] && [dict get $arguments operation] ne ""}]
+	}
+	if {[OperationKind $id] eq "book"} {
+		return [expr {[dict exists $arguments operation] && [dict get $arguments operation] ne ""}]
+	}
+	if {[OperationKind $id] eq "layout-save"} {
+		return [expr {[dict exists $arguments name] && [dict get $arguments name] ne ""}]
+	}
+	if {[OperationKind $id] eq "layout-manage"} {
+		return [expr {[dict exists $arguments operation] && [dict get $arguments operation] ne ""}]
+	}
+	if {[OperationKind $id] eq "search"} {
+		dict for {key value} $arguments {
+			if {$key eq "object" || ($key eq "color" && $value eq "any")} { continue }
+			if {$value ne ""} { return 1 }
+		}
+		return 0
+	}
+	return [expr {[dict exists $arguments filename] && [dict get $arguments filename] ne ""}]
+}
+
+proc ::menu::OperationCallback {args} { return 0 }
+
+proc ::menu::WriteDatabaseFile {filename format encoding overwrite {base ""} {variant ""}} {
+	set filename [file normalize $filename]
+	if {[file exists $filename] && !$overwrite} { error "file exists; supply overwrite true to replace it: $filename" }
+	if {$base eq ""} { set base [CurrentBase] }
+	if {$variant eq ""} { set variant [CurrentVariant] }
+	# Never replace the database being read, even with overwrite permission.
+	if {[::scidb::db::get open? $filename]} { error "cannot export over an open database" }
+	switch -- $format {
+		pgn {
+			set result [::scidb::view::export $base $variant 0 $filename [::export::getPgnFlags] 0 $encoding 0 {} {{* yes}} \
+				::menu::OperationCallback {} ::menu::OperationCallback {}]
+		}
+		html {
+			set result [::scidb::view::printHtml $base $variant 0 $filename 63 {{* yes}} \
+				::menu::OperationCallback {} ::menu::OperationCallback {}]
+		}
+		default { error "unsupported export format: $format" }
+	}
+	return "exported games to $filename"
+}
+
+proc ::menu::RunOperation {id arguments} {
+	set kind [OperationKind $id]
+    if {$kind in {play-engine engine-match game-review review-engine iccf-settings download training-set private-card correspondence comparison engine-admin}} {
+        return [RunSessionOperation $kind $arguments]
+    }
+	if {$kind in {keyboard pgn-options log engine-log}} { return [RunDialogOperation $kind $arguments] }
+	if {$kind eq "repertoire"} { return [::reptrainer::runOperation $arguments] }
+	if {$kind eq "tactics"} { return [::tactics::runOperation $arguments] }
+	if {$kind eq "endgame"} { return [::endtrainer::runOperation $arguments] }
+	if {$kind eq "book"} { return [::book::runOperation $arguments] }
+	if {$kind in {layout-save layout-manage}} { return [RunLayoutOperation $kind $arguments] }
+	if {$kind eq "search"} {
+		set checked [::application::assistant::CheckArgs search_games $arguments]
+		set result [::application::assistant::DoSearchGames [dict get $checked criteria]]
+		::application::assistant::DoShowSearch
+		return $result
+	}
+	set filename [dict get $arguments filename]
+	switch -- $kind {
+		new {
+			if {[file exists $filename]} { error "database already exists: $filename" }
+			set variant Normal
+			if {$id eq "menu.file.new.three"} { set variant ThreeCheck }
+			if {$id eq "menu.file.new.crazy"} { set variant Crazyhouse }
+			return [::application::database::newBase .application $variant $filename [dict get $arguments encoding]]
+		}
+		open { return [::application::assistant::DoOpenDatabase $filename] }
+		import {
+			if {![file readable $filename]} { error "cannot read file: $filename" }
+			set base [CurrentBase]
+			if {[dict exists $arguments object base]} { set base [dict get $arguments object base] }
+			if {[::scidb::db::get readonly? $base]} { error "database is read-only" }
+			::import::import .application $base [list $filename] $::import::mc::DatabaseImport [dict get $arguments encoding]
+			if {$base eq [CurrentBase]} { ::application::database::refreshBase $base }
+			return "imported $filename"
+		}
+		export {
+			set format [expr {$id eq "menu.file.export.html" ? "html" : "pgn"}]
+			set base [CurrentBase]
+			if {[dict exists $arguments object base]} { set base [dict get $arguments object base] }
+			return [WriteDatabaseFile $filename $format [dict get $arguments encoding] [dict get $arguments overwrite] $base]
+		}
+	}
+	error "no operation adapter for $id"
+}
+
+# Use the same layout persistence as the native dialogs. Only registry calls
+# with explicit names reach this path; interactive callers keep their dialogs.
+proc ::menu::RunLayoutOperation {kind arguments} {
+	set twm [CurrentTWM]
+	if {$twm eq ""} { error "no layout selected" }
+	set id $::application::Vars($twm:id)
+	set variant $::application::Vars($id:layout:variant)
+	if {$kind eq "layout-manage" && [dict get $arguments operation] eq "list"} {
+		return [::application::twm::glob $id]
+	}
+	set name [dict get $arguments name]
+	::application::twm::checkLayoutName $name
+	if {$kind eq "layout-save"} {
+		return [::application::twm::saveNamedLayout $twm $name [dict get $arguments overwrite]]
+	}
+	if {![file exists [::application::twm::makeFilename $id $variant $name]]} {
+		error "layout does not exist: $name"
+	}
+	switch -- [dict get $arguments operation] {
+		rename - delete {
+			set operation [dict get $arguments operation]
+			return [::action::run layout.$operation [dict create name $name \
+				new_name [dict get $arguments new_name] overwrite [dict get $arguments overwrite]]]
+		}
+		load { ::application::twm::loadLayout $twm $name; return $name }
+		replace { ::application::twm::replaceLayout $twm $variant $name; return $name }
+		link {
+			if {$id eq "board"} { error "board layouts cannot link to another board layout" }
+			set link [dict get $arguments link]
+			if {$link ne ""} {
+				::application::twm::checkLayoutName $link
+				if {$link ni [::application::twm::glob board]} { error "board layout does not exist: $link" }
+			}
+			::application::twm::setLink $id $name $link
+			return $link
+		}
+	}
+}
+
+proc ::menu::RunNamedLayoutMutation {operation arguments} {
+	set twm [CurrentTWM]
+	if {$twm eq ""} { error "no layout selected" }
+	set name [dict get $arguments name]
+	::application::twm::checkLayoutName $name
+	set id $::application::Vars($twm:id)
+	set variant $::application::Vars($id:layout:variant)
+	if {![file exists [::application::twm::makeFilename $id $variant $name]]} {
+		error "layout does not exist: $name"
+	}
+	if {$operation eq "delete"} { return [::application::twm::deleteNamedLayout $twm $name $variant] }
+	return [::application::twm::renameNamedLayout $twm $name [dict get $arguments new_name] [dict get $arguments overwrite]]
+}
+
+proc ::menu::InvokeOperationAlias {id original arguments} {
+	if {[OperationSupplied $id $arguments]} { return [RunOperation $id $arguments] }
+	return [{*}$original $arguments]
+}
+
+# Reject malformed names before any window, slot or engine can change.
+proc ::menu::ValidateMatchArgs {arguments} {
+	if {[dict get $arguments operation] ne "start"} {return $arguments}
+	set names [dict get $arguments engines]
+	if {![llength $names]} {return $arguments}
+	if {([dict get $arguments mode] eq "match" && [llength $names] != 2) || [llength $names] < 2} {
+		return -code error -errorcode {CHESSWIZ ARGUMENT engines} "engines must contain two names for a match, or at least two for a gauntlet"
+	}
+	foreach name $names {
+		if {$name ni [::enginematch::EngineNames]} {
+			return -code error -errorcode {CHESSWIZ ARGUMENT engines} "unknown configured UCI engine '$name'; pass engine names as an array, without separator punctuation"
+		}
+	}
+	return $arguments
+}
+
+proc ::menu::WireOperations {} {
+	foreach id [::action::list] {
+		if {[OperationKind $id] eq ""} { continue }
+		set rec [::action::get $id]
+		set spec [OperationSpec $id]
+		# Preserve the object resolver used by context-menu actions.
+		foreach param [dict get $rec args] {
+			if {[lindex $param 0] eq "object"} { lappend spec $param }
+		}
+		dict set rec args $spec
+		set kind [OperationKind $id]
+		if {$kind in {keyboard pgn-options log engine-log tactics repertoire play-engine engine-match game-review review-engine iccf-settings download training-set private-card correspondence comparison engine-admin}} {
+			dict set rec doc "Run [dict get $rec label] with operation arguments; omit operation to open its window. Use the list or status operation where available to inspect current state."
+		}
+		if {$kind eq "engine-match"} {dict set rec validate ::menu::ValidateMatchArgs}
+		dict set rec schema ""
+		set handler [dict get $rec handler]
+		if {[lindex $handler 0] ni {::menu::Invoke ::menu::InvokeOperationAlias}} {
+			dict set rec handler [list ::menu::InvokeOperationAlias $id $handler]
+		}
+		dict set ::action::Registry $id $rec
+	}
+}
+
 proc ::menu::Invoke {id {argsDict {}}} {
-	if {[catch { ::menu::Do $id } result options]} {
+	if {[catch {
+		if {$id eq "app-fullscreen" && [dict exists $argsDict state] && [dict get $argsDict state] ne "toggle"} {
+			::menu::setFullscreen [expr {[dict get $argsDict state] eq "on"}]
+			set result [::menu::fullscreen?]
+		} elseif {[OperationSupplied $id $argsDict]} {
+			RunOperation $id $argsDict
+		} else { ::menu::Do $id }
+	} result options]} {
 		::debuglog::log menu "$id: [dict get $options -errorinfo]"
 		if {[llength [info commands ::log::error]]} {
 			catch { ::log::error menu "$id: $result" }
@@ -1880,13 +2473,13 @@ proc ::menu::Do {id} {
 
 		menu.db.search.plain { return [::application::database::OpenPlainSearch .application [CurrentBase] [CurrentVariant]] }
 		menu.db.search.advanced { return [::application::database::searchCurrent .application] }
-		menu.db.search.material { return [::application::database::searchCurrent .application] }
-		menu.db.search.rating { return [::application::database::searchCurrent .application] }
-		menu.db.search.duplicates { return [::application::database::searchCurrent .application] }
+		menu.db.search.material { return [::application::database::OpenMaterialSearch .application [CurrentBase] [CurrentVariant]] }
+		menu.db.search.rating { return [::application::database::OpenRatingSearch .application [CurrentBase] [CurrentVariant]] }
+		menu.db.search.duplicates { return [::application::database::ShowDuplicates .application [CurrentBase] [CurrentVariant]] }
 		menu.db.search.query { return [::application::database::OpenCql6Search .application [CurrentBase] [CurrentVariant]] }
 		menu.db.reports.eco { return [::application::database::ShowEcoStats .application [CurrentBase] [CurrentVariant]] }
 		menu.db.reports.opening { return [::application::database::ShowOpeningReport .application] }
-		menu.db.reports.repertoire { return [::application::database::searchCurrent .application] }
+		menu.db.reports.repertoire { return [::application::database::OpenRepertoireReport .application [CurrentBase] [CurrentVariant]] }
 		menu.db.reports.result { return [::application::assistant::runTool check_results {}] }
 		menu.db.reports.timecontrol { return [::application::assistant::runTool event_types {}] }
 		menu.db.reports.trends { return [::application::assistant::runTool database_trend {}] }
@@ -2108,3 +2701,266 @@ proc ::menu::ToggleBoardOption {option {arrayName ::board::layout}} {
 # drop-down module is loaded; ::menu::Register later refreshes the
 # placement of the ids the drop-down also carries.
 ::application::keyEditor::RegisterActions
+
+# Form controls and assistant operations share the same persistent settings APIs.
+proc ::menu::CloseNamedDialog {arguments} {
+	set windows [dict create about .application.infoDialog correspondence .application.corrGames \
+		engine_dictionary .application.engineDict iccf .application.iccfSettings \
+		keyboard .application.shortcutPreferences pgn .application.pgnOptions \
+		player_dictionary .application.playerDict review_engine .application.__aiengine__]
+	if {[dict get $arguments dialog] eq "crosstable"} {
+		set window $::crosstable::Reuse
+		if {$window eq ""} {return "dialog closed"}
+	} else {set window [dict get $windows [dict get $arguments dialog]]}
+	if {[winfo exists $window]} { destroy $window }
+	return "dialog closed"
+}
+
+proc ::menu::RunDialogOperation {kind arguments} {
+	set operation [dict get $arguments operation]
+	switch -- $kind {
+		keyboard {
+			set action [dict get $arguments action]
+			switch -- $operation {
+				list {
+					set result {}
+					foreach entry $::application::keyEditor::Actions {
+						set id [lindex $entry 0]
+						dict set result $id [::application::keyEditor::CurrentKey $id]
+					}
+					return $result
+				}
+				set - reset {
+					if {$action eq ""} { return [Do menu.edit.keyboard] }
+					set found 0
+					foreach entry $::application::keyEditor::Actions {
+						if {[lindex $entry 0] eq $action} { set found 1; break }
+					}
+					if {!$found} { error "unknown key action: $action" }
+					if {$operation eq "set"} {
+						if {[dict get $arguments key] eq ""} { return [Do menu.edit.keyboard] }
+						::application::keyEditor::SetKey $action [dict get $arguments key]
+					} else { ::application::keyEditor::ResetAction $action }
+				}
+				reset_all { ::application::keyEditor::ResetAll }
+			}
+			set tree .application.shortcutPreferences.content.keys.list.tree
+			if {[winfo exists $tree]} { ::application::keyEditor::FillTable $tree }
+			return "keyboard preferences updated"
+		}
+		pgn-options {
+			::export::migrateOptions
+			set option [dict get $arguments option]
+			if {$option eq "compatibility_format"} { set option use_chessbase_format }
+			if {$operation eq "set"} {
+				if {$option eq ""} { return [Do menu.edit.preferences.pgn] }
+				set value [dict get $arguments value]
+				if {$value && $option in {use_chessbase_format use_scidb_import_format use_strict_pgn_standard}} {
+					foreach other {use_chessbase_format use_scidb_import_format use_strict_pgn_standard} {
+						set ::export::Values(pgn,flag,$other) 0
+					}
+				}
+				set ::export::Values(pgn,flag,$option) $value
+			} elseif {$operation eq "reset"} {
+				foreach field [array names ::export::Defaults pgn,flag,*] {
+					set ::export::Values($field) $::export::Defaults($field)
+				}
+			}
+			set frame .application.pgnOptions.options
+			if {[winfo exists $frame]} { ::export::options::SetupFlags $frame pgn }
+			set result {}
+			foreach field $::export::Fields(pgn) {
+				set name $field
+				if {$name eq "use_chessbase_format"} { set name compatibility_format }
+				dict set result $name $::export::Values(pgn,flag,$field)
+			}
+			return $result
+		}
+		log {
+			if {$operation eq "clear"} {
+				if {[winfo exists $::log::Log.top.text]} { ::log::Clear }
+			} elseif {[winfo exists $::log::Log]} { wm withdraw $::log::Log }
+			return "log $operation complete"
+		}
+		engine-log {
+			set dialog .application.engineLog
+			if {$operation eq "clear"} {
+				if {[winfo exists $dialog.top.text]} { ::engine::ClearLog $dialog.top.text }
+			} else { ::engine::CloseLog $dialog }
+			return "engine console $operation complete"
+		}
+	}
+}
+
+# Supplied session arguments use the same execution APIs as the native forms.
+proc ::menu::RunSessionOperation {kind arguments} {
+    set operation [dict get $arguments operation]
+    switch -- $kind {
+        comparison {
+            switch -- $operation {
+                start {
+                    set names [dict get $arguments engines]
+                    if {[llength $names] < 2} { return [::application::analysis::openComparison .application] }
+                    foreach name $names {
+                        if {[::engine::FindIndex $name] < 0 || ![::application::analysis::CanAnalyse $name]} {
+                            error "engine cannot analyse: $name"
+                        }
+                    }
+                    ::application::analysis::StartNamedComparison $names [dict get $arguments seconds]
+                }
+                stop { ::application::analysis::FinishComparison }
+                close { ::application::analysis::CloseComparison }
+            }
+            return [dict create lines [::application::analysis::ComparisonLines] timer $::application::analysis::compare::Vars(after)]
+        }
+        engine-admin {
+            set name [dict get $arguments engine]
+            switch -- $operation {
+                list { return $::engine::Engines }
+                add {
+                    set filename [dict get $arguments filename]
+                    if {$filename eq ""} { return [::engine::openAdmininstration .application] }
+                    return [::engine::install $filename]
+                }
+                delete { return [::action::run remove_engine [dict create engine $name]] }
+                update - clear_usage { return [::engine::updateEntry $name $arguments] }
+                webpage {
+                    set index [::engine::FindIndex $name]
+                    if {$index < 0} { error "no engine named '$name'" }
+                    set url [dict get [lindex $::engine::Engines $index] Url]
+                    if {$url eq ""} { error "engine has no webpage" }
+                    return [::web::open .application $url]
+                }
+                close {
+                    if {[winfo exists .application.adminEngines]} {
+                        if {[dict exists $arguments discard]} {
+                            if {![dict get $arguments discard] && ![::arrayEqual ::engine::Data ::engine::Data_]} {
+                                error "unsaved engine fields; supply discard true to close"
+                            }
+                            destroy .application.adminEngines
+                        } else {
+                            ::engine::CloseSetup .application.adminEngines.top.list
+                        }
+                    }
+                    return closed
+                }
+            }
+        }
+        correspondence {
+            switch -- $operation {
+                sync { return [::iccf::xfcc::getGames] }
+                refresh { return [dict create games [::application::corr::games::localGames [dict get $arguments filter]]] }
+                open {
+                    set number [dict get $arguments number]
+                    if {$number < 1} { return [::application::corr::games::open .application] }
+                    return [::game::new .application -base [CurrentBase] -number [expr {$number-1}] -variant [CurrentVariant]]
+                }
+            }
+        }
+        private-card { return [::playercard::runOperation $arguments] }
+        training-set {
+            switch -- $operation {
+                start {
+                    set spec {}
+                    foreach key {patterns player max scan depth} { lappend spec -$key [dict get $arguments $key] }
+                    lappend spec -file [dict get $arguments filename]
+                    return [::ai::cql::training .application {*}$spec]
+                }
+                cancel { set ::ai::cql::Priv(cancel) 1 }
+            }
+            return [dict create running $::ai::cql::Priv(running)]
+        }
+        download {
+            switch -- $operation {
+                start {
+                    set base [dict get $arguments base]
+                    if {$base eq ""} { set base [CurrentBase] }
+                    set spec {}
+                    foreach key {source issues lichess studies broadcast refresh url site player months} {
+                        dict set spec -$key [dict get $arguments $key]
+                    }
+                    set ::menu::DownloadResult {}
+                    ::application::download::run $base $spec ::menu::DownloadDone
+                }
+                cancel { ::application::download::Close }
+            }
+            return [dict create running $::application::download::Priv(running) result $::menu::DownloadResult]
+        }
+        review-engine {
+            switch -- $operation {
+                list { return [::ai::engine::uciEngines] }
+                select { ::ai::engine::select [dict get $arguments engine] }
+            }
+            return [dict create engine $::ai::engine::Options(engine)]
+        }
+        iccf-settings {
+            if {$operation eq "save"} {
+                ::iccf::xfcc::configure [dict get $arguments username] [dict get $arguments password] [dict get $arguments endpoint]
+            }
+            # Credentials never enter the assistant reply.
+            return [dict create configured [::iccf::xfcc::configured?] endpoint $::iccf::xfcc::Config(endpoint)]
+        }
+        game-review {
+            switch -- $operation {
+                start { return [::gamereview::run .application -depth [dict get $arguments depth]] }
+                cancel { return [::gamereview::cancel] }
+                status { return [dict create running [::gamereview::running?]] }
+            }
+        }
+        play-engine {
+            switch -- $operation {
+                start {
+                    set engine [dict get $arguments engine]
+                    if {$engine eq ""} { return [::playengine::open .application] }
+                    set spec {}
+                    foreach key {engine color minutes increment movetime elo skill} {
+                        lappend spec -$key [dict get $arguments $key]
+                    }
+                    return [::playengine::StartGame $spec]
+                }
+                move { return [::playengine::UserMove [dict get $arguments move]] }
+                resign { ::playengine::Resign }
+                offer_draw { ::playengine::OfferDraw }
+                takeback { ::playengine::Takeback }
+                close { ::playengine::Close }
+            }
+            set status ""
+            if {[info exists ::playengine::Priv(statusText)]} {set status $::playengine::Priv(statusText)}
+            return [dict create active $::playengine::Priv(active) phase $::playengine::Priv(phase) status $status]
+        }
+        engine-match {
+            switch -- $operation {
+                open { return [::enginematch::open .application] }
+                start {
+                    if {[llength [dict get $arguments engines]] < 2} { return [::enginematch::open .application] }
+                    set spec {}
+                    foreach key {mode engines games minutes increment movetime suite} {
+                        lappend spec -$key [dict get $arguments $key]
+                    }
+                    set base [dict get $arguments base]
+                    if {$base eq ""} { set base $::scidb::clipbaseName }
+                    lappend spec -base $base -suitePlies [dict get $arguments suite_plies] \
+                        -tb [dict get $arguments tablebase] -online [dict get $arguments online]
+                    ::enginematch::open .application
+                    if {![::enginematch::StartMatch $spec]} {
+                        return -code error -errorcode {CHESSWIZ PRECONDITION match} $::enginematch::Priv(lastError)
+                    }
+                    return 1
+                }
+                close { ::enginematch::Close }
+            }
+            return [dict create running $::enginematch::Priv(running) saved $::enginematch::Priv(saved)]
+        }
+    }
+}
+
+proc ::menu::DownloadDone {result} {
+    set ::menu::DownloadResult $result
+}
+namespace eval ::menu { variable DownloadResult {} }
+
+# Share the native Help teardown, which also cancels its document callbacks.
+proc ::menu::CloseHelp {arguments} {
+    ::help::Destroy
+    return "Help closed"
+}

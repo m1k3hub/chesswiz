@@ -696,8 +696,13 @@ vinvoke(char const* callee, Tcl_Obj* cmd, va_list args)
 
 		for ( ; arg; ++objc, arg = va_arg(args, Tcl_Obj*))
 		{
-			// simple check whether this is a Tcl object.
-			M_ASSERT(0 <= arg->refCount && arg->refCount <= 10000);
+			// Simple check whether this is a Tcl object.  The upper bound is
+			// deliberately high: a legitimate argument may be a heavily
+			// shared object (Tcl's shared empty string carries a reference
+			// for every empty literal and empty list element), and the old
+			// 10000 limit aborted otherwise valid calls once that count was
+			// reached.
+			M_ASSERT(arg->refCount >= 0 && arg->refCount < 0x01000000);
 			M_ASSERT(objc < MaxArgs);
 			objv[objc] = tcl::incrRef(arg);
 		}

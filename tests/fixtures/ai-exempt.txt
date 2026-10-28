@@ -1,0 +1,6 @@
+# Assistant exposure exemptions (VAL-AI-009).
+# Format: id or surface-item | one-line reason
+# Short and reviewed; "too hard to wire" is not a reason.
+context.ask | the Ask field itself opens the assistant
+inventory.presentation.static | Inventory rows 566,655,658,659,661,662,663,664,715 are static labels/icons/statistics or a disabled filename header, with no operation; inventory-map.tsv records each individual reason.
+inventory.presentation.structure | Inventory rows 657,687,707,708,709,710,717,724,725,726,727,736,740,746 are layout frames/separators or presentation-only insertion/removal of existing toolbar controls; their child operations are mapped separately and each individual reason is in inventory-map.tsv.

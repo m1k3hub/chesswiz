@@ -152,6 +152,10 @@ proc open {parent} {
 
 
 proc show {parent} {
+	# The assistant is the startup discovery surface. Explicit Tip of the
+	# Day menu requests still use open; do not change the user's tip option.
+	if {[llength [info commands ::application::assistant::panel::Enabled]]
+	 && [::application::assistant::panel::Enabled]} { return }
 	variable Options
 	variable Priv
 

@@ -547,23 +547,21 @@ proc viewFullscreen {{toggle {}}} {
 	if {[llength $toggle]} {
 		set Fullscreen [expr {!$Fullscreen}]
 	}
-	if {[wm attributes .application -fullscreen] != $Fullscreen} {
-		wm attributes .application -fullscreen $Fullscreen
-		event generate .application <<Fullscreen>> -data $Fullscreen
-	}
+	# The WM reports its acknowledged state, which can lag a queued change.
+	# Always send the desired state: a rapid on/off must cancel the pending on.
+	wm attributes .application -fullscreen $Fullscreen
+	event generate .application <<Fullscreen>> -data $Fullscreen
 }
 
 
 proc setFullscreen {flag} {
 	variable Fullscreen
 
-	if {$Fullscreen != $flag} {
-		set Fullscreen $flag
-		if {[winfo ismapped .application]} {
-			viewFullscreen
-		} else {
-			bind .application <Map> [namespace code SetFullscreenMode]
-		}
+	set Fullscreen $flag
+	if {[winfo ismapped .application]} {
+		viewFullscreen
+	} else {
+		bind .application <Map> [namespace code SetFullscreenMode]
 	}
 }
 

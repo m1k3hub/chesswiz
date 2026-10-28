@@ -39,9 +39,13 @@ clean:
 	@rm -f $(EXE)
 
 install:
+ifneq ($(wildcard $(EXE)),)
 	@install -m 755 -d $(ENGINESDIR)
 	@install -m 755 -p $(EXE) $(ENGINESDIR)
 	@rm -f $(ENGINESDIR)/$(subst -chesswiz,-scidb,$(EXE))
+else
+	@echo "Skipping optional engine $(EXE): not built"
+endif
 
 uninstall:
 	@rm -f $(ENGINESDIR)/$(EXE)

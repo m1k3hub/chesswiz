@@ -713,6 +713,29 @@ test aipc-openai-reply-7.3 {openaiReply decodes arguments} -body {
 	return OK
 } -result OK
 
+test aipc-fireworks-reasoning-7.3a {reasoning metadata survives tool turns without becoming visible content} -body {
+	::ai::provider::configure -name fireworks
+	set data {{"choices":[{"message":{"role":"assistant","content":null,"reasoning_content":"Inspect \"state\" first.\nThen act.","tool_calls":[{"id":"r1","function":{"name":"app_state","arguments":"{}"}}]}}]}}
+	set msg [::ai::provider::openaiReply $data]
+	Assert {[dict get $msg content] eq ""} "reasoning is not a reply"
+	set encoded [json::json2dict [::ai::provider::openaiMessages [list $msg]]]
+	Assert {[dict get [lindex $encoded 0] reasoning_content] eq [dict get $msg reasoning_content]} "reasoning round trip"
+	# Across multiple assistant turns, only the latest assistant turn retains reasoning_content
+	set msg2 [dict create role assistant content "Done." reasoning_content "Second thought."]
+	set multi [json::json2dict [::ai::provider::openaiMessages [list $msg [dict create role tool tool_call_id r1 content "ok"] $msg2]]]
+	Assert {![dict exists [lindex $multi 0] reasoning_content]} "older reasoning omitted"
+	Assert {[dict get [lindex $multi 2] reasoning_content] eq "Second thought."} "latest reasoning kept"
+	# Follow-up tool rounds lower default medium effort to low on Fireworks
+	set b1 [json::json2dict [::ai::provider::openaiBody [list [dict create role user content "hi"]] ""]]
+	set b2 [json::json2dict [::ai::provider::openaiBody [list [dict create role user content "hi"] $msg [dict create role tool tool_call_id r1 content "ok"]] ""]]
+	Assert {[dict get $b1 reasoning_effort] eq "medium"} "initial round uses medium"
+	Assert {[dict get $b2 reasoning_effort] eq "low"} "follow-up tool round uses low"
+	::ai::provider::configure -name openai
+	set other [json::json2dict [::ai::provider::openaiMessages [list $msg]]]
+	Assert {![dict exists [lindex $other 0] reasoning_content]} "provider metadata stays local"
+	return OK
+} -result OK
+
 test aipc-openai-body-7.4 {openaiBody needs a model and passes tools through} -body {
 	global ToolsJson
 	::ai::provider::configure -name openai -model gpt-mock

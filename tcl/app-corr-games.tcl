@@ -178,6 +178,22 @@ proc build {dlg} {
 }
 
 
+# Database records shared by the native tree and the supplied-argument path.
+proc localGames {{filter all}} {
+    set base [::scidb::db::get name]
+    set variant [::scidb::app::variant]
+    set result {}
+    set count [::scidb::db::count games $base $variant]
+    for {set i 0} {$i < $count} {incr i} {
+        set tags [::scidb::db::get tags $i $base $variant]
+        if {![isCorrespondenceGame $tags]} { continue }
+        set status [getGameStatus $tags]
+        if {$filter ne "all" && $status ne $filter} { continue }
+        lappend result [dict create number [expr {$i+1}] tags $tags status $status]
+    }
+    return $result
+}
+
 proc refresh {dlg} {
 	variable Vars
 
@@ -204,14 +220,10 @@ proc refresh {dlg} {
 
 	set filter $Vars(filter)
 
-	for {set i 0} {$i < $count} {incr i} {
-		set tags {}
-		if {[catch { set tags [::scidb::db::get tags $i $base $variant] } err]} { puts stderr "corr-games: $err" }
-
-		if {![isCorrespondenceGame $tags]} { continue }
-
-		set status [getGameStatus $tags]
-		if {$filter ne "all" && $status ne $filter} { continue }
+    foreach entry [localGames $filter] {
+        set i [expr {[dict get $entry number]-1}]
+        set tags [dict get $entry tags]
+        set status [dict get $entry status]
 
 		set white [getTag $tags White]
 		set black [getTag $tags Black]

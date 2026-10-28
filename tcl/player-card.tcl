@@ -574,39 +574,58 @@ proc ClearVars {{dlg ""}} {
 # Fill the empty fields from the rating lists: by the FIDE ID when one is
 # given, else by the name. Returns the fields it filled.
 proc FillFromLists {dlg} {
-	variable Var
+    variable PrivateFields
+    set draft {}
+    foreach field $PrivateFields { dict set draft $field [GetField $dlg $field] }
+    if {[catch { FillRatingDraft $draft } result]} {
+        ::dialog::info -parent $dlg -message $result
+        return {}
+    }
+    foreach field [dict get $result filled] {
+        SetField $dlg $field [dict get $result draft $field]
+    }
+    return [dict get $result filled]
+}
 
-	set id [string trim $Var(FideID)]
-	set name [string trim $Var(Name)]
-	set entry {}
-	if {[string is integer -strict $id]} {
-		set entry [::scidb::player::lookup -fide $id]
-	} elseif {$name ne ""} {
-		set entry [::scidb::player::lookup -name $name]
-		if {![llength $entry]} {
-			# "carlsen, magnus" as "Carlsen, Magnus"
-			set entry [::scidb::player::lookup -name [join [lmap w [split $name " "] {
-				string toupper $w 0 0
-			}] " "]]
-		}
-	}
-	if {![llength $entry]} {
-		::dialog::info -parent $dlg -message [format $mc::NotInRatingList [expr {$id ne "" ? $id : $name}]]
-		return {}
-	}
-	set filled {}
-	set values [list Name [dict get $entry name] FideID [dict get $entry fideID] \
-		Nation [dict get $entry federation] Sex [dict get $entry sex] Birthday [dict get $entry born] \
-		DsbID [dict get $entry dsb] EcfID [dict get $entry ecf] IccfID [dict get $entry iccf]]
-	if {[dict get $entry elo] ne ""} { lappend values Rating1 Elo Score1 [dict get $entry elo] }
-	set i 0
-	foreach t [dict get $entry titles] { if {[incr i] <= 3} { lappend values Title$i $t } }
-	foreach {field value} $values {
-		if {$value eq "" || [GetField $dlg $field] ne ""} continue
-		SetField $dlg $field $value
-		lappend filled $field
-	}
-	return $filled
+# A fill-only draft operation: no persistence, chooser or widget dependencies.
+# The form and the assistant use the same lookup and empty-field policy.
+proc FillRatingDraft {draft} {
+    set id [string trim [dict get $draft FideID]]
+    set name [string trim [dict get $draft Name]]
+    set entry {}
+    if {[string is integer -strict $id]} {
+        set entry [::scidb::player::lookup -fide $id]
+    } elseif {$name ne ""} {
+        set entry [::scidb::player::lookup -name $name]
+        if {![llength $entry]} {
+            set entry [::scidb::player::lookup -name [join [lmap w [split $name " "] {
+                string toupper $w 0 0
+            }] " "]]
+        }
+    }
+    if {![llength $entry]} {
+        error [format $mc::NotInRatingList [expr {$id ne "" ? $id : $name}]]
+    }
+    set values [list Name [dict get $entry name] FideID [dict get $entry fideID] \
+        Nation [dict get $entry federation] Sex [dict get $entry sex] Birthday [dict get $entry born] \
+        DsbID [dict get $entry dsb] EcfID [dict get $entry ecf] IccfID [dict get $entry iccf]]
+    if {[dict get $entry elo] ne ""} { lappend values Rating1 Elo Score1 [dict get $entry elo] }
+    set i 0
+    foreach t [dict get $entry titles] { if {[incr i] <= 3} { lappend values Title$i $t } }
+    set filled {}
+    foreach {field value} $values {
+        if {$value eq "" || [dict get $draft $field] ne ""} { continue }
+        dict set draft $field $value
+        lappend filled $field
+    }
+    return [dict create draft $draft filled $filled]
+}
+
+proc EmptyDraft {} {
+    variable PrivateFields
+    set draft {}
+    foreach field $PrivateFields { dict set draft $field [expr {$field eq "Me" ? 0 : ""}] }
+    return $draft
 }
 
 
@@ -659,6 +678,90 @@ proc ChoosePhoto {dlg} {
 }
 
 
+# Shared persistence for supplied fields and the native form.
+proc savePrivateCard {card {photo ""}} {
+    set name [string trim [dict get $card Name]]
+    if {$name eq ""} { error $mc::NameMissing }
+    if {$photo ne ""} {
+        set image [image create photo -file $photo]
+        image delete $image
+        set path [PhotoPath $name]
+        if {$path eq ""} { error "name cannot identify a photo" }
+    }
+    set cards [privateCards]
+    if {[dict exists $card Me] && [dict get $card Me]} {
+        dict for {other c} $cards { dict set cards $other Me 0 }
+        set ::application::ai::Settings(me) $name
+    }
+    dict set card Name $name
+    dict set cards $name $card
+    SavePrivate $cards
+    if {$photo ne ""} {
+        file mkdir [file dirname $path]
+        file copy -force $photo $path
+    }
+    return $card
+}
+
+proc runOperation {arguments} {
+    variable PrivateFields
+    set name [string trim [dict get $arguments name]]
+    switch -- [dict get $arguments operation] {
+        new_draft {
+            # Clear the active form too, exactly as its New button does.
+            if {[winfo exists .application.setupPrivateCard]} {
+                ClearVars .application.setupPrivateCard
+                focus .application.setupPrivateCard.top.data.ename
+            }
+            return [EmptyDraft]
+        }
+        rating_fill {
+            set draft [EmptyDraft]
+            dict set draft Name $name
+            foreach field $PrivateFields {
+                if {[dict exists $arguments $field]} { dict set draft $field [dict get $arguments $field] }
+            }
+            return [FillRatingDraft $draft]
+        }
+        list { return [privateCards] }
+        close {
+            if {[winfo exists .application.setupPrivateCard]} { destroy .application.setupPrivateCard }
+            return closed
+        }
+        get { return [privateCard $name] }
+        delete {
+            set card [privateCard $name]
+            if {![dict size $card]} { error "private card does not exist" }
+            if {[dict exists $card Me] && [dict get $card Me]
+                && [info exists ::application::ai::Settings(me)] && $::application::ai::Settings(me) eq $name} {
+                set ::application::ai::Settings(me) ""
+            }
+            SavePrivate [dict remove [privateCards] $name]
+            return deleted
+        }
+        lookup {
+            if {[dict exists $arguments FideID] && [dict get $arguments FideID] ne ""} {
+                return [::scidb::player::lookup -fide [dict get $arguments FideID]]
+            }
+            return [::scidb::player::lookup -name $name]
+        }
+        save {
+            if {$name eq ""} { return [setupPrivateCard .application] }
+            set card [privateCard $name]
+            foreach field $PrivateFields {
+                if {$field eq "Name"} { continue }
+                if {[dict exists $arguments $field]} {
+                    dict set card $field [dict get $arguments $field]
+                } elseif {![dict exists $card $field]} {
+                    dict set card $field [expr {$field eq "Me" ? 0 : ""}]
+                }
+            }
+            dict set card Name $name
+            return [savePrivateCard $card [dict get $arguments photo]]
+        }
+    }
+}
+
 proc SavePlayer {list} {
 	variable Var
 	variable PrivateFields
@@ -675,23 +778,8 @@ proc SavePlayer {list} {
 	dict set card Name $name
 	dict set card Me [expr {$Var(Me) ? 1 : 0}]
 
-	set cards [privateCards]
-	# only one card is the user's own
-	if {[dict get $card Me]} {
-		dict for {other c} $cards { dict set cards $other Me 0 }
-		set ::application::ai::Settings(me) $name
-	}
-	dict set cards $name $card
-	SavePrivate $cards
-
-	if {$PhotoSource ne ""} {
-		set path [PhotoPath $name]
-		if {$path ne ""} {
-			file mkdir [file dirname $path]
-			file copy -force $PhotoSource $path
-		}
-		set PhotoSource ""
-	}
+    savePrivateCard $card $PhotoSource
+    set PhotoSource ""
 	FillList $list $name
 }
 

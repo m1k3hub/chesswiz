@@ -1313,6 +1313,11 @@ proc ::application::ask::Preferences {args} {
 	set top [ttk::frame $dlg.content -padding 12]
 	pack $top -fill both -expand yes
 
+	ttk::checkbutton $top.startup -text "Show assistant at startup" \
+		-variable ::application::Options(assistant:startup) \
+		-command ::application::assistant::panel::SyncPreference
+	pack $top.startup -anchor w -pady {0 8}
+
 	ttk::label $top.title -text $mc::SpeechInput -font TkHeadingFont
 	pack $top.title -anchor w -pady {0 4}
 	ttk::label $top.hint -text [::application::speech::hint] -wraplength 460 \

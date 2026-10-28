@@ -238,6 +238,72 @@ proc ::book::openEditor {parent} {
 }
 
 
+# Execute explicit arguments through the native book APIs. The editor remains
+# optional; Refresh updates it if it is already open.
+proc ::book::runOperation {arguments} {
+	variable Priv
+	variable Options
+	set operation [dict get $arguments operation]
+	if {$operation eq "close"} { Close; return "closed book" }
+	if {$operation in {open new create}} {
+		set filename [dict get $arguments filename]
+		if {$filename eq ""} { error "filename is required for $operation" }
+		set filename [file normalize $filename]
+		if {$operation ne "open"} {
+			if {[file exists $filename] && ![dict get $arguments overwrite]} {
+				error "book already exists; supply overwrite true: $filename"
+			}
+			set entries {}
+			if {$operation eq "create"} {
+				set base [::scidb::db::get name]
+				set variant [::scidb::db::get variant?]
+				if {$variant ne "Normal"} { error "books require the normal chess variant" }
+				set entries [collectEntries $base $variant [gameNumbers $base $variant {}] \
+					[dict get $arguments plies] [dict get $arguments min_games] [dict get $arguments weight_mode]]
+			}
+			if {$Priv(handle) ne "" && $Priv(file) eq $filename} {
+				::scidb::book::close $Priv(handle)
+				set Priv(handle) {}
+			}
+			::scidb::book::write $filename $entries
+		}
+		set handle [::scidb::book::open $filename]
+		if {$Priv(handle) ne ""} { ::scidb::book::close $Priv(handle) }
+		set Priv(handle) $handle
+		set Priv(file) $filename
+		set Options(file) $filename
+		Refresh
+		return "$operation book $filename"
+	}
+	if {$Priv(handle) eq ""} { error "no book is open" }
+	if {$operation eq "save"} {
+		if {![::scidb::book::save $Priv(handle)]} { error "book is read-only" }
+	} else {
+		set fen [Fen]
+		if {$fen eq ""} { error "no normal chess position is selected" }
+		set move [dict get $arguments move]
+		if {$operation eq "add_last"} {
+			lassign [LastMove] move fen
+		}
+		if {$move eq ""} { error "move is required for $operation" }
+		switch -- $operation {
+			add - add_last { ::scidb::book::add $Priv(handle) $fen $move [dict get $arguments weight] }
+			remove {
+				if {![::scidb::book::remove $Priv(handle) $fen $move]} { error "move is not in the book: $move" }
+			}
+			reweight {
+				if {![::scidb::book::reweight $Priv(handle) $fen $move [dict get $arguments weight]]} {
+					error "move is not in the book: $move"
+				}
+			}
+			default { error "unknown book operation: $operation" }
+		}
+	}
+	Refresh
+	return "$operation book"
+}
+
+
 proc ::book::Close {} {
 	variable Priv
 

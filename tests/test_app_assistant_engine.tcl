@@ -54,6 +54,7 @@ tcltest::test assistant-last-move-context {current_game provides the predecessor
 		[expr {[lrange $previous 0 3] eq [lrange $before 0 3]}] \
 		[expr {[::scidb::pos::fen] eq $fen}] \
 		[expr {[::scidb::game::query current] eq $key}] [::scidb::game::query modified?]]
+	::application::pgn::release $slot
 	::game::release $slot
 	set result
 } -result {1 1 1 1 0}

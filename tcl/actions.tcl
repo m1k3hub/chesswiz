@@ -41,8 +41,28 @@ proc ::action::_dg {d key def} {
 	return $def
 }
 
-# Tri-state required option: 1 = explicitly required, 0 = explicitly
-# optional, -1 = not specified (required only when there is no default).
+# Exact effect metadata, independent of whether a model likes the result.
+proc ::action::changesState {id arguments} {
+	set rec [get $id]
+	if {[_dg $rec effect change] eq "query"} {return 0}
+	# Execution used schema defaults. Classifying only the supplied arguments
+	# would incorrectly turn an omitted default status/list into a mutation.
+	foreach param [dict get $rec args] {
+		lassign $param name opts
+		if {![dict exists $arguments $name] && [dict exists $opts default]} {
+			dict set arguments $name [dict get $opts default]
+		}
+	}
+	if {[dict exists $arguments operation] && [dict get $arguments operation] in {status list}} {return 0}
+	set predicate [_dg $rec effect-command {}]
+	if {$predicate ne ""} {
+		if {[catch {uplevel #0 [::list {*}$predicate $arguments]} changes]} {return 0}
+		return [expr {[string is boolean -strict $changes] && $changes}]
+	}
+	return 1
+}
+
+# Tri-state required option: 1 = required, 0 = optional, -1 = unspecified.
 proc ::action::_requiredState {opts} {
 	if {[dict exists $opts required]} {
 		set val [dict get $opts required]
@@ -74,9 +94,19 @@ proc ::action::_requiredState {opts} {
 #   context    {C12}      (context menu id)
 #   toolmenu   "..."      (assistant reply menu hint)
 #   doc        description text
+#   effect     change|query (query results never stand in for a missing fact)
+#   effect-command optional exact predicate for mixed getter/setter actions
 #   async      0|1
 #   maxreply   int
 #   ends-in-dialog  0|1
+#   purpose    one plain sentence: what the action does (VAL-KNOW-001)
+#   when       one plain sentence: when a user wants it
+#   examples   at least two plain-language requests
+#   related    existing action ids a user may want next
+#   video      optional how-to video key
+#   keywords   lexical lookup terms (find_capability; never shown)
+#   i18n       {lang {purpose ... when ... examples {...}}} translations
+#   operator   1 = the assistant may run it through run_action (VAL-AI-009)
 # ----------------------------------------------------------------------
 proc ::action::register {id record} {
 	variable Registry
@@ -125,7 +155,12 @@ proc ::action::register {id record} {
 		}
 	}
 
+	if {[_dg $record effect change] ni {change query}} {
+		return -code error "error: action '$id' effect must be change or query"
+	}
 	set normalized [dict create \
+		effect   [_dg $record effect change] \
+		effect-command [_dg $record effect-command {}] \
 		label    [dict get $record label] \
 		object   [_dg $record object {}] \
 		args     [_dg $record args {}] \
@@ -147,6 +182,14 @@ proc ::action::register {id record} {
 		async    [expr {[_dg $record async 0] ? 1 : 0}] \
 		maxreply [_dg $record maxreply 6000] \
 		ends-in-dialog [expr {[_dg $record ends-in-dialog 0] ? 1 : 0}] \
+		purpose  [_dg $record purpose {}] \
+		when     [_dg $record when {}] \
+		examples [_dg $record examples {}] \
+		related  [_dg $record related {}] \
+		video    [_dg $record video {}] \
+		keywords [_dg $record keywords {}] \
+		i18n     [_dg $record i18n {}] \
+		operator [expr {[_dg $record operator 0] ? 1 : 0}] \
 	]
 
 	dict set Registry $id $normalized
@@ -249,6 +292,9 @@ proc ::action::argsToSchema {spec} {
 				dict set items enum $itemEnum
 			}
 			dict set prop items $items
+		} elseif {$type eq "object"} {
+			dict set prop type object
+			dict set prop additionalProperties 1
 		} else {
 			dict set prop type string
 		}
@@ -331,6 +377,8 @@ proc ::action::schemaJson {spec} {
 				append p ",\"enum\":\[[join $vals ,]\]"
 			}
 			append p "\}"
+		} elseif {$type eq "object"} {
+			append p "\"object\",\"additionalProperties\":true"
 		} else {
 			append p "\"string\""
 		}
@@ -401,6 +449,16 @@ proc ::action::validateArgs {id argsDict} {
 		return [::list ok [dict create]]
 	}
 
+	# A model sometimes wraps flat arguments in an invented object
+	# ("criteria": {...}); silently dropping those keys runs the action with
+	# defaults. Name the key so the model loop can correct the call.
+	set known [lmap param $spec { lindex $param 0 }]
+	foreach key [dict keys $argsDict] {
+		if {$key ni $known} {
+			return [::list error "unknown argument '$key'"]
+		}
+	}
+
 	set validated [dict create]
 
 	foreach param $spec {
@@ -423,6 +481,19 @@ proc ::action::validateArgs {id argsDict} {
 
 		if {[dict exists $argsDict $name]} {
 			set value [dict get $argsDict $name]
+			# A model (and a JSON null) commonly sends "" for an optional
+			# value; that means "use the default". An explicit empty enum
+			# member remains a value when the schema offers it.
+			if {!$isRequired && $value eq "" && $type in {integer number boolean enum}
+			 && ($type ne "enum" || "" ni $enumVals)} {
+				if {$hasLegacyDefault} {
+					set value [dict get $opts legacy-default]
+				} elseif {$hasDefault} {
+					set value $defaultVal
+				} else {
+					continue
+				}
+			}
 		} elseif {$isRequired} {
 			return [::list error "missing argument '$name'"]
 		} elseif {$hasLegacyDefault} {
@@ -467,6 +538,10 @@ proc ::action::validateArgs {id argsDict} {
 				set value 1
 			} else {
 				set value 0
+			}
+		} elseif {$type eq "object"} {
+			if {[catch { dict size $value }]} {
+				return [::list error "argument '$name' must be an object"]
 			}
 		} elseif {$type eq "array"} {
 			set items [_dg $opts items string]
@@ -581,6 +656,16 @@ proc ::action::Dispatch {id args approval} {
 		set argsDict [lindex $args 0]
 	} elseif {[llength $args] > 0} {
 		set argsDict [lindex $args 0]
+	}
+
+	if {[llength [info commands ::context::NeedsObject]] && [::context::NeedsObject $record $argsDict]} {
+		if {![dict exists $argsDict object]} {
+			set selected [::context::CurrentObjectFor $id]
+			if {[llength $selected]} { dict set argsDict object [lindex $selected 1] }
+		}
+		if {![dict exists $argsDict object] || [dict get $argsDict object] eq ""} {
+			return "error: precondition: select an item before running $id"
+		}
 	}
 
 	set argsSpec [dict get $record args]

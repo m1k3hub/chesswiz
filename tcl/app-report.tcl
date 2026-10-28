@@ -157,6 +157,8 @@ proc application::report::build {frame width height} {
 	bind $inner <Configure> +[namespace code [list FitWidth $inner $sw.html %w]]
 
 	set Priv(html) $sw.html
+	::font::html::setupFonts report
+	ApplyFont
 	FitWidth $inner $sw.html $width
 
 	# a rebuilt pane (layout change) keeps showing the last document
@@ -399,3 +401,30 @@ proc application::report::LinkClick {w x y} {
 }
 
 # vi:set ts=3 sw=3:
+
+# Report typography uses the same HTML font settings as other viewers.
+proc ::application::report::ApplyFont {} {
+	variable Priv
+	if {![info exists Priv(html)] || ![winfo exists $Priv(html)]} { error "no report viewer is open" }
+	$Priv(html) fontsize [::font::html::fontSize report]
+	$Priv(html) css [::html::textStyle [list [::font::html::textFont report]]]
+	return [$Priv(html) fontsize?]
+}
+proc ::application::report::SetSize {size} {
+	::font::html::setupFontSize report $size
+	return [ApplyFont]
+}
+proc ::application::report::FontMenu {id} {
+	variable Priv
+	if {![info exists Priv(html)] || ![winfo exists $Priv(html)]} { error "no report viewer is open" }
+	::font::html::setupFonts report
+	set m [::context::PopupMenu reportFont]
+	if {$id eq "c9.report.family"} {
+		::font::html::addChangeFontToMenu report $m ::application::report::ApplyFont yes
+	} else {
+		foreach size {8 9 10 11 12 13 14} {
+			$m add command -label "$size pt" -command [list ::application::report::SetSize $size]
+		}
+	}
+	return [::context::PostChoices $m]
+}

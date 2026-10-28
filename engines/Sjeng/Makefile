@@ -26,12 +26,16 @@ clean:
 	@rm -f $(EXE) $(OBJS)
 
 install:
+ifneq ($(wildcard $(EXE)),)
 	@install -m 755 -d $(ENGINESDIR)
 	@install -m 755 -p $(EXE) $(ENGINESDIR)
 	@rm -f $(ENGINESDIR)/$(subst -chesswiz,-scidb,$(EXE))
 	@install -m 755 -d $(SHAREDIR)/engines
 	@install -m 755 -d $(SHAREDIR)/engines/$(EXE)
 	@install -m 644 -p books/* $(SHAREDIR)/engines/$(EXE)
+else
+	@echo "Skipping optional engine $(EXE): not built"
+endif
 
 uninstall:
 	@rm -f $(ENGINESDIR)/$(EXE)

@@ -111,6 +111,10 @@ tcltest::test p6-live-loop {analysis starts, resumes, plays a PV and pins a comp
     set played [expr {[::scidb::pos::fen] ne $before}]
     ::scidb::test::p6::waitUntil {[::scidb::engine::bound? [::engine::id $number]]}
     ::scidb::test::p6::waitUntil {[llength [::application::analysis::BestLine $tree]] > 0}
+    # A first depth-one UCI result may contain just one ply. Wait for the
+    # multi-move candidate this test pins, rather than sampling that first PV.
+    ::scidb::test::p6::waitUntil {[llength [::application::analysis::LineMoves [lindex [lindex [::application::analysis::BestLine $tree] 1] 8]]] > 1}
+    ::application::analysis::Stop $tree
     set fen [::scidb::pos::fen]
     set pgn [::scidb::game::toPGN modified]
     # Exercise the selected-row context action, including the existing destination chooser.

@@ -1635,7 +1635,7 @@ proc ::board3d::CameraBar {bar} {
 	foreach {label view} {White white Black black Side side Top top} {
 		$bar.view.menu add radiobutton -label $label \
 			-variable ::board3d::State(view) -value $view \
-			-command [namespace code [list viewerPreset $view]]
+			-command [list ::action::run board3d.camera [dict create view $view]]
 	}
 	pack $bar.view -side left -padx 2
 	foreach {name label command} {
@@ -1781,12 +1781,12 @@ proc ::board3d::openViewer {parent} {
 	set appearance [menu $bar.appearance.menu -tearoff 0]
 	foreach theme {"Classic Woodcraft" "Photorealistic Walnut & Maple" "Rosewood & Boxwood" "Walnut & Maple" "Ebony & Ivory" "Tournament Green"} {
 		$appearance add radiobutton -label $theme -variable ::board3d::State(theme) \
-			-value $theme -command [namespace code [list setTheme $theme]]
+			-value $theme -command [list ::action::run board3d.theme [dict create name $theme]]
 	}
 	$appearance add separator
 	foreach {label style} {"Rendered pieces" realistic3d "Vector pieces" vector "Piece photos" photos "Piece symbols" glyphs} {
 		$appearance add radiobutton -label $label -variable ::board3d::State(pieceStyle) \
-			-value $style -command [namespace code [list setPieceStyle $style]]
+			-value $style -command [list ::action::run board3d.pieces [dict create style $style]]
 	}
 	pack $bar.appearance -side left -padx 6 -pady 2
 

@@ -988,7 +988,7 @@ proc Build {w} {
 		set y [expr {(7 - $row)*$size + $offs}]
 		set k [expr {$flip ? 63 - $i : $i}]
 		set color [expr {($row + $col) % 2 ? "lite" : "dark"}]
-		$w.c delete square:$k selected:$k suggested:$k input:$k
+		$w.c delete square:$k mark:$k selected:$k suggested:$k input:$k
 		$w.c create image $x $y -anchor nw -image photo_Square($color,$size) -tag square:$k
 		$w.c create rectangle $x $y [expr {$x + $size}] [expr {$y + $size}] \
 			-tag mark:$k -width 0 -state hidden

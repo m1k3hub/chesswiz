@@ -3705,4 +3705,9 @@
 ::context::mc::c12_merge_game "Partita"
 ::context::mc::c12_export "Esporta Partita"
 
+### application::assistant::panel ###################################
+::application::assistant::panel::mc::StartupGreeting	"Posso usare Chesswiz per te. Scegli un suggerimento qui sotto o chiedi con parole tue."
+::application::assistant::panel::mc::Hide	"Nascondi"
+::application::assistant::panel::mc::NoModelHint	"Nessun modello \u00e8 ancora collegato. Apri Strumenti > Scegli modello\u2026 per collegarne uno; i suggerimenti qui sopra funzionano anche senza."
+
 # vi:set ts=3 sw=3:

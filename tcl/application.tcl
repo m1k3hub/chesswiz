@@ -107,7 +107,7 @@ set BoardLayout {
 	}
 }
 
-array set Options { shortcut:scheme chesswiz window:geometry {} window:state normal }
+array set Options { shortcut:scheme chesswiz window:geometry {} window:state normal assistant:startup 1 }
 array set ShortcutDefaults {}
 
 set FontSizeActive 0
@@ -1503,8 +1503,8 @@ proc newAnalysisPane {analysisNumber} {
 }
 
 
-# Show pane <uid> of the board tab: add it to the layout when it is not
-# part of it, then bring it to the front (its tab, its multiwindow or
+# Show pane <uid> on the current tab when it hosts it, otherwise on the board.
+# Add it to the layout when it is not part of it, then bring it to the front (its tab, its multiwindow or
 # notebook page, or its toplevel when undocked). Returns the twm frame,
 # or {} when the board layout is not available. Automatic content callers
 # pass explicit=false so they do not create a persistent user reopen override.
@@ -1515,6 +1515,11 @@ proc openPane {uid {explicit true}} {
 
 	if {![info exists Vars(board:twm)]} { return {} }
 	set twm $Vars(board:twm)
+	# A game list can live on both pages. Showing it must preserve the
+	# user's database page rather than raise the board's duplicate pane.
+	if {![catch { set current [twm] }] && $uid in [$current leaves]} {
+		set twm $current
+	}
 
 	if {$uid ni [$twm leaves]} {
 		set name [NameFromUid $uid]
@@ -1530,12 +1535,11 @@ proc openPane {uid {explicit true}} {
 	}
 	if {[catch { set frame [$twm leaf $uid] }] || ![winfo exists $frame]} { return {} }
 
-	if {![string match {*.board} [$Vars(notebook) select]]} {
-		switchTab board
+	if {$twm eq $Vars(board:twm)} {
+		if {![string match {*.board} [$Vars(notebook) select]]} { switchTab board }
+		if {$explicit} { reflow::explicitOpen $twm $uid }
+		reflow::onPaneStateChange
 	}
-
-	if {$explicit} { reflow::explicitOpen $twm $uid }
-	reflow::onPaneStateChange
 	set parent [$twm parent $frame]
 	if {[$twm ismultiwindow $parent] || [$twm isnotebook $parent]} {
 		$twm select $parent $frame
@@ -2286,6 +2290,13 @@ proc Startup2 {} {
 	#::util::photos::checkForUpdate [namespace current]::InformAboutUpdates
 	reflow::Startup
 	startDisplayWatch
+	# Mapping the assistant also paints the board for the first time. Let
+	# startup settle and process user input before doing that optional work.
+	# Both the option and the pane are checked again by Startup at execution.
+	after 500 [list after idle [list ::application::assistant::panel::DeferredStartup $tab]]
+	# Expose every surface operator now; synthesize descriptive knowledge
+	# when it is first requested, outside the startup interaction path.
+	catch { ::knowledge::Ensure 0 }
 }
 
 
@@ -2475,7 +2486,7 @@ proc shapeTokens {stream} {
    if {[llength $kids] == 1 && $type in {multiwindow notebook}} {lappend out {*}$kids; continue}
    set orient {}; if {$type eq "panedwindow"} {set orient [string index [dict get $attrs -orient] 0]}
    lappend out "${type}${orient}\[[join $kids ,]\]"
-  } elseif {$attrs ne "media"} {lappend out $type:$attrs}
+  } elseif {$attrs ni {media assistant}} {lappend out $type:$attrs}
  }
  return $out
 }
@@ -2693,6 +2704,20 @@ proc collapseNode {t uid} {
  }
  return [list $pw $node]
 }
+# Idle callbacks can replace the docking tree during a collapse transaction.
+# Discard coordinates belonging to destroyed widgets and recompute next turn.
+proc collapseTreeLive {t} {
+ variable S
+ foreach {pw coords} $S(snapshot) {
+  if {![winfo exists $pw]} {
+   set S(collapsed) {}; set S(snapshot) {}; set S(busy) 0
+   unset -nocomplain S(stretch) S(snapshotSize) S(returnSnapshot) S(returnSize)
+   onPaneStateChange
+   return 0
+  }
+ }
+ return 1
+}
 proc updateCollapse {} {
  variable S; variable ShortWidth; variable ShortHeight
  set t [boardTwm]
@@ -2733,6 +2758,17 @@ proc updateCollapse {} {
  set custom [expr {![reflowable? $t]}]
  set S(busy) 1
  restoreCollapsed
+ # Restore runs the event loop to settle native sashes. A pending layout
+ # load can replace every panedwindow while it runs, invalidating desired
+ # before the new snapshot is even captured. Never apply old paths to the
+ # replacement tree; let the next content turn recompute from live leaves.
+ foreach {pw node} $desired {
+  if {![winfo exists $pw] || ![winfo exists $node]} {
+   set S(busy) 0
+   onPaneStateChange
+   return
+  }
+ }
  if {$desired ne {}} {
   set S(snapshot) [::application::focuszoom::Snapshot $t]
   set S(snapshotSize) [list [winfo width .application] [winfo height .application]]
@@ -2765,6 +2801,7 @@ proc updateCollapse {} {
   set S(collapsed) $desired
  }
  update idletasks
+ if {![collapseTreeLive $t]} {return}
  if {$custom && $desired ne {}} {
   # Tk reuses requested pane sizes when hiding a child, even for panes
   # marked non-stretching. Reapply every boundary except the one consumed
@@ -2787,6 +2824,7 @@ proc updateCollapse {} {
     }
    }
    update idletasks
+   if {![collapseTreeLive $t]} {return}
   }
  }
  set S(busy) 0
@@ -2821,7 +2859,7 @@ proc onPaneStateChange args {
  if {![info exists S(contentAfter)]} {set S(contentAfter) [after 0 [namespace code contentChanged]]}
 }
 proc contentChanged {} {
- variable S; unset S(contentAfter)
+ variable S; unset -nocomplain S(contentAfter)
  updateCollapse
 }
 # SAVE RULE (VAL-PANE-009): tall reflow remains temporary; enlarge to

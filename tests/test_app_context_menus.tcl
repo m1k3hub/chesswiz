@@ -244,6 +244,16 @@ proc ::scidb::test::ctx::Expected {cid {section default}} {
 		# Round 5: the synthetic C3 object has no real game/site URL.
 		# URL visibility and dispatch are covered by test_app_menu_round5.
 		if {$cid eq "C3" && [string match {Open URL*} $line]} continue
+		# Worker ruling: remove unimplemented leaves and their empty source
+		# group; the board's existing tablebase toggle is now a command.
+		# The frozen proposal remains untouched; dispatch-removed separately
+		# asserts that the removed controls cannot be invoked.
+		if {$cid eq "C9"} {
+			if {$section eq "report" && $line eq "Print…"} {continue}
+			if {$section eq "assistant" && [string match {Source ▸*} $line]} {continue}
+			if {$section eq "explorer" && $line eq "Online Tablebase"} {continue}
+			if {$section eq "board" && $line eq "Show Tablebase ▸"} {set line "Show Tablebase"}
+		}
 		lappend parsed [FixtureRow $line]
 	}
 	set seen 0

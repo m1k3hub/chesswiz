@@ -32,18 +32,14 @@ namespace eval ::scidb::test::objects {
         c7.external {opens an external browser/player; no external applications in headless audit}
         c5.insights {capability insights is absent; no insights backend is shipped}
         c6.add_sequence {requires an end-of-line position; fixture deliberately remains mid-game}
-        c9.assistant.cloud {requires a configured provider; fixture has no local/cloud model service}
-        c9.assistant.local {requires a configured provider; fixture has no local/cloud model service}
-        c9.explorer.tablebase {requires online tablebase service; no network in this fixture}
         c9.report.family {requires an HTML report header; the C9 fixture selects the notation pane}
-        c9.report.print {requires an HTML report header; the C9 fixture selects the notation pane}
         c9.report.size {requires an HTML report header; the C9 fixture selects the notation pane}
         c9.report.zoom {requires an HTML report header; the C9 fixture selects the notation pane}
     }
     proc cases {} {
         set cases {}
         foreach {kind ids} {
-            board {c1.set_start_board c1.set_start_position c1.start.standard c1.start.chess960 c1.start.symm960 c1.start.shuffle c1.start.setup c1.board_setup c1.copy_fen c1.copy_diagram c1.edit_annotation c1.flip_board c1.insert_null}
+            board {c9.tablebase c1.set_start_board c1.set_start_position c1.start.standard c1.start.chess960 c1.start.symm960 c1.start.shuffle c1.start.setup c1.board_setup c1.copy_fen c1.copy_diagram c1.edit_annotation c1.flip_board c1.insert_null}
             move {c2.try_variation c2.annot.prefix c2.annot.infix c2.annot.suffix c2.import_game c2.import_variation c2.promote_variation c2.remove_variation c2.comment_after c2.comment_before c2.marks_palette c2.move_info c2.insert_diagram c2.insert_diagram_black c2.strip.moves c2.strip.truncate c2.strip.variations c2.strip.annotations c2.strip.info c2.strip.marks c2.strip.comments c2.copy_comments c2.undo c2.redo c2.collapse c2.expand}
             game {c3.sort.column c3.sort.asc c3.sort.desc c3.paste_games c3.merge c3.load c3.browse c3.overview c3.tournament c3.games_like c3.edit_characteristics c3.delete c3.copy_game}
             database {c4.new.scid c4.new.pgn c4.close c4.open_new_tab c4.download_games c4.import.pgn c4.open_database c4.help c4.maintenance.compact c4.export.pgn c4.export.lichess c4.symbol.small c4.symbol.normal c4.symbol.large c4.properties c4.readonly c4.search.current c4.reports.opening}
@@ -353,6 +349,12 @@ namespace eval ::scidb::test::objects {
         foreach path [glob -nocomplain [file rootname $base].*] {
             if {[file extension $path] ne {.control}} { catch {lappend out disk $path [zlib crc32 [bytes $path]]} }
         }
+        # An export may finish and close its dialog before the window poll.
+        # The newly written bytes are an observable effect in their own right.
+        variable dir
+        foreach path [glob -nocomplain [file join $dir exported.pgn]] {
+            lappend out exported [file tail $path] [zlib crc32 [bytes $path]]
+        }
         catch {lappend out count [::scidb::db::count games $base Normal]}
         catch {
             set deleted {}
@@ -447,6 +449,7 @@ namespace eval ::scidb::test::objects {
         }
         return [probe $id $kind]
     }
+    proc observeTreeUpdate {command operation} { incr ::scidb::test::objects::treeUpdates }
     proc probe {id kind} {
         variable object
         variable control
@@ -478,7 +481,29 @@ namespace eval ::scidb::test::objects {
             after 100 [list [namespace current]::acceptDialogs]
         } elseif {$id ni {c4.export.pgn c12.export}} { after 500 ::scidb::test::reachability::cancelDialogs }
         puts "OBJECT ACTION $id begin"; flush stdout
-        set reply [::scidb::test::reachability::runAction [list tool $id [list object $object]]]
+        set manualSearchComplete 0
+        if {$id eq "c8.start_search"} {
+            set ::scidb::test::objects::treeUpdates 0
+            trace add execution ::scidb::tree::update enter [namespace current]::observeTreeUpdate
+        }
+        set code [catch {::scidb::test::reachability::runAction [list tool $id [list object $object]]} reply options]
+        if {$id eq "c8.start_search"} {
+            trace remove execution ::scidb::tree::update enter [namespace current]::observeTreeUpdate
+        }
+        if {$code} { return -options $options $reply }
+        if {$id eq "c8.start_search"} {
+            # A cached manual search is idempotent. Verify the real native
+            # update and its completed continuation, rather than requiring
+            # unrelated window changes from an already displayed result.
+            set deadline [expr {[clock milliseconds] + 5000}]
+            while {![::scidb::tree::isUpToDate?] && [clock milliseconds] < $deadline} { after 20; update }
+            variable base
+            if {!$::scidb::test::objects::treeUpdates || [::scidb::tree::get] ne $base
+                || ![::scidb::tree::isUpToDate?] || [::scidb::tree::move 0] ne "a6"} {
+                error {manual search did not update the selected database's generated continuation}
+            }
+            set manualSearchComplete 1
+        }
         puts "OBJECT ACTION $id returned"; flush stdout
         if {$id eq "c8.move_actions"} {
             set menu .contextMoveActions
@@ -503,6 +528,10 @@ namespace eval ::scidb::test::objects {
             variable dir
             exportFile
             if {![file exists [file join $dir exported.pgn]] || [file size [file join $dir exported.pgn]] == 0} { error "$id did not export data" }
+            set exported [bytes [file join $dir exported.pgn]]
+            if {![regexp {\[Event\s+"Generated Open"\]} $exported]
+                || ![regexp {1\.\s*e4} $exported]} { error "$id exported something other than the generated fixture game" }
+            puts "EVIDENCE export-file bytes=[string length $exported] fixture-game=1"
         }
         if {$id eq {c8.copy_line}} {
             if {[clipboard get] ne {e4 e5 Nf3 Nc6 Bb5 a6}} { error {Copy Line did not copy exactly the selected continuation} }
@@ -519,6 +548,13 @@ namespace eval ::scidb::test::objects {
                 error {Copy Line lost the variation path or moved the board}
             }
             ::scidb::game::go key $saved
+        }
+        if {$id eq "c8.analyze"} {
+            # Starting analysis completes on the event queue. Observe its
+            # real UI transition before applying the unchanged effect check.
+            set deadline [expr {[clock milliseconds] + 10000}]
+            while {$before eq [state] && $::scidb::test::reachability::seen eq {}
+                && [clock milliseconds] < $deadline} { after 20; update }
         }
         set after [state]
         if {$id eq {c3.delete}} {
@@ -541,7 +577,7 @@ namespace eval ::scidb::test::objects {
             if {!$changed} { error "$id did not change the scratch copy" }
         }
         if {$id eq {c4.maintenance.compact} && [::scidb::db::count games $::scidb::test::objects::base Normal] != 7} { error {compact did not remove exactly the deleted scratch game} }
-        if {$before eq $after && $::scidb::test::reachability::seen eq {} && !($id eq "c3.games_like" && [string match {*candidate games:*} $reply])} {
+        if {!$manualSearchComplete && $before eq $after && $::scidb::test::reachability::seen eq {} && !($id eq "c3.games_like" && [string match {*candidate games:*} $reply])} {
             error "$id: no observable effect (reply: $reply)"
         }
         if {$id in {c4.save_changes c4.maintenance.compact c12.save.replace c12.save.replace_moves c12.save.new}} {

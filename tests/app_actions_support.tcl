@@ -98,6 +98,8 @@ namespace eval ::scidb::test::actions {
             opening_score { set result {eco A00} }
             open_view { set result {kind player_card name {Generated White}} }
             find_positions { set result {request {initial position} cql {cql() initial}} }
+            find_capability { set result {request {review my games}} }
+            run_action { set result {id pane arguments {action dock pane board}} }
             engine_options - remove_engine { set result {engine {Generated Engine}} }
             start_engine { set result {engine {Generated Engine}} }
             set_engine_option { set result {engine {Generated Engine} option Skill value 1} }

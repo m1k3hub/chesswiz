@@ -1541,26 +1541,31 @@ proc DefaultCSS {} {
 }
 
 
-proc SaveAsHTML {dlg} {
+proc SaveAsHTML {dlg {filename ""}} {
 	variable ${dlg}::Vars
 	variable Options
 
-	set filetypes [list [list $::dialog::fsbox::mc::FileType(html) {.html}]]
-	set eventName [lindex $Vars(event) 0]
-	set save [::dialog::saveFile \
-		-parent $dlg \
-		-class crosstable \
-		-initialdir $::scidb::dir::home \
-		-initialfile $eventName.html \
-		-filetypes $filetypes \
-		-needencoding no \
-		-geometry last \
-	]
+	set interactive [expr {$filename eq ""}]
+	if {$interactive} {
+		set filetypes [list [list $::dialog::fsbox::mc::FileType(html) {.html}]]
+		set eventName [lindex $Vars(event) 0]
+		set save [::dialog::saveFile \
+			-parent $dlg \
+			-class crosstable \
+			-initialdir $::scidb::dir::home \
+			-initialfile $eventName.html \
+			-filetypes $filetypes \
+			-needencoding no \
+			-geometry last \
+		]
 
-	if {[llength $save] == 0} { return }
+		if {[llength $save] == 0} { return }
 
-	set file [lindex $save 0]
+		set filename [lindex $save 0]
+	}
+	set file $filename
 	if {[catch { ::open $file w } chan ]} {
+		if {!$interactive} { error $chan }
 		if {[file exists $file]} {
 			set msg $mc::CannotOverwriteFile
 		} else {

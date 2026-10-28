@@ -2416,6 +2416,34 @@ proc application::media::StreamChosen {dlg} {
 
 
 # Play a stream link; returns 1 when the player took it.
+# One registry action for the Open Stream dialog and for playing a link
+# directly: a dialog-only feature exposes its operation with an argument
+# (VAL-AI-009). The dialog opens only when no URL was given.
+proc application::media::DoOpenStream {cargs} {
+	# The registry calls a handler with the validated argument dictionary;
+	# accept a bare URL too, for callers that still use the old shape.
+	if {[catch { dict get $cargs url } url]} {
+		if {[catch { dict size $cargs }]} { set url $cargs } else { set url "" }
+	}
+	set url [string trim $url]
+	if {$url eq ""} {
+		OpenStream .application
+		return "the stream dialog is open; pick a live site or paste a stream link"
+	}
+	if {![PlayStream $url]} { return "error: not a playable stream: $url" }
+	return "playing $url"
+}
+
+::action::register open_stream [dict create \
+	label open_stream \
+	object {} \
+	args {{url {type string default {} description {a stream link; leave empty to open the dialog}}}} \
+	handler ::application::media::DoOpenStream \
+	what {open the stream %s} \
+	ai 1 \
+	doc "Open a video stream or a live tournament broadcast. With a link, play it; without one, open the stream dialog with the live sites." \
+]
+
 proc application::media::PlayStream {url} {
 	variable Priv
 	variable StreamOptions

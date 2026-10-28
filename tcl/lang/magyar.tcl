@@ -3686,4 +3686,9 @@
 ::context::mc::c12_paste_game "Játszma"
 ::context::mc::c12_merge_game "Játszma"
 
+### application::assistant::panel ###################################
+::application::assistant::panel::mc::StartupGreeting	"\u00c9n tudom vezetni a Chesswizt \u00d6n helyett. V\u00e1lasszon egy javaslatot lent, vagy k\u00e9rdezzen saj\u00e1t szavaival."
+::application::assistant::panel::mc::Hide	"Elrejt\u00e9s"
+::application::assistant::panel::mc::NoModelHint	"M\u00e9g nincs modell csatlakoztatva. Nyissa meg az Eszk\u00f6z\u00f6k > Modell kiv\u00e1laszt\u00e1sa\u2026 men\u00fcpontot; a fenti javaslatok modell n\u00e9lk\u00fcl is m\u0171k\u00f6dnek."
+
 # vi:set ts=8 sw=8:

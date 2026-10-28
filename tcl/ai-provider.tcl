@@ -182,10 +182,15 @@ proc ::ai::provider::request {url body args} {
 	if {[string match -nocase https://* $url]} {
 		::platform::sys::tlsRegister
 	}
+	catch { ::http::config -postfresh 1 -repost 1 }
+	set payload [encoding convertto utf-8 $body]
+	set qblock [expr {max(65536, [string length $payload] + 1)}]
 
 	return [::http::geturl $url \
 		-type "application/json; charset=utf-8" \
-		-query [encoding convertto utf-8 $body] \
+		-query $payload \
+		-queryblocksize $qblock \
+		-keepalive 0 \
 		-timeout $Config(timeoutMs) \
 		-binary 1 \
 		{*}$args]
@@ -1007,10 +1012,19 @@ proc ::ai::provider::anthropic {prompt system} {
 proc ::ai::provider::openaiMessages {messages} {
 	set out {}
 	set pending {}
+	set lastAssistant -1
+	for {set idx 0} {$idx < [llength $messages]} {incr idx} {
+		if {[dict get [lindex $messages $idx] role] eq "assistant"} {
+			set lastAssistant $idx
+		}
+	}
 
+	set idx -1
 	foreach msg $messages {
+		incr idx
 		set role [dict get $msg role]
 		set content [expr {[dict exists $msg content] ? [dict get $msg content] : ""}]
+		set content [string map [list "\r\n" "\n"] $content]
 
 		switch -- $role {
 			tool {
@@ -1029,6 +1043,14 @@ proc ::ai::provider::openaiMessages {messages} {
 			assistant {
 				set calls [expr {[dict exists $msg tool_calls] ? [dict get $msg tool_calls] : {}}]
 				set enc {}
+				# Fireworks reasoning models require their opaque reasoning text
+				# on the immediately preceding assistant turn. Keep it separate
+				# from visible content and omit older turns to bound payload size.
+				set reasoning ""
+				if {[Current] eq "fireworks" && $idx == $lastAssistant && [dict exists $msg reasoning_content]} {
+					set rtext [string map [list "\r\n" "\n"] [dict get $msg reasoning_content]]
+					set reasoning [format {,"reasoning_content":"%s"} [jsonEscape $rtext]]
+				}
 				foreach call $calls {
 					set id [CallId $call]
 					set fn [dict get $call function]
@@ -1045,10 +1067,10 @@ proc ::ai::provider::openaiMessages {messages} {
 					lappend pending $id
 				}
 				if {[llength $enc]} {
-					lappend out [format {{"role":"assistant","content":"%s","tool_calls":[%s]}} \
-						[jsonEscape $content] [join $enc ,]]
+					lappend out [format {{"role":"assistant","content":"%s","tool_calls":[%s]%s}} \
+						[jsonEscape $content] [join $enc ,] $reasoning]
 				} else {
-					lappend out [format {{"role":"assistant","content":"%s"}} [jsonEscape $content]]
+					lappend out [format {{"role":"assistant","content":"%s"%s}} [jsonEscape $content] $reasoning]
 				}
 			}
 			default {
@@ -1065,6 +1087,10 @@ proc ::ai::provider::openaiReply {data} {
 	set m [dict get [lindex [dict get $d choices] 0] message]
 	set content [expr {[dict exists $m content] && [dict get $m content] ne "null" ? [dict get $m content] : ""}]
 	set msg [dict create role assistant content $content]
+	if {[Current] eq "fireworks" && [dict exists $m reasoning_content]
+	 && [dict get $m reasoning_content] ne "null"} {
+		dict set msg reasoning_content [dict get $m reasoning_content]
+	}
 	if {[dict exists $m tool_calls] && [dict get $m tool_calls] ne "null"} {
 		set calls {}
 		# Decode arguments for tool execution, retain provider metadata as JSON.
@@ -1095,9 +1121,15 @@ proc ::ai::provider::openaiBody {messages tools} {
 	if {$model eq ""} { error "no [label [Current]] model chosen: pick one in Extras > AI: Choose Model" }
 	set body "\{\"model\":\"[jsonEscape $model]\",\"messages\":[openaiMessages $messages]"
 	if {$tools ne ""} { append body ",\"tools\":$tools" }
-	# GLM on Fireworks thinks for minutes unbounded; medium answers in seconds
+	# GLM on Fireworks thinks for minutes unbounded; medium answers in seconds,
+	# and follow-up tool rounds use low effort so multi-round requests finish
+	# well inside the per-step timeout budget.
 	if {[Current] eq "fireworks" && $Config(effort) ne ""} {
-		append body ",\"reasoning_effort\":\"[jsonEscape $Config(effort)]\""
+		set effort $Config(effort)
+		if {$effort eq "medium" && [HasToolTurns $messages]} {
+			set effort low
+		}
+		append body ",\"reasoning_effort\":\"[jsonEscape $effort]\""
 	}
 	return "$body\}"
 }
@@ -1198,7 +1230,7 @@ proc ::ai::provider::OnModelList {provider script token} {
 # {ok 1 text T} (completion), or {ok 0 error E}.
 # ----------------------------------------------------------------------
 
-proc ::ai::provider::cloudChatAsync {messages tools script {mode chat}} {
+proc ::ai::provider::cloudChatAsync {messages tools script {mode chat} {attempt 0}} {
 	variable Config
 
 	set provider $Config(name)
@@ -1219,7 +1251,7 @@ proc ::ai::provider::cloudChatAsync {messages tools script {mode chat}} {
 	}
 
 	requestAsync $url $body \
-		[namespace code [list ::ai::provider::OnCloud $provider $mode $script]] \
+		[namespace code [list ::ai::provider::OnCloud $provider $mode $script $url $body $headers $attempt]] \
 		[namespace code [list ::ai::provider::cloudUnavailable $script]] \
 		$headers
 	return
@@ -1242,11 +1274,28 @@ proc ::ai::provider::cloudUnavailable {script error} {
 }
 
 
-proc ::ai::provider::OnCloud {provider mode script token} {
+proc ::ai::provider::OnCloud {provider mode script args} {
+	if {[llength $args] == 1} {
+		lassign $args token
+		set url ""
+		set reqBody ""
+		set headers {}
+		set attempt 1
+	} else {
+		lassign $args url reqBody headers attempt token
+	}
 	set status [::http::status $token]
 	set code [::http::ncode $token]
 	set data [body $token]
 	::http::cleanup $token
+
+	if {$status in {timeout eof} && $attempt < 1 && $url ne ""} {
+		requestAsync $url $reqBody \
+			[namespace code [list ::ai::provider::OnCloud $provider $mode $script $url $reqBody $headers [expr {$attempt + 1}]]] \
+			[namespace code [list ::ai::provider::cloudUnavailable $script]] \
+			$headers
+		return
+	}
 
 	set name [label $provider]
 	if {$status ne "ok" || $code != 200} {

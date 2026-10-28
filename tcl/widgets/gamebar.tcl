@@ -782,7 +782,7 @@ proc popupMenu {gamebar parent {addGameHistory 1} {remove -1}} {
 
 # C1: explain the game currently on the board (the selected game list row).
 proc ExplainGame {parent} {
-	::application::ai::explainSelection $parent game {}
+	::action::run game.explain
 }
 
 
@@ -2125,7 +2125,7 @@ proc BuildMenu {gamebar id side menu} {
 				-compound left \
 				-image $::icon::16x16::none \
 				-label " $mc::ExplainGame" \
-				-command [namespace code [list ExplainGame [winfo parent $menu]]] \
+				-command [list ::action::run game.explain] \
 				;
 			set addsep [list $menu add separator]
 		}

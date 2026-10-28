@@ -2507,25 +2507,28 @@ proc RenderHistoricalDevelopment {txt moveRows totalRow} {
 	set sumYear 0
 	set countYear 0
 
+	# A game without a date (or a tree row whose year column is empty)
+	# yields "" here; comparing that with a number raises "can't use
+	# non-numeric string as operand" and aborts the whole report.
 	foreach row $moveRows {
 		lassign $row _ _ _ _ _ _ _ _ _ avgY lastY _ _
-		if {$lastY > 0} {
+		if {[string is integer -strict $lastY] && $lastY > 0} {
 			if {$lastY > $maxYear} { set maxYear $lastY }
 			if {$lastY < $minYear} { set minYear $lastY }
 			lappend years $lastY
 		}
-		if {$avgY > 0} {
+		if {[string is integer -strict $avgY] && $avgY > 0} {
 			set sumYear [expr {$sumYear + $avgY}]
 			incr countYear
 		}
 	}
 
 	lassign $totalRow _ _ _ _ _ _ _ _ _ avgY lastY _ _
-	if {$lastY > 0} {
+	if {[string is integer -strict $lastY] && $lastY > 0} {
 		if {$lastY > $maxYear} { set maxYear $lastY }
 		if {$lastY < $minYear} { set minYear $lastY }
 	}
-	if {$avgY > 0} {
+	if {[string is integer -strict $avgY] && $avgY > 0} {
 		set sumYear [expr {$sumYear + $avgY}]
 		incr countYear
 	}

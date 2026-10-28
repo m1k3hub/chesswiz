@@ -443,7 +443,11 @@ proc ::application::download::Start {} {
 			return
 		}
 		lichess {
-			set ids [lichessGameIds [$Priv(lichessWidget) get 1.0 end]]
+			set text $Priv(lichess)
+            if {[info exists Priv(lichessWidget)] && [winfo exists $Priv(lichessWidget)]} {
+                set text [$Priv(lichessWidget) get 1.0 end]
+            }
+            set ids [lichessGameIds $text]
 			if {![llength $ids]} {
 				Status $mc::NoGames
 				return
@@ -752,7 +756,7 @@ proc ::application::download::ScheduleRefresh {} {
 
 	if {![RefreshActive]} { return }
 	if {$Priv(cancel)} { return }
-	if {![DialogExists]} { return }
+	if {![DialogExists] && (![info exists Priv(doneCmd)] || ![llength $Priv(doneCmd)])} { return }
 	set Priv(bcTimer) [after [expr {$Priv(bcInterval) * 1000}] \
 		[namespace code BroadcastRefresh]]
 	Status [format $mc::BroadcastNext $Priv(bcImported) [RefreshMinutes]]
@@ -930,7 +934,7 @@ proc ::application::download::BroadcastDone {text ok} {
 		Status $text
 	}
 	# the refresh needs the dialog: it goes on until the dialog is closed
-	if {$ok && [RefreshActive] && [DialogExists]} {
+	if {$ok && [RefreshActive] && ([DialogExists] || ([info exists Priv(doneCmd)] && [llength $Priv(doneCmd)]))} {
 		ScheduleRefresh
 		return
 	}
@@ -999,6 +1003,18 @@ proc ::application::download::UserAgent {} {
 proc ::application::download::Get {url done} {
 	variable Timeout
 
+    if {[string match file://* $url]} {
+        if {[catch {
+            set chan [::open [string range $url 7 end] rb]
+            try { set data [read $chan] } finally { close $chan }
+        } err]} {
+            set result [dict create ok 0 error $err code 404]
+        } else {
+            set result [dict create ok 1 data $data code 200]
+        }
+        after 0 [list {*}$done $result]
+        return
+    }
 	if {[catch { package require http 2.7 } err]} {
 		after 0 [list {*}$done [list ok 0 error $err code 0]]
 		return

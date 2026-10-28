@@ -37,7 +37,11 @@ install: $(ENGINES_INSTALL)
 	@echo "Install engines"
 
 $(ENGINES_INSTALL): install-%:
-	@$(MAKE) -C $* install
+	@if [ -f "$*/Makefile" ]; then \
+		$(MAKE) -C $* install; \
+	else \
+		echo "Skipping optional engine $*: sources not installed"; \
+	fi
 
 uninstall: $(ENGINES_UNINSTALL)
 	@echo "Uninstall engines"

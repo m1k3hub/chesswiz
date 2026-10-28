@@ -191,6 +191,12 @@ namespace eval ::scidb::test::reachability {
     proc probe {id argv kind} {
         variable baseline [windows]
         variable seen {}
+        # Switching to the current tab is correctly idempotent. Put the
+        # real app on the opposite tab before taking the observation.
+        if {$id eq "switch_tab"} {
+            ::application::switchTab [expr {[dict get $argv tab] eq "board" ? "database" : "board"}]
+            update
+        }
         variable before [snapshot]
         # Preserve the observed modal state even after the close protocol.
         after 500 ::scidb::test::reachability::cancelDialogs

@@ -225,6 +225,7 @@ SOURCES = \
 	app-ai-models.tcl \
 	capability.tcl \
 	actions.tcl \
+	knowledge.tcl \
 	game-clipboard.tcl \
 	context.tcl \
 	app-assistant.tcl \
@@ -232,6 +233,7 @@ SOURCES = \
 	app-assistant-args.tcl \
 	app-assistant-offers.tcl \
 	app-assistant-jobs.tcl \
+	app-assistant-panel.tcl \
 	app-diagnose.tcl \
 	app-voice.tcl \
 	app-ask.tcl \
@@ -261,6 +263,8 @@ SOURCES = \
 	move.tcl \
 	game.tcl \
 	menu.tcl \
+	inventory-controls.tcl \
+	inventory-actions.tcl \
 	dropdown.tcl \
 	end.tcl \
 
@@ -726,13 +730,48 @@ uninstall-photos:
 		fi;                                                                               \
 	fi
 
+# The knowledge pack is generated from the registry, never edited by hand
+# (VAL-KNOW-002). Generation needs a display; xvfb-run keeps it headless.
+knowledge:
+	@echo "Generate knowledge pack"
+	@if [ -n "$$DISPLAY" ]; then                                             \
+		cd .. && ./src/$(TKPROGRAM) scripts/build-knowledge.tcl --out share/knowledge; \
+	elif command -v xvfb-run >/dev/null 2>&1; then                           \
+		cd .. && xvfb-run -a ./src/$(TKPROGRAM) scripts/build-knowledge.tcl --out share/knowledge; \
+	else                                                                     \
+		echo "Knowledge generation requires an X display or xvfb-run." >&2;  \
+		exit 1;                                                              \
+	fi
+
+knowledge-check:
+	@echo "Check knowledge pack against the registry"
+	@if [ -n "$$DISPLAY" ]; then                                             \
+		cd .. && ./src/$(TKPROGRAM) scripts/build-knowledge.tcl --check --out share/knowledge; \
+	elif command -v xvfb-run >/dev/null 2>&1; then                           \
+		cd .. && xvfb-run -a ./src/$(TKPROGRAM) scripts/build-knowledge.tcl --check --out share/knowledge; \
+	else                                                                     \
+		echo "Knowledge check requires an X display or xvfb-run." >&2;       \
+		exit 1;                                                              \
+	fi
+
+install-knowledge: knowledge
+	@echo "Install knowledge pack"
+	@install -m 755 -d $(SHAREDIR)/knowledge
+	@install -m 644 -p ../share/knowledge/* $(SHAREDIR)/knowledge
+
+uninstall-knowledge:
+	@echo "Uninstall knowledge pack"
+	@if [ -d $(SHAREDIR)/knowledge ]; then                                   \
+		rm -rf $(SHAREDIR)/knowledge;                                        \
+	fi
+
 install: install-scripts install-sample install-pieces install-cursors install-flags install-localizations \
 				install-textures install-themes install-ttk-themes install-text-scripts install-images \
-				install-help install-config install-photos install-fonts
+				install-help install-config install-photos install-fonts install-knowledge
 
 uninstall: uninstall-scripts uninstall-sample uninstall-pieces uninstall-cursors uninstall-flags uninstall-localizations \
 				uninstall-ttk-themes uninstall-themes uninstall-text-scripts uninstall-textures \
-				uninstall-images uninstall-help uninstall-config uninstall-fonts
+				uninstall-images uninstall-help uninstall-config uninstall-fonts uninstall-knowledge
 	@if [ -d $(SHAREDIR) ]; then                                                             \
 		if [ -n "$(XDGDIR)" ]; then                                                           \
 			rm -rf $(SHAREDIR)/photos;                                                         \

@@ -286,7 +286,7 @@ proc ::game::clipboard::Register {} {
 		handler ::game::clipboard::DoCopy \
 		what "copy these games" \
 		ai 1 \
-		doc "Copy the selected games (base, variant, numbers) into the game clipboard; optionally also paste them into 'database'." \
+		doc "Copy games into the Chesswiz game clipboard so they can be pasted elsewhere. With no arguments it copies the game on the board; with base, variant and numbers it copies those games; optionally also paste them into 'database'." \
 	]
 	::action::register game.paste [dict create \
 		label game.paste \

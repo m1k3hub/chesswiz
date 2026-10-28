@@ -2653,13 +2653,23 @@ proc StartComparison {lb} {
 
 	set dlg $Vars(dlg)
 	set names [lmap i [$lb curselection] { $lb get $i }]
+    if {[llength $names] < 2} { return [::dialog::info -parent $dlg -message $mc::NeedTwoEngines] }
+    StartNamedComparison $names $Seconds
+}
+
+# Execution core shared by selection widgets and registry arguments.
+proc StartNamedComparison {names seconds} {
+    variable compare::Vars
+    variable compare::Seconds
+    set dlg $Vars(dlg)
+    set Seconds $seconds
 	if {[llength $names] < 2} {
-		return [::dialog::info -parent $dlg -message $mc::NeedTwoEngines]
+		error $mc::NeedTwoEngines
 	}
 	if {![string is integer -strict $Seconds] || $Seconds < 1} { set Seconds 10 }
 
 	StopComparisonEngines
-	$dlg.top.results delete [$dlg.top.results children {}]
+	if {[winfo exists $dlg]} { $dlg.top.results delete [$dlg.top.results children {}] }
 	SetSummary ""
 	set Vars(engines) {}
 	set failed {}
@@ -2668,16 +2678,24 @@ proc StartComparison {lb} {
 			lappend failed "$name: $number"
 		} else {
 			lappend Vars(engines) [list $name $number]
-			$dlg.top.results insert {} end -id $number -values [list $name "" "" "" "" ""]
+			if {[winfo exists $dlg]} { $dlg.top.results insert {} end -id $number -values [list $name "" "" "" "" "" ] }
 		}
 	}
-	if {[llength $failed]} { SetSummary [join $failed \n] }
+    if {[llength $failed]} {
+        SetSummary [join $failed \n]
+        if {![winfo exists $dlg]} {
+            CloseComparison
+            error [join $failed "; "]
+        }
+    }
 	if {[llength $Vars(engines)] < 2} { return [FinishComparison] }
 
 	set Vars(remaining) $Seconds
 	set Vars(startup) 0
-	$dlg.start configure -state disabled
-	$dlg.stop configure -state normal
+	if {[winfo exists $dlg]} {
+		$dlg.start configure -state disabled
+		$dlg.stop configure -state normal
+	}
 	TickComparison
 }
 
@@ -2685,7 +2703,7 @@ proc StartComparison {lb} {
 proc TickComparison {} {
 	variable compare::Vars
 
-	if {![winfo exists $Vars(dlg)]} { return }
+	if {![llength $Vars(engines)]} { return }
 	RefreshComparison
 	# The time counts from when every engine has a line: a big network can
 	# take seconds to load on a slow machine (4 s on the macOS VM), and that
@@ -2696,7 +2714,7 @@ proc TickComparison {} {
 		return
 	}
 	if {[incr Vars(remaining) -1] < 0} { return [FinishComparison] }
-	$Vars(dlg).top.status configure -text [format $mc::SecondsLeft [expr {$Vars(remaining) + 1}]]
+	if {[winfo exists $Vars(dlg)]} { $Vars(dlg).top.status configure -text [format $mc::SecondsLeft [expr {$Vars(remaining) + 1}]] }
 	set Vars(after) [after 1000 [namespace code TickComparison]]
 }
 
@@ -2724,6 +2742,7 @@ proc RefreshComparison {} {
 	variable compare::Vars
 
 	set tv $Vars(dlg).top.results
+	if {![winfo exists $tv]} { return }
 	foreach entry [ComparisonLines] {
 		lassign $entry name number line
 		if {![$tv exists $number] || ![llength $line]} { continue }
@@ -2738,7 +2757,8 @@ proc FinishComparison {} {
 	variable compare::Vars
 
 	after cancel $Vars(after)
-	if {![winfo exists $Vars(dlg)]} { return }
+	set Vars(after) {}
+	if {![winfo exists $Vars(dlg)]} { StopComparisonEngines; return }
 	RefreshComparison
 	SetSummary [ComparisonSummary [ComparisonLines]]
 	StopComparisonEngines
@@ -2788,6 +2808,7 @@ proc SetSummary {text} {
 	variable compare::Vars
 
 	set w $Vars(dlg).top.summary
+	if {![winfo exists $w]} { return }
 	$w configure -state normal
 	$w delete 1.0 end
 	$w insert end $text
@@ -2813,7 +2834,9 @@ proc CloseComparison {} {
 	after cancel $Vars(after)
 	StopComparisonEngines
 	set Vars(engines) {}
-	destroy $Vars(dlg)
+	if {[winfo exists $Vars(dlg)]} { destroy $Vars(dlg) }
+	set Vars(dlg) {}
+	set Vars(after) {}
 }
 
 

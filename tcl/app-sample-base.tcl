@@ -40,7 +40,7 @@ proc maybeOpen {parent} {
 	# the app-test harness (tests/run_app_tests.tcl) opens no sample
 	# automatically: its many in-process test files must not see a
 	# surprise database; the tests drive an automatic open themselves
-	if {[namespace exist ::scidb::test::app]} { return }
+	if {[namespace exist ::scidb::test::app] || [namespace exists ::RequestEval] || [namespace exists ::BoundsEval]} { return }
 	set path [location]
 	if {![file readable $path] || [::scidb::db::get open? $path]} { return }
 

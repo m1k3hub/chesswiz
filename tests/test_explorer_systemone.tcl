@@ -100,8 +100,12 @@ tcltest::test focus-no-examples {absent examples cannot be selected} -body {
 } -result {}
 tcltest::test focus-qualified {uncalibrated backend makes no request} -body {
     unset ::env(SCIDB_AI_EXPLORER_FOCUS_MIN_CONFIDENCE)
+    set override [expr {[info exists ::env(SCIDB_AI_UNCALIBRATED)] ? $::env(SCIDB_AI_UNCALIBRATED) : ""}]
+    unset -nocomplain ::env(SCIDB_AI_UNCALIBRATED)
     set before $::calls
     ::application::explorer::Show $::entry
-    list [expr {$before == $::calls}] $::status
+    set result [list [expr {$before == $::calls}] $::status]
+    if {$override ne ""} { set ::env(SCIDB_AI_UNCALIBRATED) $override }
+    set result
 } -result {1 {}}
 tcltest::cleanupTests

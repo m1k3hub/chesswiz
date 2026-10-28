@@ -31,6 +31,10 @@ dict set Actions run_job {
 # the rounds a job's request may use (a plan of up to 6 steps plus answers)
 variable JobRounds 14
 
+proc CorrespondenceChangesState {arguments} {
+	return [expr {[dict exists $arguments action] && [dict get $arguments action] eq "open"}]
+}
+
 } ;# namespace assistant
 } ;# namespace application
 
@@ -99,7 +103,7 @@ proc ::application::assistant::DoRunJob {job name colour games pattern} {
 	foreach {label tool args} $plan {
 		lappend lines "[incr i]. $label: $tool [::ai::provider::jsonObject $args]"
 	}
-	Append info "Plan:\n[join [lmap l $lines { set _ "  $l" }] \n]"
+	# This is a provider plan, not the user-confirmed execution preview.
 	# the plan's steps, then the answer
 	set Priv(maxRounds) [expr {max($Priv(maxRounds), $JobRounds)}]
 	return "plan of the job '$job'; call these tools in order with exactly these arguments, then end with a short checklist of what was done:\n[join $lines \n]"
@@ -232,7 +236,13 @@ dict for {name entry} $Actions {
 	set spec [::application::assistant::_specFor $parameters $name]
 	set schemaStr [::application::assistant::_schemaFor $parameters $spec]
 	if {$spec eq "{}"} { set spec {} }
+	# These tools inspect data, even when their implementation caches results.
+	set queries {explain_game_result list_open_databases current_game position_moves database_summary database_trend similar_games player_stats opening_score prepare_against repertoire_check search_games cql_help list_engines engine_options engine_evaluate engine_check_move tablebase engine_analysis app_state recent_errors tool_log list_issues classifier_status structure_profile event_types detect_language diagnose_import comment_kind novelty_label check_results factcheck_annotations voice_status list_procs proc_source read_variable ui_state timers loop_health media_state child_processes hang_dumps find_capability run_job}
+	set effectCommand {}
+	if {$name eq "correspondence_games"} {set effectCommand ::application::assistant::CorrespondenceChangesState}
 	::action::register $name [dict create \
+		effect-command $effectCommand \
+		effect   [expr {$name in $queries ? "query" : "change"}] \
 		label    $label \
 		args     $spec \
 		schema   $schemaStr \

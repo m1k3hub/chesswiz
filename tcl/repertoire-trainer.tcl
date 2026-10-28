@@ -952,8 +952,9 @@ proc ::reptrainer::open {parent {base ""} {variant Normal}} {
 
 	set dlg $parent.__reptrainer__
 	if {[winfo exists $dlg]} {
+		wm deiconify $dlg
 		raise $dlg
-		return
+		return $dlg
 	}
 	set Vars(dlg) $dlg
 
@@ -1229,3 +1230,48 @@ proc ::reptrainer::WriteOptions {chan} {
 ::options::hookWriter ::reptrainer::WriteOptions
 
 # vi:set ts=3 sw=3:
+
+# Explicit source/side execution for assistant callers; the chooser remains the
+# argument collector for menu clicks. Use the existing native drill and deck.
+proc ::reptrainer::runOperation {arguments} {
+    variable Vars
+    set operation [dict get $arguments operation]
+    switch -- $operation {
+        open { return [open .application [dict get $arguments base] [dict get $arguments variant]] }
+        start {
+            set base [dict get $arguments base]
+            set variant [dict get $arguments variant]
+            set side [dict get $arguments side]
+            if {$base ne "" && ![::scidb::db::get open? $base]} { error "source database is not open" }
+            open .application $base $variant
+            Build $base $variant $side
+            if {![dict size $Vars(built)]} { error "source contains no moves for the trained side" }
+            set Vars(sourceBase) $base
+            drill .application $Vars(built) $side $variant
+            if {!$Vars(running)} { error "repertoire session did not start" }
+        }
+        move {
+            if {![active]} { error "no repertoire answer is pending" }
+            set san [dict get $arguments move]
+            if {$san eq ""} { return [open .application] }
+            # Verify legality before the trainer compares the answer. The
+            # existing board path does this in move::addMove.
+            set facts [::scidb::ai::moveFacts $san [dict get $Vars(card) fen]]
+            if {![regexp {"uci":"[a-h][1-8][a-h][1-8]} $facts]} { error "illegal repertoire move" }
+            answered $san
+        }
+        grade {
+            if {$Vars(state) ne "grade"} { error "no correct answer is waiting for a grade" }
+            grade [dict get $arguments grade]
+        }
+        stop { stop }
+        close {
+            stop
+            if {$Vars(dlg) ne "" && [winfo exists $Vars(dlg)]} { Close $Vars(dlg) }
+        }
+        status {}
+    }
+    set result [dict create running $Vars(running) state $Vars(state) side $Vars(side) deck_file $Vars(deckFile)]
+    if {[info exists Vars(card)] && $Vars(card) ne ""} { dict set result card $Vars(card) }
+    return $result
+}

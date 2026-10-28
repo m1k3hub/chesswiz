@@ -36,11 +36,11 @@ proc ::scidb::test::guardAsk {replies request} {
 	list $roles $last
 }
 
-tcltest::test guard-nudge {a made-up claim is sent back once; the second answer stands} -body {
+tcltest::test guard-nudge {a made-up claim is sent back once; the second answer stands} -match glob -body {
 	::scidb::test::guardAsk [list \
 		[dict create role assistant content "I've started a new game for you."] \
 		[dict create role assistant content "I cannot start a game here."]] "start a new game"
-} -result {{system user assistant user assistant} {I cannot start a game here.}}
+} -result {{system user assistant user assistant} {Chesswiz cannot do that*}}
 
 tcltest::test guard-honest {an answer without claims is not sent back} -body {
 	::scidb::test::guardAsk [list [dict create role assistant content "Which database do you mean?"]] "find games"

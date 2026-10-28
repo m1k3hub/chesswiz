@@ -1720,8 +1720,13 @@ proc UpdateTagList {t name value} {
 		lappend Priv(tags) [list $name $value]
 		set Priv(tags) [lsort -command [namespace current]::CompareTag $Priv(tags)]
 		set index [lsearch -index 0 $Priv(tags) $name]
-		set item [lindex [$t item children 0] [expr {$index - 1}]]
-		$t item nextsibling $item [NewItem $t $name $value]
+		set newItem [NewItem $t $name $value]
+		if {$index == 0} {
+			$t item firstchild 0 $newItem
+		} else {
+			set item [lindex [$t item children 0] [expr {$index - 1}]]
+			$t item nextsibling $item $newItem
+		}
 		$t see active
 	}
 }

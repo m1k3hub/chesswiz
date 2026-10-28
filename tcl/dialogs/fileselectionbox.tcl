@@ -554,16 +554,32 @@ proc Open {type args} {
 	wm deiconify $w
 
 	array unset Priv $type:$w:result
-	tkwait visibility $w
-	::ttk::grabWindow $w
-	vwait [namespace current]::Priv($type:$w:result)
-	::ttk::releaseGrab $w
+	bind $w <Destroy> +[list set [namespace current]::Priv($type:$w:result) {}]
+	if {[catch { tkwait visibility $w }]} {
+		catch { ::ttk::releaseGrab $w }
+		set Priv(dialog) {}
+		return {}
+	}
+	if {![winfo exists $w]} {
+		catch { ::ttk::releaseGrab $w }
+		set Priv(dialog) {}
+		return {}
+	}
+	catch { ::ttk::grabWindow $w }
+	if {![info exists Priv($type:$w:result)]} {
+		vwait [namespace current]::Priv($type:$w:result)
+	}
+	catch { ::ttk::releaseGrab $w }
+	if {![winfo exists $w]} {
+		set Priv(dialog) {}
+		return {}
+	}
 	wm withdraw $w
 	set Priv(dialog) {}
 	if {[string length $data(-class)]} {
-		set LastFolders($class:$data(-class)) [::fsbox::lastFolder $w.fsbox]
+		catch { set LastFolders($class:$data(-class)) [::fsbox::lastFolder $w.fsbox] }
 	}
-	::fsbox::cleanup $w.fsbox
+	catch { ::fsbox::cleanup $w.fsbox }
 
 	lassign $Priv($type:$w:result) path encoding
 	if {[llength $path] == 0} { return {} }

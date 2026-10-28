@@ -619,30 +619,32 @@ proc ::ai::engine::chooseDialog {parent} {
 }
 
 
+# Validate a supplied engine exactly as the native chooser does.
+proc ::ai::engine::select {name} {
+    if {$name eq ""} {
+        set command [bundled]
+    } elseif {$name in [uciEngines]} {
+        set entry [lindex $::engine::Engines [::engine::FindIndex $name]]
+        set command [dict get $entry Command]
+    } else {
+        error $::engine::mc::ChooseConfigured
+    }
+    set invalid [::engine::CheckCommand $command]
+    if {$invalid ne ""} { error $invalid }
+    choose $name
+}
+
+
 # Validate before changing the preference or closing the chooser (run146).
 proc ::ai::engine::AcceptChoice {dlg} {
-	set value [$dlg.top.engine get]
-	set name $value
-	set message ""
-	if {$value eq $mc::Bundled} {
-		set name ""
-		set command [bundled]
-	} elseif {$value in [uciEngines]} {
-		set entry [lindex $::engine::Engines [::engine::FindIndex $value]]
-		set command [dict get $entry Command]
-	} else {
-		set command $value
-		set message $::engine::mc::ChooseConfigured
-	}
-	set invalid [::engine::CheckCommand $command]
-	if {$invalid ne ""} { set message $invalid }
-	if {$message ne ""} {
-		$dlg.top.error configure -text $message
-		pack $dlg.top.error -fill x -pady {8 0}
-		focus $dlg.top.engine
-		return
-	}
-	choose $name
+    set name [$dlg.top.engine get]
+    if {$name eq $mc::Bundled} { set name "" }
+    if {[catch { select $name } message]} {
+        $dlg.top.error configure -text $message
+        pack $dlg.top.error -fill x -pady {8 0}
+        focus $dlg.top.engine
+        return
+    }
 	destroy $dlg
 }
 

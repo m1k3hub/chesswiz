@@ -257,6 +257,20 @@ tcltest::test crosstable-close {Close releases the table and the window} -setup 
 	::scidb::test::xtab::closeWindow $dlg $base
 } -result {1 1 1}
 
+tcltest::test crosstable-registry-close {typed close invokes the tournament window teardown and releases its table} -setup {
+    set base [::scidb::test::xtab::makeBase]
+    set dlg [::scidb::test::xtab::openWindow $base]
+} -body {
+    ::knowledge::Ensure
+    set tableId [::scidb::test::xtab::vget $dlg tableId]
+    set viewId [::scidb::test::xtab::vget $dlg viewId]
+    set result [::knowledge::RunAction view.dialog.close {dialog crosstable}]
+    update
+    list $result [winfo exists $dlg] [catch {::scidb::crosstable::get playerCount $tableId $viewId}] [winfo exists .application]
+} -cleanup {
+    ::scidb::test::xtab::closeWindow $dlg $base
+} -result {{dialog closed} 0 1 1}
+
 foreach _id [after info] { catch { after cancel $_id } }
 
 ::tcltest::cleanupTests

@@ -10,7 +10,8 @@ namespace eval ::mediaLessonTest {
         set tempDir [tcltest::makeDirectory media-lesson-regressions]
         interp create lessonTest
         lessonTest eval {namespace eval ::util {proc source {args} {}}}
-        foreach file {app-media-decode.tcl app-media-lesson.tcl app-media-sync.tcl app-media.tcl} {
+        lessonTest eval {namespace eval ::options {proc hookWriter {args} {}}}
+        foreach file {actions.tcl app-media-decode.tcl app-media-lesson.tcl app-media-sync.tcl app-media.tcl} {
             lessonTest eval [list source [file join $sourceDir $file]]
         }
         lessonTest eval [list set tempDir $tempDir]

@@ -4103,6 +4103,46 @@ proc install {path {parent .application}} {
 }
 
 
+# Save supplied administration fields without creating the form.
+proc updateEntry {name arguments} {
+    variable Engines
+    variable EmptyEngine
+    if {[adminIsOpen?]} { error "close the Manage Engines dialog first" }
+    set index [FindIndex $name]
+    if {$index < 0} { error "no engine named '$name'" }
+    set entry [dict merge $EmptyEngine [lindex $Engines $index]]
+    foreach {key field} {name Name directory Directory logo Logo parameters Parameters webpage Url email Email country Country} {
+        if {![dict exists $arguments $key]} { continue }
+        set value [dict get $arguments $key]
+        if {$key eq "name" && ($value eq "" || ($value ne $name && [FindIndex $value]>=0))} {
+            error "engine name is empty or already used"
+        }
+        if {$key eq "directory" && $value ne ""} {
+            set reason [CheckDirectory $value]
+            if {$reason ne ""} { error $reason }
+            set value [file normalize $value]
+            set previous [dict get $entry Directory]
+            if {$previous ne "" && [file isdirectory $previous] && ![file isdirectory $value]} {
+                file rename $previous $value
+            }
+            if {![file isdirectory $value]} {file mkdir $value}
+        }
+        if {$key eq "logo" && $value ne ""} {
+            set image [image create photo -file $value]
+            image delete $image
+        }
+        dict set entry $field $value
+    }
+    if {[dict get $arguments operation] eq "clear_usage"} {
+        dict set entry LastUsed 0
+        dict set entry Frequency 0
+    }
+    lset Engines $index $entry
+    SaveEngineList
+    return $entry
+}
+
+
 proc remove {name} {
 	variable Engines
 

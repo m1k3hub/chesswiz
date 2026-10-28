@@ -50,12 +50,12 @@ variable ShiftLeft	8
 # A dialog the user moved or resized is left alone from then on, even over
 # the board (VAL-DLG-018C); only a display change that leaves it outside the
 # new screen work area re-places it.
-variable BesideDelay		80
+variable BesideDelay		40
 variable BesideTimer		{}
 # A steady stream of events (a playing video's per-frame Configure, a live
 # engine clock) would restart a pure trailing debounce forever; the settle
 # runs at the latest this long after the first deferred event.
-variable BesideMaxWait		120
+variable BesideMaxWait		80
 variable BesideFirst		{}
 variable BesideUnmappedRetries	0
 variable BesideDialogs		{}
@@ -1364,6 +1364,14 @@ proc besideCapture {dlg} {
 	}
 	if {![winfo exists $dlg] || ![winfo ismapped $dlg]
 		|| ([info exists BesideState($dlg,user)] && $BesideState($dlg,user))} { return }
+	# A content Configure can precede this idle capture. Keep the old
+	# request until the planner consumes the change; capturing it here
+	# would make the next settle mistake natural growth for a user resize.
+	if {[info exists BesideState($dlg,context)]
+		&& [lindex [besideContext $dlg] 2] ne [lindex $BesideState($dlg,context) 2]} {
+		besideSchedule 0
+		return
+	}
 	besideDialogExtents $dlg
 	if {[besideClampNative $dlg]} {
 		# Capture only after the WM has applied the guard, without yielding
@@ -1589,6 +1597,9 @@ proc besideClampNative {dlg} {
 proc besideUserChange {dlg current context} {
 	variable BesideState
 	set reqSame [expr {[lindex $context 2] eq [lindex $BesideState($dlg,context) 2]}]
+	# Natural growth can also move a transient: the WM keeps its enlarged
+	# frame on screen. Re-plan the changed content before inferring a drag.
+	if {!$reqSame} { return 0 }
 	set last $BesideState($dlg,last)
 	set sized [expr {[lrange $current 2 3] ne [lrange $last 2 3]}]
 	set moved [besideRectDiffers [concat [lrange $current 0 1] {0 0}] \
@@ -2119,6 +2130,30 @@ proc besideReserve {dlg bx by bw bh dw dh workarea extents gap {minimum {}}} {
 # All rectangles are outer frames; this is also used by headless tests.
 proc besidePack {board sizes workarea gap {placed {}}} {
 	if {![llength $sizes]} { return $placed }
+	# Reject impossible individual rectangles before exploring combinations.
+	# A rectangle clear of the board must fit wholly on at least one side;
+	# otherwise no placement of the earlier group members can help it.
+	# This necessary test preserves the search order and every feasible pack.
+	if {![llength $placed] && [llength $board] == 4} {
+		lassign $board bx by bw bh
+		if {$bw > 0 && $bh > 0} {
+			foreach need $sizes {
+				lassign $workarea ax ay aw ah
+				lassign $need nw nh bounds
+				if {[llength $bounds] == 4} {
+					lassign $bounds lx ly lw lh
+					set right [expr {min($ax+$aw,$lx+$lw)}]
+					set bottom [expr {min($ay+$ah,$ly+$lh)}]
+					set ax [expr {max($ax,$lx)}]; set ay [expr {max($ay,$ly)}]
+					set aw [expr {$right-$ax}]; set ah [expr {$bottom-$ay}]
+				}
+				if {$nw > $aw || $nh > $ah} { return {} }
+				set horizontal [expr {max(0,min($ax+$aw,$bx)-$ax,$ax+$aw-max($ax,$bx+$bw))}]
+				set vertical [expr {max(0,min($ay+$ah,$by)-$ay,$ay+$ah-max($ay,$by+$bh))}]
+				if {$nw > $horizontal && $nh > $vertical} { return {} }
+			}
+		}
+	}
 	lassign $workarea wx wy ww wh
 	lassign [lindex $sizes 0] w h bounds
 	set limits $workarea
@@ -2208,8 +2243,18 @@ proc besideRequestedReserve {dlg peers rw rh workarea extents gap {compact 0}} {
 	set previousSide $::application::board::ReserveSide
 	set previousPixels $::application::board::ReservePixels
 	set previousKind $::application::board::ReserveKind
-	set group $peers
-	lappend group $dlg
+	# Every member plans the same group. Preserve registration order so
+	# planning the other peer cannot reverse the packing order and move
+	# both windows again on every Configure event.
+	variable BesideDialogs
+	set members [linsert $peers end $dlg]
+	set group {}
+	foreach other $BesideDialogs {
+		if {$other in $members} { lappend group $other }
+	}
+	foreach other $members {
+		if {$other ni $group} { lappend group $other }
+	}
 	# Requested-size placement keeps a peer's squeeze. The scrolling pass
 	# may release a squeeze owned by this same group: otherwise its old
 	# board cap can prevent every usable viewport from being considered.

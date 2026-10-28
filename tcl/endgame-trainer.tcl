@@ -1024,6 +1024,66 @@ proc ::endtrainer::Step {gridArr piece x y dx dy} {
 # The window
 # ----------------------------------------------------------------------
 
+# Explicit arguments operate on the same session as the dialog. Chess facts
+# remain with the native move validator and tablebase, never the assistant.
+proc ::endtrainer::runOperation {arguments} {
+	variable Priv
+	set operation [dict get $arguments operation]
+	switch -- $operation {
+		catalog {
+			variable Catalog
+			return $Catalog
+		}
+		status { return [SessionState] }
+		start {
+			set id [dict get $arguments ending]
+			if {$id eq ""} { return [open .application] }
+			set ending [Ending $id]
+			if {$ending eq ""} { error "unknown ending: $id; use operation catalog" }
+			set index [dict get $arguments index]
+			if {$index >= [llength [dict get $ending positions]]} { error "position index outside ending" }
+			if {![Start $id $index]} { error "could not start ending" }
+		}
+		retry - continue {
+			if {!$Priv(active) || $Priv(phase) ne "fault"} { error "no faulty move to $operation" }
+			if {$operation eq "retry"} { Retry } else { Continue }
+		}
+		move {
+			if {!$Priv(active) || $Priv(phase) ne "user"} { error "not the user's turn in an active endgame" }
+			set san [dict get $arguments move]
+			if {$san eq ""} { error "move is required" }
+			if {![UserMove $san]} { error "move was not played" }
+		}
+		give_up - next {
+			if {!$Priv(active)} { error "no active endgame session" }
+			if {$operation eq "give_up"} { GiveUp } else { Next }
+		}
+		close { Close }
+		default { error "unknown endgame operation: $operation" }
+	}
+	return [SessionState]
+}
+
+proc ::endtrainer::SessionState {} {
+	variable Priv
+	return [dict create active $Priv(active) ending $Priv(endingId) index $Priv(index) \
+		phase $Priv(phase) fault $Priv(fault) status $Priv(status)]
+}
+
+proc ::endtrainer::DialogOperation {operation} {
+	set arguments [dict create operation $operation]
+	if {$operation eq "start"} {
+		variable Priv
+		if {$Priv(dialog) eq "" || ![winfo exists $Priv(dialog)]} { return }
+		set selection [$Priv(widget:tree) selection]
+		if {![llength $selection]} { return }
+		set node [lindex $selection 0]
+		if {![dict exists $Priv(treeIds) $node]} { return }
+		dict set arguments ending [dict get $Priv(treeIds) $node]
+	}
+	return [::action::run menu.training.endgame $arguments]
+}
+
 proc ::endtrainer::open {parent} {
 	variable Priv
 	variable mc
@@ -1039,8 +1099,8 @@ proc ::endtrainer::open {parent} {
 	wm title $dlg $mc::Title
 	wm transient $dlg [winfo toplevel $parent]
 	wm withdraw $dlg
-	wm protocol $dlg WM_DELETE_WINDOW [namespace code Close]
-	bind $dlg <Escape> [namespace code Close]
+	wm protocol $dlg WM_DELETE_WINDOW [namespace code {DialogOperation close}]
+	bind $dlg <Escape> [namespace code {DialogOperation close}]
 
 	set top [ttk::frame [::util::place::playingBody $dlg].top]
 	pack $top -fill both -expand yes -padx $::theme::padx -pady $::theme::pady
@@ -1057,7 +1117,7 @@ proc ::endtrainer::open {parent} {
 	$tree configure -yscrollcommand [list $setup.vs set]
 	pack $tree -side left -fill both -expand yes
 	pack $setup.vs -side right -fill y
-	bind $tree <Double-1> [namespace code StartSelected]
+	bind $tree <Double-1> [namespace code {DialogOperation start}]
 	pack $setup -fill both -expand yes
 
 	### the session panel ##################################################
@@ -1065,17 +1125,17 @@ proc ::endtrainer::open {parent} {
 	ttk::label $panel.goal -wraplength 320 -justify left
 	ttk::label $panel.status -wraplength 320 -justify left
 	set buttons [ttk::frame $panel.buttons]
-	ttk::button $buttons.retry -text $mc::Retry -command [namespace code Retry]
-	ttk::button $buttons.continue -text $mc::Continue -command [namespace code Continue]
-	ttk::button $buttons.giveup -text $mc::GiveUp -command [namespace code GiveUp]
+	ttk::button $buttons.retry -text $mc::Retry -command [namespace code {DialogOperation retry}]
+	ttk::button $buttons.continue -text $mc::Continue -command [namespace code {DialogOperation continue}]
+	ttk::button $buttons.giveup -text $mc::GiveUp -command [namespace code {DialogOperation give_up}]
 	pack $buttons.retry $buttons.continue $buttons.giveup -side left -padx [list 0 $::theme::padx]
 	pack $panel.goal -anchor w
 	pack $panel.status -anchor w -pady [list $::theme::pady 0]
 	pack $buttons -anchor w -pady [list 0 $::theme::pady]
 
 	::util::place::playingButtons $dlg {ok cancel}
-	[::util::place::playingBody $dlg].ok configure -text $mc::Start -command [namespace code StartSelected]
-	[::util::place::playingBody $dlg].cancel configure -text $mc::Close -command [namespace code Close]
+	[::util::place::playingBody $dlg].ok configure -text $mc::Start -command [namespace code {DialogOperation start}]
+	[::util::place::playingBody $dlg].cancel configure -text $mc::Close -command [namespace code {DialogOperation close}]
 
 	set Priv(widget:setup) $setup
 	set Priv(widget:panel) $panel
@@ -1140,15 +1200,7 @@ proc ::endtrainer::RefreshTree {} {
 
 
 proc ::endtrainer::StartSelected {} {
-	variable Priv
-
-	set dlg $Priv(dialog)
-	if {$dlg eq "" || ![winfo exists $dlg]} { return }
-	set sel [$Priv(widget:tree) selection]
-	if {![llength $sel]} { return }
-	set item [lindex $sel 0]
-	if {![dict exists $Priv(treeIds) $item]} { return }
-	Start [dict get $Priv(treeIds) $item] 0
+	return [DialogOperation start]
 }
 
 
@@ -1162,7 +1214,7 @@ proc ::endtrainer::ShowPanel {} {
 	pack forget $Priv(widget:setup)
 	pack $Priv(widget:panel) -fill both -expand yes
 	if {[winfo exists $Priv(widget:ok)]} {
-		$Priv(widget:ok) configure -text $mc::Next -command [namespace code Next]
+		$Priv(widget:ok) configure -text $mc::Next -command [namespace code {DialogOperation next}]
 	}
 	$Priv(widget:goal) configure -text [GoalText]
 	RefreshButtons
@@ -1178,7 +1230,7 @@ proc ::endtrainer::ShowSetup {} {
 	pack forget $Priv(widget:panel)
 	pack $Priv(widget:setup) -fill both -expand yes
 	if {[winfo exists $Priv(widget:ok)]} {
-		$Priv(widget:ok) configure -text $mc::Start -command [namespace code StartSelected]
+		$Priv(widget:ok) configure -text $mc::Start -command [namespace code {DialogOperation start}]
 	}
 	RefreshTree
 }

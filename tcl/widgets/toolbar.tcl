@@ -917,16 +917,34 @@ proc ::toolbar::RegistryCommand {toolbar w command {label ""}} {
 	if {$command eq "" || [string match "::action::run *" $command]} {
 		return $command
 	}
+	# The registry id must not encode volatile widget-path counters (a
+	# pane's frame number), or the generated knowledge pack would differ
+	# between layouts. Use the toolbar's stable -id and its row order.
+	set tid ""
+	if {[info exists ::toolbar::Specs(id:$toolbar)]} {
+		set tid $::toolbar::Specs(id:$toolbar)
+	}
+	if {$tid eq ""} { set tid $w }
 	set id "toolbar."
-	append id [string map {. _ - _ : _ / _ { } _} $w]
+	append id [string map {. _ - _ : _ / _ { } _} $tid]
 	set base $id
+	set seq 0
+	if {[info exists ::toolbar::Specs(children:$toolbar)]} {
+		set seq [llength $::toolbar::Specs(children:$toolbar)]
+	}
+	set id "$base.$seq"
 	set n 0
 	while {[dict exists $::action::Registry $id]} {
 		incr n
-		set id "${base}_$n"
+		set id "${base}.${seq}_$n"
+	}
+	set knowledge {}
+	if {[dict exists $::toolbar::Knowledge "$base.$seq"]} {
+		set knowledge [dict get $::toolbar::Knowledge "$base.$seq"]
+		set label [dict get $knowledge label]
 	}
 	if {$label eq ""} { set label "Toolbar action" }
-	::action::register $id [dict create \
+	::action::register $id [dict merge $knowledge [dict create \
 		label $label \
 		object {} \
 		args {} \
@@ -934,7 +952,7 @@ proc ::toolbar::RegistryCommand {toolbar w command {label ""}} {
 		what $label \
 		ai 0 \
 		doc $label \
-	]
+	]]
 	return [list ::action::run $id]
 }
 
@@ -1024,6 +1042,12 @@ proc Add {toolbar widgetCommand args} {
 		if {[info exists options(-text)]} { set label $options(-text) }
 		if {$label eq "" && [info exists options(-tooltip)]} {
 			set label $options(-tooltip)
+		}
+		if {$label eq "" && [info exists options(-tooltipvar)]} {
+			set var [string trim $options(-tooltipvar)]
+			if {$var ne "" && ![catch { set label [set $var] }]} {
+				set label [string trim [string map {& {}} $label]]
+			}
 		}
 		set options(-command) \
 			[::toolbar::RegistryCommand $toolbar $w $options(-command) $label]
@@ -1533,6 +1557,10 @@ proc PackToolbar {toolbar {before {}} {alignment {}}} {
 		tk::frame $tbf.frame -borderwidth 0 -takefocus 0
 		tk::frame $tbf.frame.scrolled -borderwidth 1 -relief raised -takefocus 0
 		grid $tbf.frame -row 1 -column 1 -sticky ewns
+		# A pane can be unmapped and reparented by a native layout load
+		# without changing its final size. Recompute the viewport grid on
+		# remap as well as Configure, so its packed toolbar becomes visible.
+		bind $tbf <Map> [list after idle [namespace code [list RemapFrame $tbf]]]
 		if {$Specs(orientation:$toolbar) eq "horz"} {
 			grid columnconfigure $tbf {1} -weight 1
 		} else {
@@ -1629,6 +1657,13 @@ proc PackToolbar {toolbar {before {}} {alignment {}}} {
 	RaiseArrows $toolbar
 	DoAlignment $tbf
 	ReplaceIcons $toolbar
+}
+
+
+proc RemapFrame {tbf} {
+	if {![winfo exists $tbf] || ![winfo ismapped $tbf]} { return }
+	grid remove $tbf.frame
+	grid $tbf.frame -row 1 -column 1 -sticky ewns
 }
 
 
@@ -3764,3 +3799,76 @@ set arrow(b) [image create photo -data {
 } ;# namespace toolbar
 
 # vi:set ts=3 sw=3:
+
+# Operation-specific knowledge for the shipped toolbar controls.
+# Stable toolbar ids and row positions retain saved bindings. Labels describe
+# each native callback; repeated pane instances use the same description.
+namespace eval ::toolbar {
+ variable Knowledge [dict create \
+	toolbar.board_tools.0 [dict create label {Set up engine} purpose {Open the engine manager to choose and configure analysis engines.} when {Use this before analysing with an engine that has not been configured.} examples {{Open the engine manager to choose and configure analysis engines} {I want to open the engine manager to choose and configure analysis engines}}] \
+	toolbar.board_layout.0 [dict create label {Rotate board} purpose {Turn the displayed board so the other colour is at the bottom.} when {Use this when reviewing the position from your opponent's side.} examples {{Turn the displayed board so the other colour is at the bottom} {I want to turn the displayed board so the other colour is at the bottom}}] \
+	toolbar.board_layout.2 [dict create label {Side-to-move indicator} purpose {Apply the selected visibility of the board side-to-move indicator.} when {Use this when you want to see or hide whose turn it is beside the board.} examples {{Apply the selected visibility of the board side-to-move indicator} {I want to apply the selected visibility of the board side-to-move indicator}}] \
+	toolbar.board_database.0 [dict create label {Previous database game} purpose {Load the preceding game from the current database selection.} when {Use this while reviewing games in database order.} examples {{Load the preceding game from the current database selection} {I want to load the preceding game from the current database selection}}] \
+	toolbar.board_database.1 [dict create label {Next database game} purpose {Load the following game from the current database selection.} when {Use this after finishing the game currently on the board.} examples {{Load the following game from the current database selection} {I want to load the following game from the current database selection}}] \
+	toolbar.board_database.2 [dict create label {First database game} purpose {Load the first game from the current database selection.} when {Use this to begin reviewing a database selection from its beginning.} examples {{Load the first game from the current database selection} {I want to load the first game from the current database selection}}] \
+	toolbar.board_database.3 [dict create label {Last database game} purpose {Load the last game from the current database selection.} when {Use this to inspect the end of a database selection.} examples {{Load the last game from the current database selection} {I want to load the last game from the current database selection}}] \
+	toolbar.board_database.4 [dict create label {Game navigation source} purpose {Switch game navigation between the game list and the whole database.} when {Use this when next and previous should follow either your filtered list or every database game.} examples {{Switch game navigation between the game list and the whole database} {I want to switch game navigation between the game list and the whole database}}] \
+	toolbar.board_database.5 [dict create label {Random database game} purpose {Load a randomly selected game from the current database selection.} when {Use this for an unplanned game to study.} examples {{Load a randomly selected game from the current database selection} {I want to load a randomly selected game from the current database selection}}] \
+	toolbar.board_database.7 [dict create label {Replace saved game} purpose {Save the current edited game over its existing database entry.} when {Use this after correcting moves or annotations in a saved game.} examples {{Save the current edited game over its existing database entry} {I want to save the current edited game over its existing database entry}}] \
+	toolbar.board_database.8 [dict create label {Add saved game} purpose {Append the current game as a new database entry.} when {Use this to keep a separate copy of the game you edited.} examples {{Append the current game as a new database entry} {I want to append the current game as a new database entry}}] \
+	toolbar.board_control.0 [dict create label {Game start} purpose {Move the board to the starting position of the current game.} when {Use this before replaying the opening from the beginning.} examples {{Move the board to the starting position of the current game} {I want to move the board to the starting position of the current game}}] \
+	toolbar.board_control.1 [dict create label {Back ten plies} purpose {Move backward ten half-moves in the current game.} when {Use this to revisit an earlier phase without clicking every move.} examples {{Move backward ten half-moves in the current game} {I want to move backward ten half-moves in the current game}}] \
+	toolbar.board_control.2 [dict create label {Previous ply} purpose {Move backward by one half-move in the current game.} when {Use this to inspect the position before the last displayed move.} examples {{Move backward by one half-move in the current game} {I want to move backward by one half-move in the current game}}] \
+	toolbar.board_control.3 [dict create label {Next ply} purpose {Move forward by one half-move in the current game.} when {Use this to replay a game one move at a time.} examples {{Move forward by one half-move in the current game} {I want to move forward by one half-move in the current game}}] \
+	toolbar.board_control.4 [dict create label {Forward ten plies} purpose {Move forward ten half-moves in the current game.} when {Use this to skip ahead to a later phase of the game.} examples {{Move forward ten half-moves in the current game} {I want to move forward ten half-moves in the current game}}] \
+	toolbar.board_control.5 [dict create label {Game end} purpose {Move the board to the final position of the current line.} when {Use this to inspect how the game or variation finishes.} examples {{Move the board to the final position of the current line} {I want to move the board to the final position of the current line}}] \
+	toolbar.board_control.7 [dict create label {Enter variation} purpose {Enter a variation branching from the displayed game line.} when {Use this to examine an alternative continuation.} examples {{Enter a variation branching from the displayed game line} {I want to enter a variation branching from the displayed game line}}] \
+	toolbar.board_control.8 [dict create label {Leave variation} purpose {Return from the current variation to its parent line.} when {Use this after reviewing an alternative to resume the enclosing line.} examples {{Return from the current variation to its parent line} {I want to return from the current variation to its parent line}}] \
+	toolbar.editor_game.0 [dict create label {New game} purpose {Create an empty game for entering moves and game information.} when {Use this when recording a game that is not already in the database.} examples {{Create an empty game for entering moves and game information} {I want to create an empty game for entering moves and game information}}] \
+	toolbar.editor_game.1 [dict create label {Import game text} purpose {Open the game-text import dialog for the notation editor.} when {Use this when you have a game copied as portable game notation text.} examples {{Open the game-text import dialog for the notation editor} {I want to open the game-text import dialog for the notation editor}}] \
+	toolbar.editor_history.0 [dict create label {Remove history entry} purpose {Remove the selected game from the recent-game history.} when {Use this to remove one unwanted entry from your game history.} examples {{Remove the selected game from the recent-game history} {I want to remove the selected game from the recent-game history}}] \
+	toolbar.editor_history.1 [dict create label {Clear game history} purpose {Remove all entries from the recent-game history.} when {Use this when you want to start a fresh browsing history.} examples {{Remove all entries from the recent-game history} {I want to remove all entries from the recent-game history}}] \
+	toolbar.editor_display.0 [dict create label {Notation columns} purpose {Apply the selected column layout to the notation display.} when {Use this to choose how White and Black moves line up on the page.} examples {{Apply the selected column layout to the notation display} {I want to apply the selected column layout to the notation display}}] \
+	toolbar.editor_display.1 [dict create label {Notation paragraph spacing} purpose {Apply the selected paragraph spacing to the notation display.} when {Use this when long annotations need a different amount of separation.} examples {{Apply the selected paragraph spacing to the notation display} {I want to apply the selected paragraph spacing to the notation display}}] \
+	toolbar.editor_display.2 [dict create label {Show move information} purpose {Apply the selected visibility of supplemental move information in notation.} when {Use this to show or hide recorded move statistics beside the moves.} examples {{Apply the selected visibility of supplemental move information in notation} {I want to apply the selected visibility of supplemental move information in notation}}] \
+	toolbar.editor_display.4 [dict create label {Fold variations} purpose {Collapse the displayed variation branches in the notation.} when {Use this to concentrate on the main continuation.} examples {{Collapse the displayed variation branches in the notation} {I want to collapse the displayed variation branches in the notation}}] \
+	toolbar.editor_display.5 [dict create label {Expand variations} purpose {Expand the displayed variation branches in the notation.} when {Use this to read the alternative continuations and their annotations.} examples {{Expand the displayed variation branches in the notation} {I want to expand the displayed variation branches in the notation}}] \
+	toolbar.editor_languages.0 [dict create label {All comment languages} purpose {Apply the all-languages setting when displaying game comments.} when {Use this to read annotations written in several languages instead of filtering them to selected languages.} examples {{Apply the all-languages setting when displaying game comments} {I want to apply the all-languages setting when displaying game comments}}] \
+	toolbar.tree_control.0 [dict create label {Automatic tree search} purpose {Apply the automatic-search setting to the opening tree.} when {Use this when the tree should follow each newly displayed board position.} examples {{Apply the automatic-search setting to the opening tree} {I want to apply the automatic-search setting to the opening tree}}] \
+	toolbar.tree_control.1 [dict create label {Search opening tree} purpose {Search the tree database for the displayed board position.} when {Use this after changing the board while automatic tree searching is off.} examples {{Search the tree database for the displayed board position} {I want to search the tree database for the displayed board position}}] \
+	toolbar.tree_switcher.0 [dict create label {Lock tree database} purpose {Apply the tree-database lock setting to the current tree selection.} when {Use this when database switching should leave the tree source unchanged.} examples {{Apply the tree-database lock setting to the current tree selection} {I want to apply the tree-database lock setting to the current tree selection}}] \
+	toolbar.tree_control.3 [dict create label {Tree exact search} purpose {Invalidate cached opening-tree results after selecting exact search.} when {Use this when the opening tree should use the exact search method for its next query.} examples {{Invalidate cached opening-tree results after selecting exact search} {I want to invalidate cached opening-tree results after selecting exact search}}] \
+	toolbar.tree_control.4 [dict create label {Tree fast search} purpose {Invalidate cached opening-tree results after selecting fast search.} when {Use this when the opening tree should use the fast search method for its next query.} examples {{Invalidate cached opening-tree results after selecting fast search} {I want to invalidate cached opening-tree results after selecting fast search}}] \
+	toolbar.analysis_control.0 [dict create label {Pause analysis} purpose {Pause or resume the engine search in this analysis pane.} when {Use this to hold the current engine results while examining them.} examples {{Pause or resume the engine search in this analysis pane} {I want to pause or resume the engine search in this analysis pane}}] \
+	toolbar.analysis_control.1 [dict create label {Lock analysis position} purpose {Apply the position-lock setting for this engine analysis pane.} when {Use this when analysis should stay on one position while you browse moves.} examples {{Apply the position-lock setting for this engine analysis pane} {I want to apply the position-lock setting for this engine analysis pane}}] \
+	toolbar.analysis_control.2 [dict create label {Opponent analysis} purpose {Restart analysis with the selected opponent-view setting.} when {Use this to examine the position from the other side's perspective.} examples {{Restart analysis with the selected opponent-view setting} {I want to restart analysis with the selected opponent-view setting}}] \
+	toolbar.analysis_control.3 [dict create label {Start analysis} purpose {Start the engine search in this analysis pane.} when {Use this when an attached engine is ready but not searching.} examples {{Start the engine search in this analysis pane} {I want to start the engine search in this analysis pane}}] \
+	toolbar.analysis_control.4 [dict create label {Stop analysis} purpose {Stop the current engine search while retaining the engine attachment.} when {Use this when you have enough analysis for the displayed position.} examples {{Stop the current engine search while retaining the engine attachment} {I want to stop the current engine search while retaining the engine attachment}}] \
+	toolbar.analysis_control.5 [dict create label {Close analysis engine} purpose {Detach and close the engine assigned to this analysis pane.} when {Use this when that engine is no longer needed for the session.} examples {{Detach and close the engine assigned to this analysis pane} {I want to detach and close the engine assigned to this analysis pane}}] \
+	toolbar.analysis_control.7 [dict create label {Pin best line to repertoire} purpose {Save the best engine continuation in a compatible repertoire database.} when {Use this to retain the strongest current analysis line for later practice.} examples {{Save the best engine continuation in a compatible repertoire database} {I want to save the best engine continuation in a compatible repertoire database}}] \
+	toolbar.analysis_control.8 [dict create label {Multiple principal variations} purpose {Apply the multi-variation setting to the engine search.} when {Use this when you want the engine to compare several candidate moves.} examples {{Apply the multi-variation setting to the engine search} {I want to apply the multi-variation setting to the engine search}}] \
+	toolbar.analysis_control.9 [dict create label {Best-first analysis order} purpose {Apply best-first or unordered display of engine principal variations.} when {Use this when the strongest candidate should lead the list or variations should retain engine order.} examples {{Apply best-first or unordered display of engine principal variations} {I want to apply best-first or unordered display of engine principal variations}}] \
+	toolbar.analysis_control.12 [dict create label {Number of analysis lines} purpose {Apply the selected number of principal variations for the engine.} when {Use this to control how many candidate continuations the engine searches.} examples {{Apply the selected number of principal variations for the engine} {I want to apply the selected number of principal variations for the engine}}] \
+	toolbar.analysis_info.2 [dict create label {Engine information} purpose {Toggle the extra engine information shown in this analysis pane.} when {Use this to inspect engine statistics or recover display space.} examples {{Toggle the extra engine information shown in this analysis pane} {I want to toggle the extra engine information shown in this analysis pane}}] \
+	toolbar.games_control.0 [dict create label {First game-list row} purpose {Scroll the game list to its first row.} when {Use this to return to the beginning of a long list of games.} examples {{Scroll the game list to its first row} {I want to scroll the game list to its first row}}] \
+	toolbar.games_control.1 [dict create label {Game-list page backward} purpose {Scroll backward through the game list.} when {Use this to browse earlier rows without changing the board game.} examples {{Scroll backward through the game list} {I want to scroll backward through the game list}}] \
+	toolbar.games_control.2 [dict create label {Selected game-list row} purpose {Scroll the game list to its current selection.} when {Use this after scrolling away from the selected game.} examples {{Scroll the game list to its current selection} {I want to scroll the game list to its current selection}}] \
+	toolbar.games_control.3 [dict create label {Game-list page forward} purpose {Scroll forward through the game list.} when {Use this to browse later rows without changing the board game.} examples {{Scroll forward through the game list} {I want to scroll forward through the game list}}] \
+	toolbar.games_control.4 [dict create label {Last game-list row} purpose {Scroll the game list to its last row.} when {Use this to inspect the end of a long list of games.} examples {{Scroll the game list to its last row} {I want to scroll the game list to its last row}}] \
+	toolbar.games_layout.0 [dict create label {Preview beside game list} purpose {Place the game preview to the right of the game list.} when {Use this when the database pane has room for a side-by-side arrangement.} examples {{Place the game preview to the right of the game list} {I want to place the game preview to the right of the game list}}] \
+	toolbar.games_layout.1 [dict create label {Preview below game list} purpose {Place the game preview below the game list.} when {Use this when a vertical arrangement fits the database pane better.} examples {{Place the game preview below the game list} {I want to place the game preview below the game list}}] \
+	toolbar.playertable_options.0 [dict create label {Player information source} purpose {Refresh player details using the selected player-information source.} when {Use this to include or exclude supplemental information from the player database.} examples {{Refresh player details using the selected player-information source} {I want to refresh player details using the selected player-information source}}] \
+	toolbar.database_switcher.0 [dict create label {Create database} purpose {Open the dialog to create a new normal-chess database.} when {Use this when starting a separate collection of games.} examples {{Open the dialog to create a new normal-chess database} {I want to open the dialog to create a new normal-chess database}}] \
+	toolbar.database_switcher.1 [dict create label {Open database} purpose {Open the database chooser for an existing database file.} when {Use this to work with a saved collection of games.} examples {{Open the database chooser for an existing database file} {I want to open the database chooser for an existing database file}}] \
+	toolbar.database_switcher.2 [dict create label {Search current database} purpose {Open a search scoped to the currently selected database.} when {Use this to find games matching criteria within the active collection.} examples {{Open a search scoped to the currently selected database} {I want to open a search scoped to the currently selected database}}] \
+	toolbar.database_switcher.3 [dict create label {Close current database} purpose {Close the active database.} when {Use this when you have finished working with that collection.} examples {{Close the database shown in the switcher} {Stop working with the active collection}}] \
+	toolbar.database_switcher.4 [dict create label {Save database changes} purpose {Write pending changes in the active database to disk.} when {Use this after editing games or database contents that have not been saved.} examples {{Write pending changes in the active database to disk} {I want to write pending changes in the active database to disk}}] \
+	toolbar.database_switcher.5 [dict create label {Database read-only mode} purpose {Apply the selected write-protection setting to the active database.} when {Use this to protect a collection from accidental changes or enable editing.} examples {{Apply the selected write-protection setting to the active database} {I want to apply the selected write-protection setting to the active database}}] \
+	toolbar.database_clipbase.0 [dict create label {Normal-chess clipboard} purpose {Switch the game clipboard to normal chess.} when {Use this when collecting ordinary chess games in the clipboard.} examples {{Switch the game clipboard to normal chess} {I want to switch the game clipboard to normal chess}}] \
+	toolbar.database_clipbase.1 [dict create label {Three-check clipboard} purpose {Switch the game clipboard to three-check chess.} when {Use this when collecting games where giving three checks wins.} examples {{Switch the game clipboard to three-check chess} {I want to switch the game clipboard to three-check chess}}] \
+	toolbar.database_clipbase.2 [dict create label {Bughouse clipboard} purpose {Switch the game clipboard to bughouse chess.} when {Use this when collecting bughouse games.} examples {{Switch the game clipboard to bughouse chess} {I want to switch the game clipboard to bughouse chess}}] \
+	toolbar.database_clipbase.3 [dict create label {Crazyhouse clipboard} purpose {Switch the game clipboard to crazyhouse chess.} when {Use this when collecting crazyhouse games with piece drops.} examples {{Switch the game clipboard to crazyhouse chess} {I want to switch the game clipboard to crazyhouse chess}}] \
+	toolbar.database_clipbase.4 [dict create label {Antichess clipboard} purpose {Switch the game clipboard to antichess.} when {Use this when collecting games played under antichess rules.} examples {{Switch the game clipboard to antichess} {I want to switch the game clipboard to antichess}}] \
+	toolbar.database_clipbase.5 [dict create label {Losers-chess clipboard} purpose {Switch the game clipboard to losers chess.} when {Use this when collecting games played under losers-chess rules.} examples {{Switch the game clipboard to losers chess} {I want to switch the game clipboard to losers chess}}] \
+]
+}

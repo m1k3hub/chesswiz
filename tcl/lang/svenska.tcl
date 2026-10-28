@@ -3694,4 +3694,9 @@
 ::context::mc::c12_merge_game "Parti"
 ::context::mc::c12_export "Exporta parti"
 
+### application::assistant::panel ###################################
+::application::assistant::panel::mc::StartupGreeting	"Jag kan sk\u00f6ta Chesswiz \u00e5t dig. V\u00e4lj ett f\u00f6rslag nedan eller fr\u00e5ga med egna ord."
+::application::assistant::panel::mc::Hide	"D\u00f6lj"
+::application::assistant::panel::mc::NoModelHint	"Ingen modell \u00e4r ansluten \u00e4n. \u00d6ppna Verktyg > V\u00e4lj modell\u2026 f\u00f6r att ansluta en; f\u00f6rslagen ovan fungerar utan."
+
 # vi:set ts=3 sw=3:

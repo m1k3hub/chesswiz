@@ -304,7 +304,7 @@ tcltest::test ask-scope-no-game {without a game no C2 row is listed and truncate
 	set rc [::action::run c2.strip.truncate]
 	set after [::scidb::game::count halfmoves]
 	list [llength $ask] [dict get $state visible] $rc [expr {$before == $after}]
-} -result {0 0 {error: action 'c2.strip.truncate' is not available here} 1}
+} -result {0 0 {error: precondition: select an item before running c2.strip.truncate} 1}
 
 # ----------------------------------------------------------------------
 # Game start: truncate and comment-before are absent, comment-after is

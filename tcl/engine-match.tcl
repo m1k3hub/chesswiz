@@ -664,13 +664,13 @@ proc ::enginematch::ClaimSlot {} {
 		catch { ::scidb::game::switch $Priv(pos) }
 		return $Priv(pos)
 	}
-	set before [::scidb::game::current]
-	if {[catch { ::menu::gameNew .application }]} { return -1 }
-	set pos [::scidb::game::current]
-	if {$pos == $before || [::scidb::game::query length] > 0} {
+	if {[catch {::game::new .application -variant Normal} pos] || $pos < 0} {return -1}
+	if {[::scidb::game::query $pos length] > 0} {
 		# no free slot: never take over a game the user has open
 		return -1
 	}
+	::scidb::game::switch $pos
+	::application::switchTab board
 	return $pos
 }
 
@@ -692,6 +692,8 @@ proc ::enginematch::EngineBase {label} {
 
 
 proc ::enginematch::Fail {why} {
+	variable Priv
+	set Priv(lastError) $why
 	if {[DialogExists]} {
 		Status $why
 		return

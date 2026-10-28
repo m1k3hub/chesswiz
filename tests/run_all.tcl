@@ -18,11 +18,13 @@ namespace eval ::scidb::test {
 # Parse command line
 set matchPattern "*"
 set verbose 0
+set singleFile ""
 
 for {set i 0} {$i < [llength $argv]} {incr i} {
     switch -glob -- [lindex $argv $i] {
         -match { incr i; set matchPattern [lindex $argv $i] }
         -verbose { set verbose 1 }
+        -file { incr i; set singleFile [lindex $argv $i] }
         -help {
             puts "Usage: tclsh tests/run_all.tcl [-match PATTERN] [-verbose]"
             exit 0
@@ -51,6 +53,10 @@ set testFiles [lsearch -inline -all -not -glob $testFiles \
 # They are exercised by the tests/Makefile `ai-tests` group instead.
 set testFiles [lsearch -inline -all -not -glob $testFiles \
     [file join $::scidb::test::testDir test_ai_*.tcl]]
+
+if {$singleFile ne ""} {
+    set testFiles [lsearch -all -inline -glob $testFiles [file join $::scidb::test::testDir $singleFile]]
+}
 
 if {[llength $testFiles] == 0} {
     puts "ERROR: No test files found"
@@ -82,6 +88,26 @@ set startTime [clock seconds]
 foreach testFile $testFiles {
     puts "\n=== Running [file tail $testFile] ==="
     
+    # Each file owns global Tcl/Tk command replacements. A fresh process
+    # prevents leaked mocks and Tk initialization from changing later files.
+    if {$singleFile eq ""} {
+        set command [list [info nameofexecutable] [file normalize [info script]] -file [file tail $testFile] -match $matchPattern]
+        if {$verbose} { lappend command -verbose }
+        set rc [catch {exec {*}$command 2>@1} output options]
+        puts $output
+        set complete 1
+        foreach {label field} {Passed totalPass Failed totalFail Skipped totalSkip} {
+            if {[regexp -line "^Total $label: (\\d+)$" $output -> count]} {
+                incr ::scidb::test::$field $count
+            } else { set complete 0 }
+        }
+        if {!$complete || ($rc && ![regexp -line {^STATUS: FAILED$} $output])} {
+            puts "ERROR in [file tail $testFile]: child did not complete successfully"
+            incr ::scidb::test::totalFail
+        }
+        continue
+    }
+
     # Configure tcltest
     tcltest::configure -match $matchPattern
     if {$verbose} {

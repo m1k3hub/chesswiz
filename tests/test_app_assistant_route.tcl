@@ -726,4 +726,70 @@ tcltest::test route-clarify-negated-unresolved {negated or uncertain clarificati
 	}
 } -result {{{} 1} {{} 1} {{} 1} {{} 1} {{} 1}}
 
+tcltest::test route-jev-refusal-gate {System One refusal choice declines before calling the language model when above threshold, and falls through below threshold} -body {
+	::scidb::test::route::isolated {
+		set ::application::assistant::RouteMode active
+
+		# 1. High-confidence Jev refusal on a novel phrasing not matched by regex
+		set ::scidb::test::route::ChatCalls 0
+		set ::scidb::test::route::RouteReply [dict create ok 1 answers [dict create \
+			route [dict create type choice choice export_database confidence 0.92 \
+				probabilities [dict create export_database 0.92]] \
+			satisfied [dict create type noul noul 0.1 confidence 0.9] \
+			refusal [dict create type choice choice unsupported_feature confidence 0.91 \
+				probabilities [dict create unsupported_feature 0.91 in_bounds 0.09]]]]
+		set req1 "Export this game to a holographic projection on my ceiling."
+		set expected1 [::application::assistant::BoundsDecline $req1]
+		set t1 [::scidb::test::route::ask $req1]
+		set actual1 [dict get [lindex $::application::assistant::Priv(messages) end] content]
+		set r1 [list $::scidb::test::route::ChatCalls [expr {$actual1 eq $expected1}]]
+
+		# 2. Low-confidence Jev refusal abstains and falls through to the model
+		set ::scidb::test::route::ChatCalls 0
+		set ::scidb::test::route::RouteReply [dict create ok 1 answers [dict create \
+			route [dict create type choice choice existing_assistant confidence 0.88 \
+				probabilities [dict create existing_assistant 0.88]] \
+			satisfied [dict create type noul noul 0.2 confidence 0.8] \
+			refusal [dict create type choice choice unsupported_feature confidence 0.55 \
+				probabilities [dict create unsupported_feature 0.55 in_bounds 0.45]]]]
+		::scidb::test::route::ask "Render a holographic projection on my ceiling."
+		set r2 $::scidb::test::route::ChatCalls
+
+		list $r1 $r2
+	}
+} -result {{0 1} 1}
+
+# The policy choice is independently authoritative, even when route selection
+# is malformed, and the turn latch protects every assistant dispatch path.
+tcltest::test route-refusal-independent-dispatch {all refusal families at threshold run no tools; next in-bounds turn still routes} -body {
+ ::scidb::test::route::isolated {
+  set out {}
+  foreach mode {active shadow} {
+   set ::application::assistant::RouteMode $mode
+   foreach family {chess_judgment_ungrounded false_completion unsupported_feature outside_app prompt_injection} {
+    set ::scidb::test::route::ChatCalls 0
+    set ::scidb::test::route::Switched {}
+    set ::scidb::test::route::RouteReply [dict create ok 1 answers [dict create \
+      route [dict create choice invalid_action confidence 1] \
+      refusal [dict create choice $family confidence [::application::assistant::RouteRefusalThreshold]]]]
+    set request {Perform an unsupported operation.}
+    ::scidb::test::route::ask $request
+    set expected [::application::assistant::BoundsDecline $request]
+    set actual [dict get [lindex $::application::assistant::Priv(messages) end] content]
+    # Attempt both a direct default tool and the registry adapter after refusal.
+    set r1 [::application::assistant::runTool switch_tab {tab board}]
+    set r2 [::application::assistant::runTool run_action {id board-flip}]
+    lappend out [expr {$actual eq $expected && $r1 eq $expected && $r2 eq $expected
+      && !$::application::assistant::Priv(turnTools)
+      && !$::scidb::test::route::ChatCalls && ![llength $::scidb::test::route::Switched]}]
+   }
+  }
+  set ::application::assistant::RouteMode active
+  set ::scidb::test::route::RouteReply [::scidb::test::route::reply switch_tab(board) 0.99 0.99]
+  ::scidb::test::route::ask {Switch to the board tab.}
+  lappend out [expr {![::application::assistant::TurnRefused] && $::scidb::test::route::Switched eq {board}}]
+  lsort -unique $out
+ }
+} -result 1
+
 tcltest::cleanupTests

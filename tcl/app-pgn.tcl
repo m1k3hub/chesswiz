@@ -348,10 +348,25 @@ proc build {top width height} {
 	[namespace parent]::board::needBinding $main
 	[namespace parent]::board::bindKeys
 
+	set previous [::scidb::game::current]
 	InitScratchGame ;# before subscribing
 	::scidb::db::subscribe gameSwitch [namespace current]::GameSwitched
 	::pgn::setup::setupNags editor
-	Raise history
+	# A pane can be destroyed while the games remain open. Rebuild its
+	# gamebar and notation from those slots before any selection lookup.
+	foreach position [::game::usedPositions?] {
+		::gamebar::add $gamebar $position [::game::tags? $position]
+		ResetGame $Vars(pgn:$position) $position [::game::tags? $position]
+		if {[::game::locked? $position]} { ::gamebar::lock $gamebar $position }
+		::gamebar::setState $gamebar $position [::game::modified? $position]
+	}
+	if {$previous in [::game::usedPositions?]} {
+		::scidb::game::switch $previous
+		select $previous
+		::scidb::game::refresh $previous -immediate
+	} else {
+		Raise history
+	}
 }
 
 
@@ -414,6 +429,13 @@ proc activate {w flag} {
 
 proc closed {w} {
 	::scidb::db::unsubscribe gameSwitch [namespace current]::GameSwitched
+	# Detach this pane's callbacks before its text widgets disappear.
+	# Rebuilding fonts/styles can notify the still-open games before the
+	# new widgets have their marks; ResetGame reattaches after setup.
+	foreach position [::game::usedPositions?] {
+		catch { ::scidb::game::unsubscribe pgn $position [namespace current]::DoLayout }
+		catch { ::scidb::game::unsubscribe state $position [namespace current]::StateChanged }
+	}
 	# The scratch game lives in slot 9 for the lifetime of this pane. A
 	# rebuilt editor takes the same slot, so it must be free again or the
 	# next build fails in InitScratchGame.

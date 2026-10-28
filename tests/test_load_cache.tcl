@@ -1,6 +1,12 @@
 # Headless checks of startup orchestration; persistence is tested by the native
 # production-adapter integration test, and parity by test_player_cache.cpp.
 package require tcltest
+namespace eval ::ttk {
+    proc style {args} {
+        if {$args ne {theme names}} {error "unexpected theme call: $args"}
+        return {clearlooks dark scidblue}
+    }
+}
 namespace eval ::util { proc source {args} {} }
 namespace eval ::splash { proc print {args} {} }
 namespace eval ::log { proc open {args} {} }

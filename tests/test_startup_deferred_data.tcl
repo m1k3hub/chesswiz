@@ -1,5 +1,11 @@
 # Headless orchestration test using the real startup loader.
 package require tcltest
+namespace eval ::ttk {
+    proc style {args} {
+        if {$args ne {theme names}} {error "unexpected theme call: $args"}
+        return {clearlooks dark scidblue}
+    }
+}
 namespace eval util {proc source {args} {}}
 namespace eval splash {proc print {args} {}}
 namespace eval log {proc open {args} {}}

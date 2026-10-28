@@ -343,14 +343,16 @@ proc ::application::keyEditor::RegisterActions {} {
 		lassign $entry action labelVar tag keySpec cbSpec cmd
 		if {[dict exists $::action::Registry $action]} { continue }
 		set label [ActionLabel $action $labelVar]
+		# A key-editor row is a keyboard shortcut the user can reach, so the
+		# assistant can run it too (VAL-AI-009).
 		::action::register $action [dict create \
 			label    $label \
 			object   {} \
 			args     {} \
 			handler  [list ::application::keyEditor::RunAction $action] \
 			what     $label \
-			ai       0 \
-			keys     [list {} {}] \
+			ai       1 \
+			keys     [list $keySpec $cbSpec] \
 			menu     {} \
 			dropdown {} \
 			doc      $label \

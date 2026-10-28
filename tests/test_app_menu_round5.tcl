@@ -132,13 +132,13 @@ tcltest::test r5-layout-fresh {manage can inspect a layout before any saved snap
         ::application::twm::savedLayout .twm
     }
 } -result liveLayout
-tcltest::test r5-docked-topmost {docked panes disable floating-only operations and direct invocation is harmless} -body {
+tcltest::test r5-docked-topmost {docked panes disable floating-only operations and invocation explains the refusal} -body {
     ::scidb::test::r5::run {
         proc ::menu::PaneFloating {uid twm} {return 0}
         list [::context::ObjectRule c9.stay_on_top {paneUid board twm .twm}] \
-            [::context::Command c9.stay_on_top {paneUid board twm .twm frame .frame}]
+            [::context::Invoke c9.stay_on_top {paneUid board twm .twm frame .frame}]
     }
-} -result {{1 0} {}}
+} -result {{1 0} {error: action is unavailable for this pane}}
 tcltest::test r5-board-hidden {updates after hiding the board never access deleted diagram state} -body {
     ::scidb::test::r5::run {
         set ::application::board::board .destroyed
@@ -159,9 +159,9 @@ tcltest::test r5-engine-idle {pause and opponent view safely reject an engine th
     ::scidb::test::r5::run {
         namespace eval ::application::analysis::.tree {variable Vars; set Vars(number) 1}
         list [::application::analysis::Pause .tree] [::application::analysis::restartAnalysis 1] \
-            [::context::Command c6.opponents_view {number 1 tree .tree}]
+            [::context::Invoke c6.opponents_view {number 1 tree .tree}]
     }
-} -result {{} {} {}}
+} -result {{} {} {error: no running engine for this pane}}
 foreach {where expected} {atend seq middle line} {
     tcltest::test r5-sequence-$where {sequence appends only at a line end and preserves a middle continuation as a variation} -body {
         ::scidb::test::r5::run [format {
@@ -201,13 +201,14 @@ tcltest::test r5-site-url {a city never opens a browser; an actual URL does} -bo
         set object {parent .application path .games base test variant Normal view 0 index 1}
         set ::site Budva
         set city [::context::ObjectRule c3.open_url $object]
-        ::context::Command c3.open_url $object
+        set refusal [catch {::context::Command c3.open_url $object} why options]
+        set typed [expr {[dict get $options -errorcode] eq {CHESSWIZ PRECONDITION CONTEXT}}]
         set unvisited [expr {![info exists ::opened]}]
         set ::site https://example.org/game
         ::context::Command c3.open_url $object
-        list $city $unvisited $::opened
+        list $refusal $typed $city $unvisited $::opened
     }
-} -result {{0 1} 1 https://example.org/game}
+} -result {1 1 {0 1} 1 https://example.org/game}
 tcltest::test r5-support-site {support action is assistant-visible and opens the configured site} -body {
     ::scidb::test::r5::run {
         set ::action::Registry {}; set ::action::ConfirmHook {}; set ::action::BulkHook {}
@@ -406,13 +407,14 @@ tcltest::test r7-event-url {event URL reaches the browser only for a real link} 
         proc ::web::open {parent url} {set ::opened [list $parent $url]}
         set object {parent .events base db variant Normal index 3 view 7}
         set ::site London
-        ::context::Command c5.event_url $object
+        set refusal [catch {::context::Command c5.event_url $object} why options]
+        set typed [expr {[dict get $options -errorcode] eq {CHESSWIZ PRECONDITION CONTEXT}}]
         set city [info exists ::opened]
         set ::site https://example.org/tournament
         ::context::Command c5.event_url $object
-        list $city $::siteArgs $::opened
+        list $refusal $typed $city $::siteArgs $::opened
     }
-} -result {0 {db Normal 7 3} {.events https://example.org/tournament}}
+} -result {1 1 0 {db Normal 7 3} {.events https://example.org/tournament}}
 tcltest::test r7-engine-expired {registry rejects a menu object after its engine stops} -body {
     ::scidb::test::r5::run {
         set ::action::Registry {}; set ::action::ConfirmHook {}; set ::action::BulkHook {}

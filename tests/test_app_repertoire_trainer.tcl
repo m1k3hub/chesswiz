@@ -571,7 +571,10 @@ tcltest::test reptrainer-jev-grade {reptrainer_grade suggestions, lapsed-card fi
 } -result {easy classifier good classifier {} rules hard {e4 is right. How well did you know it? (Suggested: Hard)} 4}
 
 
+# Cloud integration is opt-in: possessing a key must not turn an offline
+# regression run into a live network test.
 tcltest::testConstraint typesafeKey [expr {
+	[info exists ::env(SCIDB_TEST_LIVE_AI)] && $::env(SCIDB_TEST_LIVE_AI) eq "1" &&
 	[info exists ::env(TYPESAFE_API_KEY)] && [string length $::env(TYPESAFE_API_KEY)] > 0
 }]
 

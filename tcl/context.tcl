@@ -107,11 +107,14 @@ proc ::context::Item {id text contexts {keys {}} {visible {}} {enabled {}}} {
 		namespace eval ::context::mc [list set $var $text]
 	}
 
+	# Pane-toggle aliases identify their target in the action id itself.
+	set selectionArgs {{object {type object default {} description {Selected item and its action-specific details; uses the current selection when omitted.}}}}
+	if {[string match c9.pane.* $id]} { set selectionArgs {} }
 	if {![dict exists $::action::Registry $id]} {
 		::action::register $id [dict create \
 			label $text \
 			object {} \
-			args {{object {type string default {}}}} \
+			args $selectionArgs \
 			handler [list ::context::InvokeArgs $id] \
 			what $text \
 			ai 0 \
@@ -153,12 +156,28 @@ proc ::context::RegisterCore {} {
 	]
 }
 
+# Operation aliases may accept a supplied filename without any selection.
+# Otherwise the original context callback needs the same object as its menu.
+proc ::context::NeedsObject {record {arguments {}}} {
+	set handler [dict get $record handler]
+	if {[lindex $handler 0] eq "::menu::InvokeOperationAlias"} {
+		if {[::menu::OperationSupplied [lindex $handler 1] $arguments]} { return 0 }
+		set handler [lindex $handler 2]
+	}
+	return [expr {[lindex $handler 0] eq "::context::InvokeArgs" && [dict get $record args] ne ""}]
+}
+
 proc ::context::InvokeArgs {id argsDict} {
+	if {[string match c9.pane.* $id]} { return [Invoke $id [dict create paneUid [lindex [split $id .] end]]] }
 	set object {}
 	if {[dict exists $argsDict object]} {
 		set object [dict get $argsDict object]
 	} else {
 		set object $argsDict
+	}
+	if {$object eq ""} {
+		set selected [CurrentObjectFor $id]
+		if {[llength $selected]} { set object [lindex $selected 1] }
 	}
 	return [Invoke $id $object]
 }
@@ -645,14 +664,12 @@ proc ::context::Declare {} {
 	Item c9.report.font		"Font"						C9
 	Item c9.report.size		"Size"						C9
 	Item c9.report.family		"Family"					C9
-	Item c9.report.print		"Print…"					C9
+
 	Item c9.report.zoom		"Zoom"						C9
 	Item c9.assistant.clear	"Clear Conversation"		C9
 	Item c9.assistant.model	"Choose Model…"				C9
-	Item c9.assistant.source	"Source"					C9
-	Item c9.assistant.local	"Local"						C9
-	Item c9.assistant.cloud	"Cloud"						C9
-	Item c9.explorer.tablebase "Online Tablebase"		C9 {} {[::capability::present explorer]}
+
+
 	Item c9.explorer.source	"Source"					C9 {} {[::capability::present explorer]}
 	Item c9.maximise			"Maximise/Restore Pane"		C9
 	Item c9.fold				"Fold Title Bar"			C9
@@ -679,7 +696,7 @@ proc ::context::Declare {} {
 		-
 		{cascade c9.appearance {}}
 		c9.board_setup
-		{cascade c9.tablebase {c9.explorer.tablebase}}
+		c9.tablebase
 		c9.flip_board
 		{cascade c9.start_position {c1.start.standard c1.start.chess960 c1.start.symm960 c1.start.shuffle c1.start.setup}}
 		-
@@ -818,7 +835,7 @@ proc ::context::Declare {} {
 		ask
 		-
 		{cascade c9.report.font {c9.report.size c9.report.family}}
-		c9.report.print
+
 		c9.report.zoom
 		-
 		c9.maximise
@@ -838,7 +855,7 @@ proc ::context::Declare {} {
 		-
 		c9.assistant.clear
 		c9.assistant.model
-		{cascade c9.assistant.source {c9.assistant.local c9.assistant.cloud}}
+
 		-
 		c9.maximise
 		c9.fold
@@ -855,7 +872,7 @@ proc ::context::Declare {} {
 	DefineObject C9 explorer {
 		ask
 		-
-		c9.explorer.tablebase
+
 		{cascade c9.explorer.source {}}
 		-
 		c9.maximise
@@ -1145,7 +1162,7 @@ proc ::context::Visible {id object} {
 		if {[::menu::PaneFloating $uid $twm]} { set visible 0 }
 	}
 	# R13: the report font/print group needs the HTML report surface.
-	if {$id in {c9.report.font c9.report.size c9.report.family c9.report.print c9.report.zoom}} {
+	if {$id in {c9.report.font c9.report.size c9.report.family c9.report.zoom}} {
 		if {[::menu::NoHtmlReport]} { set visible 0 }
 	}
 	return $visible
@@ -1423,7 +1440,7 @@ proc ::context::CurrentObject {cid} {
 			set fen ""
 			catch { set fen [::scidb::game::query fen] }
 			if {$fen eq ""} { return {} }
-			return [dict create fen $fen]
+			return [dict create fen $fen widget $::application::board::Vars(widget:frame)]
 		}
 		C2 {
 			if {![GameInTab]} { return {} }
@@ -1529,7 +1546,9 @@ proc ::context::CurrentObject {cid} {
 			return [dict create widget $w index $index]
 		}
 		C12 {
-			return [dict create gameSlot 0]
+			if {![GameInTab]} { return {} }
+			if {[catch {::scidb::game::current} slot] || $slot < 0} { return {} }
+			return [dict create parent $::application::pgn::Vars(gamebar) id $slot gameSlot $slot]
 		}
 	}
 	return {}
@@ -1581,6 +1600,15 @@ proc ::context::ObjectRule {id object} {
 	}
 	if {$id eq "c3.open_url"} {
 		return [list [::web::isWebLink [GameSite $object]] 1]
+	}
+	if {$id eq "c9.float"} {
+		set canFloat 0
+		if {[dict exists $object twm] && [dict exists $object paneUid]} {
+			set twm [dict get $object twm]
+			set uid [dict get $object paneUid]
+			catch {set canFloat [expr {[::menu::PaneFloating $uid $twm] || [$twm isundockable $uid]}]}
+		}
+		return [list 1 $canFloat]
 	}
 	if {$id in {c9.stay_on_top c9.hide_leaving}} {
 		set floating 0
@@ -1832,22 +1860,77 @@ proc ::context::Deliver {cid record} {
 # ----------------------------------------------------------------------
 # Invoke a context action from the menu or the registry.
 # ----------------------------------------------------------------------
+# These fields identify the selected item; parent/view/variant have defaults.
+# Shared by dispatch and capability lookup so availability never promises a
+# callback whose identifying input is absent.
+proc ::context::RequiredFields {id} {
+	switch -glob -- $id {
+		c12.copy_game - c12.copy_clipboard - c12.export { return {id} }
+		c12.close_tab - c12.remove_history - c12.save.* - c12.merge.game { return {gameSlot} }
+		c1.set_start_board - c1.set_start_position - c1.flip_board { return {widget} }
+		c3.load - c3.browse - c3.overview - c3.tournament - c3.merge { return {path index} }
+		c3.games_like - c3.ask_about_game - c3.copy_game { return {path base variant index} }
+		c3.sort* { return {path column} }
+		c3.delete - c3.flag.* - c3.edit_characteristics { return {base index} }
+		c4.readonly - c4.properties - c4.open_new_tab - c4.close - c4.save_changes - c4.maintenance.compact - c4.export.* { return {base} }
+		c5.site_url - c5.player_card - c5.prep_report { return {name} }
+		c5.event_url - c5.event_table - c5.player.prep - c5.insights - c5.player.insights { return {base variant index} }
+		c5.open_switcher - c5.save_working_set { return {base variant kind name} }
+		c6.copy_fen { return {} }
+		c6.copy_line - c6.explain_line { return {pv} }
+		c6.lock_engine - c6.opponents_view - c6.best_first - c6.lines.* - c6.setup_engine { return {tree number} }
+		c6.* { return {tree} }
+		c7.play - c7.open_report { return {mediaId path} }
+		c7.external { return {path} }
+		c8.move_actions - c8.analyze { return {table row} }
+		c10.* { return {table column} }
+		c11.insert_symbol - c11.insert_emoticon - c11.add_language - c11.switch_language { return {call} }
+		c11.copy - c11.cut - c11.paste - c11.select_all - c11.revert - c11.draft_comment - c11.classify_comment { return {widget} }
+		c9.maximise - c9.fold - c9.amalgamate - c9.float - c9.stay_on_top - c9.hide_leaving - c9.close { return {paneUid twm frame} }
+		c9.docking { return {twm} }
+	}
+	return {}
+}
+
+proc ::context::MissingFields {id object} {
+	set missing {}
+	foreach key [RequiredFields $id] {
+		if {![dict exists $object $key] || [dict get $object $key] eq ""} { lappend missing $key }
+	}
+	return $missing
+}
+
 proc ::context::Invoke {id {object {}}} {
-	if {[dict size $object] == 0} { set object [dict create] }
+	if {[catch {dict size $object} size] || !$size} {
+		return "error: precondition: select an item before running $id"
+	}
 	if {[catch { Command $id $object } result options]} {
+		set errorcode [lrange [dict get $options -errorcode] 0 2]
+		if {$errorcode in {{TCL LOOKUP DICT} {CHESSWIZ PRECONDITION CONTEXT}}} {
+			return "error: precondition: selected item is missing details needed by $id: $result"
+		}
 		::debuglog::log context "$id: [dict get $options -errorinfo]"
 		if {[llength [info commands ::log::error]]} {
 			catch { ::log::error context "$id: $result" }
 		}
+		if {$result eq ""} {set result "the selected item could not perform $id; select a suitable item and try again"}
 		return "error: $result"
 	}
+	if {$result eq ""} { return "completed $id" }
 	return $result
 }
 
 proc ::context::Command {id object} {
-	if {($id eq "c9.stay_on_top" || $id eq "c9.hide_leaving") && ![lindex [ObjectRule $id $object] 1]} { return }
+	set missing [MissingFields $id $object]
+	if {[llength $missing]} {
+		return -code error -errorcode {CHESSWIZ PRECONDITION CONTEXT} "select an item with [join $missing {, }] before running $id"
+	}
+	if {$id eq "c9.float" && ![lindex [ObjectRule $id $object] 1]} {
+		return -code error -errorcode {CHESSWIZ PRECONDITION CONTEXT} "focus or select a pane that supports floating before running $id"
+	}
+	if {($id eq "c9.stay_on_top" || $id eq "c9.hide_leaving") && ![lindex [ObjectRule $id $object] 1]} { error "action is unavailable for this pane" }
 	if {([string match c6.* $id] && $id ni {c6.copy_fen c6.copy_line c6.setup_engine c6.setup_eval_edges}
-		|| $id in {c9.analysis.best c9.analysis.opponents}) && ![ObjectEngineRunning $object]} { return }
+		|| $id in {c9.analysis.best c9.analysis.opponents}) && ![ObjectEngineRunning $object]} { error "no running engine for this pane" }
 	if {![dict exists $object parent]} { dict set object parent .application }
 	if {![dict exists $object view]} { dict set object view 0 }
 	if {![dict exists $object variant]} {
@@ -1866,99 +1949,112 @@ proc ::context::Command {id object} {
 		dict set object table $::application::tree::Vars(table)
 	}
 	switch -glob -- $id {
-		c9.pane.board { catch { ::menu::TogglePaneId board } }
-		c9.pane.notation { catch { ::menu::TogglePaneId editor } }
-		c9.pane.games { catch { ::menu::TogglePaneId games } }
-		c9.pane.people { catch { ::menu::TogglePaneId players } }
-		c9.pane.tree { catch { ::menu::TogglePaneId tree } }
-		c9.pane.analysis { catch { ::menu::TogglePaneId analysis } }
-		c9.pane.media { catch { ::menu::TogglePaneId media } }
-		c9.pane.report { catch { ::menu::TogglePaneId report } }
-		c9.pane.assistant { catch { ::menu::TogglePaneId assistant } }
-		c9.pane.explorer { catch { ::menu::TogglePaneId explorer } }
+		c9.pane.board { ::menu::TogglePaneId board }
+		c9.pane.notation { ::menu::TogglePaneId editor }
+		c9.pane.games { ::menu::TogglePaneId games }
+		c9.pane.people { ::menu::TogglePaneId players }
+		c9.pane.tree { ::menu::TogglePaneId tree }
+		c9.pane.analysis { ::menu::TogglePaneId analysis }
+		c9.pane.media { ::menu::TogglePaneId media }
+		c9.pane.report { ::menu::TogglePaneId report }
+		c9.pane.assistant { ::menu::TogglePaneId assistant }
+		c9.pane.explorer { ::menu::TogglePaneId explorer }
 		c1.set_start_board {
 			set w [expr {[dict exists $object widget] ? [dict get $object widget] : ""}]
-			if {$w ne "" && [info commands ::application::board::SetStartBoard] ne ""} {
-				::application::board::SetStartBoard $w
-			}
+			if {$w eq ""} { error "select a board first" }
+			::application::board::SetStartBoard $w
 		}
 		c1.set_start_position {
 			set w [expr {[dict exists $object widget] ? [dict get $object widget] : ""}]
-			if {$w ne "" && [info commands ::application::board::SetStartPosition] ne ""} {
-				::application::board::SetStartPosition $w
-			}
+			if {$w eq ""} { error "select a board first" }
+			::application::board::SetStartPosition $w
 		}
-		c1.start.standard { catch { ::application::pgn::Shuffle Normal } }
-		c1.start.chess960 { catch { ::application::pgn::Shuffle Chess960 } }
-		c1.start.symm960 { catch { ::application::pgn::Shuffle Symm960 } }
-		c1.start.shuffle { catch { ::application::pgn::Shuffle Shuffle } }
+		c1.start.standard { ::application::pgn::Shuffle Normal }
+		c1.start.chess960 { ::application::pgn::Shuffle Chess960 }
+		c1.start.symm960 { ::application::pgn::Shuffle Symm960 }
+		c1.start.shuffle { ::application::pgn::Shuffle Shuffle }
 		c1.start.setup { ::setup::board::open [dict get $object parent] }
-		c1.insert_null { catch { ::move::addMove dialog -- } }
+		c1.insert_null { ::move::addMove dialog -- }
 		c1.flip_board {
 			set w [expr {[dict exists $object widget] ? [dict get $object widget] : ""}]
-			if {$w ne ""} { catch { ::application::board::Rotate $w } }
+			if {$w eq ""} { error "select a board first" }
+			::application::board::Rotate $w
 		}
 		c1.copy_fen { clipboard clear; clipboard append [::scidb::pos::fen] }
-		c1.copy_diagram { catch { ::context::CopyDiagram $object } }
-		c1.edit_annotation { catch { ::application::pgn::editAnnotation } }
+		c1.copy_diagram { ::context::CopyDiagram $object }
+		c1.edit_annotation { ::application::pgn::editAnnotation }
 		c1.board_setup {
 			set w [expr {[dict exists $object widget] ? [dict get $object widget] : ".application"}]
-			catch { ::board::options::openConfigDialog $w ::application::board::Redraw }
+			::board::options::openConfigDialog $w ::application::board::Redraw
 		}
-		c2.load_continuation { catch { ::context::MoveAction load $object } }
-		c2.replace_move { catch { ::context::MoveAction replace $object } }
-		c2.add_variation { catch { ::context::MoveAction variation $object } }
-		c2.new_main_line { catch { ::context::MoveAction mainline $object } }
+		c2.load_continuation { ::context::MoveAction load $object }
+		c2.replace_move { ::context::MoveAction replace $object }
+		c2.add_variation { ::context::MoveAction variation $object }
+		c2.new_main_line { ::context::MoveAction mainline $object }
 		c2.try_variation { ::application::pgn::flipTrialMode }
-		c2.exchange_move { catch { ::context::MoveAction exchange $object } }
-		c2.promote_variation { catch { ::application::pgn::PromoteVariation } }
-		c2.remove_variation { catch { ::application::pgn::RemoveVariation } }
-		c2.comment_after { catch { ::application::pgn::editComment after } }
-		c2.comment_before { catch { ::application::pgn::editComment before } }
-		c2.marks_palette { catch { ::application::pgn::openMarksPalette } }
-		c2.move_info { catch { ::application::pgn::EditInfo .application } }
+		c2.exchange_move { ::context::MoveAction exchange $object }
+		c2.promote_variation { ::application::pgn::PromoteVariation }
+		c2.remove_variation { ::application::pgn::RemoveVariation }
+		c2.comment_after { ::application::pgn::editComment after }
+		c2.comment_before { ::application::pgn::editComment before }
+		c2.marks_palette { ::application::pgn::openMarksPalette }
+		c2.move_info { ::application::pgn::EditInfo .application }
 		c2.annot.prefix - c2.annot.infix - c2.annot.suffix { ::application::pgn::editAnnotation }
-		c2.explain_move { catch { ::application::pgn::ExplainMove ::application::pgn "" } }
-		c2.insert_diagram { catch { ::annotation::addNag suffix 155 } }
-		c2.insert_diagram_black { catch { ::annotation::addNag suffix 156 } }
-		c2.strip.moves { catch { ::scidb::game::strip moves } }
-		c2.strip.truncate { catch { ::scidb::game::strip truncate } }
-		c2.strip.variations { catch { ::scidb::game::strip variations } }
-		c2.strip.annotations { catch { ::scidb::game::strip annotations } }
-		c2.strip.info { catch { ::scidb::game::strip info } }
-		c2.strip.marks { catch { ::scidb::game::strip marks } }
-		c2.strip.comments { catch { ::scidb::game::strip comments } }
-		c2.copy_comments { catch { ::application::pgn::CopyComments .application } }
-		c2.import_game { catch { ::application::pgn::PasteClipboardGame } }
-		c2.import_variation { catch { ::application::pgn::PasteClipboardVariation } }
-		c2.undo { catch { ::application::pgn::Undo undo } }
-		c2.redo { catch { ::application::pgn::Undo redo } }
-		c2.collapse { catch { ::scidb::game::variation fold on } }
-		c2.expand { catch { ::scidb::game::variation fold off } }
+		c2.explain_move { ::application::pgn::ExplainMove ::application::pgn "" }
+		c2.insert_diagram { ::annotation::addNag suffix 155 }
+		c2.insert_diagram_black { ::annotation::addNag suffix 156 }
+		c2.strip.moves { ::scidb::game::strip moves }
+		c2.strip.truncate { ::scidb::game::strip truncate }
+		c2.strip.variations { ::scidb::game::strip variations }
+		c2.strip.annotations { ::scidb::game::strip annotations }
+		c2.strip.info { ::scidb::game::strip info }
+		c2.strip.marks { ::scidb::game::strip marks }
+		c2.strip.language {
+			if {![dict exists $object language]} {
+				set m [PopupMenu stripLanguage]
+				foreach lang $::application::pgn::Vars(lang:set) {
+					$m add command -label [::encoding::languageName $lang] -command [list ::action::run $id [dict create object [dict replace $object language $lang]]]
+				}
+				return [PostChoices $m]
+			}
+			set lang [dict get $object language]
+			if {$lang ni $::application::pgn::Vars(lang:set)} { error "language is not present in this game" }
+			::scidb::game::strip comments [expr {$lang eq "xx" ? "" : $lang}]
+			return "removed comments in $lang"
+		}
+		c2.strip.comments { ::scidb::game::strip comments }
+		c2.copy_comments { ::application::pgn::CopyComments .application }
+		c2.import_game { ::application::pgn::PasteClipboardGame }
+		c2.import_variation { ::application::pgn::PasteClipboardVariation }
+		c2.undo { ::application::pgn::Undo undo }
+		c2.redo { ::application::pgn::Undo redo }
+		c2.collapse { ::scidb::game::variation fold on }
+		c2.expand { ::scidb::game::variation fold off }
 		c3.load {
-			catch { ::gamestable::LoadGame [dict get $object path] [dict get $object index] }
+			::gamestable::LoadGame [dict get $object path] [dict get $object index]
 		}
 		c3.browse {
-			catch { ::gamestable::Open(browse) [dict get $object path] [dict get $object index] }
+			::gamestable::Open(browse) [dict get $object path] [dict get $object index]
 		}
 		c3.overview {
-			catch { ::gamestable::Open(overview) [dict get $object path] [dict get $object index] }
+			::gamestable::Open(overview) [dict get $object path] [dict get $object index]
 		}
 		c3.games_like { return [::gamestable::SimilarGames [dict get $object path] [dict get $object base] [dict get $object variant] [dict get $object index]] }
 		c3.ask_about_game {
-			catch { ::gamestable::AskAboutGame [dict get $object path] [dict get $object base] \
-				[dict get $object variant] [dict get $object index] }
+			::gamestable::AskAboutGame [dict get $object path] [dict get $object base] \
+				[dict get $object variant] [dict get $object index]
 		}
 		c3.tournament {
-			catch { ::gamestable::Open(tourntable) [dict get $object path] [dict get $object index] }
+			::gamestable::Open(tourntable) [dict get $object path] [dict get $object index]
 		}
 		c3.open_url {
 			set site [GameSite $object]
-			if {[::web::isWebLink $site]} { ::web::open [dict get $object parent] $site }
+			if {![::web::isWebLink $site]} { return -code error -errorcode {CHESSWIZ PRECONDITION CONTEXT} "the selected game has no web address" }
+			::web::open [dict get $object parent] $site
 		}
 		c3.merge {
-			catch { gamebar::mergeGame [dict get $object path] [list [dict get $object base] \
-				[dict get $object variant] [dict get $object view] [dict get $object index]] }
+			gamebar::mergeGame [dict get $object path] [list [dict get $object base] \
+				[dict get $object variant] [dict get $object view] [dict get $object index]]
 		}
 		c3.delete {
 			return [::gamestable::deleteGame [dict get $object base] [dict get $object variant] [dict get $object index] [dict get $object view]]
@@ -1990,10 +2086,17 @@ proc ::context::Command {id object} {
 		}
 		c4.search.current { ::application::database::searchCurrent [dict get $object parent] }
 		c4.reports.opening { ::application::database::ShowOpeningReport [dict get $object parent] }
+		c5.site_url {
+			set url [dict get $object name]
+			if {![::web::isWebLink $url]} { error "the selected site has no web address" }
+			::web::open [dict get $object parent] $url
+			return "opened site web address"
+		}
 		c5.event_url {
 			set url [::eventtable::GetSite [dict get $object base] [dict get $object variant] \
 				[dict get $object view] [dict get $object index]]
-			if {[::web::isWebLink $url]} { return [::web::open [dict get $object parent] $url] }
+			if {![::web::isWebLink $url]} { return -code error -errorcode {CHESSWIZ PRECONDITION CONTEXT} "the selected event has no web address" }
+			return [::web::open [dict get $object parent] $url]
 		}
 		c5.event_table { ::crosstable::open [dict get $object parent] [dict get $object base] [dict get $object variant] [dict get $object index] [dict get $object view] event }
 		c9.not.spacing - c9.not.numbering - c9.not.markers - c9.not.diagrams - c9.not.emoticons {
@@ -2014,7 +2117,7 @@ proc ::context::Command {id object} {
 			::scidb::view::close $base $variant $view
 			return -options $options $result
 		}
-		c4.close { catch { ::application::database::CloseBase [dict get $object parent] [dict get $object base] } }
+		c4.close { ::application::database::closeBase [dict get $object parent] [dict get $object base] }
 		c4.download_games { return [::action::run menu.tools.download] }
 		c4.save_changes {
 			set base [dict get $object base]
@@ -2035,16 +2138,16 @@ proc ::context::Command {id object} {
 		}
 		c4.new.scid {
 			set parent [expr {[dict exists $object parent] ? [dict get $object parent] : ".application"}]
-			set file [expr {[dict exists $object file] ? [dict get $object file] : ([dict exists $object path] ? [dict get $object path] : "")}]
+			set file [expr {[dict exists $object file] ? [dict get $object file] : ""}]
 			if {$file eq ""} {
 				return [::menu::dbNew $parent Normal]
 			}
 			set encoding [expr {[dict exists $object encoding] ? [dict get $object encoding] : "utf-8"}]
-			catch { ::application::database::newBase $parent Normal $file $encoding }
+			::application::database::newBase $parent Normal $file $encoding
 		}
 		c4.new.pgn {
 			set parent [expr {[dict exists $object parent] ? [dict get $object parent] : ".application"}]
-			set file [expr {[dict exists $object file] ? [dict get $object file] : ([dict exists $object path] ? [dict get $object path] : "")}]
+			set file [expr {[dict exists $object file] ? [dict get $object file] : ""}]
 			if {$file eq ""} {
 				set filetypes [list [list $::menu::mc::PGNFilesArchives {.pgn .pgn.gz}]]
 				set result [::dialog::saveFile \
@@ -2063,11 +2166,15 @@ proc ::context::Command {id object} {
 				return
 			}
 			set encoding [expr {[dict exists $object encoding] ? [dict get $object encoding] : "utf-8"}]
-			catch { ::application::database::newBase $parent Undetermined $file $encoding }
+			::application::database::newBase $parent Undetermined $file $encoding
 		}
 		c4.open_database { return [::action::run menu.file.open] }
 		c4.help { return [::action::run app-help] }
 		c5.player_card { return [::action::run open_view [list kind player_card name [dict get $object name]]] }
+		c5.player.prep {
+			::application::database::player::OpenPrepReport [dict get $object parent] [dict get $object base] [dict get $object variant] [dict get $object index]
+			return "opened player preparation report"
+		}
 		c5.prep_report { return [::action::run open_view [list kind prep_report name [dict get $object name]]] }
 		c5.insights - c5.player.insights { ::insights::show [dict get $object parent] [dict get $object base] [dict get $object variant] [dict get $object index] }
 		c5.open_switcher - c5.save_working_set {
@@ -2099,6 +2206,7 @@ proc ::context::Command {id object} {
 		c6.pin_repertoire { return [::application::analysis::PinToRepertoire [dict get $object tree] [EngineLine $object]] }
 		c6.insert_comment { return [::application::analysis::InsertComment [dict get $object tree] [EngineLine $object]] }
 		c6.explain_line {
+			if {![dict exists $object pv] || [string trim [dict get $object pv]] eq ""} { error "select an engine line first" }
 			if {[dict exists $object pv] && [string trim [dict get $object pv]] ne ""} {
 				return [::application::ai::explainLine [dict get $object parent] \
 					[dict get $object pv] [::scidb::pos::fen]]
@@ -2124,10 +2232,10 @@ proc ::context::Command {id object} {
 			set ::application::analysis::[dict get $object number]::Options(engine:nlines) [lindex [split $id .] end]
 			return [::application::analysis::SetLinesPerPV [dict get $object tree]]
 		}
-		c6.close_engine { catch { ::application::analysis::CloseEngine [dict get $object tree] } }
-		c6.pause_resume { catch { ::application::analysis::Pause [dict get $object tree] } }
-		c6.setup_engine { catch { ::application::analysis::Setup [dict get $object tree] [dict get $object number] } }
-		c6.setup_eval_edges { catch { ::application::analysis::SetupEvalEdges [dict get $object tree] } }
+		c6.close_engine { ::application::analysis::CloseEngine [dict get $object tree] }
+		c6.pause_resume { ::application::analysis::Pause [dict get $object tree] }
+		c6.setup_engine { ::application::analysis::Setup [dict get $object tree] [dict get $object number] }
+		c6.setup_eval_edges { ::application::analysis::SetupEvalEdges [dict get $object tree] }
 		c7.play - c7.open_report {
 			set row ""
 			if {[dict exists $object row]} {
@@ -2142,7 +2250,13 @@ proc ::context::Command {id object} {
 			if {$row eq ""} { error "media entry is no longer available" }
 			::mediainset::Choose $row
 		}
-		c7.open_stream { catch { ::application::media::OpenStream [dict get $object parent] } }
+		c7.external {
+			set path [dict get $object path]
+			if {$path eq ""} { error "no media path selected" }
+			::application::media::LaunchExternal $path
+			return "external media player requested"
+		}
+		c7.open_stream { ::application::media::OpenStream [dict get $object parent] }
 		c7.show_in_board - c9.media.show {
 			set ::mediainset::Options(enabled) [expr {!$::mediainset::Options(enabled)}]
 			::mediainset::toggle
@@ -2192,6 +2306,10 @@ proc ::context::Command {id object} {
 			::table::FitColumns [dict get $object table] $op
 		}
 		c10.configure { ::table::OpenConfigureDialog [dict get $object table] [dict get $object column] [Header column $object] }
+		c11.draft_comment {
+			::comment::DraftComment [winfo toplevel [dict get $object widget]]
+			return "comment draft requested for review"
+		}
 		c11.copy { ::comment::TextCopy [dict get $object widget] }
 		c11.cut { ::comment::TextCut [dict get $object widget] }
 		c11.paste { ::comment::TextPaste [dict get $object widget] }
@@ -2258,39 +2376,50 @@ proc ::context::Command {id object} {
 			if {[lindex $call 0] ni [dict get $allowed $id]} { error "$id: unexpected row [lindex $call 0]" }
 			return [namespace inscope ::comment $call]
 		}
-		c11.select_all { catch { [dict get $object widget] tag add sel 1.0 end } }
+		c11.select_all { [dict get $object widget] tag add sel 1.0 end }
 		c11.clear { ::comment::Clear }
 		c11.classify_comment { ::comment::ClassifyComment [winfo toplevel [dict get $object widget]] }
 		c11.detect_language {
 			set parent [expr {[dict exists $object parent] ? [dict get $object parent] : ".application"}]
 			set w [expr {[dict exists $object widget] ? [dict get $object widget] : ""}]
 			if {$w ne "" && [winfo exists $w]} { set parent [winfo toplevel $w] }
-			catch { ::comment::DetectLanguage $parent }
+			::comment::DetectLanguage $parent
 		}
 		c11.explain_comment {
 			set parent [expr {[dict exists $object parent] ? [dict get $object parent] : ".application"}]
 			set w [expr {[dict exists $object widget] ? [dict get $object widget] : ""}]
 			if {$w ne "" && [winfo exists $w]} { set parent [winfo toplevel $w] }
-			catch { ::comment::ExplainComment $parent }
+			::comment::ExplainComment $parent
 		}
-		c12.load_number { catch { ::gamebar::LoadGameNumber [dict get $object parent] } }
+		c12.load_number { ::gamebar::LoadGameNumber [dict get $object parent] }
 		c12.import_game { ::application::pgn::importGame }
-		c12.reload { catch { ::gamebar::ReloadCurrentGame [dict get $object parent] } }
-		c12.copy_game { catch { ::gamebar::CopyThisGameToClipbase [dict get $object parent] [dict get $object id] } }
-		c12.export { catch { ::gamebar::exportGame [dict get $object parent] [dict get $object id] } }
+		c12.reload { ::gamebar::ReloadCurrentGame [dict get $object parent] }
+		c12.copy_game { ::gamebar::CopyThisGameToClipbase [dict get $object parent] [dict get $object id] }
+		c12.export { ::gamebar::exportGame [dict get $object parent] [dict get $object id] }
 		c12.close_tab {
 			set pos [dict get $object gameSlot]
-			if {[::gamebar::CheckIfModified [dict get $object parent] $pos]} { return }
+			if {[::gamebar::CheckIfModified [dict get $object parent] $pos]} { return "declined: game tab was not closed" }
 			::application::pgn::release $pos
 			::game::release $pos
 		}
 		c12.clear_history { ::game::clearHistory }
 		c12.remove_history {
 			set index [::game::historyIndex [dict get $object gameSlot]]
-			if {$index >= 0} { ::game::removeHistoryEntry $index }
+			if {$index < 0} { error "game has no history entry" }
+			::game::removeHistoryEntry $index
 		}
 		c12.new.standard { ::menu::gameNew [dict get $object parent] }
-		c12.new.chess960 { catch { ::application::pgn::Shuffle Chess960 } }
+		c12.new.chess960 { ::application::pgn::Shuffle Chess960 }
+		c12.save.line - c12.save.repertoire {
+			::scidb::game::switch [dict get $object gameSlot]
+			set m [PopupMenu repertoire]
+			set builder [expr {$id eq "c12.save.line" ? "addRepertoireLineDestinationsForSaveToMenu" : "addRepertoireDestinationsForSaveToMenu"}]
+			::application::database::$builder [dict get $object parent] $m 0 [dict get $object variant]
+			return [PostChoices $m]
+		}
+		c9.report.size - c9.report.zoom - c9.report.family {
+			return [::application::report::FontMenu $id]
+		}
 		c12.save.replace {
 			::scidb::game::switch [dict get $object gameSlot]
 			::application::pgn::saveGame replace
@@ -2306,8 +2435,9 @@ proc ::context::Command {id object} {
 		c12.paste.variation { ::application::pgn::PasteClipboardVariation }
 		c12.paste.game { ::application::pgn::PasteClipboardGame }
 		c12.merge.game { ::gamebar::mergeGame [dict get $object parent] [dict get $object gameSlot] }
+		default { error "no dispatch for $id" }
 	}
-	return
+	return "completed $id"
 }
 
 # Use the pane's live engine identity, never a stale popup ID or another pane.
@@ -2588,3 +2718,16 @@ proc ::context::PaneFontSize {uid} {
 
 ::context::RegisterCore
 ::context::Declare
+
+# Owned transient menus are shared by direct and registry entry paths.
+proc ::context::PopupMenu {name} {
+	set m .contextChoices_$name
+	catch {destroy $m}
+	menu $m -tearoff 0
+	return $m
+}
+proc ::context::PostChoices {m} {
+	if {[$m index end] eq "none"} { error "no choices are available" }
+	tk_popup $m {*}[winfo pointerxy .application]
+	return "opened choices"
+}
