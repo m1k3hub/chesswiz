@@ -174,22 +174,28 @@ proc setup {} {
 
 	if {[::process::testOption full-screen]} { viewFullscreen toggle }
 
-	# macOS application menu (decision 003): the system menu gets About,
-	# Preferences and Quit; no second copy of the drop-down is installed.
-	if {[tk windowingsystem] eq "aqua"} {
-		catch {
-			if {[llength [info commands ::tk::mac::ShowPreferences]] == 0} {
-				proc ::tk::mac::ShowPreferences {} {
-					catch { ::application::ShortcutPreferences .application }
-				}
-			}
-		}
-		catch {
-			if {[llength [info commands ::tk::mac::Quit]] == 0} {
-				proc ::tk::mac::Quit {} { ::application::shutdown }
+	if {[tk windowingsystem] eq "aqua"} { InstallMacHooks }
+}
+
+# macOS application menu (decision 003): the system menu gets About,
+# Preferences and Quit; no second copy of the drop-down is installed.
+proc InstallMacHooks {} {
+	catch {
+		if {[llength [info commands ::tk::mac::ShowPreferences]] == 0} {
+			proc ::tk::mac::ShowPreferences {} {
+				catch { ::application::ShortcutPreferences .application }
 			}
 		}
 	}
+	catch {
+		if {[llength [info commands ::tk::mac::Quit]] == 0} {
+			proc ::tk::mac::Quit {} { ::application::shutdown }
+		}
+	}
+	# the system menu's About item calls ::tkAboutDialog when it exists
+	proc ::tkAboutDialog {} { ::menu::MacAbout }
+	# the shortcuts bound so far answer to Command as well
+	after idle ::menu::MirrorCommandBindings
 }
 
 proc ::menu::MacAbout {} {

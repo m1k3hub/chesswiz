@@ -321,16 +321,16 @@ proc ::menu::DefineTree {} {
 
 	set DropdownTree [list \
 		[list cascade File "" [list \
-			[list cascade NewDatabase "Ctrl+Shift+N" [list \
+			[list cascade NewDatabase "Control-Shift-N" [list \
 				[list cmd menu.file.new.normal Normal] \
 				[list cmd menu.file.new.three Three-check] \
 				[list cmd menu.file.new.crazy Crazyhouse] \
 				[list cmd menu.file.new.variants "variant list"] \
 			]] \
-			[list cmd menu.file.open OpenDatabase "Ctrl+O"] \
+			[list cmd menu.file.open OpenDatabase "Control-o"] \
 			[list cascade OpenRecent "" dynamic] \
-			[list cmd menu.file.close CloseDatabase "Ctrl+W" {::menu::DbOpen}] \
-			[list cmd menu.file.save SaveChanges "Ctrl+S" {::menu::DbOpen} {::menu::DbWritable}] \
+			[list cmd menu.file.close CloseDatabase "Control-w" {::menu::DbOpen}] \
+			[list cmd menu.file.save SaveChanges "Control-s" {::menu::DbOpen} {::menu::DbWritable}] \
 			[list sep] \
 			[list cascade Import "" [list \
 				[list cmd menu.file.import.pgn ImportPgn "" {::menu::DbOpen} {::menu::DbWritable}] \
@@ -344,17 +344,17 @@ proc ::menu::DefineTree {} {
 			]] \
 			[list cmd menu.file.archive_create CreateDatabaseArchive "" {::menu::DbOpen} {::menu::DbWritable}] \
 			[list sep] \
-			[list cmd app-quit Quit "Ctrl+Q"] \
+			[list cmd app-quit Quit "Control-q"] \
 		]] \
 		[list cascade Edit "" [list \
-			[list cmd app-undo EditUndo "Ctrl+Z"] \
-			[list cmd app-redo EditRedo "Ctrl+Y"] \
+			[list cmd app-undo EditUndo "Control-z"] \
+			[list cmd app-redo EditRedo "Control-y"] \
 			[list sep] \
-			[list cmd app-cut EditCut "Ctrl+X"] \
-			[list cmd app-copy EditCopy "Ctrl+C"] \
-			[list cmd app-paste EditPaste "Ctrl+V"] \
-			[list cmd app-select-all SelectAll "Ctrl+A"] \
-			[list cmd app-find Find "Ctrl+F"] \
+			[list cmd app-cut EditCut "Control-x"] \
+			[list cmd app-copy EditCopy "Control-c"] \
+			[list cmd app-paste EditPaste "Control-v"] \
+			[list cmd app-select-all SelectAll "Control-a"] \
+			[list cmd app-find Find "Control-f"] \
 			[list sep] \
 			[list cmd menu.edit.keyboard KeyboardPreferences] \
 			[list cascade Preferences "" [list \
@@ -364,18 +364,18 @@ proc ::menu::DefineTree {} {
 			]] \
 		]] \
 		[list cascade Game "" [list \
-			[list cascade NewGame "Ctrl+Shift+G" dynamic] \
+			[list cascade NewGame "Control-Shift-G" dynamic] \
 			[list cmd menu.game.load_number LoadGameNumber "" {::menu::DbOpen}] \
-			[list cmd game-next NextGame "Ctrl+Down"] \
-			[list cmd game-prev PreviousGame "Ctrl+Up"] \
-			[list cmd game-first FirstGame "Ctrl+Home"] \
-			[list cmd game-last LastGame "Ctrl+End"] \
+			[list cmd game-next NextGame "Control-Down"] \
+			[list cmd game-prev PreviousGame "Control-Up"] \
+			[list cmd game-first FirstGame "Control-Home"] \
+			[list cmd game-last LastGame "Control-End"] \
 			[list cmd menu.game.random RandomGame "" {::menu::DbOpen}] \
 			[list sep] \
 			[list cascade SaveGame "" [list \
-				[list cmd game-replace ReplaceGame "Ctrl+R" {expr {[::menu::GameLoaded] && ![::menu::TrialMode]}} {::menu::DbWritable}] \
-				[list cmd game-replace-moves ReplaceMoves "Ctrl+V" {expr {[::menu::GameLoaded] && ![::menu::TrialMode]}} {::menu::DbWritable}] \
-				[list cmd game-save AddAsNewGame "Ctrl+S" {expr {[::menu::GameLoaded] && ![::menu::TrialMode]}} {::menu::DbWritable}] \
+				[list cmd game-replace ReplaceGame "Control-r" {expr {[::menu::GameLoaded] && ![::menu::TrialMode]}} {::menu::DbWritable}] \
+				[list cmd game-replace-moves ReplaceMoves "Control-v" {expr {[::menu::GameLoaded] && ![::menu::TrialMode]}} {::menu::DbWritable}] \
+				[list cmd game-save AddAsNewGame "Control-s" {expr {[::menu::GameLoaded] && ![::menu::TrialMode]}} {::menu::DbWritable}] \
 				[list cascade AddToRepertoire "" dynamic] \
 				[list cascade AddLineToRepertoire "" dynamic] \
 			]] \
@@ -390,7 +390,7 @@ proc ::menu::DefineTree {} {
 				[list dyn MergeClipbase] \
 				[list dyn MergeGameTab] \
 			]] \
-			[list cmd game-export ExportGame "Ctrl+E" {::menu::GameLoaded}] \
+			[list cmd game-export ExportGame "Control-e" {::menu::GameLoaded}] \
 			[list cmd menu.game.export.study UploadStudy "" {::menu::GameLoaded}] \
 			[list sep] \
 			[list cascade GameHistory "" [list \
@@ -446,8 +446,8 @@ proc ::menu::DefineTree {} {
 			[list cmd menu.board.set_start_board SetStartBoard] \
 			[list cmd menu.board.set_start_position SetStartPosition] \
 			[list sep] \
-			[list cmd board-flip FlipBoard "Ctrl+F"] \
-			[list cmd board-null-move InsertNullMove "Ctrl+0"] \
+			[list cmd board-flip FlipBoard "Control-f"] \
+			[list cmd board-null-move InsertNullMove "Control-0"] \
 			[list sep] \
 			[list cmd menu.board.setup BoardSetup] \
 			[list cascade Appearance "" [list \
@@ -498,7 +498,7 @@ proc ::menu::DefineTree {} {
 		[list cascade Training "" [list \
 			[list cmd menu.training.tactics TacticsTrainer] \
 			[list cmd menu.training.endgame EndgameTrainer "" {::menu::ModulePresent endtrainer}] \
-			[list cmd menu.training.guess GuessTheMove "Ctrl+G" {::menu::ModulePresent guessmove}] \
+			[list cmd menu.training.guess GuessTheMove "Control-g" {::menu::ModulePresent guessmove}] \
 			[list cmd menu.training.repertoire TrainRepertoire "" {::menu::ModulePresent reptrainer}] \
 			[list sep] \
 			[list cmd menu.training.play_engine PlayAgainstEngine "" {::menu::ModulePresent playengine}] \
@@ -559,11 +559,11 @@ proc ::menu::DefineTree {} {
 			[list cascade IconSize "" dynamic] \
 			[list cascade Language "" dynamic] \
 			[list sep] \
-			[list cmd menu.view.font_inc IncreaseFontSize "Ctrl+Shift++"] \
-			[list cmd menu.view.font_dec DecreaseFontSize "Ctrl+Shift+−"] \
+			[list cmd menu.view.font_inc IncreaseFontSize "Control-Shift-plus"] \
+			[list cmd menu.view.font_dec DecreaseFontSize "Control-Shift-minus"] \
 			[list sep] \
 			[list cmd app-fullscreen Fullscreen "F11"] \
-			[list cmd app-log MenuShowLog "Ctrl+L"] \
+			[list cmd app-log MenuShowLog "Control-l"] \
 			[list cmd menu.view.tip MenuTipOfTheDay] \
 		]] \
 		[list cascade Help "" [list \
@@ -620,8 +620,16 @@ proc ::menu::TextWidget {} {
 
 # A menu accelerator in the drop-down's own spelling (Ctrl+Down, F10,
 # Ctrl+Shift+G). It is formatted from the key spec the binding uses; the
-# localised arrow glyphs of the key-editor table are not used here.
+# localised arrow glyphs of the key-editor table are not used here. On
+# macOS Control becomes Cmd: the native menu draws it as the command
+# glyph, and ::menu::MirrorCommandBindings binds the Command key to match.
+# Tk aqua? (The registry is also loaded into Tk-less test interpreters.)
+proc ::menu::Aqua? {} {
+	return [expr {![catch { tk windowingsystem } ws] && $ws eq "aqua"}]
+}
+
 proc ::menu::FormatAccel {spec} {
+	if {$spec eq ""} { return "" }
 	if {[llength [info commands ::application::keyEditor::NormalizeKeySpec]]} {
 		set spec [::application::keyEditor::NormalizeKeySpec $spec]
 	}
@@ -632,7 +640,9 @@ proc ::menu::FormatAccel {spec} {
 		foreach mod [split $modifiers -] {
 			if {$mod eq ""} { continue }
 			switch -- [string tolower $mod] {
-				control { lappend mods Ctrl }
+				control {
+					lappend mods [expr {[::menu::Aqua?] ? "Cmd" : "Ctrl"}]
+				}
 				shift	 { lappend mods Shift }
 				alt		 { lappend mods Alt }
 				default { lappend mods [string totitle $mod] }
@@ -641,6 +651,10 @@ proc ::menu::FormatAccel {spec} {
 	}
 	if {[string length $key] == 1 && [string is alpha $key]} {
 		set key [string toupper $key]
+	}
+	switch -- $key {
+		plus	{ set key + }
+		minus	{ set key \u2212 }
 	}
 	if {[llength $mods] == 0} { return $key }
 	return "[join $mods +]+$key"
@@ -677,7 +691,7 @@ proc ::menu::CascadeAccel {labelName {fallback ""}} {
 			}
 		}
 	}
-	return $fallback
+	return [::menu::FormatAccel $fallback]
 }
 
 # A posted drop-down keeps the accelerators of the bindings that were in
@@ -686,8 +700,42 @@ proc ::menu::CascadeAccel {labelName {fallback ""}} {
 proc ::menu::RefreshAccelerators {} {
 	variable DropdownWidget
 
+	::menu::MirrorCommandBindings
 	if {$DropdownWidget eq "" || ![winfo exists $DropdownWidget]} { return }
 	::menu::UpdateAccelerators $DropdownWidget
+}
+
+# macOS: the drop-down advertises Cmd, so every Control shortcut of the
+# application window and the boards also answers to Command. The Command
+# binding follows its Control twin: a rebind or a scheme switch (both end
+# in RefreshAccelerators) re-mirrors, and a vanished twin is unbound.
+proc ::menu::MirrorCommandBindings {} {
+	variable Mirrored
+
+	if {![::menu::Aqua?]} { return }
+	set tags {.application ChessBaseBoard}
+	catch { lappend tags {*}$::application::board::Vars(need-binding) }
+	foreach tag [lsort -unique $tags] {
+		if {[string match .* $tag] && ![winfo exists $tag]} { continue }
+		set want {}
+		foreach seq [bind $tag] {
+			if {![string match *Control-* $seq]} { continue }
+			set cmdSeq [string map {Control- Command-} $seq]
+			if {[bind $tag $cmdSeq] ne "" && ![info exists Mirrored($tag,$cmdSeq)]} {
+				continue ;# an explicit Command binding wins
+			}
+			bind $tag $cmdSeq [bind $tag $seq]
+			set Mirrored($tag,$cmdSeq) 1
+			dict set want $cmdSeq 1
+		}
+		foreach key [array names Mirrored $tag,*] {
+			set cmdSeq [string range $key [string length $tag,] end]
+			if {![dict exists $want $cmdSeq]} {
+				bind $tag $cmdSeq {}
+				unset Mirrored($key)
+			}
+		}
+	}
 }
 
 proc ::menu::UpdateAccelerators {menu} {
@@ -737,6 +785,9 @@ proc ::menu::Register {id label {accel ""} {visible ""} {enabled ""} {order ""}}
 		set enabled $visible
 	}
 
+	# Rows give the key spec of their binding; the registry keeps the
+	# displayed accelerator (Ctrl+O, or Cmd+O on macOS).
+	set accel [::menu::FormatAccel $accel]
 	if {[dict exists $::action::Registry $id]} {
 		# Already registered (assistant tool or context action): keep its
 		# handler, but refresh the drop-down placement and the label so a
@@ -1118,7 +1169,7 @@ proc ::menu::FillNodes {nodes menu level} {
 				set label [uplevel #0 [lindex $node 4]]
 				lassign [AmpText $label] text ul
 				set opts [list -label $text -underline $ul -command [list ::action::run $id]]
-				set accel [lindex $node 3]
+				set accel [::menu::FormatAccel [lindex $node 3]]
 				if {$accel ne ""} { lappend opts -accelerator $accel }
 				eval [list $menu add command] $opts
 				set lastSep 0
@@ -1778,7 +1829,7 @@ proc ::menu::RegisterExtras {} {
 			doc "[string totitle $operation] a saved layout by name without opening the layout manager." \
 			handler [list ::menu::RunNamedLayoutMutation $operation]]
 	}
-	Register view.pane_zoom "Maximise / Restore Pane" "Ctrl+Shift+Z" "" "" "00.001"
+	Register view.pane_zoom "Maximise / Restore Pane" "Control-Shift-Z" "" "" "00.001"
 	Register view.focus_zoom "Focus follows size" "" "" "" "00.002"
 	Register view.focus_ratio "Zoom ratio" "" "" "" "00.003"
 	Register view.focus_pin "Pin board size" "" "" "" "00.004"

@@ -299,7 +299,7 @@ proc ApplyShortcutScheme {args} {
 	# schemes and is shown nowhere. F10/Ctrl+F10 stay prev/next in both
 	# schemes while the menu shows the active scheme's key (Ctrl+Down and
 	# Ctrl+Up in the app scheme).
-	foreach {spec action} {
+	set appKeys {
 		Control-Shift-n newdb
 		Control-Shift-N newdb
 		Control-Shift-g new
@@ -308,7 +308,11 @@ proc ApplyShortcutScheme {args} {
 		Control-N       new
 		F10             next
 		Control-F10     prev
-	} {
+	}
+	# macOS advertises Cmd+O for Open Database in this scheme too, so it is
+	# bound there (::menu::MirrorCommandBindings adds the Command twin).
+	if {[tk windowingsystem] eq "aqua"} { lappend appKeys Control-o open Control-O open }
+	foreach {spec action} $appKeys {
 		bind .application <$spec> \
 			[list ::application::ShortcutApplicationCommand %W $action]
 	}

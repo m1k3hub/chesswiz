@@ -765,7 +765,9 @@ proc bind {key cmd} {
 		if {[regexp {^<Key-[^>]+>$} $key]} {
 			# A plain key binding also matches the key with Control; let Ctrl+Q
 			# and the other application shortcuts through to .application.
-			::bind $w $key "if {%s & 4} continue\n[::bind $w $key]"
+			# On macOS the Command key (Mod1) is let through the same way.
+			set mask [expr {[tk windowingsystem] eq "aqua" ? 12 : 4}]
+			::bind $w $key "if {%s & $mask} continue\n[::bind $w $key]"
 		}
 	}
 }
