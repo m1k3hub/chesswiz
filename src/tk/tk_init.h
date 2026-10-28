@@ -44,6 +44,7 @@ void notebook_init(Tcl_Interp*);
 void clockInit(Tcl_Interp*);
 void miscInit(Tcl_Interp*);
 void glboard_init(Tcl_Interp*);
+void win_dictate_init(Tcl_Interp*);
 
 }
 

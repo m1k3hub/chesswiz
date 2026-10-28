@@ -44,6 +44,7 @@ SRC_CXX = \
 	tk_selection.cpp \
 	tk_session_manager.cpp \
 	tk_twm.cpp \
+	tk_win_dictate.cpp \
 	tk_window_manager.cpp \
 	tk_x11.cpp \
 	tk_xcursor.cpp \

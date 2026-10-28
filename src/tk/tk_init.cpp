@@ -83,6 +83,7 @@ tk::init(Tcl_Interp* ti)
 	panedwindow_init(ti);
 	notebook_init(ti);
 	glboard_init(ti);
+	win_dictate_init(ti);
 
 	Tkhtml_Init(ti);
 	Tkdnd_Init(ti);

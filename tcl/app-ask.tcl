@@ -995,6 +995,10 @@ proc ::application::speech::StopRecording {} {
 proc ::application::speech::Cancel {} {
 	variable Priv
 
+	if {[llength [info commands ::chesswiz::win::dictateEdit]]} {
+		catch { if {[::chesswiz::win::dictateEdit active]} { ::chesswiz::win::dictateEdit cancel } }
+	}
+
 	foreach pid [concat $Priv(recordPids) $Priv(transcribePids)] {
 		catch { exec kill -TERM $pid }
 	}
@@ -1303,7 +1307,48 @@ proc ::application::speech::ShowHint {} {
 
 # Windows: the operating system's dictation (Win+H). Implemented with the
 # Win32 SendInput call through PowerShell, so nothing is linked in.
+# Voice typing only types into UI Automation text fields, which Tk entries
+# are not. The native helper lays a Win32 EDIT over the Ask entry, focuses it
+# and presses Win+H; DictateFinish copies the result back.
 proc ::application::speech::WindowsDictation {} {
+	variable Priv
+
+	set entry [::application::ask::Entry]
+	if {[llength [info commands ::chesswiz::win::dictateEdit]] && [winfo exists $entry]} {
+		if {[::chesswiz::win::dictateEdit active]} { return }
+		set Priv(dictateOriginal) [$entry get]
+		set font [font actual [$entry cget -font]]
+		set weight [expr {[dict get $font -weight] eq "bold" ? 700 : 400}]
+		if {![catch {
+			::chesswiz::win::dictateEdit begin $entry $Priv(dictateOriginal) [$entry index insert] \
+				[dict get $font -family] [dict get $font -size] $weight \
+				::application::speech::DictateFinish
+		}]} {
+			SetHint $::application::speech::mc::InstallWin
+			return
+		}
+	}
+	WindowsDictationHelper
+}
+
+# Commit: the EDIT's text replaces the entry's; cancel: the original stays.
+# Neither submits the request.
+proc ::application::speech::DictateFinish {action text} {
+	variable Priv
+
+	set entry [::application::ask::Entry]
+	if {![winfo exists $entry]} { return }
+	if {$action ne "commit"} {
+		if {[info exists Priv(dictateOriginal)]} { set text $Priv(dictateOriginal) } else { set text [$entry get] }
+	}
+	unset -nocomplain Priv(dictateOriginal)
+	$entry delete 0 end
+	$entry insert 0 $text
+	$entry icursor end
+	focus -force $entry
+}
+
+proc ::application::speech::WindowsDictationHelper {} {
 	set script {
 Add-Type -TypeDefinition @'
 using System;
