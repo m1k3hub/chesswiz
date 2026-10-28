@@ -248,6 +248,7 @@ proc ::application::ask::Relabel {} {
 	}
 	if {[ListVisible]} { ShowList }
 	RegisterAction
+	SyncMic
 	RelabelPreferences
 	return
 }
@@ -276,6 +277,9 @@ proc ::application::ask::SyncMic {} {
 	variable Priv
 
 	if {![info exists Priv(mic)] || ![winfo exists $Priv(mic)]} { return }
+	set Priv(micHint) [::application::speech::hint]
+	if {$Priv(micHint) eq ""} { set Priv(micHint) $::application::ask::mc::Mic }
+	::tooltip::tooltip $Priv(mic) ::application::ask::Priv(micHint)
 	if {[llength [info commands ::application::speech::available]] \
 	 && [::application::speech::available]} {
 		if {[manager::place? $Priv(mic)] eq ""} { pack $Priv(mic) -side right -padx {2 2} -pady 1 }
@@ -916,8 +920,13 @@ proc ::application::speech::Start {} {
 	set d [detect]
 	if {![dict get $d available]} { ShowHint; return }
 	set mode [dict get $d mode]
-	if {$mode eq "windows"} { ::application::speech::WindowsDictation; return }
-	if {$mode eq "mac"} { ShowHint; return }
+	if {$mode in {windows mac}} {
+		# Native dictation types into the focused control, not necessarily
+		# the button's sibling. Set focus before handing off to the OS.
+		focus -force [::application::ask::Entry]
+		if {$mode eq "windows"} { WindowsDictation } else { ShowHint }
+		return
+	}
 
 	Cancel
 	if {[catch {set file [TempFile .wav]} err]} {
@@ -1277,20 +1286,59 @@ proc ::application::speech::LastHint {} {
 
 proc ::application::speech::ShowHint {} {
 	SetHint [hint]
+	# A click gives visible guidance without opening Preferences or adding
+	# startup chrome. The normal hover tooltip carries the same wording.
+	variable Priv
+	set parent .application.nb
+	if {![winfo exists $parent]} { return }
+	set w $parent.dictationHint
+	if {![winfo exists $w]} {
+		ttk::label $w -textvariable ::application::speech::Priv(hint) -padding {6 3}
+	}
+	set Priv(hintWidget) $w
+	place $w -relx 1.0 -anchor ne -y [winfo height $parent.ask]
+	raise $w
+	Schedule 15000 [list place forget $w]
 }
 
 # Windows: the operating system's dictation (Win+H). Implemented with the
 # Win32 SendInput call through PowerShell, so nothing is linked in.
 proc ::application::speech::WindowsDictation {} {
 	set script {
-Add-Type -Namespace W -Name K -MemberDefinition '[DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, System.UIntPtr dwExtraInfo);';
-[W.K]::keybd_event(0x5B,0,0,[System.UIntPtr]::Zero);
-[W.K]::keybd_event(0x48,0,0,[System.UIntPtr]::Zero);
-[W.K]::keybd_event(0x48,0,2,[System.UIntPtr]::Zero);
-[W.K]::keybd_event(0x5B,0,2,[System.UIntPtr]::Zero);
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class ChesswizDictation {
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Keyboard { public ushort vk, scan; public uint flags, time; public UIntPtr extra; }
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Mouse { public int x, y; public uint data, flags, time; public UIntPtr extra; }
+    [StructLayout(LayoutKind.Explicit)]
+    public struct Payload {
+        [FieldOffset(0)] public Keyboard keyboard;
+        [FieldOffset(0)] public Mouse mouse;
+    }
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Input { public uint type; public Payload payload; }
+    [DllImport("user32.dll", SetLastError=true)]
+    public static extern uint SendInput(uint count, Input[] inputs, int size);
+    public static void Start() {
+        Input[] inputs = new Input[4];
+        ushort[] keys = { 0x5B, 0x48, 0x48, 0x5B };
+        for (int i = 0; i < inputs.Length; ++i) {
+            inputs[i].type = 1;
+            inputs[i].payload.keyboard.vk = keys[i];
+            inputs[i].payload.keyboard.flags = i < 2 ? 0u : 2u;
+        }
+        if (SendInput(4, inputs, Marshal.SizeOf(typeof(Input))) != 4)
+            throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+    }
+}
+'@
+[ChesswizDictation]::Start();
 }
 	set hint $::application::speech::mc::InstallWin
-	if {[catch { exec powershell -NoProfile -NonInteractive -Command $script }]} {
+	if {[catch { exec powershell -NoProfile -NonInteractive -WindowStyle Hidden -Command $script }]} {
 		SetHint $hint
 	} else {
 		SetHint $hint
