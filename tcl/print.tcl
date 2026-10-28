@@ -239,16 +239,18 @@ proc game {{parent .application} {position -1}} {
 	} elseif {$::tcl_platform(os) eq "Darwin"} {
 		OpenViewer $pdfFile
 	} else {
-		set lp [FindExecutable lp]
-		if {$lp ne {}} {
-			RunCommand [list {*}$lp $pdfFile] 0
-		} else {
-			set lpr [FindExecutable lpr]
-			if {$lpr ne {}} {
-				RunCommand [list {*}$lpr $pdfFile] 0
-			} else {
-				OpenViewer $pdfFile
+		# A spooler that refuses the job (e.g. "No default destination")
+		# counts as unavailable: the viewer still lets the user print.
+		set printed 0
+		foreach spooler {lp lpr} {
+			set exe [FindExecutable $spooler]
+			if {$exe ne {} && ![catch { RunCommand [list {*}$exe $pdfFile] 0 }]} {
+				set printed 1
+				break
 			}
+		}
+		if {!$printed} {
+			OpenViewer $pdfFile
 		}
 	}
 

@@ -239,6 +239,35 @@ tcltest::test print-game-linux-fallback-viewer {::print::game falls back to xdg-
 	catch { ::scidb::db::close $pgn }
 } -result [expr {[tk windowingsystem] eq "aqua" ? {1 1 1 open 1} : {1 1 1 xdg-open 1}}]
 
+::tcltest::testConstraint notAqua [expr {[tk windowingsystem] ne "aqua"}]
+
+tcltest::test print-game-linux-lp-refused {::print::game falls back to xdg-open when lp refuses the job} -constraints {notAqua} -setup {
+	set pgn [makePgn "Tal, Mikhail" "Botvinnik, Mikhail"]
+	::scidb::db::open $pgn ::scidb::test::appprint::log log ::scidb::test::appprint::progress progress
+	set pos [::scidb::game::current]
+	::scidb::game::load $pos $pgn Normal 0
+	installStubs "/usr/bin/lp"
+	proc ::print::RunCommand {cmdList {async 1}} {
+		lappend ::scidb::test::appprint::capturedCalls [list $cmdList $async]
+		if {[file tail [lindex $cmdList 0]] eq "lp"} {
+			error "/usr/bin/lp: Error - No default destination."
+		}
+		return 1
+	}
+} -body {
+	set pdf [::print::game .application $pos]
+	set heads {}
+	foreach call $::scidb::test::appprint::capturedCalls {
+		lappend heads [file tail [lindex $call 0 0]]
+	}
+	list [file isfile $pdf] $heads [expr {[lindex $::scidb::test::appprint::capturedCalls end 0 1] eq $pdf}]
+} -cleanup {
+	restoreStubs
+	catch { ::scidb::game::release $pos }
+	catch { ::scidb::game::new $pos }
+	catch { ::scidb::db::close $pgn }
+} -result {1 {lp xdg-open} 1}
+
 tcltest::test print-modified-scratch-game {::print::game exports unsaved/modified game tags and players to PDF} -setup {
 	set pos [::scidb::game::current]
 	if {![::scidb::game::query $pos open?]} {
