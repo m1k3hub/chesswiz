@@ -96,7 +96,7 @@ proc ::w1::game {args} {
     return $pos
 }
 
-proc ::w1::setup {{shape wide}} {
+proc ::w1::setup {{shape wide} {backend stub}} {
     variable calls {}
     variable now 0
     variable fail 0
@@ -109,17 +109,24 @@ proc ::w1::setup {{shape wide}} {
     ::application::switchTab board
     ::application::media::Ensure
     ::application::media::Stop
-    stub available? {} {return $::w1::available}
-    stub launch {path wid {ms 0}} {
-        lappend ::w1::calls [list launch $path $wid $ms]
-        return [expr {!$::w1::fail}]
+    # VAL-BRD-017: the fold's "still playing" claim needs a real clock. The
+    # stubbed backend freezes ::media::mpv::time, so the fold tests run the
+    # native libmpv backend instead (real playback time is the oracle).
+    if {$backend eq "real"} {
+        assert {[::media::mpv::available?]} "real libmpv backend unavailable"
+    } else {
+        stub available? {} {return $::w1::available}
+        stub launch {path wid {ms 0}} {
+            lappend ::w1::calls [list launch $path $wid $ms]
+            return [expr {!$::w1::fail}]
+        }
+        stub state {} {return playing}
+        stub time {} {return $::w1::now}
+        stub duration {} {return 120}
+        stub stop {} {lappend ::w1::calls stop}
+        stub aspect {} {return $::w1::aspect}
+        stub chapters {} {return {}}
     }
-    stub state {} {return playing}
-    stub time {} {return $::w1::now}
-    stub duration {} {return 120}
-    stub stop {} {lappend ::w1::calls stop}
-    stub aspect {} {return $::w1::aspect}
-    stub chapters {} {return {}}
     set ::w1::geometry [wm geometry .application]
     set ::w1::twm [::application::twm board]
     set ::w1::paneLayout [::application::twm::inspectLayout $::w1::twm]
@@ -190,6 +197,43 @@ proc ::w1::play {{path {}}} {
     wait
     return [::mediainset::Pane].mediainset
 }
+# VAL-BRD-017: play through the native backend so ::media::mpv::time is the
+# real playback clock (the fixture setup stubs launch/time and freezes it).
+proc ::w1::playReal {{path {}}} {
+    if {$path eq ""} {set path [file normalize $::w1::root/tests/tmp-app/media-test/MediaTest.media/video/analysis.mp4]}
+    assert {[::media::mpv::available?]} "real libmpv backend unavailable"
+    assert {[::application::media::PlayInProcess $path]} "real player start failed"
+    wait
+    return [::mediainset::Pane].mediainset
+}
+# Wait (bounded) for the real player to report a clock, then for it to move by
+# at least delta seconds. Polling the actual event, never a longer sleep and
+# never a retry of a failed assertion.
+proc ::w1::clockStart {tag {deadline 15000}} {
+    set started [clock milliseconds]
+    while {[clock milliseconds] - $started < $deadline} {
+        set t [::media::mpv::time]
+        if {[string is double -strict $t]} { return $t }
+        update
+        wait 50
+    }
+    error "$tag: no real playback clock within ${deadline}ms ([::application::media::MediaState])"
+}
+proc ::w1::progressAdvance {tag {delta 0.3} {deadline 15000}} {
+    set from [clockStart $tag $deadline]
+    set started [clock milliseconds]
+    while {[clock milliseconds] - $started < $deadline} {
+        update
+        set now [::media::mpv::time]
+        if {[string is double -strict $now] && $now - $from >= $delta} {
+            log $tag-playback [list from $from to $now advanced [expr {$now-$from}] \
+                waited [expr {[clock milliseconds]-$started}]]
+            return $now
+        }
+        wait 50
+    }
+    error "$tag: playback did not advance by $delta s within ${deadline}ms (clock $from -> [::media::mpv::time])"
+}
 proc ::w1::rect {widget} {
     list [winfo rootx $widget] [winfo rooty $widget] [winfo width $widget] [winfo height $widget]
 }
@@ -231,6 +275,145 @@ proc ::w1::topAtBoard {} {
     set cx [expr {[winfo rootx $view] + [winfo width $view]/2}]
     set cy [expr {[winfo rooty $view] + [winfo height $view]/2}]
     return [list $cx $cy [winfo containing $cx $cy]]
+}
+# VAL-BRD-017: the drawn-board surfaces a fold must never cover, as root
+# rectangles straight from the production canvas tags.
+proc ::w1::drawnBoardRects {} {
+    set c $::application::board::Vars(widget:frame)
+    set rects {}
+    foreach tag {board stm material} {
+        set box [$c bbox $tag]
+        if {[llength $box] != 4} { continue }
+        lassign $box x y xx yy
+        lappend rects [list [expr {[winfo rootx $c]+$x}] [expr {[winfo rooty $c]+$y}] \
+            [expr {$xx-$x}] [expr {$yy-$y}]]
+    }
+    return $rects
+}
+proc ::w1::folded? {} {
+    expr {[info exists ::mediainset::Collapsed] && $::mediainset::Collapsed}
+}
+proc ::w1::handleMapped? {} {
+    set handle .application.videoHandle
+    expr {[winfo exists $handle] && [winfo ismapped $handle]}
+}
+# VAL-BRD-017: the full fold state, not overlap alone. A hidden or unmapped
+# video also scores zero overlap, so the oracle also demands the mapped
+# handle at its defined rectangle and a playback clock that advances.
+proc ::w1::foldState {tag} {
+    set w [::mediainset::Pane].mediainset
+    set handle .application.videoHandle
+    assert {[folded?]} "$tag: video is not folded (Collapsed is 0 or absent)"
+    assert {[winfo exists $handle] && [winfo ismapped $handle]} \
+        "$tag: no mapped fold handle (a merely hidden video must not pass)"
+    set hr [rect $handle]
+    lassign $hr hx hy hw hh
+    assert {$hw == 56 && $hh == 26} "$tag: handle is not at its defined 56x26 rectangle: $hr"
+    assert {$hx >= 0 && $hy >= 0 && $hx+$hw <= [winfo width .application] \
+        && $hy+$hh <= [winfo height .application]} "$tag: handle is not visible in the window: $hr"
+    lassign [topAtHandle] cx cy top
+    assert {$top eq $handle} "$tag: handle is not topmost at its centre (found $top)"
+    foreach r [drawnBoardRects] {
+        assert {[overlap $hr $r] == 0} "$tag: handle covers the drawn board $r"
+        assert {[overlap [rect $w] $r] == 0} "$tag: inset covers the drawn board $r"
+    }
+    assert {$::application::board::ReserveSide eq ""} \
+        "$tag: fold left reserve side '$::application::board::ReserveSide'"
+    assert {$::application::board::ReservePixels == 0} \
+        "$tag: fold left $::application::board::ReservePixels reserve pixels"
+    set square $::application::board::Dim(squaresize:Normal)
+    set unreserved [unreserved]
+    assert {$square == $unreserved} \
+        "$tag: folded board square $square is not the unreserved square $unreserved"
+    assert {[winfo manager $w.video] eq "pack"} "$tag: folded native surface went unmanaged"
+    set now [progressAdvance $tag]
+    log VAL-BRD-017-fold [list state $tag handle $hr square $square unreserved $unreserved \
+        side {} pixels 0 inset [rect $w] playback $now \
+        drawn [drawnBoardRects] top $top]
+    return $hr
+}
+proc ::w1::topAtHandle {} {
+    set handle .application.videoHandle
+    set cx [expr {[winfo rootx $handle] + [winfo width $handle]/2}]
+    set cy [expr {[winfo rooty $handle] + [winfo height $handle]/2}]
+    return [list $cx $cy [winfo containing $cx $cy]]
+}
+# VAL-BRD-017 audio branch: the opposite expectation. Audio never folds or
+# gets a handle. Where a strip fits it keeps the VAL-MED-009 audio strip;
+# where none fits it keeps the decision-5 bottom-right transport cluster
+# (VAL-BRD-020) and the accepted board overlap is MEASURED and recorded.
+proc ::w1::audioPlacement {tag w} {
+    set handle .application.videoHandle
+    set pane [winfo parent $w]
+    set side $::application::board::ReserveSide
+    assert {$::mediainset::Audio} "$tag: media was not classified audio-only"
+    assert {![folded?]} "$tag: audio-only media folded"
+    assert {![winfo exists $handle] || ![winfo ismapped $handle]} "$tag: a fold handle is shown for audio"
+    assert {[winfo ismapped $w]} "$tag: audio inset is hidden"
+    set ir [rect $w]
+    lassign $ir ix iy iw ih
+    set ch [expr {[winfo reqheight $w.controls]+8}]
+    if {$side eq ""} {
+        # No strip fits: production's bottom-right cluster, 6 px inside the pane.
+        lassign [rect $pane] px py pw ph
+        set cw [expr {[winfo reqwidth $w.controls]+8}]
+        set ew [expr {min($cw, max(1, $pw-12))}]
+        set expected [list [expr {$px+$pw-6-$ew}] [expr {$py+$ph-6-$ch}] $ew $ch]
+        assert {[near $ir $expected]} \
+            "$tag: audio is not at the VAL-BRD-020 bottom-right placement: got $ir expected $expected"
+        assert {$::application::board::ReservePixels == 0} \
+            "$tag: audio took reserve pixels without a strip"
+    } else {
+        assert {[winfo manager $w.video] eq ""} "$tag: audio has a video surface in a strip"
+    }
+    set overlap 0
+    foreach r [drawnBoardRects] { incr overlap [overlap $ir $r] }
+    if {$side eq ""} {
+        # The accepted decision-5 outcome: measured, never assumed to be zero.
+        assert {$overlap > 0} "$tag: tiny audio placement measured no board overlap"
+    } else {
+        assert {$overlap == 0} "$tag: audio strip covers the drawn board ($overlap px)"
+    }
+    log VAL-BRD-020-placement [list state $tag audio 1 collapsed 0 side $side \
+        pixels $::application::board::ReservePixels inset $ir pane [rect $pane] \
+        overlap $overlap drawn [drawnBoardRects]]
+    return [list $ir $overlap]
+}
+# VAL-BRD-015: the Media button menu now carries exactly one Stop row between
+# the media rows and Open stream..., enabled while a player holds the media.
+# Invoke that row (not ::application::media::Stop) so the label is expected
+# and exercised while the video is folded.
+proc ::w1::stopViaMenu {tag} {
+    set menu [::mediainset::Pane].mediaButton.menu
+    ::mediainset::PopulateMenu $menu
+    set labels {}
+    set stopIdx -1
+    set last [$menu index end]
+    for {set i 0} {$i <= $last} {incr i} {
+        if {[$menu type $i] eq "separator"} { lappend labels "<separator>"; continue }
+        set label [$menu entrycget $i -label]
+        lappend labels $label
+        if {$label eq "Stop"} { set stopIdx $i }
+    }
+    assert {$stopIdx >= 0} "$tag: Media menu has no Stop row: $labels"
+    assert {[$menu entrycget $stopIdx -state] eq "normal"} "$tag: Stop disabled while playing"
+    assert {[$menu type [expr {$last-1}]] ne "separator" \
+        && [$menu entrycget [expr {$last-1}] -label] eq "Stop"} \
+        "$tag: Stop is not immediately before Open stream...: $labels"
+    assert {[$menu entrycget $last -label] eq "Open stream..."} \
+        "$tag: Open stream... is not the last row: $labels"
+    $menu invoke $stopIdx
+    wait 500
+    log VAL-BRD-015-stop [list state $tag labels $labels stopIndex $stopIdx \
+        collapsed [folded?] reserve [::application::board::reserveRect] \
+        inprocess $::application::media::Priv(inprocess)]
+    assert {![folded?]} "$tag: fold survived the Media-menu Stop"
+    assert {$::application::board::ReserveSide eq "" && $::application::board::ReservePixels == 0} \
+        "$tag: reserve survived the Media-menu Stop"
+    set handle .application.videoHandle
+    assert {![winfo exists $handle] || ![winfo ismapped $handle]} \
+        "$tag: handle survived the Media-menu Stop"
+    return ok
 }
 # VAL-BRD-011: with no feasible strip the video folds, so the reachable
 # control is the fold handle; it must be mapped and topmost at its centre.
@@ -499,24 +682,17 @@ tcltest::test brd-close-db {BRD-003C closing the playing database restores the b
 # VAL-BRD-011 supersedes VAL-BRD-004's corner overlay for a playing video:
 # when every candidate strip falls below the floor the video folds to its
 # handle, leaving the unreserved board and its indicators uncovered.
-tcltest::test brd-minimum {BRD-011 refusal of every strip folds the video to its handle} -setup {::w1::setup; ::w1::size small} -body {
+# VAL-BRD-017: proved by the whole fold state and the real playback clock,
+# never by overlap alone (a hidden video also scores zero overlap).
+tcltest::test brd-minimum {BRD-011/VAL-BRD-017 refusal of every strip folds the video to its handle} -setup {::w1::setup small real} -body {
     set before $::application::board::Dim(squaresize:Normal)
-    set w [::w1::play]
+    set w [::w1::playReal]
     set d [::w1::measure VAL-BRD-011-fold 1]
-    set handle .application.videoHandle
-    ::w1::assert {$::application::board::ReserveSide eq ""} "small reserve was accepted"
-    ::w1::assert {$::application::board::ReservePixels == 0} "fold kept reserve pixels"
-    ::w1::assert {$before==$::application::board::Dim(squaresize:Normal)} "fold resized squares"
-    ::w1::assert {[winfo exists $handle] && [winfo ismapped $handle]} "fold handle missing"
+    set handle [::w1::foldState VAL-BRD-011-fold]
+    ::w1::assert {$before == $::application::board::Dim(squaresize:Normal)} "fold resized squares"
     foreach tag {board stm material} {
         ::w1::assert {[dict get $d overlap:$tag] == 0} "folded video covers $tag"
     }
-    set canvas $::application::board::Vars(widget:frame)
-    lassign [$canvas bbox board] bx by bxx byy
-    set boardRect [list [expr {[winfo rootx $canvas]+$bx}] [expr {[winfo rooty $canvas]+$by}] \
-        [expr {$bxx-$bx}] [expr {$byy-$by}]]
-    ::w1::assert {[::w1::overlap [::w1::rect $handle] $boardRect] == 0} "fold handle covers the board"
-    ::w1::assert {[winfo manager $w.video] eq "pack"} "folded video surface unmanaged"
     # The same production arithmetic: every candidate strip is below the floor.
     set ch [expr {[winfo reqheight $w.controls]+8}]
     set minHeight [expr {int(round(160/$::mediainset::Aspect))+$ch}]
@@ -524,9 +700,14 @@ tcltest::test brd-minimum {BRD-011 refusal of every strip folds the video to its
     set bottomSquare [::w1::squareWithReserve bottom $minHeight]
     ::w1::log VAL-BRD-011-fold [list before $before after $::application::board::Dim(squaresize:Normal) \
         minimum $::application::board::MinimumReserveSquare \
-        rightSquare $rightSquare bottomSquare $bottomSquare handle [::w1::rect $handle]]
+        rightSquare $rightSquare bottomSquare $bottomSquare handle $handle]
     ::w1::assert {$rightSquare < min($before,32) && $bottomSquare < min($before,32)} \
         "fold taken although a strip keeps squares at least 32 px"
+    # VAL-BRD-015/VAL-BRD-017: the Stop row the Media menu now carries is the
+    # one used to leave the folded state, and it restores the board.
+    ::w1::stopViaMenu VAL-BRD-011
+    ::w1::assert {![winfo ismapped $w]} "stopped folded inset still mapped"
+    ::w1::assert {$before == $::application::board::Dim(squaresize:Normal)} "Stop changed the board square"
     return ok
 } -cleanup {::w1::cleanup} -result ok
 
@@ -564,73 +745,73 @@ tcltest::test brd-fold-3d-clear {BRD-014 the fold handle clears the visible 3D b
     return ok
 } -cleanup {::w1::cleanup} -result ok
 
+# VAL-MED-013 / VAL-BRD-017: one resize case. Feasible strips keep their
+# unchanged arithmetic assertions and must NOT fold; a formerly-infeasible
+# size must now show the whole fold state (not merely side eq "").
+proc ::w1::sweepCase {tag geom w {requireFloor 0} {logTarget VAL-MED-013}} {
+    wm geometry .application ${geom}+0+0
+    wait 450
+    set unreserved [unreserved]
+    set d [measure ${logTarget}-$tag]
+    set square [dict get $d square]
+    set side [dict get $d side]
+    set canvas [dict get $d canvas]
+    set ch [expr {[winfo reqheight $w.controls]+8}]
+    set minHeight [expr {int(round(160/$::mediainset::Aspect))+$ch}]
+    set rightSquare [squareWithReserve right 168]
+    set bottomSquare [squareWithReserve bottom $minHeight]
+    set best [expr {max($rightSquare,$bottomSquare)}]
+    set feasible [expr {$best >= min($unreserved,32)}]
+    assert {[dict get $d mapped]} "inset unmapped at $geom"
+    log $logTarget [list geometry $geom square $square unreserved $unreserved \
+        side $side reserve [dict get $d reserve] overlap [dict get $d overlap:board] \
+        canvas $canvas rightSquare $rightSquare bottomSquare $bottomSquare feasible $feasible]
+    if {$feasible} {
+        assert {$square == $best} "did not choose largest square at $geom"
+        assert {$side ne ""} "feasible strip ignored at $geom"
+        if {$requireFloor} { assert {$best >= 32} "feasible largest strip is below 32 px at $geom" }
+        assert {![folded?]} "video folded although a strip is feasible at $geom"
+        set handle .application.videoHandle
+        assert {![winfo exists $handle] || ![winfo ismapped $handle]} \
+            "handle shown although a strip is feasible at $geom"
+        foreach name {board stm material} {
+            assert {[dict get $d overlap:$name] == 0} "reserved inset covers $name at $geom"
+        }
+    } else {
+        assert {$side eq ""} "below-floor strip accepted at $geom"
+        foldState $logTarget-$tag
+    }
+    return $feasible
+}
+
 # VAL-MED-013: sweep consecutive window heights across the reflow band.
-tcltest::test brd-height-sweep {VAL-MED-013 reserves the side leaving the largest square above the floor} -setup {::w1::setup default} -body {
-    set w [::w1::play]
-    set c $::application::board::Vars(widget:frame)
+tcltest::test brd-height-sweep {VAL-MED-013/VAL-BRD-017 reserves the side leaving the largest square, folds below the floor} -setup {::w1::setup default real} -body {
+    set w [::w1::playReal]
     set reserved 0
     set overlays 0
-    for {set h 520} {$h <= 640} {incr h 10} {
-        wm geometry .application 1250x${h}+0+0
-        ::w1::wait 450
-        set unreserved [::w1::unreserved]
-        set d [::w1::measure VAL-MED-013-$h]
-        set square [dict get $d square]
-        set side [dict get $d side]
-        set boardOverlap [dict get $d overlap:board]
-        # Forced candidate squares at the documented minimum video size,
-        # independent of the implementation's accept/refuse decision.
-        set ch [expr {[winfo reqheight $w.controls]+8}]
-        set minHeight [expr {int(round(160/$::mediainset::Aspect))+$ch}]
-        set rightSquare [::w1::squareWithReserve right 168]
-        set bottomSquare [::w1::squareWithReserve bottom $minHeight]
-        set feasible [expr {max($rightSquare,$bottomSquare) >= min($unreserved,32)}]
-        ::w1::log VAL-MED-013 [list height $h square $square unreserved $unreserved \
-            side $side reserve [dict get $d reserve] overlap $boardOverlap canvas [dict get $d canvas] \
-            rightSquare $rightSquare bottomSquare $bottomSquare feasible $feasible]
-        if {$feasible} {
-            ::w1::assert {$square == max($rightSquare,$bottomSquare)} "did not choose largest square at height $h"
-            ::w1::assert {$side ne ""} \
-                "feasible strip ignored at height $h"
-            foreach tag {board stm material} {
-                ::w1::assert {[dict get $d overlap:$tag] == 0} \
-                    "reserved inset covers $tag at height $h"
-            }
-        } else {
-            incr overlays
-            ::w1::assert {$side eq ""} \
-                "below-floor strip accepted at height $h"
-        }
-        if {$side ne ""} {incr reserved}
+    foreach h {520 530 540 550 560 570 580 590 600 610 620 630 640} {
+        if {[::w1::sweepCase $h 1250x${h} $w]} {incr reserved} else {incr overlays}
+    }
+    # VAL-BRD-017: the formerly-infeasible branch. A narrow window cannot
+    # carry the minimum strip at any of these heights, so every case proves
+    # the full fold state instead of the old accepted corner overlay.
+    foreach geom {700x520 700x600 700x640} {
+        if {[::w1::sweepCase $geom $geom $w]} {incr reserved} else {incr overlays}
     }
     ::w1::log VAL-MED-013-summary [list reserved $reserved overlays $overlays]
     ::w1::assert {$reserved > 0} "no strip was reserved across the height sweep"
+    ::w1::assert {$overlays > 0} "the formerly-infeasible branch was never exercised"
     return ok
 } -cleanup {::w1::cleanup} -result ok
 
 # Former no-shrink counterexamples must now reserve, including terminal GAP-001.
-tcltest::test brd-width-counterexamples {VAL-MED-013 width-limited boards shrink to fit video} -setup {::w1::setup default} -body {
-    set w [::w1::play]
-    foreach geom {1000x640 1000x700 1100x700 1100x850} {
-        wm geometry .application ${geom}+0+0
-        ::w1::wait 450
-        set unreserved [::w1::unreserved]
-        set d [::w1::measure VAL-MED-013-$geom]
-        set square [dict get $d square]
-        set side [dict get $d side]
-        ::w1::log VAL-MED-013-width [list geometry $geom square $square unreserved $unreserved \
-            side $side reserve [dict get $d reserve] canvas [dict get $d canvas]]
-        ::w1::assert {[dict get $d mapped]} "inset unmapped at $geom"
-        set ch [expr {[winfo reqheight $w.controls]+8}]
-        set best [expr {max([::w1::squareWithReserve right 168],
-            [::w1::squareWithReserve bottom [expr {int(round(160/$::mediainset::Aspect))+$ch}]])}]
-        ::w1::assert {$best >= 32 && $square == $best && $side ne ""} "feasible largest strip missing at $geom"
-        if {$side ne ""} {
-            foreach tag {board stm material} {
-                ::w1::assert {[dict get $d overlap:$tag] == 0} "reserved inset covers $tag at $geom"
-            }
-        }
+tcltest::test brd-width-counterexamples {VAL-MED-013/VAL-BRD-017 width-limited boards shrink to fit video} -setup {::w1::setup default real} -body {
+    set w [::w1::playReal]
+    set folds 0
+    foreach geom {1000x640 1000x700 1100x700 1100x850 700x520 700x640} {
+        if {![::w1::sweepCase $geom $geom $w 1 VAL-MED-013-width]} {incr folds}
     }
+    ::w1::assert {$folds > 0} "the formerly-infeasible width branch was never exercised"
     return ok
 } -cleanup {::w1::cleanup} -result ok
 
@@ -734,7 +915,7 @@ tcltest::test brd-types {BRD-010 reserve follows audio and video surfaces} -setu
 # corner of the drawn board (user decision 5), and an open playing dialog must
 # not fold it either. The accepted overlap is measured and logged rather than
 # assumed to be zero.
-tcltest::test brd-020-audio {BRD-020 audio keeps its placement and never folds} -setup {::w1::setup} -body {
+tcltest::test brd-020-audio {BRD-020 audio keeps its placement and never folds} -setup {::w1::setup wide real} -body {
     # 400x380 window with wm minsize 1 1 (::w1::setup) and the board pane
     # forced to 300x300 is the tiny geometry where no video strip is feasible.
     wm geometry .application 400x380+0+0
@@ -747,16 +928,19 @@ tcltest::test brd-020-audio {BRD-020 audio keeps its placement and never folds} 
     set pane [::mediainset::Pane]
     set canvas [::mediainset::BoardView]
     set before [list [$canvas bbox board] $::application::board::Dim(squaresize:Normal) [::w1::rect $pane]]
-    set w [::w1::play [file normalize $::w1::root/tests/tmp-app/media-test/MediaTest.media/audio/interview.wav]]
+    set w [::w1::playReal [file normalize $::w1::root/tests/tmp-app/media-test/MediaTest.media/audio/interview.wav]]
     set handle .application.videoHandle
     set audio [::w1::measure VAL-BRD-020-audio-tiny 1]
     ::w1::assert {$::mediainset::Audio && [winfo manager $w.video] eq ""} "audio has a video surface"
-    ::w1::assert {![winfo ismapped $handle]} "handle shown for audio-only media"
+    ::w1::assert {![::w1::handleMapped?]} "handle shown for audio-only media"
     ::w1::assert {!$::mediainset::Collapsed} "audio-only media folded"
     ::w1::assert {[winfo ismapped $w]} "audio inset hidden"
     ::w1::assert {$::application::board::ReserveSide eq "" && $::application::board::ReservePixels == 0} \
         "audio requested a strip reserve where none fits"
     ::w1::assert {[dict get $audio mapped]} "audio inset unmapped at the tiny geometry"
+    # VAL-BRD-017: the same expectation, asserted as a state and measured.
+    ::w1::audioPlacement audio-tiny $w
+    ::w1::progressAdvance VAL-BRD-020-audio
     # The measured overlap is the accepted decision-5 outcome: record it.
     ::w1::log VAL-BRD-020-measured [list inset [::w1::rect $w] board [dict get $audio bbox:board] \
         overlap [dict get $audio overlap:board] reserve [dict get $audio reserve] \
@@ -774,7 +958,7 @@ tcltest::test brd-020-audio {BRD-020 audio keeps its placement and never folds} 
     wm deiconify .application.dlgAudioProbe
     ::w1::wait 700
     set withDialog [::w1::measure VAL-BRD-020-audio-dialog 1]
-    ::w1::assert {![winfo ismapped $handle]} "handle shown for audio with a dialog open"
+    ::w1::assert {![::w1::handleMapped?]} "handle shown for audio with a dialog open"
     ::w1::assert {!$::mediainset::Collapsed} "audio folded with a dialog open"
     ::w1::assert {[winfo ismapped $w]} "audio inset hidden with a dialog open"
     ::w1::log VAL-BRD-020-dialog [list inset [::w1::rect $w] board [dict get $withDialog bbox:board] \
@@ -782,12 +966,13 @@ tcltest::test brd-020-audio {BRD-020 audio keeps its placement and never folds} 
 
     destroy .application.dlgAudioProbe
     ::w1::wait 500
-    ::application::media::Stop
+    # VAL-BRD-015: leave through the Media-menu Stop row while audio plays.
+    ::w1::stopViaMenu VAL-BRD-020
     ::w1::wait 500
     set after [list [$canvas bbox board] $::application::board::Dim(squaresize:Normal) [::w1::rect $pane]]
     ::w1::assert {$after eq $before} "board or pane left resized after stopping audio"
     ::w1::assert {![winfo ismapped $w]} "audio inset still mapped after stop"
-    ::w1::assert {![winfo ismapped $handle]} "handle left mapped after stop"
+    ::w1::assert {![::w1::handleMapped?]} "handle left mapped after stop"
     return ok
 } -cleanup {
     catch {destroy .application.dlgAudioProbe}
@@ -929,24 +1114,43 @@ tcltest::test inset-009-unoccluded {VAL-MED-009 the size control is never covere
 } -cleanup {::w1::cleanup} -result 1
 
 # VAL-MED-009: the same topmost-control guarantee holds in the corner overlay,
-# audio-only and 3D board states.
-tcltest::test inset-009-unoccluded-states {VAL-MED-009 the control is unoccluded in corner, audio and 3D states} -constraints embedded3D -setup {::w1::setup; ::w1::size small} -body {
+# audio-only and 3D board states. VAL-BRD-017: the video branch is proved by
+# the whole fold state and the real playback clock; the audio-only branch by
+# the opposite expectation (no fold, no handle) with the measured placement.
+tcltest::test inset-009-unoccluded-states {VAL-MED-009/VAL-BRD-017 control unoccluded in corner, audio and 3D states} -constraints embedded3D -setup {::w1::setup small real} -body {
     ::w1::quiet
     set states {}
-    set w [::w1::play]
-    # VAL-BRD-011 replaces the corner overlay with the fold handle.
+    set w [::w1::playReal]
+    # VAL-BRD-011 replaces the corner overlay with the fold handle; VAL-BRD-017
+    # wants the full folded state, not only a topmost control.
+    ::w1::foldState VAL-BRD-011-unoccluded
     lappend states [::w1::foldUnoccluded corner]
     ::w1::trigger $w button
     lappend states [::w1::unoccluded corner-expanded $w]
     ::w1::trigger $w button
-    set w [::w1::play [file normalize $::w1::root/tests/tmp-app/media-test/MediaTest.media/audio/interview.wav]]
+    set w [::w1::playReal [file normalize $::w1::root/tests/tmp-app/media-test/MediaTest.media/audio/interview.wav]]
+    ::w1::audioPlacement audio-strip $w
     lappend states [::w1::unoccluded audio $w]
     ::w1::trigger $w button
     lappend states [::w1::unoccluded audio-expanded $w]
     ::w1::trigger $w button
+    # VAL-BRD-020: the decision-5 geometry where no audio strip fits. Audio
+    # must still not fold or show a handle; the bottom-right transport cluster
+    # stays put and its accepted board overlap is measured and recorded.
+    ::application::media::Stop
+    ::w1::wait 300
+    place [::mediainset::Pane] -in $::w1::twm -x 0 -y 0 -width 300 -height 300 \
+        -relwidth {} -relheight {}
+    ::w1::wait 500
+    set w [::w1::playReal [file normalize $::w1::root/tests/tmp-app/media-test/MediaTest.media/audio/interview.wav]]
+    ::w1::audioPlacement audio-tiny $w
+    lappend states [::w1::unoccluded audio-tiny $w]
+    # Restore the forced pane before the 3D state.
+    place [::mediainset::Pane] -in $::w1::twm -x 0 -y 0 -relwidth 1 -relheight 1 -width 0 -height 0
+    ::w1::wait 450
     wm geometry .application 1024x700+0+0
     ::w1::wait
-    set w [::w1::play]
+    set w [::w1::playReal]
     lappend states [::w1::unoccluded 3d-pre $w]
     ::w1::assert {[::application::board::show3D 1]} "Blocked: 3D view unavailable"
     ::w1::wait
@@ -1023,20 +1227,21 @@ tcltest::test inset-009-frame {VAL-MED-009 the frame is visible and inside the p
 } -cleanup {::w1::cleanup} -result {1 {ridge 3 1} 1 1 1 3 place 1 1 1 0 0 1 {ridge 3 1} {}}
 
 # VAL-BRD-011: a board pane too small for a strip folds the playing video to
-# its handle. The inset keeps its visible ridge frame for the restored strip.
-tcltest::test inset-009-frame-corner {VAL-BRD-011 a too-small pane folds to a board-clear handle} -setup {::w1::setup; ::w1::size small} -body {
-    set w [::w1::play]
-    set handle .application.videoHandle
-    set mapped [expr {[winfo exists $handle] && [winfo ismapped $handle]}]
-    set canvas $::application::board::Vars(widget:frame)
-    lassign [$canvas bbox board] bx by bxx byy
-    set boardRect [list [expr {[winfo rootx $canvas]+$bx}] [expr {[winfo rooty $canvas]+$by}] \
-        [expr {$bxx-$bx}] [expr {$byy-$by}]]
-    set clear [expr {[::w1::overlap [::w1::rect $handle] $boardRect] == 0}]
-    ::w1::log VAL-BRD-011-corner [list rect [::w1::rect $w] handle [::w1::rect $handle] \
-        pane [::w1::rect [winfo parent $w]] style [::w1::frameStyle $w] mapped $mapped \
+# its handle. VAL-BRD-017: the whole fold state is asserted (handle rectangle,
+# playback clock, cleared reserve, unreserved square), not the handle alone.
+# The inset keeps its visible ridge frame for the restored strip.
+tcltest::test inset-009-frame-corner {VAL-BRD-011/VAL-BRD-017 a too-small pane folds to a board-clear handle} -setup {::w1::setup small real} -body {
+    set w [::w1::playReal]
+    set handle [::w1::foldState VAL-BRD-011-corner]
+    set style [::w1::frameStyle $w]
+    set clear 1
+    foreach r [::w1::drawnBoardRects] {
+        if {[::w1::overlap $handle $r] != 0} { set clear 0 }
+    }
+    ::w1::log VAL-BRD-011-corner [list rect [::w1::rect $w] handle $handle \
+        pane [::w1::rect [winfo parent $w]] style $style mapped [::w1::handleMapped?] \
         clear $clear reserve [::application::board::reserveRect]]
-    list $mapped $clear [::w1::frameStyle $w]
+    list [::w1::handleMapped?] $clear $style
 } -cleanup {::w1::cleanup} -result {1 1 {ridge 3 1}}
 
 # VAL-MED-009: the same state control, restore and frame hold for the 3D board.
