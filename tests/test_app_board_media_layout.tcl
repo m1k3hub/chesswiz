@@ -232,6 +232,23 @@ proc ::w1::topAtBoard {} {
     set cy [expr {[winfo rooty $view] + [winfo height $view]/2}]
     return [list $cx $cy [winfo containing $cx $cy]]
 }
+# VAL-BRD-011: with no feasible strip the video folds, so the reachable
+# control is the fold handle; it must be mapped and topmost at its centre.
+proc ::w1::foldUnoccluded {tag} {
+    set handle .application.videoHandle
+    set folded $::mediainset::Collapsed
+    set mapped [expr {[winfo exists $handle] && [winfo ismapped $handle]}]
+    if {!$mapped} {
+        ::w1::log VAL-MED-009-unoccluded [list state $tag folded $folded handle missing]
+        return 0
+    }
+    set cx [expr {[winfo rootx $handle] + [winfo width $handle]/2}]
+    set cy [expr {[winfo rooty $handle] + [winfo height $handle]/2}]
+    set top [winfo containing $cx $cy]
+    ::w1::log VAL-MED-009-unoccluded [list state $tag folded $folded handle [::w1::rect $handle] \
+        centre $cx $cy top $top onHandle [expr {$top eq $handle}]]
+    return [expr {$folded && $top eq $handle}]
+}
 # The control is never underneath the board. While the board is the small
 # overlay, the transport cluster must not cover its squares either.
 proc ::w1::unoccluded {tag w} {
@@ -479,24 +496,37 @@ tcltest::test brd-close-db {BRD-003C closing the playing database restores the b
     return ok
 } -cleanup {::w1::cleanup} -result ok
 
-tcltest::test brd-minimum {BRD-004 refusal keeps square size and uses the corner} -setup {::w1::setup; ::w1::size small} -body {
+# VAL-BRD-011 supersedes VAL-BRD-004's corner overlay for a playing video:
+# when every candidate strip falls below the floor the video folds to its
+# handle, leaving the unreserved board and its indicators uncovered.
+tcltest::test brd-minimum {BRD-011 refusal of every strip folds the video to its handle} -setup {::w1::setup; ::w1::size small} -body {
     set before $::application::board::Dim(squaresize:Normal)
     set w [::w1::play]
-    ::w1::measure VAL-BRD-004 1
+    set d [::w1::measure VAL-BRD-011-fold 1]
+    set handle .application.videoHandle
     ::w1::assert {$::application::board::ReserveSide eq ""} "small reserve was accepted"
-    ::w1::assert {$before==$::application::board::Dim(squaresize:Normal)} "refusal resized squares"
-    ::w1::assert {[dict get [place info $w] -anchor] eq "se"} "fallback is not in corner"
-    # VAL-MED-013: every candidate strip falls below the floor,
-    # so the corner overlay is the documented outcome.
+    ::w1::assert {$::application::board::ReservePixels == 0} "fold kept reserve pixels"
+    ::w1::assert {$before==$::application::board::Dim(squaresize:Normal)} "fold resized squares"
+    ::w1::assert {[winfo exists $handle] && [winfo ismapped $handle]} "fold handle missing"
+    foreach tag {board stm material} {
+        ::w1::assert {[dict get $d overlap:$tag] == 0} "folded video covers $tag"
+    }
+    set canvas $::application::board::Vars(widget:frame)
+    lassign [$canvas bbox board] bx by bxx byy
+    set boardRect [list [expr {[winfo rootx $canvas]+$bx}] [expr {[winfo rooty $canvas]+$by}] \
+        [expr {$bxx-$bx}] [expr {$byy-$by}]]
+    ::w1::assert {[::w1::overlap [::w1::rect $handle] $boardRect] == 0} "fold handle covers the board"
+    ::w1::assert {[winfo manager $w.video] eq "pack"} "folded video surface unmanaged"
+    # The same production arithmetic: every candidate strip is below the floor.
     set ch [expr {[winfo reqheight $w.controls]+8}]
     set minHeight [expr {int(round(160/$::mediainset::Aspect))+$ch}]
     set rightSquare [::w1::squareWithReserve right 168]
     set bottomSquare [::w1::squareWithReserve bottom $minHeight]
-    ::w1::log VAL-BRD-004 [list before $before after $::application::board::Dim(squaresize:Normal) \
+    ::w1::log VAL-BRD-011-fold [list before $before after $::application::board::Dim(squaresize:Normal) \
         minimum $::application::board::MinimumReserveSquare \
-        rightSquare $rightSquare bottomSquare $bottomSquare]
+        rightSquare $rightSquare bottomSquare $bottomSquare handle [::w1::rect $handle]]
     ::w1::assert {$rightSquare < min($before,32) && $bottomSquare < min($before,32)} \
-        "overlay taken although a strip keeps squares at least 32 px"
+        "fold taken although a strip keeps squares at least 32 px"
     return ok
 } -cleanup {::w1::cleanup} -result ok
 
@@ -806,7 +836,8 @@ tcltest::test inset-009-unoccluded-states {VAL-MED-009 the control is unoccluded
     ::w1::quiet
     set states {}
     set w [::w1::play]
-    lappend states [::w1::unoccluded corner $w]
+    # VAL-BRD-011 replaces the corner overlay with the fold handle.
+    lappend states [::w1::foldUnoccluded corner]
     ::w1::trigger $w button
     lappend states [::w1::unoccluded corner-expanded $w]
     ::w1::trigger $w button
@@ -893,15 +924,22 @@ tcltest::test inset-009-frame {VAL-MED-009 the frame is visible and inside the p
         [lindex $audio 0] [lindex $audio 1] [lindex $audio 2]
 } -cleanup {::w1::cleanup} -result {1 {ridge 3 1} 1 1 1 3 place 1 1 1 0 0 1 {ridge 3 1} {}}
 
-# VAL-MED-009: a board pane too small for a strip keeps the frame in the
-# BRD-004 corner overlay.
-tcltest::test inset-009-frame-corner {VAL-MED-009 the corner overlay keeps the inset frame inside the pane} -setup {::w1::setup; ::w1::size small} -body {
+# VAL-BRD-011: a board pane too small for a strip folds the playing video to
+# its handle. The inset keeps its visible ridge frame for the restored strip.
+tcltest::test inset-009-frame-corner {VAL-BRD-011 a too-small pane folds to a board-clear handle} -setup {::w1::setup; ::w1::size small} -body {
     set w [::w1::play]
-    set inside [::w1::inside $w]
-    ::w1::log VAL-MED-009-frame-corner [list rect [::w1::rect $w] pane [::w1::rect [winfo parent $w]] \
-        style [::w1::frameStyle $w] inside $inside reserve [::application::board::reserveRect]]
-    list $inside [::w1::frameStyle $w]
-} -cleanup {::w1::cleanup} -result {1 {ridge 3 1}}
+    set handle .application.videoHandle
+    set mapped [expr {[winfo exists $handle] && [winfo ismapped $handle]}]
+    set canvas $::application::board::Vars(widget:frame)
+    lassign [$canvas bbox board] bx by bxx byy
+    set boardRect [list [expr {[winfo rootx $canvas]+$bx}] [expr {[winfo rooty $canvas]+$by}] \
+        [expr {$bxx-$bx}] [expr {$byy-$by}]]
+    set clear [expr {[::w1::overlap [::w1::rect $handle] $boardRect] == 0}]
+    ::w1::log VAL-BRD-011-corner [list rect [::w1::rect $w] handle [::w1::rect $handle] \
+        pane [::w1::rect [winfo parent $w]] style [::w1::frameStyle $w] mapped $mapped \
+        clear $clear reserve [::application::board::reserveRect]]
+    list $mapped $clear [::w1::frameStyle $w]
+} -cleanup {::w1::cleanup} -result {1 1 {ridge 3 1}}
 
 # VAL-MED-009: the same state control, restore and frame hold for the 3D board.
 tcltest::test inset-009-3d {VAL-MED-009 the 3D board keeps the control, the restore and the frame} -constraints embedded3D -setup {::w1::setup default} -body {

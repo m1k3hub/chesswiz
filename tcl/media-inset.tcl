@@ -16,6 +16,11 @@
 #   ::mediainset::surface $fallback   -> the canvas to play video on
 #   ::mediainset::hide                 when playback stops
 #   ::mediainset::swap                 the expand button
+#
+# When no right or bottom strip can carry the video without cost to the
+# drawn board, the video folds to its handle (::mediainset::Fold): the
+# handle is the only visible surface, it re-attempts Layout when clicked,
+# and playback/audio continue on the off-pane native canvas.
 # ======================================================================
 
 ::util::source media-inset
@@ -438,7 +443,8 @@ proc ::mediainset::BoardView {} {
 # its minimum extent can carry a video at least 160 px wide (the frame adds
 # 8 px) and the board renderer accepts the reserve. The reserve is accepted
 # when its square stays at least min(unreserved, 32) (VAL-MED-014). reserveSquare
-# returns 0 when the strip is unusable; only then may it overlay.
+# returns 0 when the strip is unusable; only then does the inset fold to its
+# handle (VAL-BRD-011) instead of drawing over the board.
 proc ::mediainset::Brd004Fallback {width height controlsHeight} {
 	variable Aspect
 	set minimumWidth 168
@@ -477,6 +483,7 @@ proc ::mediainset::Layout {} {
 	try {
 		variable Collapsed
 		set Collapsed 0
+		set folded 0
 		catch {place forget .application.videoHandle}
 		Watch
 		RefreshSwapControl
@@ -539,34 +546,6 @@ proc ::mediainset::Layout {} {
 			set side [expr {$width > $height ? "right" : "bottom"}]
 			set iw $cw
 			set ih $ch
-			if {!$Audio} {
-				set choice [FitStrip $width $height $ch]
-				if {[llength $choice]} {
-					lassign $choice side iw ih
-				} elseif {[Brd004Fallback $width $height $ch]} {
-					# BRD-004: no strip can carry a >=160 px video while
-					# keeping the documented minimum square at this scaling,
-					# so the board keeps its size and the inset overlays it.
-					set side {}
-					set iw [expr {max(168, int($height*$s*$Aspect)+8)}]
-					set ih [expr {int(round(($iw-8)/$Aspect))+$ch}]
-				} else {
-					# The arithmetic says a minimum strip is feasible even
-					# though FitStrip returned nothing (e.g. a transient
-					# canvas): reserve that strip instead of covering the
-					# board, so the overlay is never taken outside BRD-004.
-					if {[::application::board::reserveSquare right 168 $width $height] \
-						> 0} {
-						set side right
-						set iw 168
-						set ih [expr {int(round(($iw-8)/$Aspect))+$ch}]
-					} else {
-						set side bottom
-						set ih [expr {int(round(160/$Aspect))+$ch}]
-						set iw [expr {int(round(($ih-$ch)*$Aspect))+8}]
-					}
-				}
-			}
 			# A dialog can ask the inset to yield its strip: move to
 			# the other side and shrink to the documented minimum so the
 			# dialog keeps every control at its requested size.
@@ -580,21 +559,57 @@ proc ::mediainset::Layout {} {
 					set ih [expr {int(round(($iw-8)/$Aspect))+$ch}]
 				}
 			}
-			set pixels [expr {$side eq "right" || $side eq "left" ? $iw : $ih}]
-			# A squeeze is the video yielding its strip to a dialog: it may
-			# shrink the board, unlike the ordinary strip chosen by FitStrip.
-			set kind [expr {$Squeeze ne {} && !$Audio ? "squeeze" : "auto"}]
-			set mb [expr {$Squeeze ne {} && !$Audio && [string is integer -strict $maxBoard] ? $maxBoard : 0}]
 			# Dialog-kind reserves belong to the playing-dialog group. The
 			# inset may dodge within the pane, but cannot repaint the board
 			# underneath that group by replacing its reserve (DLG-021).
 			set dialogHeld [::util::place::besideRequestedReserveActive]
-			if {!$dialogHeld && $side ne "" && [::application::board::setReserve $side $pixels $kind $mb]} {
-				lassign [::application::board::reserveRect] x y rw rh
-				set x [expr {$x + [winfo x $view] + ($rw - $iw)/2}]
-				set y [expr {$y + [winfo y $view] + ($rh - $ih)/2}]
-				PlaceInset $w $pane $x $y $iw $ih
-			} else {
+			if {!$Audio} {
+				set choice [FitStrip $width $height $ch]
+				if {[llength $choice]} {
+					lassign $choice side iw ih
+				} elseif {[Brd004Fallback $width $height $ch]
+					&& $Squeeze eq {} && !$dialogHeld} {
+					# VAL-BRD-011: neither a right nor a bottom strip can
+					# carry the video while keeping the drawn board at its
+					# unreserved square (the 32 px floor is unchanged), so
+					# fold the video to its handle. The board and its
+					# indicators stay uncovered; playback and audio continue.
+					set folded 1
+				} else {
+					# The arithmetic says a minimum strip is feasible even
+					# though FitStrip returned nothing (e.g. a transient
+					# canvas): reserve that strip instead of covering the
+					# board, so no overlay is ever taken on that path.
+					if {[::application::board::reserveSquare right 168 $width $height] \
+						> 0} {
+						set side right
+						set iw 168
+						set ih [expr {int(round(($iw-8)/$Aspect))+$ch}]
+					} else {
+						set side bottom
+						set ih [expr {int(round(160/$Aspect))+$ch}]
+						set iw [expr {int(round(($ih-$ch)*$Aspect))+8}]
+					}
+				}
+			}
+			set placed 0
+			if {!$folded && !$dialogHeld && $side ne ""} {
+				set pixels [expr {$side eq "right" || $side eq "left" ? $iw : $ih}]
+				# A squeeze is the video yielding its strip to a dialog: it
+				# may shrink the board, unlike the ordinary strip from FitStrip.
+				set kind [expr {$Squeeze ne {} && !$Audio ? "squeeze" : "auto"}]
+				set mb [expr {$Squeeze ne {} && !$Audio && [string is integer -strict $maxBoard] ? $maxBoard : 0}]
+				if {[::application::board::setReserve $side $pixels $kind $mb]} {
+					lassign [::application::board::reserveRect] x y rw rh
+					set x [expr {$x + [winfo x $view] + ($rw - $iw)/2}]
+					set y [expr {$y + [winfo y $view] + ($rh - $ih)/2}]
+					PlaceInset $w $pane $x $y $iw $ih
+					set placed 1
+				}
+			}
+			if {$folded} {
+				Fold $w $pane
+			} elseif {!$placed} {
 				if {!$dialogHeld} { ::application::board::setReserve {} 0 }
 				# Keep the usable transport, fitting the video to the pane.
 				set iw [expr {min($iw, max(1, [winfo width $pane] - 12))}]
@@ -603,12 +618,12 @@ proc ::mediainset::Layout {} {
 				place $w -in $pane -x -6 -y -6 -relx 1 -rely 1 -anchor se \
 					-width $iw -height $ih -relwidth {} -relheight {}
 			}
-			raise $w
+			if {!$folded} { raise $w }
 		}
 		# A dialog too large for the strips outside the pane may have made
 		# the inset move inside the pane; keep that position across rebuilds
 		# until the dialog closes or the media stops.
-		if {$Dodge ne {}} {
+		if {$Dodge ne {} && !$folded} {
 			if {![winfo exists $DodgeFor]} {
 				set Dodge {}
 				set DodgeFor {}
@@ -639,6 +654,55 @@ proc ::mediainset::Layout {} {
 	}
 }
 
+
+# The fold handle of a video that cannot get a strip: one small control at a
+# rectangle that clears the drawn board. A free spot in the board pane is
+# preferred; the main toolbar at 0,0 is outside the painted board even when
+# the pane itself has no remaining usable rectangle. Clicking it re-attempts
+# Layout (Relayout): a grown pane restores the strip, otherwise it folds again.
+proc ::mediainset::PlaceHandle {pane} {
+	if {![winfo exists .application.videoHandle]} {
+		ttk::button .application.videoHandle -text video -width 5 -command ::mediainset::Relayout
+	}
+	set handle .application.videoHandle
+	set board [BoardRect]
+	if {$board eq {}} {
+		place $handle -x 0 -y 0 -width 56 -height 26
+		raise $handle
+		return
+	}
+	set obstacles {}
+	foreach dlg $::util::place::BesideDialogs {
+		if {[winfo exists $dlg] && [winfo ismapped $dlg]} { lappend obstacles [::util::place::besideOuterRect $dlg] }
+	}
+	set packed [::util::place::besidePack $board [list {56 26}] [WidgetRect $pane] 0 $obstacles]
+	if {[llength $packed]} {
+		lassign [lindex $packed end] x y
+		place $handle -x [expr {$x-[winfo rootx .application]}] -y [expr {$y-[winfo rooty .application]}] -width 56 -height 26
+	} else {
+		place $handle -x 0 -y 0 -width 56 -height 26
+	}
+	raise $handle
+}
+
+# VAL-BRD-011: no right or bottom strip can carry the video without dropping
+# the drawn board below its unreserved square (32 px floor unchanged). Fold:
+# the native surface stays alive off-pane so playback and audio continue, the
+# board keeps its unreserved size and indicators, ReserveSide/ReservePixels
+# stay empty/0, and the handle is the video's only visible surface.
+proc ::mediainset::Fold {w pane} {
+	variable Collapsed
+	variable HeldPlace
+	set Collapsed 1
+	set HeldPlace {}
+	::application::board::setReserve {} 0
+	FrameView 0
+	RestoreBoard $pane
+	set mw [MinimumStrip]
+	set mh [expr {int(round(($mw-8)/$::mediainset::Aspect))+[winfo reqheight $w.controls]+8}]
+	place $w -x -10000 -y -10000 -width $mw -height $mh -relx 0 -rely 0 -anchor nw -relwidth {} -relheight {}
+	PlaceHandle $pane
+}
 
 # Dialogs have priority over video pixels. Keep the backend's canvas alive
 # offscreen when even a minimum video cannot clear the board; audio and the
@@ -673,20 +737,7 @@ proc ::mediainset::ProtectPlayingBoard {} {
 	set Collapsed 1
 	set HeldPlace {}
 	place $w -x -10000 -y -10000 -width $mw -height $mh -relx 0 -rely 0 -anchor nw -relwidth {} -relheight {}
-	if {![winfo exists .application.videoHandle]} {
-		ttk::button .application.videoHandle -text video -width 5 -command ::mediainset::Relayout
-	}
-	set handle .application.videoHandle
-	set packed [::util::place::besidePack $board [list {56 26}] [WidgetRect $pane] 0 $obstacles]
-	if {[llength $packed]} {
-		lassign [lindex $packed end] x y
-		place $handle -x [expr {$x-[winfo rootx .application]}] -y [expr {$y-[winfo rooty .application]}] -width 56 -height 26
-	} else {
-		# The main toolbar is outside the painted board even when the
-		# board pane itself has no remaining usable rectangle.
-		place $handle -x 0 -y 0 -width 56 -height 26
-	}
-	raise $handle
+	PlaceHandle $pane
 }
 
 # Plan the final 2D reserve before the board paints a resized extent. The
@@ -821,8 +872,13 @@ proc ::mediainset::DodgeForDialog {dlg rect} {
 	variable Dodge
 	variable DodgeFor
 	variable Aspect
+	variable Collapsed
 
 	if {!$Shown || $Swapped} { return 0 }
+	# Folded: the video's visible rect is the handle, already kept clear of
+	# the board and of the dialogs by the placement helper. There is no
+	# in-pane surface to dodge; a new position would only unfold it.
+	if {$Collapsed} { return 0 }
 	set pane [Pane]
 	if {$pane eq ""} { return 0 }
 	set w $pane.mediainset
