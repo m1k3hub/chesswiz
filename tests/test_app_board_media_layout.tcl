@@ -695,7 +695,71 @@ tcltest::test brd-types {BRD-010 reserve follows audio and video surfaces} -setu
     return ok
 } -cleanup {::w1::cleanup} -result ok
 
-# Cocoa's native fullscreen transition re-manages panes. Use the actual
+# VAL-BRD-020: audio-only media never folds. Where no strip fits it keeps its
+# VAL-MED-009 bottom-right transport placement even though that covers a
+# corner of the drawn board (user decision 5), and an open playing dialog must
+# not fold it either. The accepted overlap is measured and logged rather than
+# assumed to be zero.
+tcltest::test brd-020-audio {BRD-020 audio keeps its placement and never folds} -setup {::w1::setup} -body {
+    # 400x380 window with wm minsize 1 1 (::w1::setup) and the board pane
+    # forced to 300x300 is the tiny geometry where no video strip is feasible.
+    wm geometry .application 400x380+0+0
+    ::w1::wait 500
+    place [::mediainset::Pane] -in $::w1::twm -x 0 -y 0 -width 300 -height 300 \
+        -relwidth {} -relheight {}
+    ::w1::wait 500
+    ::application::media::Stop
+    ::w1::wait 300
+    set pane [::mediainset::Pane]
+    set canvas [::mediainset::BoardView]
+    set before [list [$canvas bbox board] $::application::board::Dim(squaresize:Normal) [::w1::rect $pane]]
+    set w [::w1::play [file normalize $::w1::root/tests/tmp-app/media-test/MediaTest.media/audio/interview.wav]]
+    set handle .application.videoHandle
+    set audio [::w1::measure VAL-BRD-020-audio-tiny 1]
+    ::w1::assert {$::mediainset::Audio && [winfo manager $w.video] eq ""} "audio has a video surface"
+    ::w1::assert {![winfo ismapped $handle]} "handle shown for audio-only media"
+    ::w1::assert {!$::mediainset::Collapsed} "audio-only media folded"
+    ::w1::assert {[winfo ismapped $w]} "audio inset hidden"
+    ::w1::assert {$::application::board::ReserveSide eq "" && $::application::board::ReservePixels == 0} \
+        "audio requested a strip reserve where none fits"
+    ::w1::assert {[dict get $audio mapped]} "audio inset unmapped at the tiny geometry"
+    # The measured overlap is the accepted decision-5 outcome: record it.
+    ::w1::log VAL-BRD-020-measured [list inset [::w1::rect $w] board [dict get $audio bbox:board] \
+        overlap [dict get $audio overlap:board] reserve [dict get $audio reserve] \
+        side [dict get $audio side] squaresize [dict get $audio square]]
+
+    # A dialog beside the board must not fold audio to its handle.
+    toplevel .application.dlgAudioProbe
+    wm withdraw .application.dlgAudioProbe
+    wm transient .application.dlgAudioProbe .application
+    ttk::frame .application.dlgAudioProbe.content -width 240 -height 160
+    pack .application.dlgAudioProbe.content -fill both -expand yes
+    ttk::button .application.dlgAudioProbe.ok -text "Keep playing"
+    pack .application.dlgAudioProbe.ok -side left -padx 6 -pady 6
+    ::util::place::besideBoard .application.dlgAudioProbe .application
+    wm deiconify .application.dlgAudioProbe
+    ::w1::wait 700
+    set withDialog [::w1::measure VAL-BRD-020-audio-dialog 1]
+    ::w1::assert {![winfo ismapped $handle]} "handle shown for audio with a dialog open"
+    ::w1::assert {!$::mediainset::Collapsed} "audio folded with a dialog open"
+    ::w1::assert {[winfo ismapped $w]} "audio inset hidden with a dialog open"
+    ::w1::log VAL-BRD-020-dialog [list inset [::w1::rect $w] board [dict get $withDialog bbox:board] \
+        overlap [dict get $withDialog overlap:board]]
+
+    destroy .application.dlgAudioProbe
+    ::w1::wait 500
+    ::application::media::Stop
+    ::w1::wait 500
+    set after [list [$canvas bbox board] $::application::board::Dim(squaresize:Normal) [::w1::rect $pane]]
+    ::w1::assert {$after eq $before} "board or pane left resized after stopping audio"
+    ::w1::assert {![winfo ismapped $w]} "audio inset still mapped after stop"
+    ::w1::assert {![winfo ismapped $handle]} "handle left mapped after stop"
+    return ok
+} -cleanup {
+    catch {destroy .application.dlgAudioProbe}
+    ::w1::cleanup
+} -result ok
+
 # managed board there, rather than the X11 fixture's forced place overlay.
 tcltest::test brd-fullscreen {BRD-009 menu fullscreen drives reserve placement} -setup {
     ::w1::setup [expr {[tk windowingsystem] eq "aqua" ? "default" : "wide"}]
