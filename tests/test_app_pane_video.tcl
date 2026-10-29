@@ -288,4 +288,81 @@ tcltest::test pane-video-008-collapse-resize {restoring a collapse snapshot from
  list [expr {$wide > 500}] [expr {$restored == $wide}]
 } -cleanup {::paneVideo::cleanup} -result {1 1}
 
+# VAL-DLG-033: on a leaf-zoomed board pane the dialog's squeeze owns the
+# inset strip. FitStrip's preferred strip can sit on the other side and be
+# wider; letting it override the squeeze makes the inset reserve and the
+# board's recomputed squeeze reserve alternate on every pass. Measured
+# through the production setReserve requests, with no real player needed.
+namespace eval ::paneVideo { variable requests {}; variable relayouts 0 }
+# Bound a runaway relayout loop so a regression fails this test instead of
+# hanging it: past the limit the relay returns without rebuilding.
+proc ::paneVideo::wrapRelayout {} {
+ rename ::mediainset::Relayout ::paneVideo::realRelayout
+ proc ::mediainset::Relayout {} {
+  if {[incr ::paneVideo::relayouts] > 40} {return}
+  tailcall ::paneVideo::realRelayout
+ }
+}
+proc ::paneVideo::unwrapRelayout {} {
+ if {[llength [info commands ::paneVideo::realRelayout]]} {
+  rename ::mediainset::Relayout {}
+  rename ::paneVideo::realRelayout ::mediainset::Relayout
+ }
+}
+proc ::paneVideo::recordReserve {command code result op} {
+ lappend ::paneVideo::requests [lrange $command 1 end]
+}
+tcltest::test pane-video-033-squeeze-owns-strip {a dialog squeeze keeps its own strip on a zoomed board pane} -setup {
+ set t [::paneVideo::setup]
+ set ::paneVideo::savedMin [wm minsize .application]
+ wm minsize .application 1 1
+} -body {
+ wm geometry .application [::paneVideo::wideGeometry]
+ set deadline [expr {[clock milliseconds]+6000}]
+ while {[winfo width .application] < 1000} {
+  if {[clock milliseconds] > $deadline} {error {window did not grow}}
+  ::paneVideo::wait 50; update
+ }
+ $t zoom [$t leaf board]
+ ::paneVideo::wait 700
+ set pane [::mediainset::Pane]
+ set c $::application::board::Vars(widget:frame)
+ toplevel .application.squeezeProbe
+ wm transient .application.squeezeProbe .application
+ frame .application.squeezeProbe.f -width 359 -height 192
+ pack .application.squeezeProbe.f
+ update idletasks
+ set ::paneVideo::requests {}
+ set ::paneVideo::relayouts 0
+ trace add execution ::application::board::setReserve leave ::paneVideo::recordReserve
+ ::paneVideo::wrapRelayout
+ ::mediainset::SqueezeForDialog .application.squeezeProbe left [::mediainset::MinimumStrip] 0
+ ::paneVideo::wait 600
+ set settled {}
+ foreach i {1 2 3 4} { lappend settled [list $::application::board::ReserveSide $::application::board::ReservePixels $::application::board::ReserveKind]; update; ::paneVideo::wait 50 }
+ trace remove execution ::application::board::setReserve leave ::paneVideo::recordReserve
+ ::paneVideo::unwrapRelayout
+ set asked {}
+ foreach r $::paneVideo::requests { if {[lindex $r 0] ne {}} { lappend asked [lrange $r 0 2] } }
+ puts "PANE-VIDEO-033-SQUEEZE relayouts=$::paneVideo::relayouts requests=$::paneVideo::requests settled=$settled"
+ # Every request made while the squeeze is in force is the squeeze itself,
+ # never FitStrip's wider strip on the other side, and the state is stable.
+ set squeezeOk [expr {[llength $asked] > 0 && [lsearch -exact -not $asked [list left [::mediainset::MinimumStrip] squeeze]] < 0}]
+ set stable [expr {[llength [lsort -unique $settled]] == 1}]
+ set side [lindex [lindex $settled 0] 0]
+ ::mediainset::ClearSqueeze .application.squeezeProbe
+ list $squeezeOk $stable [expr {$side eq "left"}] [expr {$::paneVideo::relayouts <= 20}]
+} -cleanup {
+ catch {::mediainset::ClearSqueeze .application.squeezeProbe}
+ ::paneVideo::unwrapRelayout
+ catch {trace remove execution ::application::board::setReserve leave ::paneVideo::recordReserve}
+ catch {destroy .application.squeezeProbe}
+ if {[info exists ::paneVideo::savedMin]} {
+  wm minsize .application {*}$::paneVideo::savedMin
+  unset ::paneVideo::savedMin
+ }
+ catch {[::application::reflow::boardTwm] zoom {}}
+ ::paneVideo::cleanup
+} -result {1 1 1 1}
+
 tcltest::cleanupTests

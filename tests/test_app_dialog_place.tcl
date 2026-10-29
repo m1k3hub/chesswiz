@@ -2680,5 +2680,127 @@ tcltest::test dlg-v22-review-native-left {listbox and its scrollbar remain opera
  return 1
 } -cleanup {::scidb::test::dlgplace::realCleanup} -result 1
 
+# VAL-DLG-033: leaving focus-follows-size zoom must put the pre-zoom pane
+# sizes back exactly. focuszoom::Restore used to re-place every recorded
+# sash; Tk re-clamps a sash that holds a pane below its -minsize, so the
+# analysis pane (269 px against a 300 px minimum at 1000x600) snapped to the
+# minimum and never returned.
+proc ::scidb::test::dlgplace::paneSizes {} {
+    set t [::application::reflow::boardTwm]
+    set result {}
+    foreach uid [$t leaves] {
+        lassign [$t dimension [$t leaf $uid]] w h
+        dict set result $uid [list $w $h]
+    }
+    return $result
+}
+tcltest::test dlg-033-focus-zoom-restore {leaving focus zoom restores the pre-zoom pane sizes exactly} -setup {
+    ::scidb::test::dlgplace::setupBoard
+    set ::scidb::test::dlgplace::savedMin [wm minsize .application]
+    wm minsize .application 1 1
+} -body {
+    set t [::application::reflow::boardTwm]
+    wm geometry .application [::scidb::test::dlgplace::fitGeometry 994 573]
+    ::scidb::test::dlgplace::waitFor 1200
+    set before [::scidb::test::dlgplace::paneSizes]
+    ::application::focuszoom::enable $t
+    ::application::focuszoom::growPane $t [$t leaf board]
+    ::scidb::test::dlgplace::waitFor 900
+    set grown [::scidb::test::dlgplace::paneSizes]
+    ::application::focuszoom::disable $t
+    ::scidb::test::dlgplace::waitFor 900
+    set after [::scidb::test::dlgplace::paneSizes]
+    puts "DLG-033-FOCUS before=$before grown=[dict get $grown board] after=[dict get $after board] restored=[expr {$after eq $before}]"
+    list [expr {$grown ne $before}] [expr {$after eq $before}]
+} -cleanup {
+    catch {::application::focuszoom::disable [::application::reflow::boardTwm]}
+    if {[info exists ::scidb::test::dlgplace::savedMin]} {
+        wm minsize .application {*}$::scidb::test::dlgplace::savedMin
+        unset ::scidb::test::dlgplace::savedMin
+    }
+    ::scidb::test::dlgplace::stopTrace
+    ::scidb::test::dlgplace::noRoomCleanup
+} -result {1 1}
+
+
+# VAL-DLG-033: with a playing video and a playing dialog on a leaf-zoomed
+# board pane, the dialog's squeeze must own the inset strip. FitStrip's
+# preferred strip can sit on the other side and be wider; taking it makes the
+# inset and the board's recomputed squeeze reserve alternate, and every pass
+# queues another Relayout, so ::playengine::open never returns. The relay is
+# wrapped so a regression ends in a bounded count instead of a hang: past the
+# limit the relay returns without rebuilding, the cycle stops, and the count
+# assertion fails.
+namespace eval ::scidb::test::dlgplace { variable relayouts 0 }
+proc ::scidb::test::dlgplace::wrapRelayout {} {
+    rename ::mediainset::Relayout ::scidb::test::dlgplace::realRelayout
+    proc ::mediainset::Relayout {} {
+        if {[incr ::scidb::test::dlgplace::relayouts] > 40} {return}
+        tailcall ::scidb::test::dlgplace::realRelayout
+    }
+}
+proc ::scidb::test::dlgplace::unwrapRelayout {} {
+    if {[llength [info commands ::scidb::test::dlgplace::realRelayout]]} {
+        rename ::mediainset::Relayout {}
+        rename ::scidb::test::dlgplace::realRelayout ::mediainset::Relayout
+    }
+}
+tcltest::test dlg-033-zoom-squeeze {a playing dialog on a zoomed board pane settles and the video returns} -setup {
+    ::scidb::test::dlgplace::setupBoard
+    set ::scidb::test::dlgplace::savedMin [wm minsize .application]
+    wm minsize .application 1 1
+    wm geometry .application [::scidb::test::dlgplace::fitGeometry 1.0 1.0]
+    ::scidb::test::dlgplace::waitFor 1200
+    ::scidb::test::dlgplace::realVideo
+} -body {
+    set t [::application::reflow::boardTwm]
+    $t zoom [$t leaf board]
+    ::scidb::test::dlgplace::waitFor 900
+    set pane [::mediainset::Pane]
+    set insetBefore [::scidb::test::dlgplace::widgetRect $pane.mediainset]
+    set panesBefore [::scidb::test::dlgplace::paneSizes]
+    set ::scidb::test::dlgplace::relayouts 0
+    ::scidb::test::dlgplace::wrapRelayout
+    set rc [catch {::playengine::open .application} err]
+    ::scidb::test::dlgplace::unwrapRelayout
+    if {$rc} {error "dialog placement did not settle: $err"}
+    ::scidb::test::dlgplace::waitFor 700
+    set dlg .application.playengine
+    set canvas $::application::board::Vars(widget:frame)
+    set covered 0
+    foreach tag {board stm material} {
+        if {[llength [$canvas bbox $tag]] != 4} {continue}
+        lassign [$canvas bbox $tag] x y xx yy
+        lassign [::scidb::test::dlgplace::widgetRect $dlg] dx dy dw dh
+        set bx [expr {$x+[winfo rootx $canvas]}]; set by [expr {$y+[winfo rooty $canvas]}]
+        incr covered [expr {max(0,min($bx+$xx-$x,$dx+$dw)-max($bx,$dx))*max(0,min($by+$yy-$y,$dy+$dh)-max($by,$dy))}]
+    }
+    puts "DLG-033-SQUEEZE relayouts=$::scidb::test::dlgplace::relayouts dialog=[::scidb::test::dlgplace::widgetRect $dlg] covered=$covered inset=[::scidb::test::dlgplace::widgetRect $pane.mediainset]"
+    ::playengine::Close
+    set start [clock milliseconds]
+    while {[::scidb::test::dlgplace::widgetRect $pane.mediainset] ne $insetBefore
+        && [clock milliseconds] - $start <= 500} {
+        ::scidb::test::dlgplace::waitFor 25
+    }
+    set returned [expr {[::scidb::test::dlgplace::widgetRect $pane.mediainset] eq $insetBefore}]
+    $t zoom {}
+    ::scidb::test::dlgplace::waitFor 500
+    set panesAfter [::scidb::test::dlgplace::paneSizes]
+    list [expr {$covered == 0}] $returned [expr {$panesAfter eq $panesBefore}] \
+        [expr {$::scidb::test::dlgplace::relayouts <= 20}]
+} -cleanup {
+    catch {::playengine::Close}
+    catch {destroy .application.playengine}
+    ::scidb::test::dlgplace::unwrapRelayout
+    if {[info exists ::scidb::test::dlgplace::savedMin]} {
+        wm minsize .application {*}$::scidb::test::dlgplace::savedMin
+        unset ::scidb::test::dlgplace::savedMin
+    }
+    catch {[::application::reflow::boardTwm] zoom {}}
+    catch {::application::media::Stop}
+    ::scidb::test::dlgplace::stopTrace
+    ::scidb::test::dlgplace::noRoomCleanup
+} -result {1 1 1 1}
+
 
 tcltest::cleanupTests

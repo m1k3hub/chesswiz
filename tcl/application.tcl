@@ -1092,6 +1092,17 @@ proc focuszoom::Restore {twm snapshot} {
 		update idletasks
 		foreach {w coords} $snapshot {
 			if {![winfo exists $w]} { continue }
+			# A sash already at its recorded coordinate needs no placement.
+			# Placing it anyway makes Tk re-clamp it: the window's own
+			# arrangement can hold a pane below its -minsize until a sash is
+			# moved (measured at 1000x600, where the analysis pane sits at
+			# 269 px against a 300 px minimum), so a re-place would silently
+			# restore the minimum instead of the pre-zoom pane sizes.
+			set current {}
+			for {set i 0} {$i < [llength [$w panes]] - 1} {incr i} {
+				lappend current [$w sash coord $i]
+			}
+			if {$current eq $coords} { continue }
 			set i 0
 			foreach xy $coords { catch { $w sash place $i {*}$xy }; incr i }
 		}
