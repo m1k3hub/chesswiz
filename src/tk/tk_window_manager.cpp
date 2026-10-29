@@ -776,7 +776,7 @@ static int
 cmdWM(ClientData, Tcl_Interp *ti, int objc, Tcl_Obj* const objv[])
 {
 	char const* Usage =	"Usage: ::scidb::tk::wm (frameless | splash | toolbar | menu | grid "
-								"| setLeader | map | raise | sync | desktop | ondesktop | workarea | monitor | dpi) <window> ...";
+								"| setLeader | map | raise | sync | desktop | ondesktop | workarea | workareas | monitor | dpi) <window> ...";
 
 	if (objc < 2)
 		return tcl_error(ti, Usage);
@@ -926,6 +926,122 @@ cmdWM(ClientData, Tcl_Interp *ti, int objc, Tcl_Obj* const objv[])
 		}
 #endif
 		Tcl_SetObjResult(ti, Tcl_NewDoubleObj(dpi));
+		return TCL_OK;
+	}
+	else if (strcasecmp(subcmd, "workareas") == 0)
+	{
+		// Every monitor's work area, the monitor hosting <window> first: a
+		// dialog may leave the main window only onto free desktop space, and
+		// only crosses to another monitor when its own has none (VAL-DLG-026).
+		Tcl_Obj* list = Tcl_NewListObj(0, 0);
+		Tcl_IncrRefCount(list);
+
+#if defined(__WIN32__)
+		Tk_MakeWindowExist(tkwin);
+		MONITORINFO info = {};
+		info.cbSize = sizeof(info);
+		if (GetMonitorInfo(MonitorFromWindow(TkWinGetHWND(Tk_WindowId(tkwin)),
+							MONITOR_DEFAULTTONEAREST), &info))
+		{
+			Tcl_Obj* objs[4] =
+			{
+				Tcl_NewIntObj(info.rcWork.left),
+				Tcl_NewIntObj(info.rcWork.top),
+				Tcl_NewIntObj(info.rcWork.right - info.rcWork.left),
+				Tcl_NewIntObj(info.rcWork.bottom - info.rcWork.top)
+			};
+			Tcl_ListObjAppendElement(ti, list, Tcl_NewListObj(4, objs));
+		}
+#elif defined(__APPLE__)
+		int geometry[4] = {};
+		chesswizAquaGeometry(tkwin, 1, geometry);
+		Tcl_Obj* objs[4] =
+		{
+			Tcl_NewIntObj(geometry[0]), Tcl_NewIntObj(geometry[1]),
+			Tcl_NewIntObj(geometry[2]), Tcl_NewIntObj(geometry[3])
+		};
+		Tcl_ListObjAppendElement(ti, list, Tcl_NewListObj(4, objs));
+#else
+		using namespace monitor_geometry;
+		Display* display = Tk_Display(tkwin);
+		Window root = RootWindowOfScreen(Tk_Screen(tkwin));
+		Rect desktop;
+		if (!getDesktopWorkArea(display, root, getDesktop(tkwin), desktop)
+			&& !getDesktopWorkArea(display, root, getCurrentDesktop(display), desktop))
+		{
+			desktop.left = 0;
+			desktop.right = 0;
+			desktop.width = WidthOfScreen(Tk_Screen(tkwin));
+			desktop.height = HeightOfScreen(Tk_Screen(tkwin));
+		}
+		Rectangle free(desktop.left, desktop.right, desktop.width, desktop.height);
+		Rectangle containing = getMonitor(tkwin);
+		int event, error, major = 1, minor = 5, count = 0;
+		XRRMonitorInfo* monitors = 0;
+		if (XRRQueryExtension(display, &event, &error)
+			&& XRRQueryVersion(display, &major, &minor)
+			&& (major > 1 || (major == 1 && minor >= 5)))
+		{
+			monitors = XRRGetMonitors(display, root, True, &count);
+		}
+		int match = -1;
+		for (int i = 0; monitors && i < count; ++i)
+		{
+			if (monitors[i].x == containing.x && monitors[i].y == containing.y
+				&& monitors[i].width == containing.width
+				&& monitors[i].height == containing.height) { match = i; break; }
+		}
+		// Two passes: the main window's monitor first, then the others.
+		for (int pass = 0; pass < 2 && monitors; ++pass)
+		{
+			for (int i = 0; i < count; ++i)
+			{
+				if ((pass == 0) != (i == match)) continue;
+				Rectangle r = intersect(Rectangle(monitors[i].x, monitors[i].y,
+					monitors[i].width, monitors[i].height), free);
+				if (r.width <= 0 || r.height <= 0) continue;
+				Tcl_Obj* objs[4] =
+				{
+					Tcl_NewIntObj(r.x), Tcl_NewIntObj(r.y),
+					Tcl_NewIntObj(r.width), Tcl_NewIntObj(r.height)
+				};
+				Tcl_ListObjAppendElement(ti, list, Tcl_NewListObj(4, objs));
+			}
+		}
+		if (monitors) XRRFreeMonitors(monitors);
+		int have = 0;
+		Tcl_ListObjLength(0, list, &have);
+		if (have == 0 && XineramaIsActive(display))
+		{
+			XineramaScreenInfo* screens = XineramaQueryScreens(display, &count);
+			for (int i = 0; screens && i < count; ++i)
+			{
+				Rectangle r = intersect(Rectangle(screens[i].x_org, screens[i].y_org,
+					screens[i].width, screens[i].height), free);
+				if (r.width <= 0 || r.height <= 0) continue;
+				Tcl_Obj* objs[4] =
+				{
+					Tcl_NewIntObj(r.x), Tcl_NewIntObj(r.y),
+					Tcl_NewIntObj(r.width), Tcl_NewIntObj(r.height)
+				};
+				Tcl_ListObjAppendElement(ti, list, Tcl_NewListObj(4, objs));
+			}
+			if (screens) XFree(screens);
+		}
+		Tcl_ListObjLength(0, list, &have);
+		if (have == 0)
+		{
+			Tcl_Obj* objs[4] =
+			{
+				Tcl_NewIntObj(free.x), Tcl_NewIntObj(free.y),
+				Tcl_NewIntObj(free.width), Tcl_NewIntObj(free.height)
+			};
+			Tcl_ListObjAppendElement(ti, list, Tcl_NewListObj(4, objs));
+		}
+#endif
+
+		Tcl_SetObjResult(ti, list);
+		Tcl_DecrRefCount(list);
 		return TCL_OK;
 	}
 	else if (strcasecmp(subcmd, "workarea") == 0 || strcasecmp(subcmd, "monitor") == 0)

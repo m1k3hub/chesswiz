@@ -699,6 +699,144 @@ proc besidePosition {bx by bw bh dw dh workarea {extents {16 0 40 0}} {gap 12}} 
 	return [dict get [besidePlan $bx $by $bw $bh $dw $dh $workarea $extents $gap] geometry]
 }
 
+# VAL-DLG-022/024: the smallest size the in-window ladder can reduce a
+# dialog to. A viewport body scrolls down to the compact minimum; any other
+# body cannot reflow below its natural request.
+proc besideCompactMinimum {dlg rw rh} {
+	if {[winfo exists $dlg.__viewport]} {
+		return [list [expr {min(240,$rw)}] [expr {min(180,$rh)}]]
+	}
+	return [list $rw $rh]
+}
+
+# The monitor work areas a dialog may use, the monitor hosting the main
+# window first (VAL-DLG-026: only cross to another monitor when that one has
+# no free desktop space). Falls back to the window manager's single area when
+# the platform cannot enumerate monitors.
+proc besideMonitorAreas {dlg} {
+	variable mainWindow
+	set window $dlg
+	if {[winfo exists $mainWindow]} { set window $mainWindow }
+	set areas {}
+	if {[llength [info commands ::scidb::tk::wm]]} {
+		catch { set areas [::scidb::tk::wm workareas $window] }
+	}
+	set valid {}
+	foreach area $areas {
+		if {[llength $area] != 4} { continue }
+		lassign $area ax ay aw ah
+		if {$aw < 1 || $ah < 1} { continue }
+		lappend valid $area
+	}
+	if {![llength $valid]} { set valid [list [besideWorkArea $dlg]] }
+	return $valid
+}
+
+# VAL-DLG-024/025/036: the measured gate for the outside route. Only the
+# last in-window rung failing is sufficient: the ladder left an overlapping
+# rectangle, a peer-free one, or one below the compact/scroll minimum.
+proc besideOutsideWanted {dlg plan rw rh} {
+	if {![dict exists $plan geometry]} { return 1 }
+	set rule [expr {[dict exists $plan rule] ? [dict get $plan rule] : ""}]
+	if {$rule eq "outside"} { return 1 }
+	if {[dict exists $plan overlap] && [dict get $plan overlap] > 0} { return 1 }
+	if {[dict exists $plan peerFree] && ![dict get $plan peerFree]} { return 1 }
+	if {[dict exists $plan record]
+		&& [besidePlanPeerOverlap $plan [besidePeers $dlg] [besideDialogExtents $dlg]]} {
+		return 1
+	}
+	lassign [dict get $plan geometry] _ _ pw ph
+	lassign [besideCompactMinimum $dlg $rw $rh] minw minh
+	return [expr {$pw < $minw || $ph < $minh}]
+}
+
+# VAL-DLG-024/025/026: free desktop space outside the main window. <main> is
+# the main window's native frame. Returns a plan with the stable rule token
+# 'outside' when the dialog fits wholly inside a monitor work area and wholly
+# outside the main window (so it can never cover the board or its indicators);
+# empty when no monitor has such space, leaving the caller's in-window
+# minimum-overlap fallback in force (VAL-DLG-035).
+proc besideOutsidePlan {dlg main dw dh extents gap {rw ""} {rh ""}} {
+	if {[llength $main] != 4} { return {} }
+	lassign $main mx my mw mh
+	lassign $extents el er et eb
+	set fw [expr {$el+$er}]
+	set fh [expr {$et+$eb}]
+	if {$rw eq ""} { set rw $dw }
+	if {$rh eq ""} { set rh $dh }
+	lassign [besideCompactMinimum $dlg $rw $rh] minw minh
+	set board [besideBoardRect]
+	set peers [besidePeers $dlg]
+	set best {}
+	set bestSize -1
+	foreach area [besideMonitorAreas $dlg] {
+		lassign $area wx wy ww wh
+		set candidates {}
+		# The four strips of free desktop around the main window inside this
+		# monitor. Values are the client width and height each strip can hold.
+		foreach {side x y maxw maxh} [list \
+			right [expr {$mx+$mw+$gap}] $my \
+				[expr {$wx+$ww-($mx+$mw+$gap)-$fw}] [expr {$wh-$fh}] \
+			left [expr {$mx-$gap-$fw}] $my \
+				[expr {$mx-$gap-$wx-$fw}] [expr {$wh-$fh}] \
+			below $mx [expr {$my+$mh+$gap}] \
+				[expr {$ww-$fw}] [expr {$wy+$wh-($my+$mh+$gap)-$fh}] \
+			above $mx [expr {$my-$gap-$fh}] \
+				[expr {$ww-$fw}] [expr {$my-$gap-$wy-$fh}]] {
+			if {$maxw < $minw || $maxh < $minh} { continue }
+			# Largest placement that keeps the requested size where it fits and
+			# falls back no lower than the compact/scroll minimum.
+			set w [expr {min($dw,$maxw)}]
+			set h [expr {min($dh,$maxh)}]
+			set cx [expr {max($wx,min($x,$wx+$ww-$w-$fw))}]
+			set cy [expr {max($wy,min($y,$wy+$wh-$h-$fh))}]
+			# Some X11 window managers read an exact +0+0 request as "no
+			# position given" and place the dialog at its parent's origin
+			# instead (measured with openbox on a monitor layout that starts
+			# at the screen origin). One pixel keeps the requested placement
+			# inside the work area and still clear of the main window, which
+			# the candidate only ever starts beyond.
+			if {$cx == 0 && $cy == 0} { set cx 1; set cy 1 }
+			set rect [list $cx $cy [expr {$w+$fw}] [expr {$h+$fh}]]
+			if {![besideInside $rect $area]} { continue }
+			if {[besideOverlap $rect $main] > 0} { continue }
+			if {$board ne {} && [besideOverlap $rect $board] > 0} { continue }
+			set blocked 0
+			foreach peer $peers {
+				if {[besideOverlap $rect [besidePeerRect $peer]] > 0} {
+					set blocked 1
+					break
+				}
+			}
+			if {$blocked} { continue }
+			dict set candidates $side [list $cx $cy $w $h]
+			set size [expr {$w*$h}]
+			# Prefer the largest placement; ties keep right/left/below/above
+			# order, and the first monitor (the main window's) wins.
+			if {$best eq {} || $size > $bestSize} {
+				set best [list $area $side [list $cx $cy $w $h] $candidates]
+				set bestSize $size
+			}
+		}
+	}
+	if {$best eq {}} { return {} }
+	lassign $best area side geometry candidates
+	lassign $geometry x y w h
+	set record {}
+	dict for {cside cgeom} $candidates {
+		lassign $cgeom cx cy cw ch
+		set rect [list $cx $cy [expr {$cw+$fw}] [expr {$ch+$fh}]]
+		set boardArea [expr {$board eq {} ? 0 : [besideOverlap $rect $board]}]
+		set peerArea 0
+		foreach peer $peers { incr peerArea [besideOverlap $rect [besidePeerRect $peer]] }
+		dict set record $cside [list rect $rect board $boardArea peer $peerArea \
+			chosen [expr {$cside eq $side}]]
+	}
+	return [dict create geometry $geometry rule outside side $side overlap 0 \
+		resized [expr {$w < $rw || $h < $rh}] candidates $candidates \
+		record $record workarea $area main $main minimumFits 1 outside 1]
+}
+
 
 # Root rectangle {x y width height} of a mapped board, or {} when the board
 # cannot be placed against yet.
@@ -1513,6 +1651,10 @@ proc besideTriggerFor {dlg parentRect boardRect} {
 # the main window's frame (the same area BesideBoardPlan plans against).
 proc besideMainArea {dlg {fresh 0} {parent ""}} {
 	variable BesideState
+	# VAL-DLG-024/026: a dialog the planner placed outside the main window is
+	# bounded by the work area of the monitor it landed on, never by the frame
+	# it intentionally left.
+	if {[info exists BesideState($dlg,outside)]} { return $BesideState($dlg,outside) }
 	set workarea [expr {$fresh ? [winfo workarea $dlg] : [besideWorkArea $dlg]}]
 	if {$parent eq ""} {
 		if {![info exists BesideState($dlg,parent)]} { return $workarea }
@@ -2791,6 +2933,7 @@ proc BesideBoardPlan {dlg parent {retry 0}} {
 	set dw [expr {min($maxw, max($rw, $mw))}]
 	set dh [expr {min($maxh, max($rh, $mh))}]
 	set workarea [besideWorkArea $dlg]
+	set mainRect {}
 	if {[winfo exists $parent]} {
 		set pTop [winfo toplevel $parent]
 		lassign [winfo extents $pTop] pel per pet peb
@@ -2820,6 +2963,7 @@ proc BesideBoardPlan {dlg parent {retry 0}} {
 		}
 		set native [besideNativeFrame $pTop]
 		if {[llength $native] == 4} { lassign $native px py pw ph }
+		set mainRect [list $px $py $pw $ph]
 		lassign $workarea wx wy ww wh
 		set x0 [expr {max($wx, $px)}]
 		set y0 [expr {max($wy, $py)}]
@@ -3106,14 +3250,29 @@ proc BesideBoardPlan {dlg parent {retry 0}} {
 			if {[llength $peers]} { dict set plan pair 1 }
 		}
 	}
+	# VAL-DLG-024/025/036: the in-window ladder above is the preference. Only
+	# when its last rung still cannot hold the compact/scroll minimum clear of
+	# the board may the dialog leave the main window for free desktop space
+	# (mission-002 user decision, 2026-10-28). The gate is the measured plan:
+	# overlap, peer clearance and the realised size decide, not the window size.
+	if {$mainRect ne {} && [besideOutsideWanted $dlg $plan $rw $rh]} {
+		set outside [besideOutsidePlan $dlg $mainRect $dw $dh $extents 0 $rw $rh]
+		if {[llength $outside]} { set plan $outside }
+	}
 	# Idle geometry work during planning can change the live parent frame.
 	# Recompute candidates against it rather than applying a stale minimum.
+	# An outside plan is bounded by its monitor work area, not the window.
+	unset -nocomplain BesideState($dlg,outside)
 	set liveArea [besideMainArea $dlg 0 $parent]
-	if {$liveArea ne $workarea && $retry < 2} {
+	if {[dict get $plan rule] ne "outside" && $liveArea ne $workarea && $retry < 2} {
 		return [BesideBoardPlan $dlg $parent [expr {$retry+1}]]
 	}
 	lassign [dict get $plan geometry] x y w h
-	set bounded [clampGeometry "${w}x${h}+${x}+${y}" $liveArea $extents]
+	set clampArea $liveArea
+	if {[dict get $plan rule] eq "outside" && [dict exists $plan workarea]} {
+		set clampArea [dict get $plan workarea]
+	}
+	set bounded [clampGeometry "${w}x${h}+${x}+${y}" $clampArea $extents]
 	regexp {^([0-9]+)x([0-9]+)\+(-?[0-9]+)\+(-?[0-9]+)$} $bounded -> w h x y
 	dict set plan geometry [list $x $y $w $h]
 	# openbox applies +x to the client, not the frame: at the left edge of
@@ -3154,8 +3313,18 @@ proc BesideBoardPlan {dlg parent {retry 0}} {
 	set BesideState($dlg,trigger) $BesideTrigger
 	# A genuinely tiny work area can still force the frame over the pane.
 	# The inset must never be the window that loses: move or shrink it
-	# inside the pane first (restored on close/media stop).
-	if {!$foreign} { besideDodgeVideo $dlg $x $y $w $h $extents }
+	# inside the pane first (restored on close/media stop). A dialog placed
+	# outside the main window never touches the pane (VAL-DLG-024).
+	if {!$foreign && [dict get $plan rule] ne "outside"} {
+		besideDodgeVideo $dlg $x $y $w $h $extents
+	}
+	# VAL-DLG-024/026: an outside placement is bounded by its monitor work
+	# area; the containment guard must not pull it back into the window.
+	if {[dict get $plan rule] eq "outside" && [dict exists $plan workarea]} {
+		set BesideState($dlg,outside) [dict get $plan workarea]
+	} else {
+		unset -nocomplain BesideState($dlg,outside)
+	}
 	besideRegistryAdd $dlg $parent
 	catch { ::mediainset::ProtectPlayingBoard }
 	# VAL-DLG-017B: every beside-board call registers a live reserve owner

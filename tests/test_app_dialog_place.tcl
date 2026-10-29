@@ -246,11 +246,23 @@ proc ::scidb::test::dlgplace::check {target dlg {wantRule ""}} {
     require [expr {$w == [winfo width $dlg] && $h == [winfo height $dlg]}] "$target: unsettled client size"
     set requested [list [winfo reqwidth $dlg] [winfo reqheight $dlg]]
     # A below-minimum strip (shrink/no-room) must stay usable; a reserved or
-    # fitting placement keeps the requested size.
+    # fitting placement keeps the requested size. An outside placement keeps
+    # the requested size or the compact/scroll minimum, whichever fits on the
+    # free desktop (VAL-DLG-024: outside+compacted is representable).
     if {$rule eq "scroll"} {
         require [expr {$w >= min(240,[lindex $requested 0]) && $h >= min(180,[lindex $requested 1])}] "$target: below scrolling minimum"
     } elseif {$rule in {shrink no-room}} {
         require [expr {$w >= 1 && $h >= 1}] "$target: degenerate ${w}x${h}"
+    } elseif {$rule eq "outside"} {
+        set floorW [expr {min(240,[lindex $requested 0])}]
+        set floorH [expr {min(180,[lindex $requested 1])}]
+        if {[dict get $plan resized]} {
+            require [expr {$w >= $floorW && $h >= $floorH}] \
+                "$target: below scrolling minimum outside ${w}x${h}"
+        } else {
+            require [expr {$w >= [lindex $requested 0] && $h >= [lindex $requested 1]}] \
+                "$target: outside ${w}x${h} clips requested $requested"
+        }
     } else {
         require [expr {$w >= [lindex $requested 0] && $h >= [lindex $requested 1]}] \
             "$target: final ${w}x${h} clips requested $requested"
@@ -261,22 +273,46 @@ proc ::scidb::test::dlgplace::check {target dlg {wantRule ""}} {
     set area [overlapArea $outer $board]
     # Independent candidate oracle, evaluated at FINAL dimensions, including frame.
     lassign $board bx by bw bh
-    lassign $wa wx wy ww wh
     lassign $outer _ _ fw fh
     set areas {}
+    # The ladder clamps inside the main window's work area; a no-room plan is
+    # measured against the same rectangle, an in-window plan against the
+    # monitor work area that already contains it.
+    set clampArea [expr {$rule eq "no-room" ? [windowWorkArea] : $wa}]
+    lassign $clampArea wx wy ww wh
     foreach {side cx cy} [list right [expr {$bx+$bw+12}] $by left [expr {$bx-12-$fw}] $by below $bx [expr {$by+$bh+12}]] {
         set cx [expr {max($wx,min($cx,$wx+$ww-$fw))}]
         set cy [expr {max($wy,min($cy,$wy+$wh-$fh))}]
         dict set areas $side [overlapArea [list $cx $cy $fw $fh] $board]
     }
-    if {$rule ni {shrink scroll}} {
-        require [expr {$area == [tcl::mathfunc::min {*}[dict values $areas]]}] "$target: overlap $area is not minimum of $areas"
-    }
-    if {$rule ne "shrink"} {require [expr {$area == 0}] "$target: $rule overlaps $area"}
-    if {$rule eq "no-room"} {
-        # No strip holds the minimum: this is the largest overlap-free forced
-        # strip, never an overlap allowance.
-        require [expr {$area == 0}] "$target: no-room plan overlaps $area"
+    if {$rule eq "outside"} {
+        # VAL-DLG-024/026: the dialog left the main window deliberately. It
+        # must be board-clear, wholly outside the main window frame, and
+        # wholly inside the work area the helper planned against.
+        set planArea [expr {[dict exists $plan workarea] ? [dict get $plan workarea] : $wa}]
+        require [inside $outer $planArea] "$target: outside frame $outer outside $planArea"
+        set mainFrame [::scidb::tk::wm frame .application]
+        if {[llength $mainFrame] != 4} {
+            lassign [wm geometry .application] _ _ gx gy
+            lassign [winfo extents .application] xl xr xt xb
+            set mainFrame [list $gx $gy [expr {[winfo width .application]+$xl+$xr}] \
+                [expr {[winfo height .application]+$xt+$xb}]]
+        }
+        puts "DLG-OUTSIDE $target main=$mainFrame planArea=$planArea outer=$outer"
+        require [expr {[overlapArea $outer $mainFrame] == 0}] \
+            "$target: outside frame $outer overlaps the main window $mainFrame"
+        require [expr {$area == 0}] "$target: outside frame $outer overlaps board $board"
+        require [expr {$wa eq [winfo workarea $dlg]}] "$target: outside on another work area"
+    } else {
+        if {$rule ni {shrink scroll}} {
+            require [expr {$area == [tcl::mathfunc::min {*}[dict values $areas]]}] "$target: overlap $area is not minimum of $areas"
+        }
+        # VAL-DLG-035: with no free desktop space left, no-room is the one
+        # defined case that may cover the board; it must still be the measured
+        # minimum over the ladder's candidates and never leave the work area.
+        if {$rule ni {shrink no-room}} {
+            require [expr {$area == 0}] "$target: $rule overlaps $area"
+        }
     }
     set buttonRects {}
     foreach button [buttons $dlg] {
@@ -941,15 +977,28 @@ proc ::scidb::test::dlgplace::noRoomCheck {target dlg before} {
         [wm geometry $dlg] -> fw fh fx fy] "invalid geometry [wm geometry $dlg]"
     set outer [list $fx $fy [expr {$fw+$el+$er}] [expr {$fh+$et+$eb}]]
     set wa [winfo workarea $dlg]
-    puts "DLG-NOROOM $target boardBefore=$before boardDuring=$during dlg=$client outer=$outer wa=$wa requested=[list [winfo reqwidth $dlg] [winfo reqheight $dlg]] reserve=$::application::board::ReserveSide/$::application::board::ReservePixels"
+    set plan {}
+    if {[info exists ::util::place::BesideLastPlan($dlg)]} {set plan $::util::place::BesideLastPlan($dlg)}
+    set rule [expr {[dict exists $plan rule] ? [dict get $plan rule] : ""}]
+    puts "DLG-NOROOM $target rule=$rule boardBefore=$before boardDuring=$during dlg=$client outer=$outer wa=$wa requested=[list [winfo reqwidth $dlg] [winfo reqheight $dlg]] reserve=$::application::board::ReserveSide/$::application::board::ReservePixels plan=$plan"
     require [expr {[overlapArea $client $during] == 0}] \
         "$target: client $client overlaps board $during"
     require [expr {[overlapArea $outer $during] == 0}] \
         "$target: decorated frame $outer overlaps board $during"
     require [inside $outer $wa] "$target: frame $outer outside $wa"
-    require [expr {[winfo width $dlg] >= [winfo reqwidth $dlg]
-        && [winfo height $dlg] >= [winfo reqheight $dlg]}] \
-        "$target: dialog [winfo width $dlg]x[winfo height $dlg] clips requested [list [winfo reqwidth $dlg] [winfo reqheight $dlg]]"
+    if {$rule eq "outside"} {
+        # VAL-DLG-024: free desktop space outside the main window.
+        lassign [::scidb::tk::wm frame .application] mx my mw mh
+        require [expr {![overlapArea $outer [list $mx $my $mw $mh]]}] \
+            "$target: outside frame $outer overlaps the main window"
+        require [expr {[winfo width $dlg] >= min(240,[winfo reqwidth $dlg])
+            && [winfo height $dlg] >= min(180,[winfo reqheight $dlg])}] \
+            "$target: outside dialog below the usable minimum"
+    } else {
+        require [expr {[winfo width $dlg] >= [winfo reqwidth $dlg]
+            && [winfo height $dlg] >= [winfo reqheight $dlg]}] \
+            "$target: dialog [winfo width $dlg]x[winfo height $dlg] clips requested [list [winfo reqwidth $dlg] [winfo reqheight $dlg]]"
+    }
     requireControls $target $dlg
     return 1
 }
@@ -2396,10 +2445,13 @@ tcltest::test dlg-v22-trainers {trainers use the native scrolling body} -setup {
     ::scidb::test::dlgplace::realCleanup
 } -result 1
 
-tcltest::test dlg-v22-minimum-fallback {infeasible minimum uses overlap fallback; default button remains keyboard reachable} -setup {
+tcltest::test dlg-v22-minimum-fallback {the measured gate goes outside at 400x380; with no desktop space no-room minimises overlap} -setup {
     ::scidb::test::dlgplace::setupBoard
     wm minsize .application 1 1
 } -body {
+    # VAL-DLG-024/036: at the lowered-minimum geometry the compact/scroll
+    # minimum cannot be placed inside, so the dialog goes to free desktop
+    # space outside the main window, board-clear.
     wm geometry .application [::scidb::test::dlgplace::fitGeometry 400 380]
     ::scidb::test::dlgplace::waitFor 700
     ::enginematch::open .application
@@ -2408,18 +2460,20 @@ tcltest::test dlg-v22-minimum-fallback {infeasible minimum uses overlap fallback
     set plan $::util::place::BesideLastPlan($dlg)
     set frame [::scidb::test::dlgplace::outerRect $dlg]
     set board [::scidb::test::dlgplace::boardRect]
-    puts "DLG022 MINIMUM frame=$frame board=$board plan=$plan"
-    ::scidb::test::dlgplace::require [expr {[dict get $plan rule] eq "no-room" && [winfo width $dlg]>=240 && [winfo height $dlg]>=180}] "unusable fallback"
-    lassign [::scidb::test::dlgplace::windowWorkArea] wx wy ww wh
-    lassign $board bx by bw bh
-    lassign $frame _ _ fw fh
-    set areas {}
-    foreach {x y} [list [expr {$bx+$bw+12}] $by [expr {$bx-12-$fw}] $by $bx [expr {$by+$bh+12}]] {
-        set x [expr {max($wx,min($x,$wx+$ww-$fw))}]
-        set y [expr {max($wy,min($y,$wy+$wh-$fh))}]
-        lappend areas [::scidb::test::dlgplace::overlapArea [list $x $y $fw $fh] $board]
-    }
-    ::scidb::test::dlgplace::require [expr {[::scidb::test::dlgplace::overlapArea $frame $board] == [tcl::mathfunc::min {*}$areas]}] "fallback did not minimise overlap"
+    set wa [winfo workarea $dlg]
+    lassign [::scidb::tk::wm frame .application] mx my mw mh
+    puts "DLG022 OUTSIDE frame=$frame board=$board main=[wm geometry .application] workarea=$wa plan=$plan"
+    ::scidb::test::dlgplace::require [expr {[dict get $plan rule] eq "outside"}] \
+        "the gate did not take the outside route: $plan"
+    ::scidb::test::dlgplace::require [expr {[dict get $plan resized] in {0 1}}] "resized is not a boolean"
+    ::scidb::test::dlgplace::require [expr {![::scidb::test::dlgplace::overlapArea $frame $board]}] \
+        "outside dialog covers the board"
+    ::scidb::test::dlgplace::require [::scidb::test::dlgplace::inside $frame $wa] \
+        "outside frame $frame outside the work area $wa"
+    ::scidb::test::dlgplace::require [expr {![::scidb::test::dlgplace::overlapArea $frame [list $mx $my $mw $mh]]}] \
+        "outside frame $frame overlaps the main window frame [list $mx $my $mw $mh]"
+    ::scidb::test::dlgplace::require [expr {[winfo width $dlg]>=min(240,[winfo reqwidth $dlg]) && [winfo height $dlg]>=min(180,[winfo reqheight $dlg])}] \
+        "outside placement below the usable minimum"
     set body [::util::place::playingBody $dlg]
     set ::scidb::test::dlgplace::defaultInvoked 0
     $body.ok configure -command {set ::scidb::test::dlgplace::defaultInvoked 1}
@@ -2430,6 +2484,44 @@ tcltest::test dlg-v22-minimum-fallback {infeasible minimum uses overlap fallback
     ::scidb::test::dlgplace::require $::scidb::test::dlgplace::defaultInvoked "Return default binding lost"
     ::scidb::test::dlgplace::require [::scidb::test::dlgplace::inside [::scidb::test::dlgplace::widgetRect $body.ok] [::scidb::test::dlgplace::widgetRect $dlg.__viewport.canvas]] "default button not revealed"
     ::enginematch::Close
+    ::scidb::test::dlgplace::waitFor 900
+    # VAL-DLG-035: with the main window filling the only monitor's work area
+    # no desktop space exists outside it. The defined fallback is the ladder's
+    # minimum-overlap no-room placement, measured and inside the work area.
+    wm geometry .application [::scidb::test::dlgplace::fitGeometry 1.0 1.0]
+    ::scidb::test::dlgplace::waitFor 1200
+    set fill .application.dlgFill
+    toplevel $fill
+    wm withdraw $fill
+    wm transient $fill .application
+    lassign [winfo workarea .application] wx wy ww wh
+    ttk::frame $fill.content -width $ww -height $wh
+    pack $fill.content -fill both -expand yes
+    ttk::button $fill.ok -text "Keep playing"
+    pack $fill.ok -side left -padx 6 -pady 6
+    ::util::place::besideBoard $fill .application
+    wm deiconify $fill
+    ::scidb::test::dlgplace::waitFor 900
+    set plan $::util::place::BesideLastPlan($fill)
+    set frame [::scidb::test::dlgplace::outerRect $fill]
+    set board [::scidb::test::dlgplace::boardRect]
+    set wa [winfo workarea $fill]
+    puts "DLG022 MINIMUM frame=$frame board=$board main=[wm geometry .application] workarea=$wa plan=$plan"
+    ::scidb::test::dlgplace::require [expr {[dict get $plan rule] eq "no-room"}] \
+        "no free desktop space must take the no-room fallback: $plan"
+    ::scidb::test::dlgplace::require [::scidb::test::dlgplace::inside $frame $wa] \
+        "fallback frame $frame outside the work area $wa"
+    lassign [::scidb::test::dlgplace::windowWorkArea] ax ay aw ah
+    lassign $board bx by bw bh
+    lassign $frame _ _ fw fh
+    set areas {}
+    foreach {x y} [list [expr {$bx+$bw+12}] $by [expr {$bx-12-$fw}] $by $bx [expr {$by+$bh+12}]] {
+        set x [expr {max($ax,min($x,$ax+$aw-$fw))}]
+        set y [expr {max($ay,min($y,$ay+$ah-$fh))}]
+        lappend areas [::scidb::test::dlgplace::overlapArea [list $x $y $fw $fh] $board]
+    }
+    ::scidb::test::dlgplace::require [expr {[::scidb::test::dlgplace::overlapArea $frame $board] == [tcl::mathfunc::min {*}$areas]}] "fallback did not minimise overlap"
+    destroy $fill
     return 1
 } -cleanup {
     ::scidb::test::dlgplace::realCleanup
