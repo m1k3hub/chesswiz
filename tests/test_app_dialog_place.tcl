@@ -2803,4 +2803,392 @@ tcltest::test dlg-033-zoom-squeeze {a playing dialog on a zoomed board pane sett
 } -result {1 1 1 1}
 
 
+# ======================================================================
+# VAL-DLG-028..031: the placement survives the dialog's lifetime.
+# Growth brings a helper-placed dialog back inside, shrinking sends it out
+# again without drift; a user move/resize is never re-planned by that rule;
+# two playing dialogs are both board-clear and never cover each other; the
+# first stable placement is reached once, inside 500 ms, without flip-flop.
+# ======================================================================
+proc ::scidb::test::dlgplace::tinyMain {} {
+    wm minsize .application 1 1
+    wm geometry .application [::scidb::test::dlgplace::fitGeometry 400 380]
+    ::scidb::test::dlgplace::waitFor 700
+}
+proc ::scidb::test::dlgplace::restoreMainMinimum {} {
+    catch { wm minsize .application {*}[::application::LayoutMinimum] }
+}
+proc ::scidb::test::dlgplace::lifetimeOpen {kind} {
+    switch -- $kind {
+        playengine { ::playengine::open .application; return .application.playengine }
+        enginematch { ::enginematch::open .application; return .application.enginematch }
+        gamereview {
+            set review [::gamereview::classify {{san e4 before 0 after 0 best 1}}]
+            ::gamereview::ShowWindow .application $review {} 0
+            return .application.__gamereview
+        }
+        guessmove { ::guessmove::start white; return .application.__guessmove__ }
+        default { error "unknown dialog $kind" }
+    }
+}
+proc ::scidb::test::dlgplace::lifetimeClose {kind dlg} {
+    catch {
+        switch -- $kind {
+            playengine { ::playengine::Close }
+            enginematch { ::enginematch::Close }
+            gamereview { destroy .application.__gamereview }
+            guessmove { ::guessmove::stop; destroy .application.__guessmove__ }
+        }
+    }
+}
+# Wait until the board, the reserve and the main frame are unchanged and no
+# placement/rebuild work is pending. Used when no dialog is open.
+proc ::scidb::test::dlgplace::settleMain {{timeout 6000}} {
+    set deadline [expr {[clock milliseconds]+$timeout}]
+    set previous {}
+    set changedAt [clock milliseconds]
+    while {[clock milliseconds] < $deadline} {
+        ::scidb::test::dlgplace::waitFor 25
+        set now [clock milliseconds]
+        set state [list [::scidb::test::dlgplace::boardRect] \
+            [::scidb::test::dlgplace::reserveState] \
+            [::scidb::test::dlgplace::widgetRect .application]]
+        set pending [expr {$::util::place::BesideTimer ne {}
+            || $::application::Vars(loading)}]
+        if {$state ne $previous || $pending} {set previous $state; set changedAt $now}
+        if {!$pending && $now-$changedAt >= 300} {return}
+    }
+    error {main layout did not settle within $timeout ms}
+}
+proc ::scidb::test::dlgplace::lifetimeCleanup {} {
+    catch {::playengine::Close}
+    catch {::enginematch::Close}
+    catch {destroy .application.playengine}
+    catch {destroy .application.enginematch}
+    catch {destroy .application.__guessmove__}
+    catch {destroy .application.__gamereview}
+    catch {wm attributes .application -fullscreen 0}
+    catch {wm state .application normal}
+    ::scidb::test::dlgplace::restoreMainMinimum
+    ::scidb::test::dlgplace::noRoomCleanup
+    ::scidb::test::dlgplace::stopTrace
+}
+# Grow or shrink the main window and wait for board, dialog and inset.
+proc ::scidb::test::dlgplace::resizeMain {dlg w h} {
+    set boardBefore [::scidb::test::dlgplace::boardRect]
+    wm geometry .application [::scidb::test::dlgplace::fitGeometry $w $h]
+    ::scidb::test::dlgplace::followSettled $dlg $boardBefore
+    return [::scidb::test::dlgplace::outerRect $dlg]
+}
+# Two window sizes, both wider than tall, that the ladder can hold on any
+# test screen. Growing width (not height) keeps the pane layout in its wide
+# arrangement, so a placement drift here is the dialog's, not a pane reflow.
+proc ::scidb::test::dlgplace::growSizes {} {
+    lassign [winfo workarea .application] wx wy ww wh
+    set h [expr {min(600, $wh - 80)}]
+    return [list [list [expr {min(1280, $ww - 20)}] $h]         [list [expr {min(1700, $ww - 20)}] $h]]
+}
+proc ::scidb::test::dlgplace::mainNativeFrame {} {
+    if {![catch {::scidb::tk::wm frame .application} frame] && [llength $frame] == 4} {
+        return $frame
+    }
+    lassign [wm geometry .application] _ _ gx gy
+    lassign [winfo extents .application] xl xr xt xb
+    return [list $gx $gy [expr {[winfo width .application]+$xl+$xr}] \
+        [expr {[winfo height .application]+$xt+$xb}]]
+}
+# A grown window holds the dialog: the helper's last plan left the outside
+# route, the frame is inside the main window and clear of the board.
+proc ::scidb::test::dlgplace::grownCheck {target dlg w h} {
+    set plan $::util::place::BesideLastPlan($dlg)
+    set rule [dict get $plan rule]
+    set frame [::scidb::test::dlgplace::outerRect $dlg]
+    set board [::scidb::test::dlgplace::boardRect]
+    set main [::scidb::test::dlgplace::mainNativeFrame]
+    puts "DLG-028 $target grown=${w}x${h} rule=$rule frame=$frame board=$board main=$main"
+    ::scidb::test::dlgplace::require [expr {$rule ne "outside"}] \
+        "$target: dialog is still outside in a ${w}x${h} window (rule $rule)"
+    ::scidb::test::dlgplace::require \
+        [expr {[::scidb::test::dlgplace::overlapArea $frame $board] == 0}] \
+        "$target: grown frame $frame covers board $board"
+    ::scidb::test::dlgplace::require [::scidb::test::dlgplace::inside $frame $main] \
+        "$target: grown frame $frame is outside the main window $main"
+    return $frame
+}
+# A shrunk window pushes the dialog back onto free desktop space, still clear
+# of the board and inside the monitor work area.
+proc ::scidb::test::dlgplace::shrunkCheck {target dlg} {
+    set plan $::util::place::BesideLastPlan($dlg)
+    set rule [dict get $plan rule]
+    set frame [::scidb::test::dlgplace::outerRect $dlg]
+    set board [::scidb::test::dlgplace::boardRect]
+    set main [::scidb::test::dlgplace::mainNativeFrame]
+    puts "DLG-028 $target shrunk rule=$rule frame=$frame board=$board main=$main"
+    ::scidb::test::dlgplace::require [expr {$rule eq "outside"}] \
+        "$target: dialog stayed in the tiny window covering space it cannot share (rule $rule)"
+    ::scidb::test::dlgplace::require \
+        [expr {[::scidb::test::dlgplace::overlapArea $frame $board] == 0}] \
+        "$target: frame $frame covers board $board"
+    ::scidb::test::dlgplace::require \
+        [::scidb::test::dlgplace::inside $frame [winfo workarea $dlg]] \
+        "$target: frame $frame outside the work area"
+    return $frame
+}
+# VAL-DLG-031: timestamped 50 ms samples for 2 s; returns {stableIndex series}
+# where series entries are {milliseconds rule frame}.
+proc ::scidb::test::dlgplace::settleSeries {dlg samples} {
+    set series {}
+    for {set i 0} {$i < $samples} {incr i} {
+        set rule ""
+        if {[info exists ::util::place::BesideLastPlan($dlg)]
+            && [dict exists $::util::place::BesideLastPlan($dlg) rule]} {
+            set rule [dict get $::util::place::BesideLastPlan($dlg) rule]
+        }
+        lappend series [list [clock milliseconds] $rule \
+            [::scidb::test::dlgplace::outerRect $dlg]]
+        ::scidb::test::dlgplace::waitFor 50
+    }
+    set n [llength $series]
+    for {set i 0} {$i < $n} {incr i} {
+        set cur [list [lindex $series $i 1] [lindex $series $i 2]]
+        set same 1
+        for {set j [expr {$i+1}]} {$j < $n} {incr j} {
+            if {[list [lindex $series $j 1] [lindex $series $j 2]] ne $cur} {set same 0; break}
+        }
+        if {$same} {return [list $i $series]}
+    }
+    return [list -1 $series]
+}
+proc ::scidb::test::dlgplace::timingCheck {target dlg t0} {
+    lassign [::scidb::test::dlgplace::settleSeries $dlg 40] index series
+    ::scidb::test::dlgplace::require [expr {$index >= 0}] "$target: no stable placement in 2 s"
+    set elapsed [expr {[lindex $series $index 0] - $t0}]
+    set rule [lindex $series $index 1]
+    set frame [lindex $series $index 2]
+    set rules [lsort -unique [lmap s $series {lindex $s 1}]]
+    set frames [lsort -unique [lmap s $series {lindex $s 2}]]
+    set board [::scidb::test::dlgplace::boardRect]
+    puts "DLG-031 $target stable=${elapsed}ms rule=$rule frame=$frame samples=[llength $series] rules={$rules} frames=$frames board=$board"
+    ::scidb::test::dlgplace::require [expr {$elapsed <= 500}] \
+        "$target: first stable placement took ${elapsed} ms (> 500)"
+    ::scidb::test::dlgplace::require [expr {[llength $rules] <= 2}] \
+        "$target: inside/outside flip-flop, rules seen: $rules"
+    ::scidb::test::dlgplace::require \
+        [expr {[::scidb::test::dlgplace::overlapArea $frame $board] == 0}] \
+        "$target: stable frame $frame covers board $board"
+    return 1
+}
+
+# VAL-DLG-028: grow -> inside, shrink -> outside, five cycles, no drift.
+tcltest::test dlg-028-grow-shrink-reentry {growing pulls a helper-placed dialog back inside and shrinking pushes it out again without drift} -setup {
+    ::scidb::test::dlgplace::setupBoard
+    ::scidb::test::dlgplace::tinyMain
+} -body {
+    ::playengine::open .application
+    set dlg .application.playengine
+    ::scidb::test::dlgplace::waitFor 700
+    ::scidb::test::dlgplace::check dlg-028-tiny $dlg outside
+    set tinyFrames [list [::scidb::test::dlgplace::outerRect $dlg]]
+    set bigFrames {}
+    lassign [::scidb::test::dlgplace::growSizes] small large
+    for {set i 1} {$i <= 5} {incr i} {
+        lassign [expr {$i % 2 ? $small : $large}] w h
+        ::scidb::test::dlgplace::resizeMain $dlg $w $h
+        lappend bigFrames [::scidb::test::dlgplace::grownCheck dlg-028-big$i $dlg $w $h]
+        ::scidb::test::dlgplace::resizeMain $dlg 400 380
+        lappend tinyFrames [::scidb::test::dlgplace::shrunkCheck dlg-028-tiny$i $dlg]
+    }
+    foreach f [lrange $tinyFrames 1 end] {
+        foreach a $f b [lindex $tinyFrames 0] {
+            ::scidb::test::dlgplace::require [expr {abs($a-$b) <= 2}] \
+                "dlg-028: tiny placement drifted $f vs [lindex $tinyFrames 0]"
+        }
+    }
+    for {set j 2} {$j < [llength $bigFrames]} {incr j 2} {
+        foreach a [lindex $bigFrames $j] b [lindex $bigFrames 0] {
+            ::scidb::test::dlgplace::require [expr {abs($a-$b) <= 2}] \
+                "dlg-028: grown placement drifted [lindex $bigFrames $j] vs [lindex $bigFrames 0]"
+        }
+    }
+    expr {1}
+} -cleanup {
+    ::scidb::test::dlgplace::lifetimeCleanup
+} -result 1
+
+# VAL-DLG-028 (decision 2026-10-25): a user placement is never re-planned by
+# the grow/shrink rule, even over the board and across five cycles.
+tcltest::test dlg-028-user-drag-survives-cycles {a user-moved dialog is not re-planned by grow/shrink} -setup {
+    ::scidb::test::dlgplace::setupBoard
+    ::scidb::test::dlgplace::tinyMain
+} -body {
+    ::playengine::open .application
+    set dlg .application.playengine
+    ::scidb::test::dlgplace::waitFor 700
+    lassign [::scidb::test::dlgplace::boardRect] bx by bw bh
+    wm geometry $dlg "+[expr {$bx+$bw/4}]+[expr {$by+$bh/4}]"
+    ::scidb::test::dlgplace::waitFor 500
+    ::scidb::test::dlgplace::require [expr {[::util::place::besidePlacedBy $dlg] eq "user"}] \
+        "dlg-028: drag was not recognised as a user placement"
+    set held [::scidb::test::dlgplace::outerRect $dlg]
+    ::scidb::test::dlgplace::require \
+        [expr {[::scidb::test::dlgplace::overlapArea $held [::scidb::test::dlgplace::boardRect]] > 0}] \
+        "dlg-028: the drag did not put the dialog over the board"
+    lassign [::scidb::test::dlgplace::growSizes] small large
+    for {set i 1} {$i <= 5} {incr i} {
+        lassign [expr {$i % 2 ? $small : $large}] w h
+        set f [::scidb::test::dlgplace::resizeMain $dlg $w $h]
+        ::scidb::test::dlgplace::require [expr {$f eq $held}] \
+            "dlg-028: grow cycle $i moved the user frame $held -> $f"
+        set f [::scidb::test::dlgplace::resizeMain $dlg 400 380]
+        ::scidb::test::dlgplace::require [expr {$f eq $held}] \
+            "dlg-028: shrink cycle $i moved the user frame $held -> $f"
+    }
+    expr {1}
+} -cleanup {
+    ::scidb::test::dlgplace::lifetimeCleanup
+} -result 1
+
+# VAL-DLG-029: the outside route never overrides a user position, and the
+# VAL-DLG-023 work-area clamp still applies after main-window resizes.
+tcltest::test dlg-029-outside-keeps-user-drag {an outside-placed dialog keeps a user drag and is still clamped to the work area} -setup {
+    ::scidb::test::dlgplace::setupBoard
+    ::scidb::test::dlgplace::tinyMain
+} -body {
+    ::playengine::open .application
+    set dlg .application.playengine
+    ::scidb::test::dlgplace::waitFor 700
+    ::scidb::test::dlgplace::require \
+        [expr {[dict get $::util::place::BesideLastPlan($dlg) rule] eq "outside"}] \
+        "dlg-029: precondition, the tiny window did not route outside"
+    lassign [::scidb::test::dlgplace::boardRect] bx by bw bh
+    wm geometry $dlg "+[expr {$bx+$bw/3}]+[expr {$by+$bh/3}]"
+    ::scidb::test::dlgplace::waitFor 500
+    set held [::scidb::test::dlgplace::outerRect $dlg]
+    ::scidb::test::dlgplace::require [expr {[::util::place::besidePlacedBy $dlg] eq "user"}] \
+        "dlg-029: drag over the board was not recognised"
+    ::scidb::test::dlgplace::require \
+        [expr {[::scidb::test::dlgplace::overlapArea $held [::scidb::test::dlgplace::boardRect]] > 0}] \
+        "dlg-029: the user placement does not cover the board"
+    foreach size [::scidb::test::dlgplace::growSizes] {
+        lassign $size w h
+        set f [::scidb::test::dlgplace::resizeMain $dlg $w $h]
+        ::scidb::test::dlgplace::require [expr {$f eq $held}] \
+            "dlg-029: resize to ${w}x${h} moved the user frame $held -> $f"
+        set f [::scidb::test::dlgplace::resizeMain $dlg 400 380]
+        ::scidb::test::dlgplace::require [expr {$f eq $held}] \
+            "dlg-029: shrink back moved the user frame $held -> $f"
+    }
+    # Beyond the screen edges: the clamp pulls the frame fully inside the
+    # work area, before and after main-window resizes.
+    lassign [winfo workarea $dlg] ax ay aw ah
+    wm geometry $dlg "+[expr {$ax+$aw+120}]+[expr {$ay+$ah+80}]"
+    ::scidb::test::dlgplace::waitFor 700
+    set clamped [::scidb::test::dlgplace::outerRect $dlg]
+    puts "DLG-029 clamped=$clamped workarea=[winfo workarea $dlg]"
+    ::scidb::test::dlgplace::require \
+        [::scidb::test::dlgplace::inside $clamped [winfo workarea $dlg]] \
+        "dlg-029: escaped frame $clamped not clamped into [winfo workarea $dlg]"
+    foreach size [::scidb::test::dlgplace::growSizes] {
+        lassign $size w h
+        set f [::scidb::test::dlgplace::resizeMain $dlg $w $h]
+        ::scidb::test::dlgplace::require \
+            [::scidb::test::dlgplace::inside $f [winfo workarea $dlg]] \
+            "dlg-029: resize to ${w}x${h} left $f outside the work area"
+        set f [::scidb::test::dlgplace::resizeMain $dlg 400 380]
+        ::scidb::test::dlgplace::require \
+            [::scidb::test::dlgplace::inside $f [winfo workarea $dlg]] \
+            "dlg-029: shrink left $f outside the work area"
+    }
+    expr {1}
+} -cleanup {
+    ::scidb::test::dlgplace::lifetimeCleanup
+} -result 1
+
+# VAL-DLG-030: two playing dialogs in a tiny window are both board-clear and
+# never cover each other; closing them in either order changes no layout.
+tcltest::test dlg-030-pair-tiny {two playing dialogs in a tiny window stay board-clear, do not overlap and leave no layout behind} -setup {
+    ::scidb::test::dlgplace::setupBoard
+    ::scidb::test::dlgplace::tinyMain
+} -body {
+    set reserveBefore [::scidb::test::dlgplace::reserveState]
+    set boardBefore [::scidb::test::dlgplace::boardRect]
+    set order 0
+    foreach {first second sequence} {
+        playengine enginematch {playengine enginematch}
+        playengine enginematch {enginematch playengine}
+        playengine gamereview {playengine gamereview}
+        playengine gamereview {gamereview playengine}
+    } {
+            incr order
+            set opened {}
+            foreach kind $sequence {
+                set dlg [::scidb::test::dlgplace::lifetimeOpen $kind]
+                ::scidb::test::dlgplace::waitFor 700
+                ::scidb::test::dlgplace::followSettled $dlg {}
+                lappend opened [list $kind $dlg]
+            }
+            lassign [lindex $opened 0] k1 d1
+            lassign [lindex $opened 1] k2 d2
+            ::scidb::test::dlgplace::followSettled $d2 {}
+            set f1 [::scidb::test::dlgplace::outerRect $d1]
+            set f2 [::scidb::test::dlgplace::outerRect $d2]
+            set board [::scidb::test::dlgplace::boardRect]
+            puts "DLG-030 pair=$k1+$k2 order=$order f1=$f1 f2=$f2 board=$board workarea=[winfo workarea $d1]"
+            foreach f [list $f1 $f2] {
+                ::scidb::test::dlgplace::require \
+                    [expr {[::scidb::test::dlgplace::overlapArea $f $board] == 0}] \
+                    "dlg-030: frame $f covers board $board"
+                ::scidb::test::dlgplace::require \
+                    [::scidb::test::dlgplace::inside $f [winfo workarea $d1]] \
+                    "dlg-030: frame $f outside the work area"
+            }
+            ::scidb::test::dlgplace::require \
+                [expr {[::scidb::test::dlgplace::overlapArea $f1 $f2] == 0}] \
+                "dlg-030: helper frames $f1 and $f2 overlap"
+            # Close in the order opposite to opening on odd rounds, the same
+            # order on even rounds: both close orders are exercised.
+            set closeSeq [expr {$order % 2 ? [list [list $k2 $d2] [list $k1 $d1]] \
+                : [list [list $k1 $d1] [list $k2 $d2]]}]
+            foreach pair $closeSeq {
+                lassign $pair kind dlg
+                ::scidb::test::dlgplace::lifetimeClose $kind $dlg
+                ::scidb::test::dlgplace::waitFor 700
+            }
+            ::scidb::test::dlgplace::settleMain
+            set reserveAfter [::scidb::test::dlgplace::reserveState]
+            set boardAfter [::scidb::test::dlgplace::boardRect]
+            puts "DLG-030 closed pair=$k1+$k2 reserve=$reserveAfter board=$boardAfter"
+            ::scidb::test::dlgplace::require [expr {$reserveAfter eq $reserveBefore}] \
+                "dlg-030: reserve left behind $reserveAfter != $reserveBefore"
+            ::scidb::test::dlgplace::require \
+                [expr {[lrange $boardAfter 2 3] eq [lrange $boardBefore 2 3]}] \
+                "dlg-030: board size left changed $boardAfter != $boardBefore"
+    }
+    expr {1}
+} -cleanup {
+    ::scidb::test::dlgplace::lifetimeCleanup
+} -result 1
+
+# VAL-DLG-031: the first stable placement is reached once, inside 500 ms,
+# with no inside/outside flip-flop and no re-plan while nothing changes.
+foreach {target openScript dialog closeScript} {
+    playengine {::playengine::open .application} {.application.playengine} {::playengine::Close}
+    engine-match {::enginematch::open .application} {.application.enginematch} {::enginematch::Close}
+    guessmove {::guessmove::start white} {.application.__guessmove__} {::guessmove::stop; catch {destroy .application.__guessmove__}}
+} {
+    tcltest::test dlg-031-settle-$target {first stable placement inside 500 ms, reached once} -setup {
+        ::scidb::test::dlgplace::setupBoard
+        ::scidb::test::dlgplace::tinyMain
+    } -body [format {
+        set t0 [clock milliseconds]
+        %s
+        set dlg %s
+        expr {[::scidb::test::dlgplace::timingCheck dlg-031-%s $dlg $t0]}
+    } $openScript $dialog $target] -cleanup [format {
+        catch {%s}
+        ::scidb::test::dlgplace::lifetimeCleanup
+    } $closeScript] -result 1
+}
+
+
 tcltest::cleanupTests
