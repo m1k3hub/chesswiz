@@ -208,12 +208,13 @@ tcltest::test mediafold-button-menu {board button follows the shared entry list 
         $overlapsSquares \
         [$pane.mediaButton.menu entrycget 0 -label] \
         [$pane.mediaButton.menu entrycget 1 -label] \
-        [$pane.mediaButton.menu entrycget 3 -label]
+        [$pane.mediaButton.menu entrycget 3 -label] \
+        [$pane.mediaButton.menu entrycget 4 -label]
 } -cleanup {
     rename ::mediainset::Entries {}
     rename ::mediainset::foldSavedEntries ::mediainset::Entries
     ::mediainset::RefreshMediaButton
-} -result {{place 1} {place 1} 0 {Lesson one (Video)} {Commentary (Audio)} {Open stream...}}
+} -result {{place 1} {place 1} 0 {Lesson one (Video)} {Commentary (Audio)} Stop {Open stream...}}
 
 tcltest::test mediafold-actions-by-type {menu actions dispatch video stream picture audio and report correctly} -setup {
     set ::scidb::test::foldStubs {}
@@ -666,6 +667,12 @@ tcltest::test mediafold-real-menu-repost {board Media menu lists the entries aga
     catch { ::tk::MenuUnpost $menu }
     update
     set c7 [expr {[lsearch -exact $after " $::context::mc::WhatCanIDo"] >= 0}]
+    # VAL-BRD-015: the reposted board menu carries the one Stop entry, which
+    # follows the media rows and precedes Open stream..., both before and after
+    # a choice (never replaced by C7).
+    set stopBefore [expr {[lsearch -exact $before "Stop"] >= 0}]
+    set stopAfter [expr {[lsearch -exact $after "Stop"] >= 0}]
+    set streamLast [expr {[lrange $after end-1 end] eq {Stop {Open stream...}}}]
 
     set index 0
     foreach entry $entries {
@@ -681,8 +688,9 @@ tcltest::test mediafold-real-menu-repost {board Media menu lists the entries aga
     ::scidb::test::foldRecord VAL-MED-011 [list before $before after $after \
         posted $postedBefore $postedAfter c7 $c7 picture $picture calls $::scidb::test::foldCalls]
     list [expr {$before eq $after}] $c7 $postedBefore $postedAfter \
-        [lindex $picture 0] [lindex $picture 1]
-} -cleanup {::scidb::test::foldCleanup} -result {1 0 1 1 1 1}
+        [lindex $picture 0] [lindex $picture 1] \
+        [expr {$stopBefore && $stopAfter && $streamLast}]
+} -cleanup {::scidb::test::foldCleanup} -result {1 0 1 1 1 1 1}
 
 # C7 stays reachable where it belongs: right-click on an entry in the Media pane.
 tcltest::test mediafold-real-menu-c7 {right-click in the Media pane posts the C7 entry menu} -constraints tkMenuWindows -body {
@@ -803,7 +811,7 @@ tcltest::test mediafold-008-visible {Media button is mapped with a no-media game
     set none [::scidb::test::med008State no-game]
     list [lrange $media 0 2] [expr {[llength [lindex $media 3]] > 1}] [lindex [lindex $media 3] end] [lindex $media 4] \
         [winfo ismapped .application.mediaBackend] $plain $none
-} -cleanup {::scidb::test::foldCleanup} -result {{place 1 TButton} 1 {Open stream...} 1 0 {place 1 TButton {{Open stream...}} 1} {place 1 TButton {{Open stream...}} 1}}
+} -cleanup {::scidb::test::foldCleanup} -result {{place 1 TButton} 1 {Open stream...} 1 0 {place 1 TButton {Stop {Open stream...}} 1} {place 1 TButton {Stop {Open stream...}} 1}}
 
 tcltest::test mediafold-008-stream {choosing Open stream... and entering a URL plays it in the board inset (stub player)} -setup {
     set ::scidb::test::foldStubs {}

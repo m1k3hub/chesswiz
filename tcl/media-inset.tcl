@@ -1376,6 +1376,13 @@ proc ::mediainset::PostMenuAt {w} {
 	tk_popup $w.menu [expr {max(0, $x)}] [expr {[winfo rooty $w] + [winfo height $w]}]
 }
 
+# A player holds a media item: Stop can release it. Folded playback keeps
+# the player alive off-pane, so this reads the model, never the mapping.
+proc ::mediainset::Playing? {} {
+	if {[catch { set playing $::application::media::Priv(inprocess) }]} { return 0 }
+	return [expr {[string is true -strict $playing] ? 1 : 0}]
+}
+
 # Labels in menu order, without touching the menu widget (for scripts).
 proc ::mediainset::MediaMenuLabels {} {
 	set labels {}
@@ -1383,12 +1390,16 @@ proc ::mediainset::MediaMenuLabels {} {
 		lassign $entry row type title
 		lappend labels "$title ($type)"
 	}
+	lappend labels "Stop"
 	lappend labels "Open stream..."
 	return $labels
 }
 
 # The board button always lists the current game's entries and the stream
 # command, whether or not an entry is selected in the hidden Media pane.
+# VAL-BRD-015: Stop follows the separator and precedes Open stream..., so
+# playback stays reachable while the video is folded to its handle. Its
+# state tracks the player, not the inset's mapping (folded or not).
 proc ::mediainset::PopulateMenu {menu} {
 	$menu delete 0 end
 	set entries {}
@@ -1398,6 +1409,8 @@ proc ::mediainset::PopulateMenu {menu} {
 		$menu add command -label "$title ($type)" -command [list ::mediainset::Choose $row]
 	}
 	if {[llength $entries]} { $menu add separator }
+	$menu add command -label "Stop" -command [list ::application::media::Stop] \
+		-state [expr {[::mediainset::Playing?] ? "normal" : "disabled"}]
 	$menu add command -label "Open stream..." -command [list ::application::media::OpenStream [Pane]]
 }
 
