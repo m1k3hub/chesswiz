@@ -672,6 +672,7 @@ proc ::mediainset::PlaceHandle {pane} {
 		ttk::button .application.videoHandle -text video -width 5 -command ::mediainset::Relayout
 	}
 	set handle .application.videoHandle
+	WatchHandle
 	set board [BoardRect]
 	if {$board eq {}} {
 		place $handle -x 0 -y 0 -width 56 -height 26
@@ -682,7 +683,10 @@ proc ::mediainset::PlaceHandle {pane} {
 	foreach dlg $::util::place::BesideDialogs {
 		if {[winfo exists $dlg] && [winfo ismapped $dlg]} { lappend obstacles [::util::place::besideOuterRect $dlg] }
 	}
-	set packed [::util::place::besidePack $board [list {56 26}] [WidgetRect $pane] 0 $obstacles]
+	# Four pixels of clearance: the visible view can settle a few pixels
+	# after the pass that placed the handle (a 3D restore re-packs the
+	# canvas), and the handle must never touch the drawn board.
+	set packed [::util::place::besidePack $board [list {56 26}] [WidgetRect $pane] 4 $obstacles]
 	if {[llength $packed]} {
 		lassign [lindex $packed end] x y
 		place $handle -x [expr {$x-[winfo rootx .application]}] -y [expr {$y-[winfo rooty .application]}] -width 56 -height 26
@@ -690,6 +694,32 @@ proc ::mediainset::PlaceHandle {pane} {
 		place $handle -x 0 -y 0 -width 56 -height 26
 	}
 	raise $handle
+}
+
+# The handle is placed against the board's rectangle at fold time. A window
+# manager or packer can settle the visible view a few pixels after that pass
+# (returning from 3D restores the canvas slot), which would leave the handle
+# across the drawn board. Watch the visible view's Configure while folded and
+# re-place only when the board actually moved under the handle; placing the
+# same rectangle again is not repeated, so this never pumps the event loop.
+proc ::mediainset::WatchHandle {} {
+	set view [BoardView]
+	if {$view eq "" || ![winfo exists $view]} { return }
+	if {[string first ::mediainset::BoardMoved [bind $view <Configure>]] < 0} {
+		bind $view <Configure> +[namespace code BoardMoved]
+	}
+}
+
+proc ::mediainset::BoardMoved {} {
+	variable Collapsed
+	if {!$Collapsed} { return }
+	set pane [Pane]
+	if {$pane eq "" || ![winfo exists $pane.mediainset]} { return }
+	set handle .application.videoHandle
+	if {![winfo exists $handle]} { return }
+	set board [BoardRect]
+	if {$board eq {}} { return }
+	if {[Area [WidgetRect $handle] $board] > 0} { PlaceHandle $pane }
 }
 
 # VAL-BRD-011: no right or bottom strip can carry the video without dropping
@@ -727,7 +757,7 @@ proc ::mediainset::ProtectPlayingBoard {} {
 	set pane [Pane]
 	if {$pane eq ""} { return }
 	set w $pane.mediainset
-	set board [::util::place::besideBoardRect]
+	set board [BoardRect]
 	if {![winfo exists $w] || $board eq {}} { return }
 	set current [rect]
 	if {!$Collapsed && ![Area $current $board]} { return }
@@ -866,7 +896,15 @@ proc ::mediainset::Area {a b} {
 		max(0, min($ax+$aw, $bx+$bw) - max($ax, $bx)) *
 		max(0, min($ay+$ah, $by+$bh) - max($ay, $by))}]
 }
+# Root rectangle of the visible drawn board. In 3D the 2D canvas is unmapped
+# and besideBoardRect reports nothing, so measure ::mediainset::BoardView (the
+# 3D frame) instead; the frame is the whole painted surface there.
 proc ::mediainset::BoardRect {} {
+	if {[info exists ::application::board::Vars(3d)] && $::application::board::Vars(3d)} {
+		set view [BoardView]
+		if {[winfo exists $view] && [winfo ismapped $view]} { return [WidgetRect $view] }
+		return {}
+	}
 	if {[llength [info commands ::util::place::besideBoardRect]]} {
 		return [::util::place::besideBoardRect]
 	}

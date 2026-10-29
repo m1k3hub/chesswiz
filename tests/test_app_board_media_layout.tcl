@@ -530,6 +530,40 @@ tcltest::test brd-minimum {BRD-011 refusal of every strip folds the video to its
     return ok
 } -cleanup {::w1::cleanup} -result ok
 
+# VAL-BRD-014: in 3D the visible board is ::mediainset::BoardView (the 3D
+# frame); the 2D canvas is unmapped. The fold handle must clear the visible
+# board there too, and the fold must survive the 2D return unchanged.
+tcltest::test brd-fold-3d-clear {BRD-014 the fold handle clears the visible 3D board} -constraints embedded3D -setup {::w1::setup; ::w1::size small} -body {
+    set w [::w1::play]
+    ::w1::assert {$::mediainset::Collapsed} "not folded in the small pane"
+    ::w1::assert {[::application::board::show3D 1]} "Blocked: 3D view unavailable"
+    ::w1::wait
+    set view [::mediainset::BoardView]
+    set handle .application.videoHandle
+    ::w1::assert {[winfo ismapped $view] && ![winfo ismapped $::application::board::Vars(widget:frame)]} \
+        "wrong visible presentation in 3D"
+    ::w1::assert {[winfo exists $handle] && [winfo ismapped $handle]} "fold handle missing in 3D"
+    set vr [::w1::rect $view]
+    set hr [::w1::rect $handle]
+    ::w1::log VAL-BRD-014-3d [list view $view viewRect $vr handle $hr \
+        overlap [::w1::overlap $vr $hr] collapsed $::mediainset::Collapsed \
+        reserve [::application::board::reserveRect] side $::application::board::ReserveSide \
+        pixels $::application::board::ReservePixels]
+    ::w1::assert {[::w1::overlap $vr $hr] == 0} "fold handle covers the visible 3D board"
+    ::application::board::show3D 0
+    ::w1::wait 1200
+    ::w1::assert {$::mediainset::Collapsed} "fold lost on the 2D return"
+    ::w1::assert {$::application::board::ReserveSide eq "" && $::application::board::ReservePixels == 0} \
+        "reserve left behind by the 3D excursion"
+    set br [::w1::rect [::mediainset::BoardView]]
+    set hr2 [::w1::rect $handle]
+    ::w1::log VAL-BRD-014-2d [list handle $hr2 board $br \
+        overlap [::w1::overlap $br $hr2] collapsed $::mediainset::Collapsed \
+        pane [::w1::rect [::mediainset::Pane]]]
+    ::w1::assert {[::w1::overlap $br $hr2] == 0} "handle covers the 2D board after the 3D return"
+    return ok
+} -cleanup {::w1::cleanup} -result ok
+
 # VAL-MED-013: sweep consecutive window heights across the reflow band.
 tcltest::test brd-height-sweep {VAL-MED-013 reserves the side leaving the largest square above the floor} -setup {::w1::setup default} -body {
     set w [::w1::play]
