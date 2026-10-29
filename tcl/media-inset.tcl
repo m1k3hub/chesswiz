@@ -714,10 +714,15 @@ proc ::mediainset::Fold {w pane} {
 # Dialogs have priority over video pixels. Keep the backend's canvas alive
 # offscreen when even a minimum video cannot clear the board; audio and the
 # playback clock continue. The handle is independent of that native surface.
+# Audio-only media never takes this route: decision 5 keeps its VAL-MED-009
+# transport placement even where it covers a corner of the board, and a
+# dialog neither reserves around it nor folds it to a handle (VAL-BRD-020).
 proc ::mediainset::ProtectPlayingBoard {} {
 	variable Shown
 	variable Collapsed
 	variable HeldPlace
+	variable Audio
+	if {$Audio} { return }
 	if {!$Shown || ![llength $::util::place::BesideDialogs]} { return }
 	set pane [Pane]
 	if {$pane eq ""} { return }
