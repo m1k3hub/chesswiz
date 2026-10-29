@@ -392,6 +392,63 @@ foreach {target openScript dialog closeScript} {
         ::scidb::test::dlgplace::stopTrace
     } $closeScript] -result 1
 }
+# VAL-DLG-027/034: every shared-helper caller reaches the same outside route.
+# With the main window at the lowered-minimum 400x380 geometry none of the six
+# playing dialogs, the annotation editor or the tactics trainer can stay in
+# the window without covering the board, so each must be placed on free
+# desktop space with its whole control inventory still present and reachable.
+foreach {target openScript dialog closeScript} {
+    002A {::playengine::open .application} {.application.playengine} {::playengine::Close}
+    002B {::guessmove::start white} {.application.__guessmove__} {::guessmove::stop; catch {destroy .application.__guessmove__}}
+    002C {::reptrainer::open .application} {.application.__reptrainer__} {::reptrainer::Close .application.__reptrainer__}
+    003B {set review [::gamereview::classify {{san e4 before 0 after 0 best 1}}]; ::gamereview::ShowWindow .application $review {} 0} {.application.__gamereview} {destroy .application.__gamereview}
+    003D {set ::annotation::Position {}; ::annotation::open .application} {.application.__annotation__} {::annotation::close; destroy .application.__annotation__; set ::annotation::Vars(dialog) {}}
+    endgame {::endtrainer::open .application} {.application.__endtrainer__} {::endtrainer::Close}
+    engine-match {::enginematch::open .application} {.application.enginematch} {::enginematch::Close}
+    tactics {::tactics::open .application} {.tactics} {::tactics::close}
+} {
+    tcltest::test dlg-027-outside-$target {the shared helper's outside route covers every caller at 400x380} -setup {
+        ::scidb::test::dlgplace::setupBoard
+        wm minsize .application 1 1
+        wm geometry .application [::scidb::test::dlgplace::fitGeometry 400 380]
+        ::scidb::test::dlgplace::waitFor 700
+    } -body [format {
+        %s
+        ::scidb::test::dlgplace::check %s-outside %s outside
+    } $openScript $target $dialog] -cleanup [format {
+        %s
+        ::scidb::test::dlgplace::stopTrace
+        wm minsize .application {*}[::application::LayoutMinimum]
+    } $closeScript] -result 1
+}
+# VAL-DLG-034: at a size where the in-window ladder fits, the annotation
+# editor and the tactics trainer stay inside the main window like any other
+# helper-placed dialog.
+foreach {target openScript dialog closeScript} {
+    003D {set ::annotation::Position {}; ::annotation::open .application} {.application.__annotation__} {::annotation::close; destroy .application.__annotation__; set ::annotation::Vars(dialog) {}}
+    tactics {::tactics::open .application} {.tactics} {::tactics::close}
+} {
+    tcltest::test dlg-034-inwindow-$target {the other shared-helper callers stay in the window while the ladder fits} -setup {
+        ::scidb::test::dlgplace::setupBoard
+        wm geometry .application [::scidb::test::dlgplace::fitGeometry 1100 850]
+        ::scidb::test::dlgplace::waitFor 700
+    } -body [format {
+        %s
+        ::scidb::test::dlgplace::check %s-inwindow %s
+        ::scidb::test::dlgplace::require \
+            [expr {[dict get $::util::place::BesideLastPlan(%s) rule] ne "outside"}] \
+            "%s left the window where the ladder fits"
+        set frame [::scidb::test::dlgplace::outerRect %s]
+        set main [::scidb::tk::wm frame .application]
+        ::scidb::test::dlgplace::require \
+            [::scidb::test::dlgplace::inside $frame $main] \
+            "%s frame $frame outside the main window $main"
+        expr {1}
+    } $openScript $target $dialog $dialog $target $dialog $target] -cleanup [format {
+        %s
+        ::scidb::test::dlgplace::stopTrace
+    } $closeScript] -result 1
+}
 # Use the normal review entry and NextPly/Progress/Finish lifecycle. Only the
 # engine is replaced, so measurement is independent of engine speed/availability.
 proc ::scidb::test::dlgplace::reviewMove {args} {
