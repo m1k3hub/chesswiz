@@ -550,6 +550,7 @@ proc ::mediainset::Layout {} {
 			# the other side and shrink to the documented minimum so the
 			# dialog keeps every control at its requested size.
 			set maxBoard 0
+			set squeezedStrip 0
 			if {$Squeeze ne {} && !$Audio} {
 				if {![winfo exists $SqueezeFor]} {
 					set Squeeze {}
@@ -557,13 +558,19 @@ proc ::mediainset::Layout {} {
 				} else {
 					lassign $Squeeze side iw maxBoard
 					set ih [expr {int(round(($iw-8)/$Aspect))+$ch}]
+					set squeezedStrip 1
 				}
 			}
 			# Dialog-kind reserves belong to the playing-dialog group. The
 			# inset may dodge within the pane, but cannot repaint the board
 			# underneath that group by replacing its reserve (DLG-021).
 			set dialogHeld [::util::place::besideRequestedReserveActive]
-			if {!$Audio} {
+			# A dialog squeeze owns the strip while it lasts. FitStrip's
+			# preferred strip may sit on the other side and be wider (a
+			# zoomed board pane offers one), and taking it would fight the
+			# reserve the board recomputes from the squeeze: the two states
+			# alternate and every pass rebuilds the board again.
+			if {!$Audio && !$squeezedStrip} {
 				set choice [FitStrip $width $height $ch]
 				if {[llength $choice]} {
 					lassign $choice side iw ih
