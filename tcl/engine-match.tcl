@@ -44,7 +44,7 @@ namespace eval mc {
 set Title				"Engine Match"
 set Mode				"Mode:"
 set MatchMode			"Match: two engines"
-set GauntletMode		"Gauntlet: one engine against the others"
+set GauntletMode		"Gauntlet: one vs. the others"
 set Engine1				"Engine A:"
 set Engine2				"Engine B:"
 set GauntletEngine		"Gauntlet engine:"
@@ -56,12 +56,12 @@ set Clock				"Clock:"
 set ClockDetail			"minutes each, plus seconds increment per move"
 set MoveTime			"Fixed time per move:"
 set MilliSeconds		"ms"
-set UseSuite			"Seed games from an opening suite (PGN or database):"
+set UseSuite			"Seed from an opening suite"
 set SuiteBrowse			"Browse..."
 set SuitePlies			"Opening plies:"
 set Adjudication		"Adjudication:"
-set UseTablebase		"tablebases when seven pieces or fewer remain"
-set OnlineTb			"allow the online tablebase lookup"
+set UseTablebase		"Use endgame tablebases"
+set OnlineTb			"Allow online tablebase"
 set Target				"Save games to:"
 set Start				"Start"
 set Cancel				"Cancel"
@@ -276,12 +276,17 @@ proc ::enginematch::open {parent} {
 		-variable [namespace current]::Priv(dlg:usesuite)
 	pack $sf.use -anchor w
 	set srow [ttk::frame $sf.row]
-	ttk::entry $srow.file -width 30 -textvariable [namespace current]::Priv(dlg:suite)
+	# 24 characters keeps the entry inside the 225 px scroll viewport at the
+	# 240 px compact minimum (VAL-DLG-038); longer text scrolls in the entry.
+	ttk::entry $srow.file -width 24 -textvariable [namespace current]::Priv(dlg:suite)
 	ttk::button $srow.browse -text $mc::SuiteBrowse -command [namespace code BrowseSuite]
 	ttk::label $srow.plieslabel -text $mc::SuitePlies
 	ttk::spinbox $srow.plies -from 1 -to 40 -width 3 \
 		-textvariable [namespace current]::Priv(dlg:suitelies)
-	pack $srow.file -side left -fill x -expand yes
+	# Not stretched: inside the widened panel an expanding entry grows past
+	# the 225 px scroll viewport at the compact minimum, where it could never
+	# be shown whole (VAL-DLG-038).
+	pack $srow.file -side left
 	pack $srow.browse -side left -padx [list $::theme::padx 0]
 	pack $srow.plieslabel -side left -padx [list $::theme::padx 0]
 	pack $srow.plies -side left
@@ -301,13 +306,19 @@ proc ::enginematch::open {parent} {
 
 	set bf [ttk::frame $f.base]
 	ttk::label $bf.label -text $mc::Target
-	ttk::combobox $bf.base -state readonly -width 28 \
+	ttk::combobox $bf.base -state readonly -width 24 \
 		-textvariable [namespace current]::Priv(dlg:base)
 	pack $bf.label -side left
 	pack $bf.base -side left -padx [list $::theme::padx 0]
 	pack $bf -anchor w
 	set Priv(widget:basebox) $bf.base
 
+	# Keep the setup panel's pre-VAL-DLG-038 natural width (481 px, so a
+	# 491 px body) now that the controls inside it are narrower: at 800x600
+	# the dialog must still compact and scroll (VAL-DLG-022), not widen to
+	# fit. A frame's -width only sets its request while it has no children,
+	# hence the empty spacer.
+	pack [ttk::frame $f.__natural -width 481 -height 1] -side top
 	pack $f -fill x
 
 	### the run panel ########################################################
@@ -422,7 +433,7 @@ proc ::enginematch::ModeChanged {} {
 
 	set lf [ttk::frame $f.opps]
 	ttk::label $lf.label -text $mc::Opponents -wraplength 340 -justify left
-	listbox $lf.list -selectmode multiple -height 5 -exportselection 0 -width 28
+	listbox $lf.list -selectmode multiple -height 5 -exportselection 0 -width 24
 	ttk::scrollbar $lf.vs -orient vertical -command [list $lf.list yview]
 	$lf.list configure -yscrollcommand [list $lf.vs set]
 	pack $lf.label -anchor w

@@ -483,6 +483,56 @@ proc ::scidb::test::dlgplace::requireOutside {target dlg} {
         "$target: outside plan ${pw}x${ph} below the usable minimum"
     return 1
 }
+# VAL-DLG-038: scroll the canvas until <w> lies wholly inside the viewport.
+# Returns 1 when it does, 0 when no scroll offset can show it whole.
+proc ::scidb::test::dlgplace::scrollWholeControlIntoView {c w} {
+    lassign [$c cget -scrollregion] _ _ tw th
+    set vw [winfo width $c]; set vh [winfo height $c]
+    for {set i 0} {$i < 3} {incr i} {
+        if {[inside [widgetRect $w] [widgetRect $c]]} {return 1}
+        foreach {axis total visible} [list x $tw $vw y $th $vh] {
+            set pos [expr {[winfo root$axis $w]-[winfo root$axis $c]
+                + [lindex [$c ${axis}view] 0]*$total}]
+            set last [expr {$total > $visible ? double($total-$visible)/$total : 0}]
+            $c ${axis}view moveto [expr {min($last,max(0,double($pos)/$total))}]
+        }
+        waitFor 60
+    }
+    return [inside [widgetRect $w] [widgetRect $c]]
+}
+# VAL-DLG-038: inside a scrolling body every control must stay mapped, at
+# least its requested size, no wider or taller than the viewport (an
+# oversized control is never shown whole at any scroll offset) and wholly
+# inside both the viewport and the dialog once scrolled to it.
+proc ::scidb::test::dlgplace::requireScrollReachable {target dlg} {
+    require [winfo exists $dlg.__viewport.canvas.body] "$target: no scroll viewport"
+    set c $dlg.__viewport.canvas
+    set body $c.body
+    set vw [winfo width $c]; set vh [winfo height $c]
+    require [expr {$vw > 0 && $vh > 0}] "$target: empty viewport ${vw}x${vh}"
+    lassign [$c cget -scrollregion] _ _ tw th
+    require [expr {$tw >= $vw && $th >= $vh}] \
+        "$target: scrollregion [list $tw $th] smaller than the ${vw}x${vh} viewport"
+    set found 0
+    foreach w [controls $body] {
+        incr found
+        require [expr {[winfo ismapped $w]}] "$target: control $w is not mapped"
+        require [expr {[winfo width $w] >= [winfo reqwidth $w]
+            && [winfo height $w] >= [winfo reqheight $w]}] \
+            "$target: control $w [winfo width $w]x[winfo height $w] is below requested [winfo reqwidth $w]x[winfo reqheight $w]"
+        require [expr {[winfo width $w] <= $vw}] \
+            "$target: control $w ([winfo class $w]) is [winfo width $w] px wide, never wholly visible in the $vw px viewport"
+        require [expr {[winfo height $w] <= $vh}] \
+            "$target: control $w is [winfo height $w] px tall, never wholly visible in the $vh px viewport"
+        require [scrollWholeControlIntoView $c $w] \
+            "$target: control $w cannot be scrolled wholly into the ${vw}x${vh} viewport (scrollregion ${tw}x${th})"
+        require [inside [widgetRect $w] [widgetRect $dlg]] \
+            "$target: control $w [widgetRect $w] clipped by the dialog [widgetRect $dlg] after scrolling"
+        puts "DLG038 CONTROL $target $w requested=[winfo reqwidth $w]x[winfo reqheight $w] realised=[winfo width $w]x[winfo height $w] viewport=${vw}x${vh} visible=1"
+    }
+    require [expr {$found > 0}] "$target: no controls found in $dlg"
+    return $found
+}
 # VAL-DLG-025/032: the inside direction. At a size where the in-window ladder
 # fits, the frame stays wholly inside the main window, the reported rule is
 # never `outside`, and the placement is still clear of board and indicators.
@@ -821,6 +871,57 @@ tcltest::test dlg-032-realmin-outside-annotation {at the real minimum the editor
     ::scidb::test::dlgplace::stopTrace
     ::scidb::test::dlgplace::restoreMainMinimum
 } -result 1
+# VAL-DLG-038: at the real minimum and at the lowered-minimum geometries that
+# take the scroll rung, Engine Match setup keeps every control whole. A control
+# wider than the viewport (the 383 px suite toggle at 607x480) can never be
+# shown complete at any scroll offset; the narrowest case is the 225 px
+# viewport at the 240 px compact minimum.
+foreach {label width height real} {
+    realmin 0 0 1
+    500x420 500 420 0
+    560x450 560 450 0
+} {
+    tcltest::test dlg-038-scroll-$label-engine-match {in scroll mode Engine Match setup keeps every control whole and reachable} -setup [format {
+        ::scidb::test::dlgplace::setupBoard
+        if {%d} {
+            lassign [::scidb::test::dlgplace::realMinimum] realW realH
+            wm geometry .application [::scidb::test::dlgplace::fitGeometry $realW $realH]
+        } else {
+            ::scidb::test::dlgplace::loweredMinimum
+            wm geometry .application [::scidb::test::dlgplace::fitGeometry %d %d]
+        }
+        ::scidb::test::dlgplace::waitFor 700
+        puts "DLG-GEOMETRY ([expr {%d ? "a" : "b"}]) dlg-038 main=[wm geometry .application] workarea=[winfo workarea .application]"
+    } $real $width $height $real] -body [format {
+        ::enginematch::open .application
+        set dlg .application.enginematch
+        ::scidb::test::dlgplace::waitFor 700
+        ::scidb::test::dlgplace::requireFeasible dlg-038-scroll-%s $dlg
+        set plan $::util::place::BesideLastPlan($dlg)
+        ::scidb::test::dlgplace::require [expr {[dict exists $plan resized]
+            && [dict get $plan resized] in {0 1}}] "dlg-038: resized is not a boolean"
+        ::scidb::test::dlgplace::require [expr {[dict exists $plan geometry]
+            && [llength [dict get $plan geometry]] == 4}] "dlg-038: plan geometry is not a rectangle"
+        ::scidb::test::dlgplace::require [expr {[dict get $plan rule] eq "scroll"}] \
+            "dlg-038: expected the scroll rung at this geometry, got [dict get $plan rule]"
+        lassign [dict get $plan geometry] px py pw ph
+        regexp {^([0-9]+)x([0-9]+)\+(-?[0-9]+)\+(-?[0-9]+)$} [wm geometry $dlg] -> fw fh gx gy
+        ::scidb::test::dlgplace::require [expr {abs($gx-$px) <= 1 && abs($gy-$py) <= 1
+            && abs($fw-$pw) <= 1 && abs($fh-$ph) <= 1}] \
+            "dlg-038: final [wm geometry $dlg] != helper [dict get $plan geometry]"
+        set dlg038Count [::scidb::test::dlgplace::requireScrollReachable dlg-038-scroll-%s $dlg]
+        puts "DLG038 target=dlg-038-scroll-%s plan=$plan controls=$dlg038Count body=[winfo reqwidth $dlg.__viewport.canvas.body]x[winfo reqheight $dlg.__viewport.canvas.body] viewport=[winfo width $dlg.__viewport.canvas]x[winfo height $dlg.__viewport.canvas]"
+        if {[info exists ::env(DLG_EVIDENCE_DIR)]} {
+            file mkdir $::env(DLG_EVIDENCE_DIR)
+            ::util::execSafe import -window root [file join $::env(DLG_EVIDENCE_DIR) dlg-038-scroll-%s.png]
+        }
+        expr {1}
+    } $label $label $label $label] -cleanup {
+        catch {::enginematch::Close}
+        ::scidb::test::dlgplace::stopTrace
+        ::scidb::test::dlgplace::restoreMainMinimum
+    } -result 1
+}
 # Use the normal review entry and NextPly/Progress/Finish lifecycle. Only the
 # engine is replaced, so measurement is independent of engine speed/availability.
 proc ::scidb::test::dlgplace::reviewMove {args} {
