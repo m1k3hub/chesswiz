@@ -2471,7 +2471,20 @@ proc besideRequestedReserve {dlg peers rw rh workarea extents gap {compact 0}} {
 			set box [::application::board::reserveBorder $side $mid dialog 0 1]
 			if {[llength $box] != 4} { break }
 			lassign $box x y w h
-			set packed [besidePack [list [expr {$fx+$x}] [expr {$fy+$y}] $w $h] $packSizes $workarea $gap]
+			set box [list [expr {$fx+$x}] [expr {$fy+$y}] $w $h]
+			# The bounded video strip is a member of the group, so a box
+			# that cannot hold the dialogs alone cannot hold the group:
+			# adding a rectangle can only turn a non-empty pack empty,
+			# never the reverse. Reject such a box with the cheaper
+			# dialogs-only pack (two rectangles) before running the full
+			# pack (three). This binary search evaluates the pack up to
+			# 18 times per resize, and the settle NFR is 500 ms.
+			if {$withVideo
+				&& ![llength [besidePack $box $sizes $workarea $gap]]} {
+				set packed {}
+			} else {
+				set packed [besidePack $box $packSizes $workarea $gap]
+			}
 			if {[llength $packed]} {
 				set sq [::application::board::reserveSquare $side $mid $width $height dialog]
 				set choice [list $side $mid $sq $packed]
