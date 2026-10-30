@@ -11,7 +11,8 @@
 //   ::mpv::get PROPERTY               property as a string, {} if unavailable;
 //                                     "load-error" is "yes" once the file failed to load
 //   ::mpv::set PROPERTY VALUE         1 on success, else 0
-//   ::mpv::close                      stop and release the player
+//   ::mpv::close                      ask the player to quit; returns at once
+//   ::mpv::teardown                   "pending", the last shutdown's ms, or {}
 //   ::mpv::available                  1 (the command exists only when linked)
 //
 // Properties are read in-process (microseconds), so the GUI thread never
@@ -19,6 +20,7 @@
 // ======================================================================
 
 #include <stdlib.h>
+#include <time.h>
 #include "tcl_base.h"
 
 #include <mpv/client.h>
@@ -35,6 +37,27 @@ namespace {
 
 mpv_handle* Player = 0;
 
+// Stop must return to the Tcl event loop before libmpv is gone:
+// mpv_terminate_destroy() waits for the whole core (about 300 ms here, mostly
+// the audio and X11 output threads), and that wait used to sit inside the
+// Stop call, where it delayed the re-plan that follows it. ::mpv::close now
+// sends "quit" and returns; mpv reports MPV_EVENT_SHUTDOWN through the
+// wakeup callback, which only marks the async handler (safe from mpv's
+// thread). The handler reaps the dead player on the Tcl thread.
+Tcl_AsyncHandler TeardownAsync = 0;
+bool Closing = false;
+double ClosingSince = 0.0;	// CLOCK_MONOTONIC ms when ::mpv::close began
+double LastTeardownMs = -1.0;	// completed asynchronous teardown, ms
+
+double
+monotonicMs()
+{
+	struct timespec ts;
+
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return ts.tv_sec * 1000.0 + ts.tv_nsec / 1e6;
+}
+
 // The X error handler is process-global. mpv's X11 output installs its own
 // and, on shutdown, puts back the Xlib default, which silently removes Tk's
 // handler: Tk's routine queries of windows that are just being destroyed
@@ -42,6 +65,16 @@ mpv_handle* Player = 0;
 // starts and restored after it is gone.
 XErrorHandler TkErrorHandler = 0;
 bool TkErrorHandlerSaved = false;
+
+void
+restoreTkErrorHandler()
+{
+	if (TkErrorHandlerSaved)
+	{
+		XSetErrorHandler(TkErrorHandler);
+		TkErrorHandlerSaved = false;
+	}
+}
 
 // A synchronous property read waits for mpv's playback thread, which costs
 // about a frame (tens of milliseconds) per call: far too slow for the
@@ -224,13 +257,84 @@ closePlayer()
 		Player = 0;
 	}
 
-	if (TkErrorHandlerSaved)
+	Closing = false;
+	restoreTkErrorHandler();
+	Cache.clear();
+}
+
+
+// The core has finished shutting down. Detach the (already dead) handle and
+// forget the player. Returns true when the shutdown had arrived.
+bool
+reapShutdown()
+{
+	if (!Player || !Closing)
+		return false;
+
+	bool shut = false;
+
+	for (;;)
 	{
-		XSetErrorHandler(TkErrorHandler);
-		TkErrorHandlerSaved = false;
+		mpv_event* ev = mpv_wait_event(Player, 0);
+
+		if (ev->event_id == MPV_EVENT_NONE)
+			break;
+
+		if (ev->event_id == MPV_EVENT_SHUTDOWN)
+		{
+			shut = true;
+			break;
+		}
 	}
 
+	if (!shut)
+		return false;
+
+	mpv_destroy(Player);	// detach the handle; the core is already gone
+	Player = 0;
+	Closing = false;
+	LastTeardownMs = monotonicMs() - ClosingSince;
+	restoreTkErrorHandler();
 	Cache.clear();
+	return true;
+}
+
+// Called from mpv's own threads: it may only signal the Tcl thread.
+void
+teardownWakeup(void*)
+{
+	if (TeardownAsync)
+		Tcl_AsyncMark(TeardownAsync);
+}
+
+int
+teardownAsyncProc(ClientData, Tcl_Interp*, int code)
+{
+	reapShutdown();
+	return code;
+}
+
+// ::mpv::close: hand the core a quit and return. libmpv tears itself down on
+// its own threads; the reap above runs when it reports the shutdown.
+void
+closeAsync()
+{
+	stopWatch();
+
+	if (!Player || Closing)
+		return;
+
+	// Reads served from the cache must not resurrect a closing player.
+	Cache.clear();
+	LastTeardownMs = -1.0;
+	ClosingSince = monotonicMs();
+	Closing = true;
+	mpv_set_wakeup_callback(Player, teardownWakeup, 0);
+
+	const char* args[] = { "quit", 0 };
+
+	if (mpv_command_async(Player, 0, args) < 0)
+		closePlayer();
 }
 
 
@@ -369,7 +473,7 @@ cmdGet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	char const* name = Tcl_GetString(objv[1]);
 	if (!Player && strcmp(name, "error-text") == 0)
 		Tcl_SetObjResult(ti, Tcl_NewStringObj(Cache[name].c_str(), -1));
-	if (Player)
+	if (Player && !Closing)
 	{
 		if (isObserved(name) || strcmp(name, "load-error") == 0 || strcmp(name, "error-text") == 0)
 		{
@@ -402,7 +506,7 @@ cmdSet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 	int rc = -1;
 
-	if (Player)
+	if (Player && !Closing)
 	{
 		char const* name = Tcl_GetString(objv[1]);
 		char const* value = Tcl_GetString(objv[2]);
@@ -422,8 +526,23 @@ cmdSet(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 int
 cmdClose(ClientData, Tcl_Interp* ti, int, Tcl_Obj* const[])
 {
-	closePlayer();
+	closeAsync();
 	Tcl_ResetResult(ti);
+	return TCL_OK;
+}
+
+
+// How the last ::mpv::close went: "pending" while libmpv is still shutting
+// down, the completed teardown in milliseconds, or empty when no player has
+// been torn down since the program started.
+int
+cmdTeardown(ClientData, Tcl_Interp* ti, int, Tcl_Obj* const[])
+{
+	if (Closing)
+		Tcl_SetObjResult(ti, Tcl_NewStringObj("pending", -1));
+	else if (LastTeardownMs >= 0.0)
+		Tcl_SetObjResult(ti, Tcl_NewIntObj(static_cast<int>(LastTeardownMs + 0.5)));
+
 	return TCL_OK;
 }
 
@@ -444,10 +563,12 @@ namespace media {
 void
 init(Tcl_Interp* ti)
 {
+	TeardownAsync = Tcl_AsyncCreate(teardownAsyncProc, 0);
 	Tcl_CreateObjCommand(ti, "::mpv::open",      cmdOpen,      0, 0);
 	Tcl_CreateObjCommand(ti, "::mpv::get",       cmdGet,       0, 0);
 	Tcl_CreateObjCommand(ti, "::mpv::set",       cmdSet,       0, 0);
 	Tcl_CreateObjCommand(ti, "::mpv::close",     cmdClose,     0, 0);
+	Tcl_CreateObjCommand(ti, "::mpv::teardown",  cmdTeardown,  0, 0);
 	Tcl_CreateObjCommand(ti, "::mpv::available", cmdAvailable, 0, 0);
 }
 
