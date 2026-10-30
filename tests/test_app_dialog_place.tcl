@@ -361,11 +361,16 @@ proc ::scidb::test::dlgplace::check {target dlg {wantRule ""}} {
             "$target: outside frame $outer overlaps indicators $ind"
         require [expr {$wa eq [winfo workarea $dlg]}] "$target: outside on another work area"
     } else {
-        # Indicator clearance belongs to the outside route here: a dialog
-        # beside or below the board shares its column with the material strip,
-        # and VAL-DLG-032 requires it only when the frame leaves the window.
+        # VAL-DLG-025/032: every in-window plan stays inside the main frame,
+        # and VAL-CROSS-005's "nothing the app places covers the board or its
+        # indicators" holds in this direction too — an in-window dialog that
+        # ends up in the material column is a placement defect, not an
+        # allowance, so this stays asserted.
         require [inside $outer [mainWindowFrame]] \
             "$target: in-window frame $outer is outside the main window [mainWindowFrame]"
+        set ind [indicatorRect]
+        require [expr {$ind eq {} || [overlapArea $outer $ind] == 0}] \
+            "$target: in-window frame $outer overlaps indicators $ind"
         require [expr {![dict exists $plan outside] || ![dict get $plan outside]}] \
             "$target: in-window plan reports the outside field"
         if {$rule ni {shrink scroll}} {
