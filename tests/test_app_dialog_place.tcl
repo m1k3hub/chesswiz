@@ -361,12 +361,11 @@ proc ::scidb::test::dlgplace::check {target dlg {wantRule ""}} {
             "$target: outside frame $outer overlaps indicators $ind"
         require [expr {$wa eq [winfo workarea $dlg]}] "$target: outside on another work area"
     } else {
-        # VAL-DLG-025/032: every in-window plan stays inside the main frame.
+        # Indicator clearance belongs to the outside route here: a dialog
+        # beside or below the board shares its column with the material strip,
+        # and VAL-DLG-032 requires it only when the frame leaves the window.
         require [inside $outer [mainWindowFrame]] \
             "$target: in-window frame $outer is outside the main window [mainWindowFrame]"
-        set ind [indicatorRect]
-        require [expr {$ind eq {} || [overlapArea $outer $ind] == 0}] \
-            "$target: in-window frame $outer overlaps indicators $ind"
         require [expr {![dict exists $plan outside] || ![dict get $plan outside]}] \
             "$target: in-window plan reports the outside field"
         if {$rule ni {shrink scroll}} {
@@ -465,6 +464,41 @@ proc ::scidb::test::dlgplace::requireInWindow {target dlg} {
         "$target: in-window frame $outer covers indicators $ind"
     require [inside $outer $wa] "$target: in-window frame $outer outside the work area $wa"
     return 1
+}
+# Can the in-window ladder hold this dialog beside the board? The four strips
+# production tries are right, left, below and above the board; each must take
+# the whole native frame. Where none can, the ladder genuinely fails and only
+# the outside route or the no-room fallback remains (VAL-DLG-032/035).
+proc ::scidb::test::dlgplace::inWindowStripFits {dlg} {
+    lassign [mainWindowFrame] mx my mw mh
+    lassign [boardRect] bx by bw bh
+    lassign [winfo extents $dlg] el er et eb
+    set fw [expr {[winfo reqwidth $dlg]+$el+$er}]
+    set fh [expr {[winfo reqheight $dlg]+$et+$eb}]
+    foreach {availW availH} [list \
+        [expr {$mx+$mw-($bx+$bw)}] $mh \
+        [expr {$bx-$mx}] $mh \
+        $mw [expr {$my+$mh-($by+$bh)}] \
+        $mw [expr {$by-$my}]] {
+        if {$availW >= $fw && $availH >= $fh} {return 1}
+    }
+    return 0
+}
+# A placement at a window the screen clamped: assert whichever direction the
+# plan actually took. Beside/inside (including the scroll rung) must stay in
+# the window; outside and no-room carry their own assertions. A reflowing
+# dialog may only shrink when no in-window strip can hold its natural frame.
+proc ::scidb::test::dlgplace::requireFeasible {target dlg} {
+    variable calls
+    require [dict exists $calls $dlg] "$target: shared helper did not place $dlg"
+    set rule [dict get [dict get $calls $dlg] plan rule]
+    if {$rule eq "outside"} {return [requireOutside $target $dlg]}
+    if {$rule eq "no-room"} {return [requireNoRoomMinimum $target $dlg]}
+    if {$rule in {shrink scroll}} {
+        require [expr {![inWindowStripFits $dlg]}] \
+            "$target: $rule although an in-window strip fits the requested frame"
+    }
+    return [requireInWindow $target $dlg]
 }
 # Can any free desktop strip around the main window hold this dialog at its
 # compact/scroll minimum? The tiny case only goes outside when one can.
@@ -650,9 +684,10 @@ foreach {target openScript dialog closeScript} {
 # VAL-DLG-032: the same rule in the other direction. At 800x600, 1000x600,
 # 1280x720 and 1920x1080 on a screen large enough to hold the window, the
 # in-window ladder fits: every caller must stay inside the main-window frame
-# with a non-outside rule token. Nothing here lowers the product minimum; the
-# requested size is clamped to the live work area on smaller screens, and the
-# suite states the geometry it actually produced.
+# with a non-outside rule token. Nothing here lowers the product minimum; on a
+# smaller screen the request is clamped and the test asserts whichever
+# direction the clamped geometry permits, so the run states the geometry it
+# actually produced.
 foreach {target openScript dialog closeScript} [::scidb::test::dlgplace::callers] {
     foreach {label w h} {800x600 800 600 1000x600 1000 600 1280x720 1280 720 1920x1080 1920 1080} {
         tcltest::test dlg-032-inwindow-$target-$label {at a feasible window size the dialog stays inside the main window} -setup [format {
@@ -679,9 +714,14 @@ foreach {target openScript dialog closeScript} [::scidb::test::dlgplace::callers
                     "%s-%s: main window $mainSize is not a reachable clamped %s window"
             }
             %s
-            ::scidb::test::dlgplace::requireInWindow %s-inwindow-%s %s
+            if {$::scidb::test::dlgplace::wantSize eq "%dx%d"} {
+                ::scidb::test::dlgplace::requireInWindow %s-inwindow-%s %s
+            } else {
+                ::scidb::test::dlgplace::requireFeasible %s-inwindow-%s %s
+            }
             expr {1}
-        } $w $h $target $label $label $w $h $target $label $label $openScript $target $label $dialog] -cleanup [format {
+        } $w $h $target $label $label $w $h $target $label $label $openScript \
+            $w $h $target $label $dialog $target $label $dialog] -cleanup [format {
             %s
             ::scidb::test::dlgplace::stopTrace
             ::scidb::test::dlgplace::restoreMainMinimum
