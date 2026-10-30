@@ -18,6 +18,47 @@ proc ::scidb::test::dlgplace::waitFor {ms} {
     unset $flag
     update idletasks
 }
+# The display watcher notifies the placement helper asynchronously and Openbox
+# applies the geometry the helper requests on its own schedule. A fixed wait is
+# a bet on that schedule; this waits for the two real events instead and fails
+# on timeout (VAL-TST-001). Step 1 is the production settle: the watcher saw the
+# new work area and no placement timer has been pending across two polls. Step 2
+# is the window itself: the WM has finished moving it once its root rectangle is
+# unchanged across three polls.
+proc ::scidb::test::dlgplace::watchDisplaySettled {w {timeout 2000}} {
+    set before [::application::displayChangeCount]
+    ::application::displayWatch
+    set deadline [expr {[clock milliseconds] + $timeout}]
+    set idle 0
+    while {$idle < 2} {
+        if {[clock milliseconds] >= $deadline} {
+            error "display change did not settle within $timeout ms (watcher counts $before -> [::application::displayChangeCount], timer [set ::util::place::BesideTimer])"
+        }
+        set timer [set ::util::place::BesideTimer]
+        if {[::application::displayChangeCount] > $before && $timer eq {}} {
+            incr idle
+        } else {
+            set idle 0
+        }
+        waitFor 20
+    }
+    set last {}
+    set stable 0
+    while {$stable < 3} {
+        if {[clock milliseconds] >= $deadline} {
+            error "window $w still moving within $timeout ms (rect [widgetRect $w])"
+        }
+        set rect [widgetRect $w]
+        if {$rect eq $last} {
+            incr stable
+        } else {
+            set stable 0
+            set last $rect
+        }
+        waitFor 20
+    }
+    return 1
+}
 proc ::scidb::test::dlgplace::widgetRect {w} {
     list [winfo rootx $w] [winfo rooty $w] [winfo width $w] [winfo height $w]
 }
@@ -1256,8 +1297,7 @@ tcltest::test dlg-display-workarea {watcher repositions on area-only change and 
  set ::scidb::test::dlgplace::area [list $ax $ay $wide $ah]
 } -body {
  ::util::place::besideResetReplaceCount
- ::application::displayWatch
- ::scidb::test::dlgplace::waitFor 1500
+ ::scidb::test::dlgplace::watchDisplaySettled $dlg
  set results [list [expr {$board eq [::util::place::besideBoardRect]}] \
   [::scidb::test::dlgplace::inside [::scidb::test::dlgplace::outerRect $dlg] $::scidb::test::dlgplace::area] \
   [::util::place::besideReplaceCount]]
@@ -1275,14 +1315,12 @@ tcltest::test dlg-display-workarea {watcher repositions on area-only change and 
  set moved [::util::place::besideRect $dlg]
  ::util::place::besideResetReplaceCount
  set ::scidb::test::dlgplace::area [list $ax $ay $narrow $ah]
- ::application::displayWatch
- ::scidb::test::dlgplace::waitFor 1500
+ ::scidb::test::dlgplace::watchDisplaySettled $dlg
  lappend results [expr {$moved eq [::util::place::besideRect $dlg]}] [::util::place::besideReplaceCount]
  # The same user position must be recovered when the area excludes it.
  set short [expr {$bottomY-$ay+int($dh/2)}]
  set ::scidb::test::dlgplace::area [list $ax $ay $narrow $short]
- ::application::displayWatch
- ::scidb::test::dlgplace::waitFor 1500
+ ::scidb::test::dlgplace::watchDisplaySettled $dlg
  lappend results [::scidb::test::dlgplace::inside [::scidb::test::dlgplace::outerRect $dlg] $::scidb::test::dlgplace::area]
  set results
 } -cleanup {
