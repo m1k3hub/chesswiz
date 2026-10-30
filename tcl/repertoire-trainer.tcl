@@ -43,7 +43,7 @@ set TrainSide					"Train as:"
 set White						"White"
 set Black						"Black"
 set CurrentGame				"Current game"
-set FlipBoard					"Flip the board to the trained side"
+set FlipBoard					"Flip to trained side"
 set Start						"Start"
 set Stop						"Stop"
 set Close						"Close"
@@ -1005,8 +1005,11 @@ proc ::reptrainer::open {parent {base ""} {variant Normal}} {
 	pack $drill -side top -fill x -padx $::theme::padx -pady [list 0 $::theme::pady]
 
 	ttk::label $setup.lsource -text $mc::Source
+	# 22 characters keep the box inside the 225 px scroll viewport at the
+	# compact minimum (VAL-DLG-039); longer names scroll in the box.
 	ttk::combobox $setup.source \
 		-state readonly \
+		-width 22 \
 		-textvariable [namespace current]::Vars(sourceLabel) \
 		-values [lmap s $sources { lindex $s 0 }] \
 		;
@@ -1027,7 +1030,10 @@ proc ::reptrainer::open {parent {base ""} {variant Normal}} {
 	ttk::button $setup.close -text $mc::Close -command [namespace code [list Close $dlg]]
 
 	grid $setup.lsource -row 0 -column 0 -sticky w
-	grid $setup.source -row 0 -column 1 -columnspan 5 -sticky ew -padx [list 8 0]
+	# Not stretched: a spanning, sticky box grows to the panel width and
+	# then exceeds the scroll viewport at the compact minimum, where it
+	# could never be shown whole (VAL-DLG-039).
+	grid $setup.source -row 0 -column 1 -columnspan 5 -padx [list 8 0]
 	grid $setup.lside -row 1 -column 0 -sticky w -pady [list 6 0]
 	grid $setup.white -row 1 -column 1 -sticky w -padx [list 8 0] -pady [list 6 0]
 	grid $setup.black -row 1 -column 2 -sticky w -pady [list 6 0]

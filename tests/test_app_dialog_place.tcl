@@ -969,6 +969,85 @@ foreach {label width height real} {
         ::scidb::test::dlgplace::restoreMainMinimum
     } -result 1
 }
+# VAL-DLG-039: the plan and scroll checks shared by the three training and
+# review dialogs. Each control must be shown whole by some scroll offset, so
+# none may be wider or taller than the viewport itself.
+proc ::scidb::test::dlgplace::requireScroll039 {target dlg} {
+    requireFeasible $target $dlg
+    set plan $::util::place::BesideLastPlan($dlg)
+    require [expr {[dict exists $plan resized]
+        && [dict get $plan resized] in {0 1}}] "$target: resized is not a boolean"
+    require [expr {[dict exists $plan geometry]
+        && [llength [dict get $plan geometry]] == 4}] "$target: plan geometry is not a rectangle"
+    require [expr {[dict get $plan rule] eq "scroll"}] \
+        "$target: expected the scroll rung at this geometry, got [dict get $plan rule]"
+    lassign [dict get $plan geometry] px py pw ph
+    regexp {^([0-9]+)x([0-9]+)\+(-?[0-9]+)\+(-?[0-9]+)$} [wm geometry $dlg] -> fw fh gx gy
+    require [expr {abs($gx-$px) <= 1 && abs($gy-$py) <= 1
+        && abs($fw-$pw) <= 1 && abs($fh-$ph) <= 1}] \
+        "$target: final [wm geometry $dlg] != helper [dict get $plan geometry]"
+    set count [requireScrollReachable $target $dlg]
+    puts "DLG039 target=$target plan=$plan controls=$count body=[winfo reqwidth $dlg.__viewport.canvas.body]x[winfo reqheight $dlg.__viewport.canvas.body] viewport=[winfo width $dlg.__viewport.canvas]x[winfo height $dlg.__viewport.canvas]"
+    if {[info exists ::env(DLG_EVIDENCE_DIR)]} {
+        # Back to the scroll origin for a clean screenshot; the reachability
+        # checks above leave the canvas at the last control's offset.
+        $dlg.__viewport.canvas xview moveto 0
+        $dlg.__viewport.canvas yview moveto 0
+        update
+        file mkdir $::env(DLG_EVIDENCE_DIR)
+        ::util::execSafe import -window root \
+            [file join $::env(DLG_EVIDENCE_DIR) $target.png]
+    }
+    return $count
+}
+# VAL-DLG-039: Game Review, the Endgame trainer and the Repertoire trainer
+# keep every control whole at the real minimum (a) and at the lowered
+# minimum (b) 500x420. On 5cfd077f the review list asks for 436 px, the
+# endgame tree for 332 px and the repertoire source box for 323 px, all wider
+# than the 298 px viewport at (a); at (b) the 225 px viewport also clips the
+# repertoire flip toggle (240 px).
+foreach {label width height real} {
+    realmin 0 0 1
+    500x420 500 420 0
+} {
+    foreach who {gamereview endgame repertoire} {
+        tcltest::test dlg-039-scroll-$label-$who {in scroll mode every control stays whole and reachable} -setup [format {
+            ::scidb::test::dlgplace::setupBoard
+            if {%d} {
+                lassign [::scidb::test::dlgplace::realMinimum] realW realH
+                wm geometry .application [::scidb::test::dlgplace::fitGeometry $realW $realH]
+            } else {
+                ::scidb::test::dlgplace::loweredMinimum
+                wm geometry .application [::scidb::test::dlgplace::fitGeometry %d %d]
+            }
+            ::scidb::test::dlgplace::waitFor 700
+            puts "DLG-GEOMETRY ([expr {%d ? "a" : "b"}]) dlg-039 main=[wm geometry .application] workarea=[winfo workarea .application]"
+        } $real $width $height $real] -body [format {
+            set who "%s"
+            if {$who eq "gamereview"} {
+                set review [::gamereview::classify {{san e4 before 0 after 0 best 1} {san e5 before 0 after -250 best 0}}]
+                ::gamereview::ShowWindow .application $review {} 0
+                set dlg .application.__gamereview
+            } elseif {$who eq "endgame"} {
+                ::endtrainer::open .application
+                set dlg .application.__endtrainer__
+            } else {
+                ::reptrainer::open .application
+                set dlg .application.__reptrainer__
+            }
+            ::scidb::test::dlgplace::waitFor 700
+            ::scidb::test::dlgplace::requireScroll039 dlg-039-scroll-%s-%s $dlg
+            expr {1}
+        } $who $label $who] -cleanup {
+            catch {destroy .application.__gamereview}
+            catch {set ::gamereview::Priv(running) 0}
+            catch {::endtrainer::Close}
+            catch {::reptrainer::Close .application.__reptrainer__}
+            ::scidb::test::dlgplace::stopTrace
+            ::scidb::test::dlgplace::restoreMainMinimum
+        } -result 1
+    }
+}
 # Use the normal review entry and NextPly/Progress/Finish lifecycle. Only the
 # engine is replaced, so measurement is independent of engine speed/availability.
 proc ::scidb::test::dlgplace::reviewMove {args} {

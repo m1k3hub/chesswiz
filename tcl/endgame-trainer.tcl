@@ -1111,14 +1111,24 @@ proc ::endtrainer::open {parent} {
 		-selectmode browse -height 14]
 	$tree heading #0 -text $mc::Ending
 	$tree heading solved -text $mc::Solved
-	$tree column #0 -width 260
-	$tree column solved -width 70 -anchor e
+	# 150+50 px keep the tree inside the 225 px scroll viewport at the
+	# compact minimum (VAL-DLG-039); longer names are clipped in the column.
+	$tree column #0 -width 150
+	$tree column solved -width 50 -anchor e
 	ttk::scrollbar $setup.vs -orient vertical -command [list $tree yview]
 	$tree configure -yscrollcommand [list $setup.vs set]
-	pack $tree -side left -fill both -expand yes
-	pack $setup.vs -side right -fill y
+	# Not stretched: inside the 347 px natural panel an expanding tree grows
+	# past the viewport at the compact minimum, where it could never be
+	# shown whole (VAL-DLG-039).
+	pack $tree -side left -fill y
+	pack $setup.vs -side left -fill y
 	bind $tree <Double-1> [namespace code {DialogOperation start}]
-	pack $setup -fill both -expand yes
+	pack $setup -anchor w
+	# Keep the pre-VAL-DLG-039 natural body width (357 px) now that the tree
+	# is narrower: at 607x480 the dialog must still take the scroll rung
+	# rather than widening to fit. A frame's -width only sets its request
+	# while it has no children, hence the empty spacer.
+	pack [ttk::frame $top.__natural -width 347 -height 1] -side top
 
 	### the session panel ##################################################
 	set panel [ttk::frame $top.panel]

@@ -1103,14 +1103,22 @@ proc ::gamereview::ShowWindow {parent review errors cancelled} {
 	pack $top.head -fill x -pady [list $::theme::pady 0]
 
 	set frame [ttk::frame $top.list]
-	# 54 columns keep the dialog inside a strip beside a board-only pane
-	# at 1000x600, so no control is squeezed (VAL-DLG-016).
-	set lb [listbox $frame.list -height 10 -width 54 -exportselection false]
+	# 24 columns keep the list inside the 225 px scroll viewport at the
+	# compact minimum (VAL-DLG-039); longer rows scroll in the list itself.
+	set lb [listbox $frame.list -height 10 -width 24 -exportselection false]
 	set vs [ttk::scrollbar $frame.vs -orient vertical -command [list $lb yview]]
 	$lb configure -yscrollcommand [list $vs set]
-	pack $lb -side left -fill both -expand yes
-	pack $vs -side right -fill y
-	pack $frame -fill both -expand yes
+	pack $lb -side left -fill y
+	pack $vs -side left -fill y
+	# Not stretched: inside the 451 px natural panel an expanding list grows
+	# past the viewport at the compact minimum, where it could never be
+	# shown whole (VAL-DLG-039).
+	pack $frame -anchor w
+	# Keep the pre-VAL-DLG-039 natural body width (461 px) now that the list
+	# is narrower: at 607x480 the dialog must still take the scroll rung
+	# rather than widening to fit. A frame's -width only sets its request
+	# while it has no children, hence the empty spacer.
+	pack [ttk::frame $top.__natural -width 451 -height 1] -side top
 
 	PopulateListbox $lb $review $fbTP
 	bind $lb <<ListboxSelect>> [namespace code [list GoTo $lb]]
