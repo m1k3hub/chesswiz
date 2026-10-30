@@ -42,6 +42,38 @@ proc ::scidb::test::dlgplace::boardRect {} {
         [expr {[winfo rooty $canvas] + $y0 - int([$canvas canvasy 0])}] \
         [expr {$x1-$x0}] [expr {$y1-$y0}]]
 }
+# The indicators drawn outside the 8x8 squares: side-to-move, material and
+# the holding bar. boardRect already unions them; this names them separately
+# so an outside placement states explicitly that it clears them (VAL-DLG-024).
+proc ::scidb::test::dlgplace::indicatorRect {} {
+    set canvas $::application::board::Vars(widget:frame)
+    set boxes {}
+    foreach tag {stm material holdingbar} {
+        set box [$canvas bbox $tag]
+        if {[llength $box] == 4} {lappend boxes $box}
+    }
+    if {![llength $boxes]} {return {}}
+    lassign [lindex $boxes 0] x0 y0 x1 y1
+    foreach box [lrange $boxes 1 end] {
+        lassign $box a b c d
+        set x0 [expr {min($x0,$a)}]; set y0 [expr {min($y0,$b)}]
+        set x1 [expr {max($x1,$c)}]; set y1 [expr {max($y1,$d)}]
+    }
+    return [list [expr {[winfo rootx $canvas] + $x0 - int([$canvas canvasx 0])}] \
+        [expr {[winfo rooty $canvas] + $y0 - int([$canvas canvasy 0])}] \
+        [expr {$x1-$x0}] [expr {$y1-$y0}]]
+}
+# The main window's native frame: the rectangle an outside plan must not
+# touch and an in-window plan must lie inside (VAL-DLG-025/032).
+proc ::scidb::test::dlgplace::mainWindowFrame {} {
+    if {![catch {::scidb::tk::wm frame .application} frame] && [llength $frame] == 4} {
+        return $frame
+    }
+    lassign [wm geometry .application] _ _ gx gy
+    lassign [winfo extents .application] xl xr xt xb
+    return [list $gx $gy [expr {[winfo width .application]+$xl+$xr}] \
+        [expr {[winfo height .application]+$xt+$xb}]]
+}
 # The main window's own work area, not the whole X display: the decorated
 # application frame, clipped to the WM work area. A dialog outside the
 # configured 1280x720 window is clipped on that display even when the Xvfb
@@ -151,6 +183,26 @@ proc ::scidb::test::dlgplace::stopTrace {} {
             trace remove execution $command $op $callback
         }
     }
+}
+# Mission convention (b): lowering the product's own minimum is a test
+# precondition, never a user-reachable size (VAL-LAY-024 scope). Every
+# lowering states itself so the run log records which geometries are (b);
+# the (a) runs shrink to ::application::LayoutMinimum without this helper.
+proc ::scidb::test::dlgplace::loweredMinimum {} {
+    variable loweredCount
+    if {![info exists loweredCount]} {set loweredCount 0}
+    incr loweredCount
+    wm minsize .application 1 1
+    puts "DLG-GEOMETRY (b) lowered#${loweredCount} wm-minsize=1x1 screen=[winfo screenwidth .]x[winfo screenheight .] workarea=[winfo workarea .application]"
+}
+# (a) is the real minimum the product itself reports; it is never lowered.
+proc ::scidb::test::dlgplace::realMinimum {} {
+    lassign [::application::LayoutMinimum] w h
+    wm minsize .application $w $h
+    return [list $w $h]
+}
+proc ::scidb::test::dlgplace::restoreMainMinimum {} {
+    catch { wm minsize .application {*}[::application::LayoutMinimum] }
 }
 
 proc ::scidb::test::dlgplace::buttons {w} {
@@ -299,11 +351,24 @@ proc ::scidb::test::dlgplace::check {target dlg {wantRule ""}} {
                 [expr {[winfo height .application]+$xt+$xb}]]
         }
         puts "DLG-OUTSIDE $target main=$mainFrame planArea=$planArea outer=$outer"
+        require [expr {[dict exists $plan outside] && [dict get $plan outside]}] \
+            "$target: outside plan does not report the outside field"
         require [expr {[overlapArea $outer $mainFrame] == 0}] \
             "$target: outside frame $outer overlaps the main window $mainFrame"
         require [expr {$area == 0}] "$target: outside frame $outer overlaps board $board"
+        set ind [indicatorRect]
+        require [expr {$ind eq {} || [overlapArea $outer $ind] == 0}] \
+            "$target: outside frame $outer overlaps indicators $ind"
         require [expr {$wa eq [winfo workarea $dlg]}] "$target: outside on another work area"
     } else {
+        # VAL-DLG-025/032: every in-window plan stays inside the main frame.
+        require [inside $outer [mainWindowFrame]] \
+            "$target: in-window frame $outer is outside the main window [mainWindowFrame]"
+        set ind [indicatorRect]
+        require [expr {$ind eq {} || [overlapArea $outer $ind] == 0}] \
+            "$target: in-window frame $outer overlaps indicators $ind"
+        require [expr {![dict exists $plan outside] || ![dict get $plan outside]}] \
+            "$target: in-window plan reports the outside field"
         if {$rule ni {shrink scroll}} {
             require [expr {$area == [tcl::mathfunc::min {*}[dict values $areas]]}] "$target: overlap $area is not minimum of $areas"
         }
@@ -334,6 +399,138 @@ proc ::scidb::test::dlgplace::check {target dlg {wantRule ""}} {
         ::util::execSafe import -window root [file join $::env(DLG_EVIDENCE_DIR) $target.png]
     }
     return 1
+}
+# VAL-DLG-024/032: the outside direction. The dialog left the main window on
+# purpose: its whole native frame is off the main frame, clear of the board
+# and every indicator, inside the planned work area, and at or above the
+# compact/scroll minimum. The plan says so through `rule`, `outside` and the
+# existing boolean `resized`.
+proc ::scidb::test::dlgplace::requireOutside {target dlg} {
+    variable calls
+    waitFor 500
+    require [dict exists $calls $dlg] "$target: shared helper did not place $dlg"
+    set plan [dict get $calls $dlg plan]
+    set rule [dict get $plan rule]
+    set main [mainWindowFrame]
+    set outer [outerRect $dlg]
+    set board [boardRect]
+    set ind [indicatorRect]
+    set wa [winfo workarea $dlg]
+    set planArea [expr {[dict exists $plan workarea] ? [dict get $plan workarea] : $wa}]
+    puts "DLG-OUTSIDE-DIR $target rule=$rule outside=[expr {[dict exists $plan outside] ? [dict get $plan outside] : "-"}] resized=[dict get $plan resized] geo=[dict get $plan geometry] frame=$outer main=$main board=$board indicators=$ind workarea=$wa"
+    require [expr {$rule eq "outside"}] "$target: expected the outside rule, got $rule"
+    require [expr {[dict exists $plan outside] && [dict get $plan outside]}] \
+        "$target: outside plan does not report the outside field"
+    require [expr {[dict get $plan resized] in {0 1}}] "$target: resized is not a boolean"
+    require [expr {[overlapArea $outer $main] == 0}] \
+        "$target: outside frame $outer still overlaps the main window $main"
+    require [expr {[overlapArea $outer $board] == 0}] \
+        "$target: outside frame $outer covers the board $board"
+    require [expr {$ind eq {} || [overlapArea $outer $ind] == 0}] \
+        "$target: outside frame $outer covers indicators $ind"
+    require [inside $outer $planArea] "$target: outside frame $outer outside its work area $planArea"
+    lassign [dict get $plan geometry] _ _ pw ph
+    set requested [list [winfo reqwidth $dlg] [winfo reqheight $dlg]]
+    set floorW [expr {min(240,[lindex $requested 0])}]
+    set floorH [expr {min(180,[lindex $requested 1])}]
+    require [expr {$pw >= (([dict get $plan resized]) ? $floorW : [lindex $requested 0])
+        && $ph >= (([dict get $plan resized]) ? $floorH : [lindex $requested 1])}] \
+        "$target: outside plan ${pw}x${ph} below the usable minimum"
+    return 1
+}
+# VAL-DLG-025/032: the inside direction. At a size where the in-window ladder
+# fits, the frame stays wholly inside the main window, the reported rule is
+# never `outside`, and the placement is still clear of board and indicators.
+proc ::scidb::test::dlgplace::requireInWindow {target dlg} {
+    variable calls
+    waitFor 500
+    require [dict exists $calls $dlg] "$target: shared helper did not place $dlg"
+    set plan [dict get $calls $dlg plan]
+    set rule [dict get $plan rule]
+    set main [mainWindowFrame]
+    set outer [outerRect $dlg]
+    set board [boardRect]
+    set ind [indicatorRect]
+    set wa [winfo workarea $dlg]
+    puts "DLG-INSIDE-DIR $target rule=$rule outside=[expr {[dict exists $plan outside] ? [dict get $plan outside] : "-"}] resized=[dict get $plan resized] geo=[dict get $plan geometry] frame=$outer main=$main board=$board indicators=$ind workarea=$wa"
+    require [expr {$rule ne "outside"}] "$target: went outside though the in-window ladder fits (rule $rule)"
+    require [expr {![dict exists $plan outside] || ![dict get $plan outside]}] \
+        "$target: in-window plan reports the outside field"
+    require [expr {[dict exists $plan resized] && [dict get $plan resized] in {0 1}}] \
+        "$target: resized is not a boolean"
+    require [inside $outer $main] "$target: in-window frame $outer is outside the main window $main"
+    require [expr {[overlapArea $outer $board] == 0}] \
+        "$target: in-window frame $outer covers the board $board"
+    require [expr {$ind eq {} || [overlapArea $outer $ind] == 0}] \
+        "$target: in-window frame $outer covers indicators $ind"
+    require [inside $outer $wa] "$target: in-window frame $outer outside the work area $wa"
+    return 1
+}
+# Can any free desktop strip around the main window hold this dialog at its
+# compact/scroll minimum? The tiny case only goes outside when one can.
+proc ::scidb::test::dlgplace::outsideStripFits {dlg} {
+    lassign [mainWindowFrame] mx my mw mh
+    lassign [winfo extents $dlg] el er et eb
+    set fw [expr {$el+$er}]
+    set fh [expr {$et+$eb}]
+    set rw [winfo reqwidth $dlg]
+    set rh [winfo reqheight $dlg]
+    if {[winfo exists $dlg.__viewport]} {
+        set minw [expr {min(240,$rw)}]
+        set minh [expr {min(180,$rh)}]
+    } else {
+        set minw $rw
+        set minh $rh
+    }
+    lassign [winfo workarea .application] wx wy ww wh
+    foreach {maxw maxh} [list \
+        [expr {$wx+$ww-($mx+$mw)-12-$fw}] [expr {$wh-$fh}] \
+        [expr {$mx-12-$wx-$fw}] [expr {$wh-$fh}] \
+        [expr {$ww-$fw}] [expr {$wy+$wh-($my+$mh)-12-$fh}] \
+        [expr {$ww-$fw}] [expr {$my-12-$wy-$fh}]] {
+        if {$maxw >= $minw && $maxh >= $minh} {return 1}
+    }
+    return 0
+}
+# VAL-DLG-035: only when no free desktop strip fits may the fallback cover
+# the board; then it must be the measured minimum of the ladder candidates
+# and never leave the work area.
+proc ::scidb::test::dlgplace::requireNoRoomMinimum {target dlg} {
+    variable calls
+    require [dict exists $calls $dlg] "$target: shared helper did not place $dlg"
+    set plan [dict get $calls $dlg plan]
+    set rule [dict get $plan rule]
+    set outer [outerRect $dlg]
+    set board [boardRect]
+    set wa [winfo workarea $dlg]
+    puts "DLG-NOROOM-DIR $target rule=$rule frame=$outer board=$board workarea=$wa"
+    require [expr {$rule eq "no-room"}] \
+        "$target: no free desktop strip but the rule is $rule"
+    require [inside $outer $wa] "$target: fallback frame $outer outside the work area $wa"
+    lassign [windowWorkArea] ax ay aw ah
+    lassign $board bx by bw bh
+    lassign $outer _ _ fw fh
+    set areas {}
+    foreach {x y} [list [expr {$bx+$bw+12}] $by [expr {$bx-12-$fw}] $by $bx [expr {$by+$bh+12}]] {
+        set x [expr {max($ax,min($x,$ax+$aw-$fw))}]
+        set y [expr {max($ay,min($y,$ay+$ah-$fh))}]
+        lappend areas [overlapArea [list $x $y $fw $fh] $board]
+    }
+    require [expr {[overlapArea $outer $board] == [tcl::mathfunc::min {*}$areas]}] \
+        "$target: fallback did not minimise board overlap ($areas)"
+    return 1
+}
+proc ::scidb::test::dlgplace::callers {} {
+    return {
+        002A {::playengine::open .application} {.application.playengine} {::playengine::Close}
+        002B {::guessmove::start white} {.application.__guessmove__} {::guessmove::stop; catch {destroy .application.__guessmove__}}
+        002C {::reptrainer::open .application} {.application.__reptrainer__} {::reptrainer::Close .application.__reptrainer__}
+        003B {set review [::gamereview::classify {{san e4 before 0 after 0 best 1}}]; ::gamereview::ShowWindow .application $review {} 0} {.application.__gamereview} {destroy .application.__gamereview}
+        003D {set ::annotation::Position {}; ::annotation::open .application} {.application.__annotation__} {::annotation::close; destroy .application.__annotation__; set ::annotation::Vars(dialog) {}}
+        endgame {::endtrainer::open .application} {.application.__endtrainer__} {::endtrainer::Close}
+        engine-match {::enginematch::open .application} {.application.enginematch} {::enginematch::Close}
+        tactics {::tactics::open .application} {.tactics} {::tactics::close}
+    }
 }
 proc ::scidb::test::dlgplace::openInsightsFixture {} {
 	variable testDir
@@ -409,13 +606,14 @@ foreach {target openScript dialog closeScript} {
 } {
     tcltest::test dlg-027-outside-$target {the shared helper's outside route covers every caller at 400x380} -setup {
         ::scidb::test::dlgplace::setupBoard
-        wm minsize .application 1 1
+        ::scidb::test::dlgplace::loweredMinimum
         wm geometry .application [::scidb::test::dlgplace::fitGeometry 400 380]
         ::scidb::test::dlgplace::waitFor 700
     } -body [format {
+        puts "DLG-GEOMETRY (b) dlg-027-outside-%s main=[wm geometry .application] requested=400x380 workarea=[winfo workarea .application]"
         %s
         ::scidb::test::dlgplace::check %s-outside %s outside
-    } $openScript $target $dialog] -cleanup [format {
+    } $target $openScript $target $dialog] -cleanup [format {
         %s
         ::scidb::test::dlgplace::stopTrace
         wm minsize .application {*}[::application::LayoutMinimum]
@@ -449,6 +647,94 @@ foreach {target openScript dialog closeScript} {
         ::scidb::test::dlgplace::stopTrace
     } $closeScript] -result 1
 }
+# VAL-DLG-032: the same rule in the other direction. At 800x600, 1000x600,
+# 1280x720 and 1920x1080 on a screen large enough to hold the window, the
+# in-window ladder fits: every caller must stay inside the main-window frame
+# with a non-outside rule token. Nothing here lowers the product minimum; the
+# requested size is clamped to the live work area on smaller screens, and the
+# suite states the geometry it actually produced.
+foreach {target openScript dialog closeScript} [::scidb::test::dlgplace::callers] {
+    foreach {label w h} {800x600 800 600 1000x600 1000 600 1280x720 1280 720 1920x1080 1920 1080} {
+        tcltest::test dlg-032-inwindow-$target-$label {at a feasible window size the dialog stays inside the main window} -setup [format {
+            ::scidb::test::dlgplace::setupBoard
+            ::scidb::test::dlgplace::realMinimum
+            set ::scidb::test::dlgplace::wantSize [::scidb::test::dlgplace::fitSize %d %d]
+            wm geometry .application [::scidb::test::dlgplace::fitGeometry %d %d]
+            ::scidb::test::dlgplace::waitFor 700
+            puts "DLG-GEOMETRY (a) dlg-032-inwindow-%s-%s requested=%s expected=$::scidb::test::dlgplace::wantSize main=[wm geometry .application] workarea=[winfo workarea .application] screen=[winfo screenwidth .]x[winfo screenheight .]"
+        } $w $h $w $h $target $label $label] -body [format {
+            regexp {^([0-9]+)x([0-9]+)} [wm geometry .application] -> gotW gotH
+            set mainSize "${gotW}x${gotH}"
+            if {$::scidb::test::dlgplace::wantSize eq "%dx%d"} {
+                # A screen larger than the window grants the exact request.
+                ::scidb::test::dlgplace::require \
+                    [expr {$mainSize eq $::scidb::test::dlgplace::wantSize}] \
+                    "%s-%s: main window $mainSize is not the requested %s window"
+            } else {
+                # A smaller screen clamps the request to the work area: the
+                # reached window must stay between the real minimum and it.
+                lassign [::application::LayoutMinimum] realW realH
+                ::scidb::test::dlgplace::require \
+                    [expr {$gotW >= $realW && $gotH >= $realH && $gotW <= %d && $gotH <= %d}] \
+                    "%s-%s: main window $mainSize is not a reachable clamped %s window"
+            }
+            %s
+            ::scidb::test::dlgplace::requireInWindow %s-inwindow-%s %s
+            expr {1}
+        } $w $h $target $label $label $w $h $target $label $label $openScript $target $label $dialog] -cleanup [format {
+            %s
+            ::scidb::test::dlgplace::stopTrace
+            ::scidb::test::dlgplace::restoreMainMinimum
+        } $closeScript] -result 1
+    }
+}
+# VAL-DLG-032 (a): at the real minimum, with the default layout, the dialogs
+# that can reflow still fit the in-window ladder and must stay inside.
+foreach {target openScript dialog closeScript} [::scidb::test::dlgplace::callers] {
+    if {$target eq "003D"} {continue}
+    tcltest::test dlg-032-realmin-inwindow-$target {at the real minimum a reflowing dialog stays inside the main window} -setup {
+        ::scidb::test::dlgplace::setupBoard
+        lassign [::scidb::test::dlgplace::realMinimum] realW realH
+        wm geometry .application [::scidb::test::dlgplace::fitGeometry $realW $realH]
+        ::scidb::test::dlgplace::waitFor 700
+        puts "DLG-GEOMETRY (a) dlg-032-realmin real-minimum=${realW}x${realH} main=[wm geometry .application] workarea=[winfo workarea .application]"
+    } -body [format {
+        %s
+        ::scidb::test::dlgplace::requireInWindow %s-realmin %s
+        expr {1}
+    } $openScript $target $dialog] -cleanup [format {
+        %s
+        ::scidb::test::dlgplace::stopTrace
+        ::scidb::test::dlgplace::restoreMainMinimum
+    } $closeScript] -result 1
+}
+# VAL-DLG-032 (a): the annotation editor cannot reflow below its requested
+# size, so at the real minimum it takes the outside route when a free desktop
+# strip can hold it, and the defined no-room fallback when none can.
+tcltest::test dlg-032-realmin-outside-annotation {at the real minimum the editor leaves the too-small window} -setup {
+    ::scidb::test::dlgplace::setupBoard
+    lassign [::scidb::test::dlgplace::realMinimum] realW realH
+    wm geometry .application [::scidb::test::dlgplace::fitGeometry $realW $realH]
+    ::scidb::test::dlgplace::waitFor 700
+    puts "DLG-GEOMETRY (a) dlg-032-realmin-outside real-minimum=${realW}x${realH} main=[wm geometry .application] workarea=[winfo workarea .application]"
+} -body {
+    set ::annotation::Position {}
+    ::annotation::open .application
+    set dlg .application.__annotation__
+    ::scidb::test::dlgplace::waitFor 700
+    if {[::scidb::test::dlgplace::outsideStripFits $dlg]} {
+        ::scidb::test::dlgplace::requireOutside dlg-032-realmin-outside $dlg
+    } else {
+        ::scidb::test::dlgplace::requireNoRoomMinimum dlg-032-realmin-outside $dlg
+    }
+    expr {1}
+} -cleanup {
+    catch {::annotation::close}
+    catch {destroy .application.__annotation__}
+    set ::annotation::Vars(dialog) {}
+    ::scidb::test::dlgplace::stopTrace
+    ::scidb::test::dlgplace::restoreMainMinimum
+} -result 1
 # Use the normal review entry and NextPly/Progress/Finish lifecycle. Only the
 # engine is replaced, so measurement is independent of engine speed/availability.
 proc ::scidb::test::dlgplace::reviewMove {args} {
@@ -1615,6 +1901,9 @@ proc ::scidb::test::dlgplace::clearOf {target dlg} {
     set ov [expr {[overlapArea $outer $video] + [overlapArea $client $video]}]
     puts "DLG-V15 $target main=[wm geometry .application] zoomed=[wm attributes .application -zoomed] board=$board video=$video frame=$outer wa=$wa overlapBoard=$ob overlapVideo=$ov reserve=[reserveState] mpv=[::media::mpv::state]/[::media::mpv::time] replaces=[::util::place::besideReplaceCount]"
     require [expr {$ob == 0}] "$target: frame $outer covers board $board"
+    set ind [indicatorRect]
+    require [expr {$ind eq {} || [overlapArea $outer $ind] == 0}] \
+        "$target: frame $outer covers indicators $ind"
     require [expr {$ov == 0}] "$target: frame $outer covers video $video"
     require [inside $outer $wa] "$target: frame $outer outside $wa"
     # VAL-DLG-016: clear of board and inset is not enough; no control may be
@@ -1677,7 +1966,7 @@ proc ::scidb::test::dlgplace::realCleanup {} {
 # 500 ms; restore re-plans again; a user's own move then stops following.
 tcltest::test dlg-v15-a-maximize-playing {real maximize and restore re-plan a playing dialog clear of board and inset} -setup {
     ::scidb::test::dlgplace::setupBoard
-    catch {wm minsize .application 1 1}
+    catch {::scidb::test::dlgplace::loweredMinimum}
 } -constraints haveWmctrl -body {
     wm geometry .application [::scidb::test::dlgplace::fitGeometry 0.72 0.8]
     ::scidb::test::dlgplace::waitFor 1000
@@ -1740,7 +2029,7 @@ tcltest::test dlg-v15-a-maximize-playing {real maximize and restore re-plan a pl
 foreach zoom {0 1} {
     tcltest::test dlg-v15-b-two-playing-zoom$zoom {two playing dialogs never cover board or inset; either close order restores} -setup {
         ::scidb::test::dlgplace::setupBoard
-        catch {wm minsize .application 1 1}
+        catch {::scidb::test::dlgplace::loweredMinimum}
     } -body [format {
         wm geometry .application [::scidb::test::dlgplace::fitGeometry 1000 600]
         ::scidb::test::dlgplace::waitFor 900
@@ -1826,7 +2115,7 @@ proc ::scidb::test::dlgplace::pairReady {dialogs} {
 
 tcltest::test dlg-w9h-native-deadline {Engine Match native minimum and single settled replan by 500ms} -setup {
     ::scidb::test::dlgplace::setupBoard
-    catch {wm minsize .application 1 1}
+    catch {::scidb::test::dlgplace::loweredMinimum}
 } -constraints haveWmctrl -body {
     ::scidb::test::dlgplace::noRoomState board-only
     ::scidb::test::dlgplace::realVideo
@@ -1911,7 +2200,7 @@ tcltest::test dlg-w9i-unmap-during-plan {helper returns a plan when a pending un
 # Exercise the reported pair after both dialogs have measured native frames.
 tcltest::test dlg-w9i-pair-deadline {both playing dialogs record and settle before 500ms} -setup {
     ::scidb::test::dlgplace::setupBoard
-    catch {wm minsize .application 1 1}
+    catch {::scidb::test::dlgplace::loweredMinimum}
 } -constraints haveWmctrl -body {
     wm geometry .application [::scidb::test::dlgplace::fitGeometry 1920 1080]
     ::scidb::test::dlgplace::waitFor 900
@@ -1968,7 +2257,7 @@ tcltest::test dlg-w9i-pair-deadline {both playing dialogs record and settle befo
 # board callback can do when a helper's idle drain applies the parent request.
 tcltest::test dlg-w9j-native-resize-containment {Game Review and Endgame Trainer stay inside the live main frame} -setup {
     ::scidb::test::dlgplace::setupBoard
-    wm minsize .application 1 1
+    ::scidb::test::dlgplace::loweredMinimum
 } -constraints haveWmctrl -body {
     wm geometry .application [::scidb::test::dlgplace::fitGeometry 1000 600]
     ::scidb::test::dlgplace::waitFor 900
@@ -2078,7 +2367,7 @@ tcltest::test dlg-w9j-native-guard-edges {native containment guard corrects a on
 foreach event {close stop hide} {
     tcltest::test dlg-w9d-lifecycle-$event {real playback releases dialog/inset layout within 500 ms} -setup {
         ::scidb::test::dlgplace::setupBoard
-        wm minsize .application 1 1
+        ::scidb::test::dlgplace::loweredMinimum
     } -body [string map [list @EVENT@ $event] {
         wm geometry .application [::scidb::test::dlgplace::fitGeometry 1.0 1.0]
         ::scidb::test::dlgplace::waitFor 700
@@ -2126,7 +2415,7 @@ foreach event {close stop hide} {
 # original synthetic reserve test remains above to exercise actual stacking.
 tcltest::test dlg-w9d-pair-release {all playing pairs restore reserve side, pixels and floor in either close order} -setup {
     ::scidb::test::dlgplace::setupBoard
-    wm minsize .application 1 1
+    ::scidb::test::dlgplace::loweredMinimum
 } -body {
     wm geometry .application [::scidb::test::dlgplace::fitGeometry 1.0 1.0]
     ::scidb::test::dlgplace::waitFor 700
@@ -2188,7 +2477,7 @@ tcltest::testConstraint dlg021FullApp [expr {
     && $v21h >= 600+$v21mh-[winfo height .application]}]
 tcltest::test dlg-v21-reserve-before-overlap {playing dialogs reserve down to square32 before no-room; exact close restoration} -constraints dlg021FullApp -setup {
     ::scidb::test::dlgplace::setupBoard
-    wm minsize .application 1 1
+    ::scidb::test::dlgplace::loweredMinimum
 } -body {
     set size {800 600}
     if {[info exists ::env(DLG021_SIZE)]} { set size [split $::env(DLG021_SIZE) x] }
@@ -2320,7 +2609,7 @@ tcltest::test dlg-v21-reserve-before-overlap {playing dialogs reserve down to sq
 # must not retain the old below-floor video dodge over a newly feasible board.
 tcltest::test dlg-v21-video-after-reserve-zoom {video recovers its strip when a dialog group no longer fits after board zoom} -constraints dlg021FullApp -setup {
     ::scidb::test::dlgplace::setupBoard
-    wm minsize .application 1 1
+    ::scidb::test::dlgplace::loweredMinimum
 } -body {
     wm geometry .application [::scidb::test::dlgplace::fitGeometry 800 600]
     ::scidb::test::dlgplace::waitFor 900
@@ -2357,7 +2646,7 @@ tcltest::test dlg-v21-video-after-reserve-zoom {video recovers its strip when a 
 # intersections. Real video continues advancing even when only its handle fits.
 tcltest::test dlg-v22-small-scroll {compact only after reserve exhaustion; all active controls reachable} -setup {
     ::scidb::test::dlgplace::setupBoard
-    wm minsize .application 1 1
+    ::scidb::test::dlgplace::loweredMinimum
 } -body {
     set size 800x600
     if {[info exists ::env(DLG022_SIZE)]} {set size $::env(DLG022_SIZE)}
@@ -2368,6 +2657,10 @@ tcltest::test dlg-v22-small-scroll {compact only after reserve exhaustion; all a
         set opening [lrange $scenario 1 end]
         set before [::scidb::test::dlgplace::boardRect]
         if {$video} {::scidb::test::dlgplace::realVideo}
+        # The fold is decided by the pane, not by the dialog: record the state
+        # the video had before any dialog so the close can be compared to it
+        # instead of demanding an unfold the pane cannot support (VAL-BRD-014).
+        set wasCollapsed [expr {$video ? $::mediainset::Collapsed : 0}]
         set dialogs {}
         foreach kind $opening {
             switch $kind {
@@ -2423,7 +2716,10 @@ tcltest::test dlg-v22-small-scroll {compact only after reserve exhaustion; all a
         if {[info exists ::env(DLG022_EVIDENCE)]} {exec import -window root [file join $::env(DLG022_EVIDENCE) [join $scenario -].png]}
         foreach dlg [lreverse $dialogs] {catch {destroy $dlg}; ::scidb::test::dlgplace::waitFor 700}
         if {$video} {
-            ::scidb::test::dlgplace::require [expr {!$::mediainset::Collapsed}] "video did not restore on dialog close"
+            puts "DLG022 FOLD before=$wasCollapsed after=$::mediainset::Collapsed close=$::mediainset::Collapsed"
+            ::scidb::test::dlgplace::require \
+                [expr {$::mediainset::Collapsed == $wasCollapsed}] \
+                "dialog lifetime changed the video fold state (before=$wasCollapsed after=$::mediainset::Collapsed)"
             ::application::media::Stop
             ::scidb::test::dlgplace::waitFor 700
         }
@@ -2436,7 +2732,7 @@ tcltest::test dlg-v22-small-scroll {compact only after reserve exhaustion; all a
 
 tcltest::test dlg-v22-return-space {compact viewport restores natural size and Tab reveals controls after resize} -setup {
     ::scidb::test::dlgplace::setupBoard
-    wm minsize .application 1 1
+    ::scidb::test::dlgplace::loweredMinimum
 } -body {
     wm geometry .application [::scidb::test::dlgplace::fitGeometry 800 600]
     ::scidb::test::dlgplace::waitFor 700
@@ -2469,7 +2765,7 @@ tcltest::test dlg-v22-return-space {compact viewport restores natural size and T
 
 tcltest::test dlg-v22-trainers {trainers use the native scrolling body} -setup {
     ::scidb::test::dlgplace::setupBoard
-    wm minsize .application 1 1
+    ::scidb::test::dlgplace::loweredMinimum
 } -body {
     wm geometry .application [::scidb::test::dlgplace::fitGeometry 800 600]
     ::scidb::test::dlgplace::waitFor 700
@@ -2504,7 +2800,7 @@ tcltest::test dlg-v22-trainers {trainers use the native scrolling body} -setup {
 
 tcltest::test dlg-v22-minimum-fallback {the measured gate goes outside at 400x380; with no desktop space no-room minimises overlap} -setup {
     ::scidb::test::dlgplace::setupBoard
-    wm minsize .application 1 1
+    ::scidb::test::dlgplace::loweredMinimum
 } -body {
     # VAL-DLG-024/036: at the lowered-minimum geometry the compact/scroll
     # minimum cannot be placed inside, so the dialog goes to free desktop
@@ -2639,7 +2935,7 @@ tcltest::test dlg-v22-interactive-classes {all interactive widget classes reveal
 
 tcltest::test dlg-v22-review-native-left {listbox and its scrollbar remain operable in compacted video/review pair} -setup {
  ::scidb::test::dlgplace::setupBoard
- wm minsize .application 1 1
+ ::scidb::test::dlgplace::loweredMinimum
  wm geometry .application [::scidb::test::dlgplace::fitGeometry 800 600]
  ::scidb::test::dlgplace::waitFor 700
 } -body {
@@ -2697,7 +2993,7 @@ proc ::scidb::test::dlgplace::paneSizes {} {
 tcltest::test dlg-033-focus-zoom-restore {leaving focus zoom restores the pre-zoom pane sizes exactly} -setup {
     ::scidb::test::dlgplace::setupBoard
     set ::scidb::test::dlgplace::savedMin [wm minsize .application]
-    wm minsize .application 1 1
+    ::scidb::test::dlgplace::loweredMinimum
 } -body {
     set t [::application::reflow::boardTwm]
     wm geometry .application [::scidb::test::dlgplace::fitGeometry 994 573]
@@ -2748,7 +3044,7 @@ proc ::scidb::test::dlgplace::unwrapRelayout {} {
 tcltest::test dlg-033-zoom-squeeze {a playing dialog on a zoomed board pane settles and the video returns} -setup {
     ::scidb::test::dlgplace::setupBoard
     set ::scidb::test::dlgplace::savedMin [wm minsize .application]
-    wm minsize .application 1 1
+    ::scidb::test::dlgplace::loweredMinimum
     wm geometry .application [::scidb::test::dlgplace::fitGeometry 1.0 1.0]
     ::scidb::test::dlgplace::waitFor 1200
     ::scidb::test::dlgplace::realVideo
@@ -2811,12 +3107,9 @@ tcltest::test dlg-033-zoom-squeeze {a playing dialog on a zoomed board pane sett
 # first stable placement is reached once, inside 500 ms, without flip-flop.
 # ======================================================================
 proc ::scidb::test::dlgplace::tinyMain {} {
-    wm minsize .application 1 1
+    ::scidb::test::dlgplace::loweredMinimum
     wm geometry .application [::scidb::test::dlgplace::fitGeometry 400 380]
     ::scidb::test::dlgplace::waitFor 700
-}
-proc ::scidb::test::dlgplace::restoreMainMinimum {} {
-    catch { wm minsize .application {*}[::application::LayoutMinimum] }
 }
 proc ::scidb::test::dlgplace::lifetimeOpen {kind} {
     switch -- $kind {
