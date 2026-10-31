@@ -637,53 +637,88 @@ proc besidePlan {bx by bw bh dw dh workarea {extents {16 0 40 0}} {gap 12} {requ
 	return $plan
 }
 
-# VAL-DLG-004 no-room plan at the requested size: the right/left/below
+# VAL-DLG-004 no-room plan at the requested size: the right/left/below/above
 # candidate with the smallest overlap of the drawn board <board> (default: the
-# protected rectangle), clamped inside the work area. The protected rectangle
-# (board plus inset and earlier dialogs) only breaks ties: the inset dodges a
-# dialog, the board cannot (VAL-DLG-016C). Carries every candidate and its
-# area as evidence, plus a per-candidate record of board and peer overlap
+# protected rectangle), clamped inside the work area. Indicator overlap always
+# loses first: a candidate that covers nothing drawn outside the 8x8 squares
+# (side-to-move, material, holding bar) wins even when it covers more of the
+# board, because VAL-CROSS-005 has no in-window exemption while VAL-DLG-037
+# allows board overlap when no board-clear candidate exists. The protected
+# rectangle (board plus inset and earlier dialogs) only breaks ties: the inset
+# dodges a dialog, the board cannot (VAL-DLG-016C). Carries every candidate and
+# its area as evidence, plus a per-candidate record of board and peer overlap
 # (VAL-DLG-017B).
-proc besideNoRoomPlan {bx by bw bh rw rh workarea extents gap {peers {}} {board {}}} {
+proc besideNoRoomPlan {bx by bw bh rw rh workarea extents gap {peers {}} {board {}} {indicators {}}} {
 	set plan [besidePlan $bx $by $bw $bh $rw $rh $workarea $extents $gap]
 	set candidates [dict get $plan candidates]
 	set areas [dict get $plan areas]
+	lassign $extents el er et eb
+	set fw [expr {$el + $er}]
+	set fh [expr {$et + $eb}]
+	# VAL-DLG-044: the fourth in-window side. When the dialog cannot sit beside
+	# the board, a placement above it (clamped to the top of the usable area)
+	# can clear the indicators drawn at the bottom of the board even though it
+	# still covers part of the squares. It shares besidePlan's clamping.
+	lassign [dict get $candidates right] _ _ cw ch
+	set aboveClamped [clampGeometry \
+		"${cw}x${ch}+${bx}+[expr {$by - $gap - $ch - $fh}]" $workarea $extents]
+	regexp {^([0-9]+)x([0-9]+)\+(-?[0-9]+)\+(-?[0-9]+)$} $aboveClamped -> aw ah ax ay
+	dict set candidates above [list $ax $ay $aw $ah]
+	dict set areas above [expr {
+		max(0, min($ax + $aw + $fw, $bx + $bw) - max($ax, $bx)) *
+		max(0, min($ay + $ah + $fh, $by + $bh) - max($ay, $by))}]
 	if {[llength $board] == 4} {
-		lassign $board ax ay aw ah
-		lassign $extents el er et eb
+		lassign $board ax0 ay0 aw0 ah0
 		set boardAreas {}
 		dict for {side geometry} $candidates {
 			lassign $geometry x y w h
 			dict set boardAreas $side [expr {
-				max(0, min($x + $w + $el + $er, $ax + $aw) - max($x, $ax)) *
-				max(0, min($y + $h + $et + $eb, $ay + $ah) - max($y, $ay))}]
+				max(0, min($x + $w + $fw, $ax0 + $aw0) - max($x, $ax0)) *
+				max(0, min($y + $h + $fh, $ay0 + $ah0) - max($y, $ay0))}]
 		}
 	} else {
 		set boardAreas $areas
 	}
+	set indicatorAreas {}
+	if {[llength $indicators] == 4} {
+		dict for {side geometry} $candidates {
+			lassign $geometry x y w h
+			set outer [list $x $y [expr {$w + $fw}] [expr {$h + $fh}]]
+			dict set indicatorAreas $side [besideOverlap $outer $indicators]
+		}
+	}
 	set best {}
-	foreach side {right left below} {
-		if {$best eq {}} { set best $side; continue }
-		set a [dict get $boardAreas $side]
-		set b [dict get $boardAreas $best]
-		if {$a < $b || ($a == $b && [dict get $areas $side] < [dict get $areas $best])} {
+	set bestCost {}
+	foreach side {right left below above} {
+		if {![dict exists $candidates $side]} { continue }
+		set cost [list [expr {[dict exists $indicatorAreas $side]
+			&& [dict get $indicatorAreas $side] > 0}] \
+			[dict get $boardAreas $side] [dict get $areas $side]]
+		if {$best eq {} || [lindex $cost 0] < [lindex $bestCost 0]
+			|| ([lindex $cost 0] == [lindex $bestCost 0]
+				&& ([lindex $cost 1] < [lindex $bestCost 1]
+					|| ([lindex $cost 1] == [lindex $bestCost 1]
+						&& [lindex $cost 2] < [lindex $bestCost 2])))} {
 			set best $side
+			set bestCost $cost
 		}
 	}
 	return [dict create geometry [dict get $candidates $best] rule no-room \
 		side $best overlap [dict get $areas $best] candidates $candidates \
-		areas $areas boardAreas $boardAreas resized 0 minimumFits 0 requestedFits 0 chosen $best \
-		record [besideCandidateRecord $candidates $peers $extents $best]]
+		areas $areas boardAreas $boardAreas indicatorAreas $indicatorAreas \
+		resized 0 minimumFits 0 requestedFits 0 chosen $best \
+		record [besideCandidateRecord $candidates $peers $extents $best $board]]
 }
 
-# For each right/left/below candidate: its frame rectangle, its overlap with
-# the drawn board, its overlap with the peers' frames, and whether it is the
-# chosen one. The validator recomputes the minimum from these raw values.
-proc besideCandidateRecord {candidates peers extents chosen} {
+# For each right/left/below/above candidate: its frame rectangle, its overlap
+# with the drawn board, its overlap with the peers' frames, and whether it is
+# the chosen one. The validator recomputes the minimum from these raw values.
+proc besideCandidateRecord {candidates peers extents chosen {board {}}} {
 	lassign $extents el er et eb
-	set board [besideBoardRect]
+	if {![llength $board]} { set board [besideBoardRect] }
 	set record {}
-	foreach side {right left below} {
+	foreach side {right left below above} {
+		if {![dict exists $candidates $side]} { continue }
 		lassign [dict get $candidates $side] x y w h
 		set outer [list $x $y [expr {$w + $el + $er}] [expr {$h + $et + $eb}]]
 		set boardArea [expr {$board eq {} ? 0 : [besideOverlap $outer $board]}]
@@ -976,22 +1011,19 @@ proc besideOutsidePairPlan {dlg main dw dh extents gap {rw ""} {rh ""}} {
 }
 
 
-# Root rectangle {x y width height} of a mapped board, or {} when the board
-# cannot be placed against yet.
-proc besideBoardRect {} {
+# Root rectangle {x y width height} over the union of the given canvas tags,
+# or {} when the board cannot be placed against yet.
+proc besideCanvasUnionRect {tags} {
 	if {[catch { set board $::application::board::board }]} { return {} }
 	if {![winfo exists $board] || ![winfo ismapped $board]} { return {} }
 	if {[winfo width $board] < 2 || [winfo height $board] < 2} { return {} }
 	# The canvas item includes the border and coordinates outside the inner
-	# board widget, and the side-to-move/material/holding bars are drawn as
-	# part of the board. A dialog must clear the full drawing, not only the
-	# 8x8 squares (VAL-DLG-014f). Convert canvas coordinates to root
-	# coordinates, accounting for any canvas view offset. Early
-	# startup/teardown falls back below.
+	# board widget. Convert canvas coordinates to root coordinates, accounting
+	# for any canvas view offset. Early startup/teardown yields no rectangle.
 	if {![catch {
 		set frame $::application::board::Vars(widget:frame)
 		set boxes {}
-		foreach tag {board stm material holdingbar} {
+		foreach tag $tags {
 			set box [$frame bbox $tag]
 			if {[llength $box] == 4} {lappend boxes $box}
 		}
@@ -1011,8 +1043,32 @@ proc besideBoardRect {} {
 				[expr {$x1-$x0}] [expr {$y1-$y0}]]
 		}
 	}
+	return {}
+}
+
+# Root rectangle {x y width height} of a mapped board, or {} when the board
+# cannot be placed against yet.
+proc besideBoardRect {} {
+	# The side-to-move/material/holding bars are drawn as part of the board.
+	# A dialog must clear the full drawing, not only the 8x8 squares
+	# (VAL-DLG-014f).
+	set rect [besideCanvasUnionRect {board stm material holdingbar}]
+	if {[llength $rect]} { return $rect }
+	# No drawing yet: fall back to the board widget itself.
+	if {[catch { set board $::application::board::board }]} { return {} }
+	if {![winfo exists $board] || ![winfo ismapped $board]} { return {} }
+	if {[winfo width $board] < 2 || [winfo height $board] < 2} { return {} }
 	return [list [winfo rootx $board] [winfo rooty $board] \
 		[winfo width $board] [winfo height $board]]
+}
+
+# Root rectangle of the indicators drawn outside the 8x8 squares (side-to-move,
+# material and holding bar), or {} when none is drawn. The board rectangle
+# already unions them; VAL-DLG-044 needs them separately because a no-room plan
+# may cover the board where it cannot clear it, but never an indicator
+# (VAL-CROSS-005 has no in-window exemption).
+proc besideIndicatorRect {} {
+	return [besideCanvasUnionRect {stm material holdingbar}]
 }
 
 proc besideRect {w} {
@@ -1196,6 +1252,9 @@ proc besidePairNoRoom {dlg peers rw rh workarea extents gap} {
 	set fw [expr {$el + $er}]
 	set plan [besideNoRoomPlan $bx $by $bw $bh $rw $rh $workarea $extents $gap]
 	set candidates [dict get $plan candidates]
+	# The pair ladder keeps its three peer-aware sides; the above candidate
+	# VAL-DLG-044 adds for a lone dialog only competes when no peer is involved.
+	dict unset candidates above
 	# Measure where the frame really lands (see the openbox left-edge shift
 	# in besideBoard), so the record matches the settled geometry.
 	foreach side {right left below} {
@@ -3363,12 +3422,12 @@ proc BesideBoardPlan {dlg parent {retry 0}} {
 	# requested size is never squeezed below it. When no strip, squeeze,
 	# detach or reserve holds that size, the no-room rule applies instead:
 	# requested size, clamped inside the work area, minimum overlap over the
-	# right/left/below candidates.
+	# right/left/below/above candidates, indicators first (VAL-DLG-044).
 	lassign [dict get $plan geometry] _ _ pw ph
 	if {($pw < $rw || $ph < $rh) && $rw <= $ww-$fw && $rh <= $wh-$fh
 		&& ![info exists BesideMinimums($dlg)] && ![dict exists $plan pair]} {
 		set plan [besideNoRoomPlan $bx $by $bw $bh $rw $rh $workarea $extents 12 $peers \
-			[besideBoardRect]]
+			[besideBoardRect] [besideIndicatorRect]]
 	}
 	if {[llength $peers] && ![dict exists $plan pair]} {
 		lassign [dict get $plan geometry] gx gy gw gh
@@ -3408,7 +3467,7 @@ proc BesideBoardPlan {dlg parent {retry 0}} {
 		&& ![dict exists $plan forced] && $rw <= $ww-$fw && $rh <= $wh-$fh} {
 		lassign [besideProtectedRect] ax ay aw ah
 		set plan [besideNoRoomPlan $ax $ay $aw $ah $rw $rh $workarea $extents 12 \
-			$peers [besideBoardRect]]
+			$peers [besideBoardRect] [besideIndicatorRect]]
 		dict set plan pair 1
 	}
 	dict set plan first [expr {!$follower}]
@@ -3446,7 +3505,8 @@ proc BesideBoardPlan {dlg parent {retry 0}} {
 			# never accept a positive but unusable sliver as a scroll plan.
 			lassign [besideBoardRect] ax ay aw ah
 			set plan [besideNoRoomPlan $ax $ay $aw $ah [expr {min(240,$rw)}] \
-				[expr {min(180,$rh)}] $workarea $extents 12 $peers [besideBoardRect]]
+				[expr {min(180,$rh)}] $workarea $extents 12 $peers \
+				[besideBoardRect] [besideIndicatorRect]]
 			dict set plan resized 1
 			if {[llength $peers]} { dict set plan pair 1 }
 		}

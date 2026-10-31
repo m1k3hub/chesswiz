@@ -360,12 +360,26 @@ proc ::scidb::test::dlgplace::plannedWorkArea {dlg plan} {
 # overlap-free candidate that check is restored unchanged; only a case where
 # every candidate covers the board may fall back to the measured minimum
 # (mission decision 2026-10-28, VAL-DLG-035).
-proc ::scidb::test::dlgplace::requireNoRoomOverlap {target area areas} {
-    set candidateMin [tcl::mathfunc::min {*}[dict values $areas]]
-    require [expr {$candidateMin > 0 || $area == 0}] \
+proc ::scidb::test::dlgplace::requireNoRoomOverlap {target area areas {indAreas {}}} {
+    # VAL-DLG-044: an indicator-clear candidate wins over a smaller board
+    # overlap; board overlap is minimised only among candidates in the same
+    # indicator class, so a board-clear candidate wins whenever one exists.
+    set best {}
+    set bestCost {}
+    dict for {side a} $areas {
+        set ia [expr {[dict exists $indAreas $side] ? [dict get $indAreas $side] : 0}]
+        set cost [list [expr {$ia > 0}] $a]
+        if {$bestCost eq {} || [lindex $cost 0] < [lindex $bestCost 0]
+            || ([lindex $cost 0] == [lindex $bestCost 0]
+                && [lindex $cost 1] < [lindex $bestCost 1])} {
+            set bestCost $cost
+            set best $a
+        }
+    }
+    require [expr {$best > 0 || $area == 0}] \
         "$target: no-room plan overlaps $area although $areas has an overlap-free candidate"
-    require [expr {$area == $candidateMin}] \
-        "$target: no-room overlap $area is not the measured minimum of $areas"
+    require [expr {$area == $best}] \
+        "$target: no-room overlap $area is not the least cost of $areas (indicators $indAreas)"
 }
 # Can a free desktop strip of <area> hold the dialog at its full requested
 # size? Recomputed from the live main frame and the dialog's own request, so a
@@ -458,16 +472,42 @@ proc ::scidb::test::dlgplace::check {target dlg {wantRule ""}} {
     # Independent candidate oracle, evaluated at FINAL dimensions, including frame.
     lassign $board bx by bw bh
     lassign $outer _ _ fw fh
+    set ind [indicatorRect]
     set areas {}
+    set indAreas {}
     # The ladder clamps inside the main window's work area; a no-room plan is
     # measured against the same rectangle, an in-window plan against the
     # monitor work area that already contains it.
     set clampArea [expr {$rule eq "no-room" ? [windowWorkArea] : $wa}]
     lassign $clampArea wx wy ww wh
-    foreach {side cx cy} [list right [expr {$bx+$bw+12}] $by left [expr {$bx-12-$fw}] $by below $bx [expr {$by+$bh+12}]] {
+    # VAL-DLG-044: the no-room fallback alone adds a fourth (above) candidate.
+    set sides {right left below}
+    if {$rule eq "no-room"} {lappend sides above}
+    foreach {side cx cy} [list right [expr {$bx+$bw+12}] $by left [expr {$bx-12-$fw}] $by below $bx [expr {$by+$bh+12}] above $bx [expr {$by-12-$fh}]] {
+        if {$side ni $sides} {continue}
         set cx [expr {max($wx,min($cx,$wx+$ww-$fw))}]
         set cy [expr {max($wy,min($cy,$wy+$wh-$fh))}]
-        dict set areas $side [overlapArea [list $cx $cy $fw $fh] $board]
+        set rect [list $cx $cy $fw $fh]
+        dict set areas $side [overlapArea $rect $board]
+        dict set indAreas $side [expr {$ind eq {} ? 0 : [overlapArea $rect $ind]}]
+    }
+    # VAL-DLG-044/037: the chosen candidate minimises indicator overlap first
+    # (VAL-CROSS-005 has no in-window exemption), then board overlap; the board
+    # stays clear whenever any candidate is board-clear.
+    set expectedArea [tcl::mathfunc::min {*}[dict values $areas]]
+    if {$rule eq "no-room"} {
+        set bestCost {}
+        # Loop over a fresh name: reusing `area` here clobbered the measured
+        # overlap the comparison below is about (VAL-DLG-043).
+        dict for {side a} $areas {
+            set cost [list [expr {[dict get $indAreas $side] > 0}] $a]
+            if {$bestCost eq {} || [lindex $cost 0] < [lindex $bestCost 0]
+                || ([lindex $cost 0] == [lindex $bestCost 0]
+                    && [lindex $cost 1] < [lindex $bestCost 1])} {
+                set bestCost $cost
+                set expectedArea $a
+            }
+        }
     }
     if {$rule eq "outside"} {
         # VAL-DLG-024/026: the dialog left the main window deliberately. It
@@ -488,7 +528,6 @@ proc ::scidb::test::dlgplace::check {target dlg {wantRule ""}} {
         require [expr {[overlapArea $outer $mainFrame] == 0}] \
             "$target: outside frame $outer overlaps the main window $mainFrame"
         require [expr {$area == 0}] "$target: outside frame $outer overlaps board $board"
-        set ind [indicatorRect]
         require [expr {$ind eq {} || [overlapArea $outer $ind] == 0}] \
             "$target: outside frame $outer overlaps indicators $ind"
         require [expr {$wa eq [dialogWorkArea $dlg]}] \
@@ -501,19 +540,19 @@ proc ::scidb::test::dlgplace::check {target dlg {wantRule ""}} {
         # allowance, so this stays asserted.
         require [inside $outer [mainWindowFrame]] \
             "$target: in-window frame $outer is outside the main window [mainWindowFrame]"
-        set ind [indicatorRect]
         require [expr {$ind eq {} || [overlapArea $outer $ind] == 0}] \
             "$target: in-window frame $outer overlaps indicators $ind"
         require [expr {![dict exists $plan outside] || ![dict get $plan outside]}] \
             "$target: in-window plan reports the outside field"
         if {$rule ni {shrink scroll}} {
-            require [expr {$area == [tcl::mathfunc::min {*}[dict values $areas]]}] "$target: overlap $area is not minimum of $areas"
+            require [expr {$area == $expectedArea}] \
+                "$target: overlap $area is not the least cost of $areas (indicators $indAreas)"
         }
         # VAL-DLG-035/037: with no free desktop space left, no-room is the one
         # defined case that may cover the board; the pre-change zero-overlap
         # rule still holds wherever a ladder candidate is overlap-free.
         if {$rule eq "no-room"} {
-            requireNoRoomOverlap $target $area $areas
+            requireNoRoomOverlap $target $area $areas $indAreas
         } elseif {$rule ne "shrink"} {
             require [expr {$area == 0}] "$target: $rule overlaps $area"
         }
@@ -759,14 +798,33 @@ proc ::scidb::test::dlgplace::requireNoRoomMinimum {target dlg} {
     lassign [windowWorkArea] ax ay aw ah
     lassign $board bx by bw bh
     lassign $outer _ _ fw fh
+    set ind [indicatorRect]
     set areas {}
-    foreach {x y} [list [expr {$bx+$bw+12}] $by [expr {$bx-12-$fw}] $by $bx [expr {$by+$bh+12}]] {
+    set best {}
+    set bestCost {}
+    foreach side {right left below above} {
+        switch $side {
+            right { set x [expr {$bx+$bw+12}]; set y $by }
+            left  { set x [expr {$bx-12-$fw}]; set y $by }
+            below { set x $bx; set y [expr {$by+$bh+12}] }
+            above { set x $bx; set y [expr {$by-12-$fh}] }
+        }
         set x [expr {max($ax,min($x,$ax+$aw-$fw))}]
         set y [expr {max($ay,min($y,$ay+$ah-$fh))}]
-        lappend areas [overlapArea [list $x $y $fw $fh] $board]
+        set rect [list $x $y $fw $fh]
+        set area [overlapArea $rect $board]
+        lappend areas $area
+        set ia [expr {$ind eq {} ? 0 : [overlapArea $rect $ind]}]
+        set cost [list [expr {$ia > 0}] $area]
+        if {$bestCost eq {} || [lindex $cost 0] < [lindex $bestCost 0]
+            || ([lindex $cost 0] == [lindex $bestCost 0]
+                && [lindex $cost 1] < [lindex $bestCost 1])} {
+            set bestCost $cost
+            set best $area
+        }
     }
-    require [expr {[overlapArea $outer $board] == [tcl::mathfunc::min {*}$areas]}] \
-        "$target: fallback did not minimise board overlap ($areas)"
+    require [expr {[overlapArea $outer $board] == $best}] \
+        "$target: fallback did not minimise the indicator/board cost ($areas)"
     return 1
 }
 proc ::scidb::test::dlgplace::callers {} {

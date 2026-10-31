@@ -110,6 +110,35 @@ tcltest::test dlg-candidate-grid {the chosen outer rectangle is contained and ha
     }
     set checked
 } -result 36
+# VAL-DLG-044: layout N042 (LEFT 500x430, main 400x380+10+10, RIGHT 200x150)
+# where no monitor fits the dialog. The in-window ladder is clamped to the main
+# window's area {10 10 402 407}; the board {81 160 187 162} cannot be cleared by
+# any candidate, so board overlap is allowed (VAL-DLG-037), but the indicators
+# {250 297 18 18} at the bottom of the board must stay clear (VAL-CROSS-005 has
+# no in-window exemption). On a5330df7 the right candidate {170 160} covered the
+# board by 15876 px^2 and the indicator by 324 px^2; the above candidate
+# {81 10} clears the indicator. The chosen board overlap must still equal the
+# minimum of the candidate set.
+tcltest::test dlg-044-no-room-clears-indicators {no board-clear candidate exists, so the indicator-clear above candidate wins} -body {
+    set plan [::util::place::besideNoRoomPlan \
+        81 160 187 162 240 180 {10 10 402 407} {1 1 27 0} 12 {} \
+        {81 160 187 162} {250 297 18 18}]
+    set clear {}
+    dict for {side area} [dict get $plan boardAreas] {
+        if {$area == 0} {lappend clear $side}
+    }
+    list [dict get $plan side] [dict get $plan geometry] \
+        [dict get $plan indicatorAreas] $clear
+} -result {above {81 10 240 180} {right 324 left 36 below 324 above 0} {}}
+# Without an indicator rectangle the ladder minimises board overlap alone over
+# all four sides, so the above candidate still wins on the smaller overlap.
+tcltest::test dlg-044-no-room-four-sided-without-indicators {the fourth side wins on board overlap alone} -body {
+    set plan [::util::place::besideNoRoomPlan \
+        81 160 187 162 240 180 {10 10 402 407} {1 1 27 0} 12 {} \
+        {81 160 187 162}]
+    list [dict get $plan side] [dict get $plan geometry] \
+        [dict get $plan boardAreas]
+} -result {above {81 10 240 180} {right 15876 left 27702 below 20944 above 10659}}
 # VAL-DLG-021: joint requested-frame packing is independent of Tk/WM.
 foreach {name board sizes area fits} {
     pair-column {8 151 331 306} {{361 219} {463 385}} {0 0 802 627} 1
