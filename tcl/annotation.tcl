@@ -342,6 +342,16 @@ unset i k nagW nagB lineW lineB
 namespace import ::tcl::mathfunc::int
 
 
+# The frame the editor's controls are built in. It sits inside the shared
+# playing viewport, which gives the editor the same compact/scroll minimum as
+# the other playing dialogs: a screen too small for its natural size scrolls
+# it instead of letting it cover the board (VAL-DLG-043). The viewport is
+# created on first use and reused on every later lookup.
+proc bodyFrame {dlg} {
+	return [::util::place::playingBody $dlg].top
+}
+
+
 proc open {parent} {
 	variable ::toolbar::Defaults
 	variable Annotations
@@ -364,8 +374,11 @@ proc open {parent} {
 	wm withdraw $dlg
 	set title "$::scidb::app: $mc::AnnotationEditor"
 
-	set top [::ttk::frame $dlg.top -relief raised -borderwidth 2]
-	pack $dlg.top -fill both -expand yes
+	# The editor's body lives in the shared two-axis viewport so a screen too
+	# small for its natural size scrolls it instead of covering the board
+	# (the compact/scroll minimum, VAL-DLG-043).
+	set top [::ttk::frame [bodyFrame $dlg] -relief raised -borderwidth 2]
+	pack $top -fill both -expand yes
 	bind $dlg <<LanguageChanged>> [namespace code [list LanguageChanged $dlg %W]]
 
 	if {[tk windowingsystem] ne "win32"} {
@@ -628,6 +641,7 @@ proc Init {dlg} {
 	variable Value
 	variable Vars
 
+	set top [bodyFrame $dlg]
 	foreach line $Annotations(w) {
 		foreach nag $line { set Value($nag) 0 }
 	}
@@ -654,7 +668,7 @@ proc Init {dlg} {
 			$Vars(cb:$i) configure -state disabled
 		}
 		foreach group {0 1 2 3 4 5} {
-			foreach child [winfo children $dlg.top.std.f${group}] {
+			foreach child [winfo children $top.std.f${group}] {
 				$child configure -state disabled
 			}
 		}
@@ -676,12 +690,12 @@ proc Init {dlg} {
 
 			if {$atStart} { set state "disabled" } else { set state "normal" }
 			foreach group {0 1 2 3 4 5} {
-				foreach child [winfo children $dlg.top.std.f${group}] {
+				foreach child [winfo children $top.std.f${group}] {
 					$child configure -state $state
 				}
 			}
-			$dlg.top.std.f4.155 configure -state normal
-			$dlg.top.std.f4.156 configure -state normal
+			$top.std.f4.155 configure -state normal
+			$top.std.f4.156 configure -state normal
 		}
 	}
 }
@@ -770,6 +784,7 @@ proc SetNag {group nag} {
 
 	set deselected 0
 	set dlg $Vars(dialog)
+	set top [bodyFrame $dlg]
 
 	switch $nag {
 		153 { if {$Value(154)} { incr deselected } }
@@ -779,7 +794,7 @@ proc SetNag {group nag} {
 
 		default {
 			if {!$Vars(force) && $group != 3 && $group != 4} {
-				foreach child [winfo children $dlg.top.std.f${group}] {
+				foreach child [winfo children $top.std.f${group}] {
 					if {![string match *.$nag $child]} {
 						if {[set [$child cget -variable]]} { incr deselected }
 					}
@@ -793,14 +808,14 @@ proc SetNag {group nag} {
 		TooManyNagsWarning $dlg
 	} else {
 		switch $nag {
-			153 { $dlg.top.std.f${group}.154 deselect }
-			154 { $dlg.top.std.f${group}.153 deselect }
-			155 { $dlg.top.std.f${group}.156 deselect }
-			156 { $dlg.top.std.f${group}.155 deselect }
+			153 { $top.std.f${group}.154 deselect }
+			154 { $top.std.f${group}.153 deselect }
+			155 { $top.std.f${group}.156 deselect }
+			156 { $top.std.f${group}.155 deselect }
 
 			default {
 				if {!$Vars(force) && $group != 3 && $group != 4} {
-					foreach child [winfo children $dlg.top.std.f${group}] {
+					foreach child [winfo children $top.std.f${group}] {
 						if {![string match *.$nag $child]} {
 							if {[set [$child cget -variable]]} { $child deselect }
 						}
@@ -925,7 +940,8 @@ proc LanguageChanged {dlg w} {
 	variable Vars
 
 	if {$dlg ne $w} { return }
-	$dlg.top.decor configure -text "${::scidb::app}: $mc::AnnotationEditor"
+	set top [bodyFrame $dlg]
+	$top.decor configure -text "${::scidb::app}: $mc::AnnotationEditor"
 
 	for {set i 0} {$i < 7} {incr i} {
 		SetValues $Vars(cb:$i) 
@@ -989,6 +1005,8 @@ proc Motion {frame x y} {
 proc Focus {dlg mode} {
 	variable ::toolbar::Defaults
 
+	set top [bodyFrame $dlg]
+
 	if {$mode eq "in"} {
 		set bg $Defaults(floating:frame:activebg)
 		set fg $Defaults(floating:frame:activefg)
@@ -998,8 +1016,8 @@ proc Focus {dlg mode} {
 		set fg $Defaults(floating:frame:foreground)
 	}
 
-	$dlg.top.decor configure -background $bg -foreground $fg
-	$dlg.top.decor.close configure \
+	$top.decor configure -background $bg -foreground $fg
+	$top.decor.close configure \
 		-background $bg \
 		-foreground $fg \
 		-activebackground $bg \

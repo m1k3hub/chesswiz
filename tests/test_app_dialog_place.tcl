@@ -359,7 +359,9 @@ proc ::scidb::test::dlgplace::plannedWorkArea {dlg plan} {
 # the check was simply "overlap 0" (08ba7f1b). Where the ladder still has an
 # overlap-free candidate that check is restored unchanged; only a case where
 # every candidate covers the board may fall back to the measured minimum
-# (mission decision 2026-10-28, VAL-DLG-035).
+# (mission decision 2026-10-28, VAL-DLG-035). VAL-DLG-044 adds the above
+# candidate: the no-room ladder may clear the indicators by going above the
+# board, and the minimum is taken over that wider candidate set too.
 proc ::scidb::test::dlgplace::requireNoRoomOverlap {target area areas {indAreas {}}} {
     # VAL-DLG-044: an indicator-clear candidate wins over a smaller board
     # overlap; board overlap is minimised only among candidates in the same
@@ -380,6 +382,58 @@ proc ::scidb::test::dlgplace::requireNoRoomOverlap {target area areas {indAreas 
         "$target: no-room plan overlaps $area although $areas has an overlap-free candidate"
     require [expr {$area == $best}] \
         "$target: no-room overlap $area is not the least cost of $areas (indicators $indAreas)"
+}
+# VAL-DLG-043: the reversed VAL-DLG-004 outcome, measured independently from
+# the plan's raw candidate rectangles. Where the ladder cannot hold the dialog
+# and no board room can be reserved, board coverage is permitted; the chosen
+# candidate must then be the least cost the set allows -- an indicator-clear
+# candidate first (VAL-DLG-044), then the least overlap of the protected
+# drawing (with no video inset, the drawn board) -- at the plan-time frame
+# extents, on the planned client rectangle and inside the dialog's work area.
+proc ::scidb::test::dlgplace::requireNoRoomCost {target dlg} {
+    variable calls
+    require [info exists ::util::place::BesideLastPlan($dlg)] "$target: no placement plan"
+    set plan $::util::place::BesideLastPlan($dlg)
+    require [expr {[dict get $plan rule] eq "no-room"}] \
+        "$target: expected no-room, got [dict get $plan rule]"
+    lassign [dict get $calls $dlg extents] el er et eb
+    set board [dict get $calls $dlg board]
+    set ind [indicatorRect]
+    set cands [dict get $plan candidates]
+    set best {}
+    set bestCost {}
+    set rows {}
+    foreach side {right left below above} {
+        if {![dict exists $cands $side]} {continue}
+        lassign [dict get $cands $side] x y w h
+        set rect [list $x $y [expr {$w+$el+$er}] [expr {$h+$et+$eb}]]
+        set ba [overlapArea $rect $board]
+        set ia [expr {$ind eq {} ? 0 : [overlapArea $rect $ind]}]
+        lappend rows [list $side $ba $ia]
+        set cost [list [expr {$ia > 0}] $ba]
+        if {$best eq {}} {
+            set best $side; set bestCost $cost; continue
+        }
+        if {[lindex $cost 0] < [lindex $bestCost 0]
+            || ([lindex $cost 0] == [lindex $bestCost 0]
+                && [lindex $cost 1] < [lindex $bestCost 1])} {
+            set best $side; set bestCost $cost
+        }
+    }
+    set chosen [dict get $plan chosen]
+    puts "DLG-NOROOM-COST $target chosen=$chosen least=$best candidates=$rows frame=[outerRect $dlg] board_overlap=[overlapArea [outerRect $dlg] $board] workarea=[dialogWorkArea $dlg]"
+    require [expr {$chosen eq $best}] \
+        "$target: chose $chosen; the least board/indicator cost is $best ($rows)"
+    lassign [dict get $cands $best] cx cy cw ch
+    require [regexp {^([0-9]+)x([0-9]+)\+(-?[0-9]+)\+(-?[0-9]+)$} \
+        [wm geometry $dlg] -> w h x y] "$target: invalid geometry"
+    foreach a [list $x $y $w $h] p [list $cx $cy $cw $ch] {
+        require [expr {abs($a-$p) <= 1}] \
+            "$target: final [list $x $y $w $h] != candidate $best [list $cx $cy $cw $ch]"
+    }
+    require [inside [outerRect $dlg] [dialogWorkArea $dlg]] \
+        "$target: fallback frame [outerRect $dlg] outside [dialogWorkArea $dlg]"
+    return 1
 }
 # Can a free desktop strip of <area> hold the dialog at its full requested
 # size? Recomputed from the live main frame and the dialog's own request, so a
@@ -490,6 +544,11 @@ proc ::scidb::test::dlgplace::check {target dlg {wantRule ""}} {
         set rect [list $cx $cy $fw $fh]
         dict set areas $side [overlapArea $rect $board]
         dict set indAreas $side [expr {$ind eq {} ? 0 : [overlapArea $rect $ind]}]
+    }
+    # VAL-DLG-043: record the no-room outcome (frame, indicator bbox, rule
+    # token and the candidate overlaps) so the accepted fallback is evidenced.
+    if {$rule eq "no-room"} {
+        puts "DLG-NOROOM-CHECK $target rule=$rule frame=$outer board=$board indicators=$ind overlap=$area candidates=$areas indicatorAreas=$indAreas chosen=[expr {[dict exists $plan chosen] ? [dict get $plan chosen] : "-"}]"
     }
     # VAL-DLG-044/037: the chosen candidate minimises indicator overlap first
     # (VAL-CROSS-005 has no in-window exemption), then board overlap; the board
@@ -723,12 +782,20 @@ proc ::scidb::test::dlgplace::requireInWindow {target dlg} {
 # production tries are right, left, below and above the board; each must take
 # the whole native frame. Where none can, the ladder genuinely fails and only
 # the outside route or the no-room fallback remains (VAL-DLG-032/035).
-proc ::scidb::test::dlgplace::inWindowStripFits {dlg} {
+# With <compact> the frame is measured at the compact/scroll minimum a
+# viewport body can reflow to, which is what the scroll rung needs.
+proc ::scidb::test::dlgplace::inWindowStripFits {dlg {compact 0}} {
     lassign [mainWindowFrame] mx my mw mh
     lassign [boardRect] bx by bw bh
     lassign [winfo extents $dlg] el er et eb
-    set fw [expr {[winfo reqwidth $dlg]+$el+$er}]
-    set fh [expr {[winfo reqheight $dlg]+$et+$eb}]
+    set rw [winfo reqwidth $dlg]
+    set rh [winfo reqheight $dlg]
+    if {$compact && [winfo exists $dlg.__viewport]} {
+        set rw [expr {min(240,$rw)}]
+        set rh [expr {min(180,$rh)}]
+    }
+    set fw [expr {$rw+$el+$er}]
+    set fh [expr {$rh+$et+$eb}]
     foreach {availW availH} [list \
         [expr {$mx+$mw-($bx+$bw)}] $mh \
         [expr {$bx-$mx}] $mh \
@@ -1021,10 +1088,12 @@ foreach {target openScript dialog closeScript} [::scidb::test::dlgplace::callers
         ::scidb::test::dlgplace::restoreMainMinimum
     } $closeScript] -result 1
 }
-# VAL-DLG-032 (a): the annotation editor cannot reflow below its requested
-# size, so at the real minimum it takes the outside route when a free desktop
-# strip can hold it, and the defined no-room fallback when none can.
-tcltest::test dlg-032-realmin-outside-annotation {at the real minimum the editor leaves the too-small window} -setup {
+# VAL-DLG-032 (a): the annotation editor reflows like the other playing
+# dialogs, so at the real minimum the in-window scroll rung holds it inside
+# the window; only when even the compact/scroll minimum has no in-window strip
+# does it take the outside route, and the no-room fallback when none can
+# (VAL-DLG-022/024/043).
+tcltest::test dlg-032-realmin-outside-annotation {at the real minimum the editor stays in the window by reflowing} -setup {
     ::scidb::test::dlgplace::setupBoard
     lassign [::scidb::test::dlgplace::realMinimum] realW realH
     wm geometry .application [::scidb::test::dlgplace::fitGeometry $realW $realH]
@@ -1035,7 +1104,9 @@ tcltest::test dlg-032-realmin-outside-annotation {at the real minimum the editor
     ::annotation::open .application
     set dlg .application.__annotation__
     ::scidb::test::dlgplace::waitFor 700
-    if {[::scidb::test::dlgplace::outsideStripFits $dlg]} {
+    if {[::scidb::test::dlgplace::inWindowStripFits $dlg 1]} {
+        ::scidb::test::dlgplace::requireInWindow dlg-032-realmin-outside $dlg
+    } elseif {[::scidb::test::dlgplace::outsideStripFits $dlg]} {
         ::scidb::test::dlgplace::requireOutside dlg-032-realmin-outside $dlg
     } else {
         ::scidb::test::dlgplace::requireNoRoomMinimum dlg-032-realmin-outside $dlg
@@ -1367,11 +1438,19 @@ tcltest::test dlg-no-room-board-restore {reserved strip shrinks the board and re
     if {$used} {
         ::scidb::test::dlgplace::require [expr {[::scidb::test::dlgplace::boardRect] ne $before}] \
             "reserved strip did not shrink the board"
+        ::scidb::test::dlgplace::require [expr {[::scidb::test::dlgplace::overlapArea \
+            [::scidb::test::dlgplace::widgetRect .application.dlgRestore] \
+            [::scidb::test::dlgplace::boardRect]] == 0}] \
+            "dialog covers the board even after reserving"
+    } else {
+        # VAL-DLG-004 reversal (mission decision 2026-10-28): no strip holds
+        # the dialog and no board room can be reserved, so the no-room fallback
+        # is the outcome. It may cover the board, but only by the least cost
+        # the candidate set allows -- indicators clear first (VAL-DLG-044),
+        # then the least board overlap -- and zero board overlap is still
+        # required wherever a candidate clears the board (VAL-DLG-043).
+        ::scidb::test::dlgplace::requireNoRoomCost no-room-board-restore .application.dlgRestore
     }
-    ::scidb::test::dlgplace::require [expr {[::scidb::test::dlgplace::overlapArea \
-        [::scidb::test::dlgplace::widgetRect .application.dlgRestore] \
-        [::scidb::test::dlgplace::boardRect]] == 0}] \
-        "dialog covers the board even after reserving"
     destroy .application.dlgRestore
     ::scidb::test::dlgplace::waitFor 900
     ::scidb::test::dlgplace::require [expr {[::scidb::test::dlgplace::boardRect] eq $before}] \

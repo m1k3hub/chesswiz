@@ -11,7 +11,9 @@ namespace eval ::scidb::test::annpal {}
 
 proc ::scidb::test::annpal::button {nag} {
 	set dlg $::annotation::Vars(dialog)
-	foreach f [winfo children $dlg.top.std] {
+	# The editor's controls live in the shared playing viewport (VAL-DLG-043),
+	# so ask the editor for its body frame instead of assuming the old path.
+	foreach f [winfo children [::annotation::bodyFrame $dlg].std] {
 		if {[winfo exists $f.$nag]} { return $f.$nag }
 	}
 	return ""
