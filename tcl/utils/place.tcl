@@ -2902,6 +2902,56 @@ proc besideBoard {dlg {parent ""}} {
 	}
 }
 
+# VAL-DLG-040: a dialog may remember the spot the user left it in. <offset> is
+# measured from the parent's client origin (::annotation::TracePosition). The
+# shared helper still owns the placement: the remembered spot is used only when
+# the plan just applied keeps the dialog in the window and the frame there
+# stays clear of the board and its indicators. Otherwise the plan's own
+# placement stands, so the rule that chooses where a dialog goes (in-window
+# ladder, then outside) is never overridden by a saved position.
+proc besideSavedPosition {dlg parent offset} {
+	variable BesideLastPlan
+	variable BesideState
+	if {[llength $offset] != 2 || ![info exists BesideLastPlan($dlg)]} { return {} }
+	set plan $BesideLastPlan($dlg)
+	if {[dict get $plan rule] eq "outside"} { return $plan }
+	if {![winfo exists $parent]} { return $plan }
+	set area [besideMainArea $dlg]
+	if {[llength $area] != 4} { return $plan }
+	lassign [dict get $plan geometry] _ _ w h
+	lassign [besideDialogExtents $dlg] el er et eb
+	# The offset spans client origins; wm geometry takes the frame origin.
+	set x [expr {[winfo rootx $parent] + [lindex $offset 0] - $el}]
+	set y [expr {[winfo rooty $parent] + [lindex $offset 1] - $et}]
+	set outer [list $x $y [expr {$w+$el+$er}] [expr {$h+$et+$eb}]]
+	set obstacle [besideProtectedRect]
+	if {![besideInside $outer $area]
+		|| ([llength $obstacle] && [besideOverlap $outer $obstacle] > 0)} {
+		return $plan
+	}
+	if {$w < [winfo reqwidth $dlg] || $h < [winfo reqheight $dlg]} {
+		wm geometry $dlg "${w}x${h}+${x}+${y}"
+	} else {
+		wm geometry $dlg "+${x}+${y}"
+	}
+	dict set plan geometry [list $x $y $w $h]
+	dict set plan rule position
+	set BesideState($dlg,request) [list $x $y]
+	set BesideState($dlg,planned) $outer
+	# The remembered spot is the user's own placement: like a live drag it is
+	# kept across layout re-plans while work-area containment still applies
+	# (VAL-DLG-029). The capture below needs a non-empty last rectangle, or
+	# the settle would read the move as a fresh placement and re-plan it.
+	set BesideState($dlg,user) 1
+	set BesideState($dlg,last) [list [expr {$x+$el}] [expr {$y+$et}] $w $h]
+	unset -nocomplain BesideState($dlg,pendingTrigger)
+	set BesideLastPlan($dlg) $plan
+	update idletasks
+	if {[winfo ismapped $dlg]} { set BesideState($dlg,last) [besideRect $dlg] }
+	besideRecord $dlg user {} $outer
+	return $plan
+}
+
 proc BesideBoardPlan {dlg parent {retry 0}} {
 	if {[winfo exists $dlg.__viewport]} { playingViewport $dlg; update idletasks }
 	variable BesideRequests

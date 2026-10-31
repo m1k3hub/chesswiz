@@ -495,20 +495,6 @@ proc open {parent} {
 			bind $dlg <FocusOut> [namespace code [list Focus $dlg out]]
 		}
 	}
-	if {[llength $Position] == 2} {
-		::update idletasks
-		if {[scan [winfo geometry [winfo toplevel $parent]] "%dx%d+%d+%d" tw th tx ty] == 4} {
-			set rx [expr {$tx + [lindex $Position 0]}]
-			set ry [expr {$ty + [lindex $Position 1]}]
-			set rw [winfo reqwidth $dlg]
-			set rh [winfo reqheight $dlg]
-			set sw [winfo workareawidth $dlg]
-			set sh [winfo workareaheight $dlg]
-			set rx [expr {max(min($rx, $sw - $rw), 0)}]
-			set ry [expr {max(min($ry, $sh - $rh), 0)}]
-			wm geometry $dlg +$rx+$ry
-		}
-	}
 	if {[tk windowingsystem] eq "aqua"} {
 		::tk::unsupported::MacWindowStyle style $dlg plain {}
 	} elseif {[tk windowingsystem] eq "win32"} {
@@ -518,11 +504,17 @@ proc open {parent} {
 	} else {
 		::scidb::tk::wm frameless $dlg
 	}
-	if {[llength $Position] != 2} {
-		::util::place::besideBoard $dlg $parent
-	}
+	# VAL-DLG-040: the shared helper places the editor; a remembered Position
+	# is only the user's preferred spot, which the helper keeps when it stays
+	# clear of the board.
+	::util::place::besideBoard $dlg $parent
 	wm deiconify $dlg
 	update
+	# Applied once the dialog is mapped, so the remembered spot is measured
+	# against the real frame decorations rather than their estimates.
+	if {[llength $Position] == 2} {
+		::util::place::besideSavedPosition $dlg $parent $Position
+	}
 }
 
 

@@ -530,6 +530,35 @@ proc ::scidb::test::dlgplace::requireOutside {target dlg} {
     requireOutsideSize $target $dlg $plan
     return 1
 }
+# VAL-DLG-040: a remembered Position is a caller's preference, not a
+# placement. It must still go through the shared helper (the calls trace), and
+# whatever the helper decides must leave the editor clear of the board and
+# every indicator, inside the work area, at the geometry the plan reports.
+proc ::scidb::test::dlgplace::requireSavedPlacement {target dlg} {
+    variable calls
+    variable workareaCalls
+    waitFor 500
+    require [dict exists $calls $dlg] "$target: shared helper did not place $dlg"
+    require [expr {$workareaCalls > 0}] "$target: no work-area snapshot consumed by helper"
+    require [info exists ::util::place::BesideLastPlan($dlg)] "$target: no placement plan"
+    set plan $::util::place::BesideLastPlan($dlg)
+    set outer [outerRect $dlg]
+    set board [boardRect]
+    set ind [indicatorRect]
+    set wa [winfo workarea $dlg]
+    puts "DLG-SAVED-DIR $target rule=[dict get $plan rule] geo=[dict get $plan geometry] frame=$outer board=$board indicators=$ind workarea=$wa placement=[::util::place::besidePlacement $dlg]"
+    require [expr {[overlapArea $outer $board] == 0}] \
+        "$target: saved placement $outer covers the board $board"
+    require [expr {$ind eq {} || [overlapArea $outer $ind] == 0}] \
+        "$target: saved placement $outer covers indicators $ind"
+    require [inside $outer $wa] "$target: saved placement $outer outside $wa"
+    require [regexp {^([0-9]+)x([0-9]+)\+(-?[0-9]+)\+(-?[0-9]+)$} [wm geometry $dlg] -> w h x y] \
+        "$target: invalid geometry"
+    foreach a [list $x $y $w $h] p [dict get $plan geometry] {
+        require [expr {abs($a-$p) <= 1}] "$target: final [list $x $y $w $h] != plan [dict get $plan geometry]"
+    }
+    return $plan
+}
 # VAL-DLG-038: scroll the canvas until <w> lies wholly inside the viewport.
 # Returns 1 when it does, 0 when no scroll offset can show it whole.
 proc ::scidb::test::dlgplace::scrollWholeControlIntoView {c w} {
@@ -915,6 +944,74 @@ tcltest::test dlg-032-realmin-outside-annotation {at the real minimum the editor
     catch {::annotation::close}
     catch {destroy .application.__annotation__}
     set ::annotation::Vars(dialog) {}
+    ::scidb::test::dlgplace::stopTrace
+    ::scidb::test::dlgplace::restoreMainMinimum
+} -result 1
+# VAL-DLG-040 (a): a remembered Position is a preference the shared helper may
+# decline. At the real minimum a saved {0 0} -- the parent's client origin,
+# straight over the board -- used to place the editor itself and cover the
+# board. It must still reach the helper, and the helper's own placement must
+# stand: board-clear, indicator-clear, inside the work area.
+tcltest::test dlg-040-saved-position-realmin {a saved Position cannot place the editor over the board} -setup {
+    ::scidb::test::dlgplace::setupBoard
+    lassign [::scidb::test::dlgplace::realMinimum] realW realH
+    wm geometry .application [::scidb::test::dlgplace::fitGeometry $realW $realH]
+    ::scidb::test::dlgplace::waitFor 700
+    puts "DLG-GEOMETRY (a) dlg-040-saved-realmin real-minimum=${realW}x${realH} main=[wm geometry .application] workarea=[winfo workarea .application]"
+} -body {
+    set ::annotation::Position {0 0}
+    ::annotation::open .application
+    set dlg .application.__annotation__
+    set plan [::scidb::test::dlgplace::requireSavedPlacement dlg-040-saved-realmin $dlg]
+    ::scidb::test::dlgplace::require \
+        [expr {[dict get $plan rule] ne "position"}] \
+        "dlg-040-saved-realmin: a board-covered saved Position was kept as the placement"
+    expr {1}
+} -cleanup {
+    catch {::annotation::close}
+    catch {destroy .application.__annotation__}
+    set ::annotation::Vars(dialog) {}
+    set ::annotation::Position {}
+    ::scidb::test::dlgplace::stopTrace
+    ::scidb::test::dlgplace::restoreMainMinimum
+} -result 1
+# VAL-DLG-040 (b): where the remembered spot is clear of the board the helper
+# keeps it -- as a helper placement, reported through rule `position` and a
+# user record, with the same zero-overlap guarantees.
+tcltest::test dlg-040-saved-position-kept {a board-clear saved Position is kept by the shared helper} -setup {
+    ::scidb::test::dlgplace::setupBoard
+    wm geometry .application [::scidb::test::dlgplace::fitGeometry 1100 850]
+    ::scidb::test::dlgplace::waitFor 700
+    puts "DLG-GEOMETRY dlg-040-saved-kept main=[wm geometry .application] workarea=[winfo workarea .application]"
+} -body {
+    # A spot just right of the drawn board, measured the way the product
+    # records it: client origin offset from the parent's client origin.
+    lassign [::scidb::test::dlgplace::boardRect] bx by bw bh
+    set saved [list [expr {$bx+$bw+20-[winfo rootx .application]}] \
+        [expr {$by-[winfo rooty .application]}]]
+    set ::annotation::Position $saved
+    ::annotation::open .application
+    set dlg .application.__annotation__
+    set plan [::scidb::test::dlgplace::requireSavedPlacement dlg-040-saved-kept $dlg]
+    ::scidb::test::dlgplace::require \
+        [expr {[dict get $plan rule] eq "position"}] \
+        "dlg-040-saved-kept: a board-clear saved Position was not kept (rule [dict get $plan rule])"
+    set placement [::util::place::besidePlacement $dlg]
+    ::scidb::test::dlgplace::require \
+        [expr {[dict get $placement placed_by] eq "user"}] \
+        "dlg-040-saved-kept: saved Position not recorded as the user's placement"
+    set got [list [expr {[winfo rootx $dlg]-[winfo rootx .application]}] \
+        [expr {[winfo rooty $dlg]-[winfo rooty .application]}]]
+    foreach a $got p $saved {
+        ::scidb::test::dlgplace::require [expr {abs($a-$p) <= 1}] \
+            "dlg-040-saved-kept: placed at $got, saved Position was $saved"
+    }
+    expr {1}
+} -cleanup {
+    catch {::annotation::close}
+    catch {destroy .application.__annotation__}
+    set ::annotation::Vars(dialog) {}
+    set ::annotation::Position {}
     ::scidb::test::dlgplace::stopTrace
     ::scidb::test::dlgplace::restoreMainMinimum
 } -result 1
