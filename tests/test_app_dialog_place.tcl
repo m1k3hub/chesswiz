@@ -1071,7 +1071,6 @@ foreach {target openScript dialog closeScript} [::scidb::test::dlgplace::callers
 # VAL-DLG-032 (a): at the real minimum, with the default layout, the dialogs
 # that can reflow still fit the in-window ladder and must stay inside.
 foreach {target openScript dialog closeScript} [::scidb::test::dlgplace::callers] {
-    if {$target eq "003D"} {continue}
     tcltest::test dlg-032-realmin-inwindow-$target {at the real minimum a reflowing dialog stays inside the main window} -setup {
         ::scidb::test::dlgplace::setupBoard
         lassign [::scidb::test::dlgplace::realMinimum] realW realH
