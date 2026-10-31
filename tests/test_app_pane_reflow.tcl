@@ -386,13 +386,29 @@ proc ::reflowTest::collapseSetup {{size 1200x800}} {
  # No explicit reopen override: the empty Analysis pane collapses by
  # content (VAL-PANE-010) when this size is applied.
  set ::application::reflow::S(override) {}
- wm geometry .application $size+0+0
- waitMs 400
+ # The first size request races the app's own startup geometry restore, so
+ # wait for the widgets to really have this size before reading the panes.
+ settleSize $size
  return $t
 }
 proc ::reflowTest::sashes {t} {return [::application::focuszoom::Snapshot $t]}
+proc ::reflowTest::rect {w} {
+	return [list [winfo rootx $w] [winfo rooty $w] [winfo width $w] [winfo height $w]]
+}
+# [wm geometry] echoes the request before the WM (or the app's own startup
+# geometry restore) applies it, so settle on the size the widgets really
+# have. The 2 px tolerance is a screen-width window losing its decorations.
+proc ::reflowTest::settleSize {size} {
+	lassign [split $size x] w h
+	for {set i 0} {$i < 40} {incr i} {
+		wm geometry .application $size+0+0
+		waitMs 100
+		if {[winfo width .application] >= $w-2 && [winfo height .application] >= $h-2} {break}
+	}
+	waitMs 400
+}
 
-tcltest::test pane-reflow-006-unmapped {empty Analysis collapses by content even at a normal size, empty Media only when short; explicit reopen wins; widgets never destroyed} -setup {
+tcltest::test pane-reflow-006-unmapped {empty Analysis and empty Media collapse by content at a normal size; explicit reopen wins; widgets never destroyed} -setup {
  set t [::reflowTest::collapseSetup]
  set a [$t leaf analysis:1]; set m [$t leaf media]
  set ids [list [winfo id $a] [winfo id $m]]
@@ -421,7 +437,7 @@ tcltest::test pane-reflow-006-unmapped {empty Analysis collapses by content even
 } -cleanup {
  ::application::media::Update [::scidb::game::current]
  ::application::reflow::reset
-} -result {{0 1} {0 1} 1 1 1 {1 1} 1}
+} -result {{0 0} {0 1} 1 1 1 {1 1} 1}
 
 tcltest::test pane-reflow-006-media-content {empty Media unmaps and content restores its prior sashes without destroying its widgets} -setup {
  set t [::reflowTest::collapseSetup]
@@ -663,6 +679,60 @@ tcltest::test pane-reflow-011-save-collapsed {content collapse permits save with
  ::application::reflow::reset
  wm geometry .application $oldGeometry
 } -result {{{1 1 1 1} {1 1 1 1}} 0}
+
+# VAL-PANE-011: an empty Media pane collapses by content at a roomy size, as
+# the Analysis pane does (VAL-PANE-010), and the neighbouring Tree pane takes
+# the freed space. Loading media restores the pane at the size it had; an
+# explicit reopen keeps it; a short window keeps its deficit-ordered layout
+# (the empty Analysis pane yields first, the Media pane only for the space
+# the window is still missing, as before).
+tcltest::test pane-reflow-012-media-content-collapse {empty Media collapses by content at roomy sizes, restores on media load, explicit reopen kept, short window unchanged} -setup {
+ set oldGeometry [wm geometry .application]
+} -body {
+ set results {}
+ foreach size {1280x720 1920x1080 1200x800} {
+  ::application::reflow::reset
+  set t [::reflowTest::collapseSetup]
+  ::reflowTest::settleSize $size
+  set m [$t leaf media]; set a [$t leaf analysis:1]; set tree [$t leaf tree]
+  set id [winfo id $m]
+  set empty [list [winfo ismapped $m] [winfo ismapped $a]]
+  set treeFreed [winfo width $tree]
+  # Explicit reopen through the production pane command keeps the pane.
+  ::application::openPane media
+  ::reflowTest::waitMs 450
+  set openRect [::reflowTest::rect $m]
+  set openSash [::application::focuszoom::Snapshot $t]
+  set treeShown [winfo width $tree]
+  # Back to automatic mode: the empty pane is a candidate again.
+  ::application::reflow::explicitHide $t $m
+  ::application::reflow::updateCollapse
+  ::reflowTest::waitMs 450
+  set again [winfo ismapped $m]
+  # Media content restores the pane at the size it had before the collapse.
+  ::application::media::InsertEntry 3 Lesson /generated.mp4 -1
+  ::reflowTest::waitMs 500
+  set restored [winfo ismapped $m]
+  set sameRect [expr {$openRect eq [::reflowTest::rect $m]}]
+  set sameSash [expr {$openSash eq [::application::focuszoom::Snapshot $t]}]
+  # Empty again: it collapses again.
+  ::application::media::Update [::scidb::game::current]
+  ::reflowTest::waitMs 450
+  set emptied [winfo ismapped $m]
+  # Short window: the pre-change layout keeps the empty Media pane visible
+  # after the Analysis pane has taken the deficit.
+  ::reflowTest::settleSize 1000x800
+  set short [list [winfo ismapped $m] [winfo ismapped $a]]
+  set sameId [expr {[winfo id $m] eq $id}]
+  ::reflowTest::say "PANE011 size=$size empty=$empty tree=$treeFreed/$treeShown open=$openRect again=$again restored=$restored sameRect=$sameRect sameSash=$sameSash emptied=$emptied short=$short sameId=$sameId"
+  lappend results [list $empty $again $restored $sameRect $sameSash $emptied $short $sameId [expr {$treeFreed > $treeShown}]]
+ }
+ list {*}$results
+} -cleanup {
+ ::application::media::Update [::scidb::game::current]
+ ::application::reflow::reset
+ wm geometry .application $oldGeometry
+} -result {{{0 0} 0 1 1 1 0 {1 0} 1 1} {{0 0} 0 1 1 1 0 {1 0} 1 1} {{0 0} 0 1 1 1 0 {1 0} 1 1}}
 
 # VAL-LAY-020: exercise the saved file and actual Configure-driven geometry.
 tcltest::test pane-reflow-020-named-standard {named standard structure adapts temporarily and reloads unchanged} -setup {

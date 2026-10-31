@@ -2742,10 +2742,11 @@ proc updateCollapse {} {
  set deficit [expr {max($ShortWidth-[winfo width .application], $ShortHeight-[winfo height .application])}]
  # VAL-PANE-010: an Analysis pane with no engine adapts to its content at
  # every window size, not only while short of space. An explicit reopen
- # protects it (S(override)) until the user hides it. Media still takes
- # part in the short-window priority (VAL-PANE-006).
+ # protects it (S(override)) until the user hides it. An empty Media pane
+ # does the same at a roomy size (VAL-PANE-011); a short window keeps the
+ # deficit-ordered priority it has always had (VAL-PANE-006).
  set candidates [lsort -dictionary [lsearch -all -inline -glob [$t leaves] analysis:*]]
- if {$short} {lappend candidates media}
+ lappend candidates media
  foreach uid $candidates {
   if {$uid ni [$t leaves] || $uid in $S(override) || ![shouldCollapse $uid]} {continue}
   set pair [collapseNode $t $uid]
@@ -2758,9 +2759,12 @@ proc updateCollapse {} {
    set p [$t leaf $keep]
    if {[::application::focuszoom::Contains $pw $node $p]} {set protected 1}
   }
-  # An empty Analysis pane always yields its space; the optional Media
-  # pane only competes for the space the window is missing.
-  set needed [expr {[string match analysis:* $uid] || $deficit > 0}]
+  # An empty Analysis pane always yields its space, and so does an empty
+  # Media pane once the window is roomy enough (VAL-PANE-011). In a short
+  # window the optional Media pane competes for the space the window is
+  # missing, after the Analysis pane has taken its share.
+  set needed [expr {[string match analysis:* $uid]
+   || (!$short && $uid eq "media") || $deficit > 0}]
   if {!$protected && $needed} {
    lappend desired {*}$pair
    incr deficit -[winfo width $node]
