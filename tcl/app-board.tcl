@@ -593,12 +593,7 @@ proc setActive {flag} {
 
 
 proc setFocus {} {
-	variable Vars
-
-	# The board pane may be closed (View > Panes > Board off) while a queued
-	# or tab-switch caller still wants to focus it: skip, nothing to focus.
-	if {![info exists Vars(widget:frame)] || ![winfo exists $Vars(widget:frame)]} { return }
-	focus $Vars(widget:frame)
+	focus [set [namespace current]::Vars(widget:frame)]
 }
 
 
