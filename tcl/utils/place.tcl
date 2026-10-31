@@ -768,10 +768,16 @@ proc besideOutsidePlan {dlg main dw dh extents gap {rw ""} {rh ""}} {
 	set board [besideBoardRect]
 	set peers [besidePeers $dlg]
 	set best {}
-	set bestSize -1
+	# VAL-DLG-042: the first monitor that can hold the dialog wins.
+	# besideMonitorAreas lists the monitor hosting the main window first, so
+	# the dialog stays on the window's own monitor whenever that monitor has
+	# a strip at or above the compact/scroll minimum; a larger strip on a
+	# later monitor never outvotes it. A monitor that cannot hold the dialog
+	# is only used when no monitor can.
 	foreach area [besideMonitorAreas $dlg] {
 		lassign $area wx wy ww wh
 		set candidates {}
+		set bestSize -1
 		# The four strips of free desktop around the main window inside this
 		# monitor. Values are the client width and height each strip can hold.
 		foreach {side x y maxw maxh} [list \
@@ -811,16 +817,17 @@ proc besideOutsidePlan {dlg main dw dh extents gap {rw ""} {rh ""}} {
 			if {$blocked} { continue }
 			dict set candidates $side [list $cx $cy $w $h]
 			set size [expr {$w*$h}]
-			# Prefer the largest placement; ties keep right/left/below/above
-			# order, and the first monitor (the main window's) wins.
+			# Largest placement within this monitor; ties keep
+			# right/left/below/above order.
 			if {$best eq {} || $size > $bestSize} {
-				set best [list $area $side [list $cx $cy $w $h] $candidates]
+				set best [list $area $side [list $cx $cy $w $h]]
 				set bestSize $size
 			}
 		}
+		if {$best ne {}} { break }
 	}
 	if {$best eq {}} { return {} }
-	lassign $best area side geometry candidates
+	lassign $best area side geometry
 	lassign $geometry x y w h
 	set record {}
 	dict for {cside cgeom} $candidates {

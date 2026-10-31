@@ -184,7 +184,7 @@ proc ::scidb::test::dlgplace::placed {command code result op} {
     foreach e $::util::place::BesideReserves {lappend owners [lindex $e 0]}
     if {$dlg ni $owners} {lappend unowned [list $dlg $result]}
     dict set calls $dlg [dict create plan $result workareaCalls $workareaCalls board [boardRect] \
-        workarea [winfo workarea $dlg] extents [winfo extents $dlg]]
+        workarea [plannedWorkArea $dlg $result] extents [winfo extents $dlg]]
 }
 proc ::scidb::test::dlgplace::workareaTrace {command op} {
     variable workareaCalls
@@ -315,6 +315,45 @@ proc ::scidb::test::dlgplace::outerRect {dlg} {
  lassign [winfo extents $dlg] l r t b
  list [expr {$x-$l}] [expr {$y-$t}] [expr {$w+$l+$r}] [expr {$h+$t+$b}]
 }
+# VAL-DLG-042: the work area of the monitor a dialog is on, read from the
+# dialog's own native frame. Tk's `winfo workarea` ignores its window argument
+# on X11 and answers for the main window's monitor (measured 2026-10-31 on a
+# two-monitor Xvfb: `winfo workarea $dlg` equalled `winfo workarea .application`
+# for a dialog placed on the other monitor), so a cross-monitor placement must
+# be measured against the monitor whose rectangle the frame really occupies.
+# The widget layer enumerates every monitor; the frame's centre selects one.
+proc ::scidb::test::dlgplace::dialogWorkArea {dlg} {
+    set frame [outerRect $dlg]
+    lassign $frame x y w h
+    set cx [expr {$x + $w / 2}]
+    set cy [expr {$y + $h / 2}]
+    set areas {}
+    if {![catch {::scidb::tk::wm workareas .application} found]} {
+        foreach area $found {
+            if {[llength $area] != 4} {continue}
+            lassign $area ax ay aw ah
+            if {$aw < 1 || $ah < 1} {continue}
+            lappend areas $area
+            if {$cx >= $ax && $cx < $ax + $aw && $cy >= $ay && $cy < $ay + $ah} {
+                return $area
+            }
+        }
+    }
+    # No enumerated monitor holds the centre: a single monitor is its own
+    # answer, otherwise fall back to Tk's area so the containment checks
+    # below still fail a frame that is not on any monitor.
+    if {[llength $areas] == 1} {return [lindex $areas 0]}
+    return [winfo workarea $dlg]
+}
+# The work area a plan says the dialog belongs to: the monitor the outside
+# route chose, else the main window's monitor (every in-window plan clamps to
+# it). Taken at plan time, before the window manager applies the move.
+proc ::scidb::test::dlgplace::plannedWorkArea {dlg plan} {
+    if {[dict exists $plan workarea] && [llength [dict get $plan workarea]] == 4} {
+        return [dict get $plan workarea]
+    }
+    return [winfo workarea .application]
+}
 # VAL-DLG-037: the pre-change board-overlap rule for a no-room plan. Before
 # this mission no-room always took the largest overlap-free forced strip, so
 # the check was simply "overlap 0" (08ba7f1b). Where the ladder still has an
@@ -369,7 +408,7 @@ proc ::scidb::test::dlgplace::requireOutsideSize {target dlg plan} {
         "$target: outside plan resized ${pw}x${ph} a dialog whose body cannot reflow"
     require [expr {$pw >= min(240,$rw) && $ph >= min(180,$rh)}] \
         "$target: outside plan ${pw}x${ph} below the scrolling minimum"
-    set area [expr {[dict exists $plan workarea] ? [dict get $plan workarea] : [winfo workarea $dlg]}]
+    set area [expr {[dict exists $plan workarea] ? [dict get $plan workarea] : [dialogWorkArea $dlg]}]
     require [expr {![outsideStripHoldsRequest $dlg $area]}] \
         "$target: outside plan shrank to ${pw}x${ph} although a free desktop strip holds ${rw}x${rh}"
     return 1
@@ -386,7 +425,8 @@ proc ::scidb::test::dlgplace::check {target dlg {wantRule ""}} {
     set ext [dict get $call extents]
     set rule [dict get $plan rule]
     require [expr {[dict get $call workareaCalls] > 0}] "$target: no work-area snapshot consumed by helper"
-    require [expr {$wa eq [winfo workarea $dlg]}] "$target: work area changed"
+    require [expr {$wa eq [dialogWorkArea $dlg]}] \
+        "$target: dialog is on work area [dialogWorkArea $dlg], not the planned $wa"
     require [expr {$ext eq [winfo extents $dlg]}] "$target: frame changed after planning"
     require [expr {$board eq [boardRect]}] "$target: board changed after planning"
     if {$wantRule ne ""} {require [expr {$rule eq $wantRule}] "$target: expected $wantRule, got $rule"}
@@ -451,7 +491,8 @@ proc ::scidb::test::dlgplace::check {target dlg {wantRule ""}} {
         set ind [indicatorRect]
         require [expr {$ind eq {} || [overlapArea $outer $ind] == 0}] \
             "$target: outside frame $outer overlaps indicators $ind"
-        require [expr {$wa eq [winfo workarea $dlg]}] "$target: outside on another work area"
+        require [expr {$wa eq [dialogWorkArea $dlg]}] \
+            "$target: outside dialog is on work area [dialogWorkArea $dlg], not the planned $wa"
     } else {
         # VAL-DLG-025/032: every in-window plan stays inside the main frame,
         # and VAL-CROSS-005's "nothing the app places covers the board or its
@@ -513,10 +554,12 @@ proc ::scidb::test::dlgplace::requireOutside {target dlg} {
     set outer [outerRect $dlg]
     set board [boardRect]
     set ind [indicatorRect]
-    set wa [winfo workarea $dlg]
+    set wa [dialogWorkArea $dlg]
     set planArea [expr {[dict exists $plan workarea] ? [dict get $plan workarea] : $wa}]
     puts "DLG-OUTSIDE-DIR $target rule=$rule outside=[expr {[dict exists $plan outside] ? [dict get $plan outside] : "-"}] resized=[dict get $plan resized] geo=[dict get $plan geometry] frame=$outer main=$main board=$board indicators=$ind workarea=$wa"
     require [expr {$rule eq "outside"}] "$target: expected the outside rule, got $rule"
+    require [expr {$wa eq $planArea}] \
+        "$target: outside dialog is on work area $wa, not the planned $planArea"
     require [expr {[dict exists $plan outside] && [dict get $plan outside]}] \
         "$target: outside plan does not report the outside field"
     require [expr {[dict get $plan resized] in {0 1}}] "$target: resized is not a boolean"
@@ -545,7 +588,7 @@ proc ::scidb::test::dlgplace::requireSavedPlacement {target dlg} {
     set outer [outerRect $dlg]
     set board [boardRect]
     set ind [indicatorRect]
-    set wa [winfo workarea $dlg]
+    set wa [dialogWorkArea $dlg]
     puts "DLG-SAVED-DIR $target rule=[dict get $plan rule] geo=[dict get $plan geometry] frame=$outer board=$board indicators=$ind workarea=$wa placement=[::util::place::besidePlacement $dlg]"
     require [expr {[overlapArea $outer $board] == 0}] \
         "$target: saved placement $outer covers the board $board"
@@ -622,7 +665,7 @@ proc ::scidb::test::dlgplace::requireInWindow {target dlg} {
     set outer [outerRect $dlg]
     set board [boardRect]
     set ind [indicatorRect]
-    set wa [winfo workarea $dlg]
+    set wa [dialogWorkArea $dlg]
     puts "DLG-INSIDE-DIR $target rule=$rule outside=[expr {[dict exists $plan outside] ? [dict get $plan outside] : "-"}] resized=[dict get $plan resized] geo=[dict get $plan geometry] frame=$outer main=$main board=$board indicators=$ind workarea=$wa"
     require [expr {$rule ne "outside"}] "$target: went outside though the in-window ladder fits (rule $rule)"
     require [expr {![dict exists $plan outside] || ![dict get $plan outside]}] \
@@ -708,7 +751,7 @@ proc ::scidb::test::dlgplace::requireNoRoomMinimum {target dlg} {
     set rule [dict get $plan rule]
     set outer [outerRect $dlg]
     set board [boardRect]
-    set wa [winfo workarea $dlg]
+    set wa [dialogWorkArea $dlg]
     puts "DLG-NOROOM-DIR $target rule=$rule frame=$outer board=$board workarea=$wa"
     require [expr {$rule eq "no-room"}] \
         "$target: no free desktop strip but the rule is $rule"
@@ -1340,7 +1383,7 @@ proc ::scidb::test::dlgplace::dialogOverlap {dlg} {
 proc ::scidb::test::dlgplace::freeCorner {dlg} {
     # The first decorated-corner position that leaves the board untouched.
     lassign [boardRect] bx by bw bh
-    lassign [winfo workarea $dlg] wx wy ww wh
+    lassign [dialogWorkArea $dlg] wx wy ww wh
     lassign [winfo extents $dlg] el er et eb
     set fw [expr {[winfo width $dlg] + $el + $er}]
     set fh [expr {[winfo height $dlg] + $et + $eb}]
@@ -1726,7 +1769,7 @@ proc ::scidb::test::dlgplace::noRoomCheck {target dlg before} {
     require [regexp {^([0-9]+)x([0-9]+)\+(-?[0-9]+)\+(-?[0-9]+)$} \
         [wm geometry $dlg] -> fw fh fx fy] "invalid geometry [wm geometry $dlg]"
     set outer [list $fx $fy [expr {$fw+$el+$er}] [expr {$fh+$et+$eb}]]
-    set wa [winfo workarea $dlg]
+    set wa [dialogWorkArea $dlg]
     set plan {}
     if {[info exists ::util::place::BesideLastPlan($dlg)]} {set plan $::util::place::BesideLastPlan($dlg)}
     set rule [expr {[dict exists $plan rule] ? [dict get $plan rule] : ""}]
@@ -3218,7 +3261,7 @@ tcltest::test dlg-v22-minimum-fallback {the measured gate goes outside at 400x38
     set plan $::util::place::BesideLastPlan($dlg)
     set frame [::scidb::test::dlgplace::outerRect $dlg]
     set board [::scidb::test::dlgplace::boardRect]
-    set wa [winfo workarea $dlg]
+    set wa [::scidb::test::dlgplace::dialogWorkArea $dlg]
     lassign [::scidb::tk::wm frame .application] mx my mw mh
     puts "DLG022 OUTSIDE frame=$frame board=$board main=[wm geometry .application] workarea=$wa plan=$plan"
     ::scidb::test::dlgplace::require [expr {[dict get $plan rule] eq "outside"}] \
@@ -3262,7 +3305,7 @@ tcltest::test dlg-v22-minimum-fallback {the measured gate goes outside at 400x38
     set plan $::util::place::BesideLastPlan($fill)
     set frame [::scidb::test::dlgplace::outerRect $fill]
     set board [::scidb::test::dlgplace::boardRect]
-    set wa [winfo workarea $fill]
+    set wa [::scidb::test::dlgplace::dialogWorkArea $fill]
     puts "DLG022 MINIMUM frame=$frame board=$board main=[wm geometry .application] workarea=$wa plan=$plan"
     ::scidb::test::dlgplace::require [expr {[dict get $plan rule] eq "no-room"}] \
         "no free desktop space must take the no-room fallback: $plan"
@@ -3627,7 +3670,7 @@ proc ::scidb::test::dlgplace::shrunkCheck {target dlg} {
         [expr {[::scidb::test::dlgplace::overlapArea $frame $board] == 0}] \
         "$target: frame $frame covers board $board"
     ::scidb::test::dlgplace::require \
-        [::scidb::test::dlgplace::inside $frame [winfo workarea $dlg]] \
+        [::scidb::test::dlgplace::inside $frame [::scidb::test::dlgplace::dialogWorkArea $dlg]] \
         "$target: frame $frame outside the work area"
     return $frame
 }
@@ -3777,23 +3820,23 @@ tcltest::test dlg-029-outside-keeps-user-drag {an outside-placed dialog keeps a 
     }
     # Beyond the screen edges: the clamp pulls the frame fully inside the
     # work area, before and after main-window resizes.
-    lassign [winfo workarea $dlg] ax ay aw ah
+    lassign [::scidb::test::dlgplace::dialogWorkArea $dlg] ax ay aw ah
     wm geometry $dlg "+[expr {$ax+$aw+120}]+[expr {$ay+$ah+80}]"
     ::scidb::test::dlgplace::waitFor 700
     set clamped [::scidb::test::dlgplace::outerRect $dlg]
-    puts "DLG-029 clamped=$clamped workarea=[winfo workarea $dlg]"
+    puts "DLG-029 clamped=$clamped workarea=[::scidb::test::dlgplace::dialogWorkArea $dlg]"
     ::scidb::test::dlgplace::require \
-        [::scidb::test::dlgplace::inside $clamped [winfo workarea $dlg]] \
-        "dlg-029: escaped frame $clamped not clamped into [winfo workarea $dlg]"
+        [::scidb::test::dlgplace::inside $clamped [::scidb::test::dlgplace::dialogWorkArea $dlg]] \
+        "dlg-029: escaped frame $clamped not clamped into [::scidb::test::dlgplace::dialogWorkArea $dlg]"
     foreach size [::scidb::test::dlgplace::growSizes] {
         lassign $size w h
         set f [::scidb::test::dlgplace::resizeMain $dlg $w $h]
         ::scidb::test::dlgplace::require \
-            [::scidb::test::dlgplace::inside $f [winfo workarea $dlg]] \
+            [::scidb::test::dlgplace::inside $f [::scidb::test::dlgplace::dialogWorkArea $dlg]] \
             "dlg-029: resize to ${w}x${h} left $f outside the work area"
         set f [::scidb::test::dlgplace::resizeMain $dlg 400 380]
         ::scidb::test::dlgplace::require \
-            [::scidb::test::dlgplace::inside $f [winfo workarea $dlg]] \
+            [::scidb::test::dlgplace::inside $f [::scidb::test::dlgplace::dialogWorkArea $dlg]] \
             "dlg-029: shrink left $f outside the work area"
     }
     expr {1}
@@ -3830,13 +3873,13 @@ tcltest::test dlg-030-pair-tiny {two playing dialogs in a tiny window stay board
             set f1 [::scidb::test::dlgplace::outerRect $d1]
             set f2 [::scidb::test::dlgplace::outerRect $d2]
             set board [::scidb::test::dlgplace::boardRect]
-            puts "DLG-030 pair=$k1+$k2 order=$order f1=$f1 f2=$f2 board=$board workarea=[winfo workarea $d1]"
-            foreach f [list $f1 $f2] {
+            puts "DLG-030 pair=$k1+$k2 order=$order f1=$f1 f2=$f2 board=$board workarea=[::scidb::test::dlgplace::dialogWorkArea $d1]"
+            foreach f [list $f1 $f2] d [list $d1 $d2] {
                 ::scidb::test::dlgplace::require \
                     [expr {[::scidb::test::dlgplace::overlapArea $f $board] == 0}] \
                     "dlg-030: frame $f covers board $board"
                 ::scidb::test::dlgplace::require \
-                    [::scidb::test::dlgplace::inside $f [winfo workarea $d1]] \
+                    [::scidb::test::dlgplace::inside $f [::scidb::test::dlgplace::dialogWorkArea $d]] \
                     "dlg-030: frame $f outside the work area"
             }
             ::scidb::test::dlgplace::require \
@@ -3887,5 +3930,233 @@ foreach {target openScript dialog closeScript} {
     } $closeScript] -result 1
 }
 
+# VAL-DLG-042: the outside route must choose a monitor that can hold the
+# dialog at its compact/scroll minimum, and the main window's own monitor wins
+# whenever it can; a larger strip on a second monitor never outvotes it. The
+# cases need two real RandR monitors, so they install their own with
+# xrandr --setmonitor (the mission-001 win011 / V1-c5 recipe) and remove them
+# again in cleanup.
+proc ::scidb::test::dlgplace::areaOf {rect areas} {
+    lassign $rect x y w h
+    set cx [expr {$x + $w / 2}]
+    set cy [expr {$y + $h / 2}]
+    set i 0
+    foreach area $areas {
+        lassign $area ax ay aw ah
+        if {$cx >= $ax && $cx < $ax + $aw && $cy >= $ay && $cy < $ay + $ah} {
+            return $i
+        }
+        incr i
+    }
+    return -1
+}
+# spec entry: {name width height x y output}
+proc ::scidb::test::dlgplace::setMonitors {spec} {
+    set names {}
+    foreach entry $spec {
+        lassign $entry name w h x y output
+        set mmw [expr {max(1,$w*254/1000)}]
+        set mmh [expr {max(1,$h*254/1000)}]
+        catch {exec xrandr --delmonitor $name}
+        exec xrandr --setmonitor $name ${w}/${mmw}x${h}/${mmh}+$x+$y $output
+        lappend names $name
+    }
+    waitFor 900
+    return $names
+}
+proc ::scidb::test::dlgplace::clearMonitors {names} {
+    foreach name $names {catch {exec xrandr --delmonitor $name}}
+    waitFor 900
+}
+# The app re-fits its main window to the changed work area, and on a small
+# monitor that fit can land after the test's own geometry request; a window
+# an earlier case left zoomed or fullscreen would also keep its maximized
+# size whatever geometry is requested. Clear both states, then re-apply the
+# request until the window really has that size, so the case starts from the
+# documented window rectangle instead of a race.
+#
+# `wm geometry` echoes the request before the WM has applied it, so the check
+# is the window's own size (winfo width/height after a vwait); trusting the
+# echo let a clamped 498x403 window pass as 400x380. The display watch's
+# reflow (scalingChanged -> twm refresh) also puts the product layout minimum
+# back into wm minsize after the monitor change, and fitWindow's clamp records
+# the clamped size there, which would keep the WM from shrinking the window;
+# this case is declared to run with the minimum lowered (b), so re-apply the
+# lowered minimum before each attempt.
+proc ::scidb::test::dlgplace::forceMainGeometry {geometry {tries 10}} {
+    regexp {^(\d+)x(\d+)} $geometry -> width height
+    catch {wm attributes .application -zoomed 0}
+    catch {wm attributes .application -fullscreen 0}
+    catch {wm state .application normal}
+    waitFor 300
+    for {set i 0} {$i < $tries} {incr i} {
+        wm minsize .application 1 1
+        wm geometry .application $geometry
+        waitFor 600
+        if {[winfo width .application] == $width && [winfo height .application] == $height} {
+            return $geometry
+        }
+    }
+    return "[winfo width .application]x[winfo height .application]+[winfo x .application]+[winfo y .application]"
+}
+proc ::scidb::test::dlgplace::restoreMonitorLayout {} {
+    clearMonitors {D042-LEFT D042-RIGHT}
+    catch {::playengine::Close}
+    catch {destroy .application.playengine}
+    catch {::scidb::test::dlgplace::restoreMainMinimum}
+    waitFor 500
+    catch {wm geometry .application [::scidb::test::dlgplace::fitGeometry 1.0 1.0]}
+    waitFor 1200
+}
+# The crossing case is the contract's own regression: LEFT 1000x600 holds the
+# dialog at its compact minimum (a 296 px strip), RIGHT starts at +1000 and is
+# far larger, and the main window sits on LEFT at 400x380+300+100. The largest
+# candidate used to win and carried the dialog to RIGHT; the window's own
+# monitor must win whenever it can hold the dialog.
+#
+# dlg-042-main-monitor is the preference guard (both monitors hold a strip, the
+# dialog stays on the window's monitor). dlg-042-other-monitor is the oracle
+# case: LEFT has no strip at all, so the dialog is legitimately placed on
+# RIGHT, and the work area must be read from the dialog's frame (Tk answers
+# `winfo workarea $dlg` with the main window's monitor on X11).
+proc ::scidb::test::dlgplace::twoMonitorCase {case {leftW 1000} {leftH 600} {mainX 300} {mainY 100} {expect main}} {
+    set sw [winfo screenwidth .]
+    set sh [winfo screenheight .]
+    set names [setMonitors [list \
+        [list D042-LEFT $leftW $leftH 0 0 screen] \
+        [list D042-RIGHT [expr {$sw - $leftW}] $sh $leftW 0 none]]]
+    loweredMinimum
+    waitFor 1500
+    set areas [::scidb::tk::wm workareas .application]
+    require [expr {[llength $areas] >= 2}] "$case: two monitors were not enumerated: $areas"
+    # Open the dialog first: opening it can make the app lay the main window
+    # out at its natural size again, which on the small monitor clamps to the
+    # whole work area. The window rectangle is forced afterwards, so it is the
+    # rectangle the dialog is really planned against; the Configure that the
+    # resize sends makes the helper re-plan the open dialog.
+    ::playengine::open .application
+    waitFor 1200
+    set want [format "400x380+%d+%d" $mainX $mainY]
+    regexp {^(\d+)x(\d+)} $want -> wantW wantH
+    set main {}
+    for {set round 0} {$round < 3} {incr round} {
+        set main [forceMainGeometry $want]
+        require [expr {$main eq $want}] "$case: the main window settled at $main, not $want"
+        # The app lays the window out again after the dialog opens (it
+        # re-applies the layout's natural size, which on the small monitor
+        # clamps to the whole work area), and that pass can land just after
+        # the request. Watch the next 1.5 s and re-force until it holds.
+        set samples {}
+        set last ""
+        for {set i 0} {$i < 15} {incr i} {
+            waitFor 100
+            set now "[winfo width .application]x[winfo height .application]+[winfo x .application]+[winfo y .application]"
+            if {$now ne $last} {
+                lappend samples "$i:$now minsize={[wm minsize .application]} lastnormal=$::application::Vars(last:normal:geometry)"
+                set last $now
+            }
+        }
+        if {[winfo width .application] == $wantW && [winfo height .application] == $wantH} {
+            if {$round} {puts "DLG-042-RETRY $case round=$round samples=$samples"}
+            break
+        }
+        puts "DLG-042-REGROW $case round=$round samples=$samples"
+    }
+    require [expr {[winfo width .application] == $wantW && [winfo height .application] == $wantH}] \
+        "$case: the main window grew to [winfo width .application]x[winfo height .application] after the dialog opened"
+    set areas [::scidb::tk::wm workareas .application]
+    require [expr {[areaOf [outerRect .application] $areas] == 0}] \
+        "$case: the main window $main is not on the first monitor $areas"
+    set dlg .application.playengine
+    puts "DLG-042-STATE $case main=[wm geometry .application] state=[wm state .application] zoomed=[expr {[catch {wm attributes .application -zoomed} z] ? "?" : $z}] mainFrame=[::scidb::tk::wm frame .application] areas=[::scidb::tk::wm workareas .application] board=[boardRect] dlgFrame=[outerRect $dlg] reserve=$::application::board::ReserveSide/$::application::board::ReservePixels reserves=$::util::place::BesideReserves plan=[expr {[info exists ::util::place::BesideLastPlan($dlg)] ? $::util::place::BesideLastPlan($dlg) : {}}]"
+    check $case $dlg outside
+    set plan [dict get [dict get $::scidb::test::dlgplace::calls $dlg] plan]
+    set frame [outerRect $dlg]
+    set index [areaOf $frame $areas]
+    set onArea [dialogWorkArea $dlg]
+    puts "DLG-042 $case main=$main frame=$frame index=$index areas=$areas onArea=$onArea rule=[dict get $plan rule] resized=[dict get $plan resized] geometry=[dict get $plan geometry]"
+    require [expr {$index >= 0}] "$case: the dialog frame $frame is on no monitor $areas"
+    # The oracle must read the monitor the dialog is on.
+    require [expr {$onArea eq [lindex $areas $index]}] \
+        "$case: the oracle reads $onArea, not the dialog's monitor [lindex $areas $index]"
+    if {$expect eq "other"} {
+        require [expr {$index == 1}] \
+            "$case: the window's monitor has no strip, the dialog must use the second monitor (index $index)"
+    } else {
+        require [expr {$index == 0}] \
+            "$case: crossed to another monitor although the window's monitor holds the dialog"
+    }
+    # Never below the compact/scroll minimum.
+    lassign [dict get $plan geometry] _ _ pw ph
+    set rw [winfo reqwidth $dlg]
+    set rh [winfo reqheight $dlg]
+    require [expr {$pw >= min(240,$rw) && $ph >= min(180,$rh)}] \
+        "$case: outside plan ${pw}x${ph} is below the compact minimum"
+    clearMonitors $names
+    return 1
+}
+tcltest::testConstraint twoMonitorXrandr [expr {
+    [tk windowingsystem] eq "x11" && [auto_execok xrandr] ne ""
+    && [winfo screenwidth .] >= 1300 && [winfo screenheight .] >= 700}]
+
+foreach {case leftW leftH mainX mainY expect} {
+    dlg-042-crossing      1000 600 300 100 main
+    dlg-042-main-monitor  1000 600  50  50 main
+    dlg-042-other-monitor  500 430  10  10 other
+} {
+    tcltest::test $case {outside placement chooses a monitor that holds the dialog, the window's monitor first} \
+        -constraints twoMonitorXrandr -setup {
+        ::scidb::test::dlgplace::setupBoard
+    } -body [list ::scidb::test::dlgplace::twoMonitorCase $case $leftW $leftH $mainX $mainY $expect] \
+        -cleanup {
+        ::scidb::test::dlgplace::restoreMonitorLayout
+    } -result 1
+}
+# The second monitor is too small to hold the dialog at its compact minimum
+# (200x150 < 240x180) and the window fills the first monitor, so no monitor
+# can take it: no outside placement may be made. Pre-change this already held
+# (the monitor loop skipped too-small areas), so it guards the fix rather than
+# discriminating it.
+tcltest::test dlg-042-no-monitor {no outside placement when no monitor holds the dialog} \
+    -constraints twoMonitorXrandr -setup {
+    ::scidb::test::dlgplace::setupBoard
+} -body {
+    set sw [winfo screenwidth .]
+    set names [::scidb::test::dlgplace::setMonitors [list \
+        [list D042-LEFT 1000 600 0 0 screen] \
+        [list D042-RIGHT 200 150 1000 0 none]]]
+    ::scidb::test::dlgplace::loweredMinimum
+    # The window fills the first monitor, so no free desktop is left on it;
+    # the WM clamps the client to the work area, hence the frame-width check
+    # rather than an exact geometry match.
+    for {set i 0} {$i < 8} {incr i} {
+        wm geometry .application [format "%dx600+0+0" [expr {min(1000,$sw)}]]
+        ::scidb::test::dlgplace::waitFor 700
+        if {[llength [::scidb::tk::wm frame .application]] == 4} {
+            lassign [::scidb::tk::wm frame .application] _ _ fw _
+            if {$fw >= 900} break
+        }
+    }
+    ::scidb::test::dlgplace::waitFor 900
+    set areas [::scidb::tk::wm workareas .application]
+    ::scidb::test::dlgplace::require [expr {[llength $areas] >= 2}] \
+        "dlg-042-no-monitor: two monitors were not enumerated: $areas"
+    ::playengine::open .application
+    ::scidb::test::dlgplace::waitFor 1200
+    set dlg .application.playengine
+    ::scidb::test::dlgplace::check dlg-042-no-monitor $dlg
+    set plan [dict get [dict get $::scidb::test::dlgplace::calls $dlg] plan]
+    set frame [::scidb::test::dlgplace::outerRect $dlg]
+    set index [::scidb::test::dlgplace::areaOf $frame $areas]
+    puts "DLG-042 no-monitor frame=$frame index=$index areas=$areas rule=[dict get $plan rule]"
+    ::scidb::test::dlgplace::require [expr {[dict get $plan rule] ne "outside"}] \
+        "dlg-042-no-monitor: placed outside although no monitor holds the dialog"
+    ::scidb::test::dlgplace::require [expr {$index == 0}] \
+        "dlg-042-no-monitor: left the window's monitor"
+    ::scidb::test::dlgplace::clearMonitors $names
+    expr {1}
+} -cleanup {
+    ::scidb::test::dlgplace::restoreMonitorLayout
+} -result 1
 
 tcltest::cleanupTests
