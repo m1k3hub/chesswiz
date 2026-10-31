@@ -2566,6 +2566,8 @@ proc collapsible? {t} {
  variable S
  if {$t eq {} || $S(busy) || $S(saving)} {return 0}
  if {[$t zoomed] ne {}} {return 0}
+ # View > Panes > Board off: no board leaf, so nothing to collapse or reflow.
+ if {"board" ni [$t leaves]} {return 0}
  if {$::application::Vars(loading) || $::application::Vars(lock:layout)} {return 0}
  if {[info exists ::application::focuszoom::baseline($t)]} {return 0}
  return 1
