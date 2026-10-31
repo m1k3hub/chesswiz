@@ -837,6 +837,137 @@ proc besideOutsidePlan {dlg main dw dh extents gap {rw ""} {rh ""}} {
 		record $record workarea $area main $main minimumFits 1 outside 1]
 }
 
+# VAL-DLG-041: free desktop space for a dialog pair. The single-dialog outside
+# route looks for one free strip; once a peer already holds the only strip a
+# tiny screen offers (1000x600 with a 400x380 window), no strip can hold the
+# second frame whole, and the in-window ladder has no board-clear rung either.
+# Pack the peer and the new dialog together in one monitor work area instead,
+# keeping the peer where it is whenever the new frame fits beside it and
+# otherwise shrinking either one only down to the same compact/scroll minimum
+# the in-window ladder uses. The drawn board is inside the main frame, so a
+# rectangle outside the main frame can never cover it. Returns a plan with
+# rule 'outside', or {} when even the pair minimum does not fit.
+proc besideOutsidePairPlan {dlg main dw dh extents gap {rw ""} {rh ""}} {
+	if {[llength $main] != 4} { return {} }
+	set peers [besidePeers $dlg]
+	if {![llength $peers]} { return {} }
+	if {$rw eq ""} { set rw $dw }
+	if {$rh eq ""} { set rh $dh }
+	lassign $main mx my mw mh
+	lassign $extents el er et eb
+	set fw [expr {$el+$er}]
+	set fh [expr {$et+$eb}]
+	set sizes [list [list $dw $dh 0]]
+	lassign [besideCompactMinimum $dlg $rw $rh] cw ch
+	if {$cw < $dw || $ch < $dh} { lappend sizes [list $cw $ch 1] }
+	# The peer arrangements to try: every peer as placed, then every peer
+	# that already sits wholly outside the main window reduced to its own
+	# compact minimum. A peer inside the window is never moved for a later
+	# dialog, so its frame stays where its own plan put it.
+	set placed {}
+	foreach other $peers {
+		lassign [besideDialogExtents $other] pel per pet peb
+		lappend placed [list $other [besidePeerRect $other] \
+			[list $pel $per $pet $peb] 0]
+	}
+	set arrangements [list $placed]
+	set shrunk {}
+	set changed 0
+	foreach entry $placed {
+		lassign $entry other rect pext
+		lassign $rect rx ry rw0 rh0
+		lassign $pext pel per pet peb
+		lassign [besideCompactMinimum $other [winfo reqwidth $other] \
+			[winfo reqheight $other]] scw sch
+		set ow [expr {$scw+$pel+$per}]
+		set oh [expr {$sch+$pet+$peb}]
+		if {($ow < $rw0 || $oh < $rh0) && [besideOverlap $rect $main] == 0} {
+			lappend shrunk [list $other [list $rx $ry $ow $oh] $pext 1]
+			set changed 1
+		} else {
+			lappend shrunk [list $other $rect $pext 0]
+		}
+	}
+	if {$changed} { lappend arrangements $shrunk }
+	set best {}
+	foreach arrangement $arrangements {
+		foreach size $sizes {
+			lassign $size sw sh resized
+			set ow [expr {$sw+$fw}]
+			set oh [expr {$sh+$fh}]
+			foreach area [besideMonitorAreas $dlg] {
+				lassign $area wx wy ww wh
+				if {$ow > $ww || $oh > $wh} { continue }
+				# Nearest anchors first: beside the peer, then the strips
+				# around the main window. A 12 px gap separates two dialogs;
+				# the window edge itself is used flush, as for one dialog.
+				set anchors {}
+				foreach entry $arrangement {
+					lassign $entry other rect
+					lassign $rect px py pw ph
+					lappend anchors \
+						[list below $px [expr {$py+$ph+12}]] \
+						[list right [expr {$px+$pw+12}] $py] \
+						[list above $px [expr {$py-12-$oh}]] \
+						[list left [expr {$px-12-$ow}] $py]
+				}
+				lappend anchors \
+					[list right [expr {$mx+$mw+$gap}] $my] \
+					[list below $mx [expr {$my+$mh+$gap}]] \
+					[list left [expr {$mx-$gap-$ow}] $my] \
+					[list above $mx [expr {$my-$gap-$oh}]]
+				foreach anchor $anchors {
+					lassign $anchor side ax ay
+					set x [expr {max($wx,min($ax,$wx+$ww-$ow))}]
+					set y [expr {max($wy,min($ay,$wy+$wh-$oh))}]
+					# See besideOutsidePlan: an exact +0+0 can read as
+					# "no position" and land at the parent's origin.
+					if {$x == 0 && $y == 0} { set x 1; set y 1 }
+					set rect [list $x $y $ow $oh]
+					if {![besideInside $rect $area]} { continue }
+					if {[besideOverlap $rect $main] > 0} { continue }
+					set blocked 0
+					foreach entry $arrangement {
+						lassign $entry other prect
+						if {[besideOverlap $rect $prect] > 0} {
+							set blocked 1
+							break
+						}
+					}
+					if {$blocked} { continue }
+					set best [list $arrangement $area $side \
+						[list $x $y $sw $sh] $resized]
+					break
+				}
+				if {$best ne {}} { break }
+			}
+			if {$best ne {}} { break }
+		}
+		if {$best ne {}} { break }
+	}
+	if {$best eq {}} { return {} }
+	lassign $best arrangement area side geometry resized
+	lassign $geometry x y w h
+	# A peer the pair needed smaller moves to its compact minimum, keeping
+	# the corner it already used. wm geometry takes the frame origin and the
+	# client size, and the frame it produces is the packed rectangle.
+	set moves {}
+	foreach entry $arrangement {
+		lassign $entry other rect pext reduced
+		if {!$reduced} { continue }
+		lassign $rect fx fy fwo fho
+		lassign $pext pel per pet peb
+		lappend moves [list $other $fx $fy \
+			[expr {$fwo-$pel-$per}] [expr {$fho-$pet-$peb}]]
+	}
+	set frame [list $x $y [expr {$w+$fw}] [expr {$h+$fh}]]
+	set board [besideBoardRect]
+	set boardArea [expr {$board eq {} ? 0 : [besideOverlap $frame $board]}]
+	return [dict create geometry $geometry rule outside side $side overlap 0 \
+		resized $resized peerMoves $moves workarea $area main $main \
+		minimumFits 1 outside 1 pair 1 board $boardArea]
+}
+
 
 # Root rectangle {x y width height} of a mapped board, or {} when the board
 # cannot be placed against yet.
@@ -3320,7 +3451,47 @@ proc BesideBoardPlan {dlg parent {retry 0}} {
 	# overlap, peer clearance and the realised size decide, not the window size.
 	if {$mainRect ne {} && [besideOutsideWanted $dlg $plan $rw $rh]} {
 		set outside [besideOutsidePlan $dlg $mainRect $dw $dh $extents 0 $rw $rh]
+		# VAL-DLG-041: a peer already holds the only free strip on a tiny
+		# screen, so no single-dialog strip placement exists; pack the pair in
+		# the free desktop instead of letting the in-window minimum fall back
+		# over the board.
+		if {![llength $outside] && [llength $peers]} {
+			set outside [besideOutsidePairPlan $dlg $mainRect $dw $dh \
+				$extents 0 $rw $rh]
+		}
 		if {[llength $outside]} { set plan $outside }
+	}
+	# VAL-DLG-041: a pair packed into the free desktop may need its peer at
+	# the compact minimum. Apply each planned client rectangle through the
+	# same state path as a positioned peer, so the next settle reads the
+	# produced frame instead of mistaking the change for a user resize.
+	if {[dict exists $plan peerMoves]} {
+		variable BesideLastPlan
+		foreach move [dict get $plan peerMoves] {
+			lassign $move other fx fy cw ch
+			if {![winfo exists $other] || ![winfo ismapped $other]} { continue }
+			if {[info exists BesideState($other,user)] && $BesideState($other,user)} { continue }
+			lassign [wm minsize $other] omw omh
+			if {$cw < $omw || $ch < $omh} {
+				wm minsize $other [expr {min($omw,$cw)}] [expr {min($omh,$ch)}]
+			}
+			lassign [besideDialogExtents $other] pel per pet peb
+			wm geometry $other "${cw}x${ch}+${fx}+${fy}"
+			set BesideState($other,request) [list $fx $fy $cw $ch]
+			set BesideState($other,planned) [list $fx $fy \
+				[expr {$cw+$pel+$per}] [expr {$ch+$pet+$peb}]]
+			set BesideState($other,last) {}
+			# The peer's own last plan no longer describes its frame; keep
+			# the plan dict truthful for the position/close paths.
+			if {[info exists BesideLastPlan($other)]} {
+				set peerPlan $BesideLastPlan($other)
+				dict set peerPlan geometry [list $fx $fy $cw $ch]
+				dict set peerPlan resized [expr {
+					$cw < [winfo reqwidth $other] || $ch < [winfo reqheight $other]}]
+				set BesideLastPlan($other) $peerPlan
+			}
+			after idle [namespace code [list besideCapture $other]]
+		}
 	}
 	# Idle geometry work during planning can change the live parent frame.
 	# Recompute candidates against it rather than applying a stale minimum.
