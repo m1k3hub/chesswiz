@@ -47,10 +47,19 @@ variable ShiftLeft	8
 # window move, wide/tall reflow, fullscreen, pane zoom, a changed media
 # reserve), so besideBoard registers each placed dialog and a single
 # debounced settle re-plans them against the board's current root rectangle.
-# A dialog the user moved or resized is left alone from then on, even over
-# the board (VAL-DLG-018C); only a display change that leaves it outside the
-# new screen work area re-places it.
+# A dialog the user moved or resized normally keeps its new position, but a
+# playing dialog must not cover the board (VAL-DLG-046): once the drag or
+# resize has come to rest over the board, a non-pinned dialog is moved back
+# beside it. Dialogs built through playingBody carry a Pin control; while
+# pinned the user's position is kept, over the board included, until it is
+# unpinned. A display change that leaves any dialog outside the new screen
+# work area still clamps it.
 variable BesideDelay		40
+# A drag or resize reports a Configure per motion step. Hold the no-cover
+# correction until the dialog's rectangle has been unchanged this long, so
+# the dialog is not yanked out from under the pointer mid-drag.
+variable BesideQuiet		120
+variable BesidePinned
 variable BesideTimer		{}
 # A steady stream of events (a playing video's per-frame Configure, a live
 # engine clock) would restart a pure trailing debounce forever; the settle
@@ -412,7 +421,11 @@ proc fitWindowSettled {path rechecks} {
 # Children must be constructed in this body so native clipping works too.
 proc playingBody {dlg} {
 	set shell $dlg.__viewport
-	if {![winfo exists $dlg] || [winfo exists $shell]} { return $shell.canvas.body }
+	if {![winfo exists $dlg]} { return $shell.canvas.body }
+	# Every playing dialog offers the pin override (VAL-DLG-046). The control
+	# is placed, not gridded, so it does not change the dialog's request.
+	playingPinControl $dlg
+	if {[winfo exists $shell]} { return $shell.canvas.body }
 	ttk::frame $shell
 	canvas $shell.canvas -borderwidth 0 -highlightthickness 0 -width 1 -height 1 \
 		-xscrollcommand [list $shell.x set] -yscrollcommand [list $shell.y set]
@@ -432,6 +445,81 @@ proc playingBody {dlg} {
 	bind $dlg <Button-4> +[namespace code [list playingWheel $dlg 120]]
 	bind $dlg <Button-5> +[namespace code [list playingWheel $dlg -120]]
 	return $shell.canvas.body
+}
+
+# Pin control for playing dialogs: while selected, besideBoard leaves the
+# dialog wherever the user put it, even over the board. Clearing it puts a
+# covering dialog back beside the board on the next settle.
+proc playingPinControl {dlg} {
+	if {[winfo exists $dlg.__pin]} { return $dlg.__pin }
+	ttk::checkbutton $dlg.__pin -text "Pin" -takefocus 1 -padding 0 \
+		-command [list ::util::place::besidePin $dlg]
+	place $dlg.__pin -relx 1.0 -x -3 -y 2 -anchor ne
+	raise $dlg.__pin
+	# The body is built after this control; keep it on top of the viewport.
+	bind $dlg <Map> +[list raise $dlg.__pin]
+	return $dlg.__pin
+}
+
+# besidePin takes the new state as a boolean, or no argument to read the
+# checkbutton (its command runs after ttk has toggled it).
+proc besidePin {dlg {value ""}} {
+	variable BesidePinned
+	set w $dlg.__pin
+	if {$value eq ""} {
+		set value [expr {[winfo exists $w] && [$w instate selected]}]
+	} else {
+		set value [expr {$value ? 1 : 0}]
+		if {[winfo exists $w]} {
+			if {$value} { $w state selected } else { $w state !selected }
+		}
+	}
+	set BesidePinned($dlg) $value
+	if {$value} {
+		# Pin adopts the current rectangle as a deliberate user placement, so
+		# a later board reflow leaves the dialog where the user pinned it.
+		# Unpin does not drop that mark: a dialog pinned clear of the board
+		# keeps its position, one pinned over the board is re-placed by the
+		# no-cover rule on the next settle.
+		variable BesideState
+		if {[winfo exists $dlg] && [info exists BesideState($dlg,last)]} {
+			set BesideState($dlg,user) 1
+		}
+	}
+	besideSchedule
+	return $value
+}
+
+proc besidePinned {dlg} {
+	variable BesidePinned
+	return [expr {[info exists BesidePinned($dlg)] && $BesidePinned($dlg)}]
+}
+
+# One quiet-period settle per covering dialog: a Configure arriving inside the
+# quiet window keeps the rectangle and delays the re-plan (see BesideQuiet).
+proc BesideOverlapRecheck {dlg} {
+	variable BesideState
+	variable BesideQuiet
+	if {[info exists BesideState($dlg,overlapAfter)]} {
+		after cancel $BesideState($dlg,overlapAfter)
+	}
+	set BesideState($dlg,overlapAfter) \
+		[after $BesideQuiet [namespace code [list BesideOverlapDue $dlg]]]
+}
+
+proc BesideOverlapDue {dlg} {
+	variable BesideState
+	unset -nocomplain BesideState($dlg,overlapAfter)
+	if {[winfo exists $dlg]} { besideSchedule }
+}
+
+proc BesideOverlapClear {dlg} {
+	variable BesideState
+	if {[info exists BesideState($dlg,overlapAfter)]} {
+		after cancel $BesideState($dlg,overlapAfter)
+	}
+	unset -nocomplain BesideState($dlg,overlapAfter) \
+		BesideState($dlg,overlapRect) BesideState($dlg,overlapAt)
 }
 
 # dialogButtons normally binds its toplevel. Its parent here is the body;
@@ -2126,7 +2214,10 @@ proc besideRegistryRemove {dlg} {
 	set i [lsearch -exact $BesideDialogs $dlg]
 	if {$i >= 0} { set BesideDialogs [lreplace $BesideDialogs $i $i] }
 	if {[info exists BesideState($dlg,clampAfter)]} { after cancel $BesideState($dlg,clampAfter) }
+	if {[info exists BesideState($dlg,overlapAfter)]} { after cancel $BesideState($dlg,overlapAfter) }
 	array unset BesideState ${dlg},*
+	variable BesidePinned
+	unset -nocomplain BesidePinned($dlg)
 	variable BesideRecords
 	unset -nocomplain BesideRecords($dlg)
 	variable BesideLastPlan
@@ -2924,6 +3015,7 @@ proc BesideSettlePass {first} {
 	variable BesideDialogs
 	variable BesideState
 	variable BesideTrigger
+	variable BesideQuiet
 	set boardRect [besideBoardRect]
 	if {$boardRect eq {}} { return {} }
 	set obstacle [besideProtectedRect]
@@ -2983,8 +3075,35 @@ proc BesideSettlePass {first} {
 			}
 		}
 		if {$BesideState($dlg,user)} {
-			# Respect a user's position, including over the board. Only work-area
-			# containment may change it; never send it through the board planner.
+			# VAL-DLG-046: a non-pinned playing dialog the user dragged or
+			# resized over the board is returned beside it. Wait until the
+			# rectangle has been unchanged for BesideQuiet so an in-progress
+			# drag is not pulled out from under the pointer.
+			# The policy is for playing dialogs: those built through
+			# playingBody, which carry the pin control.
+			set outer [expr {[winfo exists $dlg.__pin] && ![besidePinned $dlg]
+				? [besideOuterRect $dlg] : {}}]
+			if {$outer ne {} && [besideOverlap $outer $boardRect] > 0} {
+				if {![info exists BesideState($dlg,overlapRect)]
+					|| $BesideState($dlg,overlapRect) ne $outer} {
+					# Moving: restart the quiet window on every step.
+					set BesideState($dlg,overlapRect) $outer
+					set BesideState($dlg,overlapAt) [clock milliseconds]
+					BesideOverlapRecheck $dlg
+				} elseif {[clock milliseconds] - $BesideState($dlg,overlapAt)
+					>= $BesideQuiet} {
+					BesideOverlapClear $dlg
+					set BesideState($dlg,user) 0
+					set BesideState($dlg,trigger) user-overlap
+					lappend replan $dlg
+					continue
+				}
+			} else {
+				BesideOverlapClear $dlg
+			}
+			# Respect a user's position clear of the board (and any pinned
+			# position). Only work-area containment may change it; never send
+			# it through the board planner.
 			# Use the measured native frame and request-coordinate translation
 			# shared with the main-window guard (decorations can differ from
 			# winfo extents). Configure and parent/display hooks all settle here.

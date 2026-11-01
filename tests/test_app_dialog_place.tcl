@@ -1547,6 +1547,17 @@ proc ::scidb::test::dlgplace::noOverlap {target dlg} {
     require [expr {$area == 0}] "$target: dialog covers board by $area px2"
     return 1
 }
+# VAL-DLG-046 evidence: one screenshot per measured state when
+# DLG_EVIDENCE_DIR names a directory. The filename carries the screen size so
+# the 1280x720 and 1920x1080 runs stay apart. A missing screenshot tool only
+# loses evidence, never the assertions.
+proc ::scidb::test::dlgplace::stateShot {target} {
+    if {![info exists ::env(DLG_EVIDENCE_DIR)] || $::env(DLG_EVIDENCE_DIR) eq ""} { return }
+    set dir $::env(DLG_EVIDENCE_DIR)
+    file mkdir $dir
+    set name "$target-[winfo screenwidth .]x[winfo screenheight .].png"
+    catch { ::util::execSafe import -window root [file join $dir $name] }
+}
 # Wait for the actual board/window transition and the placement debounce.
 # Cocoa fullscreen and the twm rebuild can finish after the initial Configure.
 proc ::scidb::test::dlgplace::followSettled {dlg before {timeout 6000}} {
@@ -1631,9 +1642,9 @@ foreach {target openScript dialog closeScript} {
     } $dialog $closeScript] -result 1
 }
 
-# A dialog the user moved away from the board is left where it is, even when
-# the board moves; once that move puts it over the board it is re-placed.
-tcltest::test dlg-follow-user-move {user-moved dialog is respected, even over the board (VAL-DLG-018C)} -setup {
+# A dialog the user moved clear of the board is left where it is, even when
+# the board moves; a move that puts it over the board is undone (VAL-DLG-046).
+tcltest::test dlg-follow-user-move {a user-moved dialog clear of the board is respected; one over it is re-placed (VAL-DLG-046)} -setup {
     ::scidb::test::dlgplace::setupBoard
 } -body {
     wm geometry .application [::scidb::test::dlgplace::fitGeometry 1274 900]
@@ -1660,20 +1671,18 @@ tcltest::test dlg-follow-user-move {user-moved dialog is respected, even over th
 
     ::scidb::test::dlgplace::require [expr {[::util::place::besidePlacedBy $dlg] eq "user"}] \
         "user-moved dialog reads placed_by [::util::place::besidePlacedBy $dlg]"
-    # Moving it onto the board is the user's choice too: the planner does
-    # not re-place it (decision 2026-10-21).
+    # Moving it onto the board is no longer the user's choice: a non-pinned
+    # playing dialog is put back beside the board (VAL-DLG-046). Pinning is
+    # the explicit way to keep it there.
     lassign [::scidb::test::dlgplace::boardRect] bx by bw bh
-    wm geometry $dlg "+[expr {$bx+20}]+[expr {$by+20}]"
-    ::scidb::test::dlgplace::waitFor 900
-    set onBoard [::scidb::test::dlgplace::widgetRect $dlg]
-    set delta [::scidb::test::dlgplace::replaceDelta {
-        wm geometry .application [::scidb::test::dlgplace::fitGeometry 1274 900]
-        ::scidb::test::dlgplace::waitFor 1400
-    }]
-    ::scidb::test::dlgplace::require [expr {$delta == 0 && [::scidb::test::dlgplace::widgetRect $dlg] eq $onBoard}] \
-        "user-placed dialog was re-placed ($delta)"
-    ::scidb::test::dlgplace::require [expr {[dict get [::util::place::besidePlacement $dlg] placed_by] eq "user"}] \
-        "placement record does not read user"
+    set over "+[expr {$bx+20}]+[expr {$by+20}]"
+    set script "[list wm geometry $dlg $over]; ::scidb::test::dlgplace::waitFor 900"
+    set delta [::scidb::test::dlgplace::replaceDelta $script]
+    ::scidb::test::dlgplace::require [expr {$delta >= 1}] \
+        "dialog dragged onto the board was not re-placed ($delta)"
+    ::scidb::test::dlgplace::noOverlap user-move-enforced $dlg
+    ::scidb::test::dlgplace::require [expr {[dict get [::util::place::besidePlacement $dlg] placed_by] eq "planner"}] \
+        "placement record does not read planner"
     return 1
 } -cleanup {
     catch {::playengine::Close}
@@ -1694,6 +1703,9 @@ foreach edge {right bottom left top oversized} {
         ::scidb::test::dlgplace::waitFor 900
     } -body [format {
         set dlg .application.playengine
+        # The drag may cross the board; pin so the test keeps measuring the
+        # user's frame and the work-area clamp, not the no-cover rule.
+        ::util::place::besidePin $dlg 1
         lassign [winfo workarea $dlg] ax ay aw ah
         lassign [::scidb::tk::wm frame $dlg] x y w h
         set cw [winfo width $dlg]; set ch [winfo height $dlg]
@@ -2248,7 +2260,7 @@ tcltest::test dlg-v14-b-reserves-both-orders {two dialogs share a real reserve, 
 
 # (c) Maximise, restore and a scripted window resize re-plan an open playing
 # dialog (it follows the board); only a real user move/resize of the dialog stops following.
-tcltest::test dlg-v14-c-resize-and-user-move {window resize follows board; a user move stops following, even onto the board (VAL-DLG-018C)} -setup {
+tcltest::test dlg-v14-c-resize-and-user-move {window resize follows board; a user move clear of the board stops following, one over it is undone (VAL-DLG-046)} -setup {
     ::scidb::test::dlgplace::setupBoard
 } -body {
     wm geometry .application [::scidb::test::dlgplace::fitGeometry 1.0 1.0]
@@ -2274,14 +2286,15 @@ tcltest::test dlg-v14-c-resize-and-user-move {window resize follows board; a use
         wm geometry .application [::scidb::test::dlgplace::fitGeometry 0.85 1.0]
         ::scidb::test::dlgplace::waitFor 1000
     }]
-    # Dragging it onto the board is the user's choice too (decision
-    # 2026-10-21): the planner leaves it there.
+    # Dragging it onto the board is undone by the no-cover policy
+    # (VAL-DLG-046): the planner puts it back beside the board.
     lassign [::scidb::test::dlgplace::boardRect] bx by bw bh
     set deltaCollision [::scidb::test::dlgplace::replaceDelta {
         wm geometry $dlg "+[expr {$bx+20}]+[expr {$by+20}]"
         ::scidb::test::dlgplace::waitFor 1000
     }]
-    list [expr {$deltaResize > 0}] [expr {$deltaUserSafe == 0}] [expr {$deltaCollision == 0}]
+    ::scidb::test::dlgplace::noOverlap v14-c-user-over-board $dlg
+    list [expr {$deltaResize > 0}] [expr {$deltaUserSafe == 0}] [expr {$deltaCollision > 0}]
 } -cleanup {
     catch {::playengine::Close}
     ::scidb::test::dlgplace::stopTrace
@@ -2596,7 +2609,8 @@ tcltest::test dlg-v15-a-maximize-playing {real maximize and restore re-plan a pl
         && [::scidb::test::dlgplace::overlapArea [::scidb::test::dlgplace::outerRect $dlg] \
             [::scidb::test::dlgplace::widgetRect [::mediainset::Pane].mediainset]] == 0}]
     puts "DLG-V15 user-move moved=$moved after=[::scidb::test::dlgplace::widgetRect $dlg] delta=$delta safe=$safe"
-    # VAL-DLG-018C: the user's place is kept, whatever the resize does.
+    # A user's place clear of the board is kept, whatever the resize does
+    # (VAL-DLG-046 keeps the safe-position half of VAL-DLG-018C).
     ::scidb::test::dlgplace::require [expr {$delta == 0 && [::scidb::test::dlgplace::widgetRect $dlg] eq $moved}] \
         "user-moved dialog was re-placed ($delta)"
     ::scidb::test::dlgplace::require [expr {[::util::place::besidePlacedBy $dlg] eq "user"}] \
@@ -2767,9 +2781,14 @@ tcltest::test dlg-w9i-unmap-during-plan {helper returns a plan when a pending un
     ::playengine::open .application
     ::scidb::test::dlgplace::waitFor 800
 } -body {
+    # While the board is mapped the ladder decides; the center fallback is
+    # only for an unmapped (or missing) board (VAL-DLG-046 check).
+    set mapped [dict get [::util::place::besideBoard .application.playengine .application] rule]
+    ::scidb::test::dlgplace::require [expr {$mapped ne "center"}] \
+        "center fallback used with the board mapped ($mapped)"
     after idle {wm withdraw .application}
     set code [catch {::util::place::besideBoard .application.playengine .application} plan]
-    puts "W9I unmap code=$code plan=$plan"
+    puts "W9I unmap code=$code mapped=$mapped plan=$plan"
     list $code [dict get $plan rule]
 } -cleanup {
     wm deiconify .application
@@ -3891,15 +3910,17 @@ tcltest::test dlg-028-grow-shrink-reentry {growing pulls a helper-placed dialog 
     ::scidb::test::dlgplace::lifetimeCleanup
 } -result 1
 
-# VAL-DLG-028 (decision 2026-10-25): a user placement is never re-planned by
-# the grow/shrink rule, even over the board and across five cycles.
-tcltest::test dlg-028-user-drag-survives-cycles {a user-moved dialog is not re-planned by grow/shrink} -setup {
+# VAL-DLG-028 (decision 2026-10-25): a pinned user placement is never
+# re-planned by the grow/shrink rule, even over the board and across five
+# cycles. The pin is the explicit over-board override (VAL-DLG-046).
+tcltest::test dlg-028-user-drag-survives-cycles {a pinned user-moved dialog is not re-planned by grow/shrink} -setup {
     ::scidb::test::dlgplace::setupBoard
     ::scidb::test::dlgplace::tinyMain
 } -body {
     ::playengine::open .application
     set dlg .application.playengine
     ::scidb::test::dlgplace::waitFor 700
+    ::util::place::besidePin $dlg 1
     lassign [::scidb::test::dlgplace::boardRect] bx by bw bh
     wm geometry $dlg "+[expr {$bx+$bw/4}]+[expr {$by+$bh/4}]"
     ::scidb::test::dlgplace::waitFor 500
@@ -3936,6 +3957,9 @@ tcltest::test dlg-029-outside-keeps-user-drag {an outside-placed dialog keeps a 
     ::scidb::test::dlgplace::require \
         [expr {[dict get $::util::place::BesideLastPlan($dlg) rule] eq "outside"}] \
         "dlg-029: precondition, the tiny window did not route outside"
+    # Pinned: the user may keep the dialog over the board on purpose
+    # (VAL-DLG-046); without the pin the no-cover rule would move it.
+    ::util::place::besidePin $dlg 1
     lassign [::scidb::test::dlgplace::boardRect] bx by bw bh
     wm geometry $dlg "+[expr {$bx+$bw/3}]+[expr {$by+$bh/3}]"
     ::scidb::test::dlgplace::waitFor 500
@@ -3979,6 +4003,95 @@ tcltest::test dlg-029-outside-keeps-user-drag {an outside-placed dialog keeps a 
 } -cleanup {
     ::scidb::test::dlgplace::lifetimeCleanup
 } -result 1
+
+# VAL-DLG-046: a playing dialog never covers the board after a user drag or
+# resize; the explicit Pin control keeps an intentional overlap until cleared.
+proc ::scidb::test::dlgplace::noCoverCase {kind} {
+    set dlg [::scidb::test::dlgplace::lifetimeOpen $kind]
+    ::scidb::test::dlgplace::waitFor 900
+    set pin $dlg.__pin
+    ::scidb::test::dlgplace::require [expr {[winfo exists $pin]}] "$kind: no pin control"
+    ::scidb::test::dlgplace::require [expr {[winfo class $pin] eq "TCheckbutton"}] \
+        "$kind: pin control is a [winfo class $pin]"
+    ::scidb::test::dlgplace::require [expr {[$pin cget -text] eq "Pin"}] \
+        "$kind: pin control reads '[$pin cget -text]'"
+    ::scidb::test::dlgplace::require [expr {[winfo ismapped $pin]}] "$kind: pin control is not mapped"
+    ::scidb::test::dlgplace::require [expr {![::util::place::besidePinned $dlg]}] \
+        "$kind: dialog starts pinned"
+    ::scidb::test::dlgplace::noOverlap $kind-open $dlg
+    ::scidb::test::dlgplace::stateShot "$kind-open"
+    lassign [::scidb::test::dlgplace::boardRect] bx by bw bh
+    set over "+[expr {$bx+int($bw/4)}]+[expr {$by+int($bh/4)}]"
+    # A drag onto the board is undone once the drag rests.
+    set script "[list wm geometry $dlg $over]; ::scidb::test::dlgplace::waitFor 900"
+    set delta [::scidb::test::dlgplace::replaceDelta $script]
+    puts "DLG-046 $kind drag delta=$delta frame=[::scidb::test::dlgplace::outerRect $dlg] board=[::scidb::test::dlgplace::boardRect]"
+    ::scidb::test::dlgplace::require [expr {$delta >= 1}] \
+        "$kind: drag onto the board was not re-placed ($delta)"
+    ::scidb::test::dlgplace::noOverlap $kind-drag $dlg
+    ::scidb::test::dlgplace::stateShot "$kind-drag"
+    # A user resize over the board is undone the same way.
+    lassign [::scidb::test::dlgplace::widgetRect $dlg] x y w h
+    set bigger [format "%dx%d+%d+%d" [expr {$w+80}] [expr {$h+60}] $bx $by]
+    set script "[list wm geometry $dlg $bigger]; ::scidb::test::dlgplace::waitFor 900"
+    set delta [::scidb::test::dlgplace::replaceDelta $script]
+    puts "DLG-046 $kind resize delta=$delta frame=[::scidb::test::dlgplace::outerRect $dlg] board=[::scidb::test::dlgplace::boardRect]"
+    ::scidb::test::dlgplace::require [expr {$delta >= 1}] \
+        "$kind: resize over the board was not re-placed ($delta)"
+    ::scidb::test::dlgplace::noOverlap $kind-resize $dlg
+    ::scidb::test::dlgplace::stateShot "$kind-resize"
+    # The control itself pins: an intentional overlap is kept.
+    $pin invoke
+    ::scidb::test::dlgplace::waitFor 300
+    ::scidb::test::dlgplace::require [expr {[::util::place::besidePinned $dlg]}] \
+        "$kind: the pin control did not pin the dialog"
+    ::scidb::test::dlgplace::require [expr {[$pin instate selected]}] \
+        "$kind: the pin control is not selected after invoke"
+    set script "[list wm geometry $dlg $over]; ::scidb::test::dlgplace::waitFor 900"
+    set delta [::scidb::test::dlgplace::replaceDelta $script]
+    set area [::scidb::test::dlgplace::overlapArea \
+        [::scidb::test::dlgplace::outerRect $dlg] [::scidb::test::dlgplace::boardRect]]
+    puts "DLG-046 $kind pinned delta=$delta area=$area frame=[::scidb::test::dlgplace::outerRect $dlg]"
+    ::scidb::test::dlgplace::require [expr {$delta == 0}] "$kind: pinned dialog was re-placed ($delta)"
+    ::scidb::test::dlgplace::require [expr {$area > 0}] "$kind: pinned dialog did not stay over the board"
+    ::scidb::test::dlgplace::require [expr {[::util::place::besidePlacedBy $dlg] eq "user"}] \
+        "$kind: pinned dialog reads placed_by [::util::place::besidePlacedBy $dlg]"
+    ::scidb::test::dlgplace::stateShot "$kind-pinned-over-board"
+    # A pinned dialog stays where it is while the board reflows.
+    set before [::scidb::test::dlgplace::outerRect $dlg]
+    set delta [::scidb::test::dlgplace::replaceDelta {
+        wm geometry .application [::scidb::test::dlgplace::fitGeometry 0.9 0.95]
+        ::scidb::test::dlgplace::waitFor 1200
+        wm geometry .application [::scidb::test::dlgplace::fitGeometry 1.0 1.0]
+        ::scidb::test::dlgplace::waitFor 1200
+    }]
+    puts "DLG-046 $kind pinned-reflow delta=$delta before=$before after=[::scidb::test::dlgplace::outerRect $dlg]"
+    ::scidb::test::dlgplace::require [expr {$delta == 0}] \
+        "$kind: pinned dialog was re-placed by a board reflow ($delta)"
+    ::scidb::test::dlgplace::require \
+        [expr {[::scidb::test::dlgplace::outerRect $dlg] eq $before}] \
+        "$kind: pinned dialog moved during a board reflow"
+    # Unpinning restores the no-cover rule.
+    $pin invoke
+    ::scidb::test::dlgplace::waitFor 900
+    ::scidb::test::dlgplace::require [expr {![::util::place::besidePinned $dlg]}] \
+        "$kind: the pin control did not unpin the dialog"
+    ::scidb::test::dlgplace::noOverlap $kind-unpin $dlg
+    ::scidb::test::dlgplace::require [expr {[::util::place::besidePlacedBy $dlg] eq "planner"}] \
+        "$kind: unpinned dialog reads placed_by [::util::place::besidePlacedBy $dlg]"
+    ::scidb::test::dlgplace::stateShot "$kind-unpinned"
+    ::scidb::test::dlgplace::lifetimeClose $kind $dlg
+    return 1
+}
+foreach kind {playengine guessmove gamereview} {
+    tcltest::test dlg-046-no-cover-$kind {a non-pinned playing dialog over the board is re-placed; the pin control is honoured} -setup {
+        ::scidb::test::dlgplace::setupBoard
+    } -body [format {
+        ::scidb::test::dlgplace::noCoverCase %s
+    } $kind] -cleanup {
+        ::scidb::test::dlgplace::lifetimeCleanup
+    } -result 1
+}
 
 # VAL-DLG-030: two playing dialogs in a tiny window are both board-clear and
 # never cover each other; closing them in either order changes no layout.
