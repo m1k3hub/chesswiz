@@ -30,6 +30,7 @@ namespace eval ::reflowTest {
 		return ${w}x${h}
 	}
 	proc paneW {t uid} { lassign [$t dimension [$t leaf $uid]] w h a b c d; return $w }
+	proc paneSize {w} { return [list [winfo width $w] [winfo height $w]] }
 	proc waitMs {ms} { variable done; set done 0; after $ms {set ::reflowTest::done 1}; vwait ::reflowTest::done; update }
 	proc fileSnap {f} { if {[file exists $f]} { set ch [open $f r]; set data [read $ch]; close $ch; return $data }; return {<none>} }
  # The native engine reaper can consume exec's child after it wrote its
@@ -1025,5 +1026,86 @@ tcltest::test pane-reflow-023-focus-follows-size-off {manual zoom off restores e
  ::application::reflow::reset
  wm geometry .application $oldGeometry
 } -result {1 1 1 1 1 1}
+
+# VAL-FOCUS-003: a resize that grows the focused pane (focus follows size)
+# leaves the grown arrangement on screen, so that is what a manual zoom
+# switched on and off from the pane must return to -- not the pre-follows
+# arrangement the resize's baseline holds.
+tcltest::test pane-reflow-024-focus-resize-click-off {manual zoom off after a follows-size growth restores the click arrangement} -setup {
+ set t [::reflowTest::setup]
+ set oldGeometry [wm geometry .application]
+ set oldDuration $::application::focuszoom::duration
+ set ::application::focuszoom::duration 0
+} -body {
+ set bad {}
+ set cases 0
+ lassign [winfo workarea .application] wx wy ww wh
+ set ext [winfo extents .application]
+ if {[expr {[lindex $ext 0]+[lindex $ext 1]+[lindex $ext 2]+[lindex $ext 3]}] == 0} {
+  set ext {4 4 24 4}
+ }
+ lassign $ext el er et eb
+ # The contract's 1280x720 and 1920x1080 screen cases as window sizes; both
+ # sit on the same side of the reflow thresholds, so only the zoom moves.
+ foreach pair {{1000x620 1200x680} {1300x820 1600x980}} {
+  lassign $pair from to
+  lassign [split $to x] tw th
+  ::reflowTest::say "FOCUS024 case=$to workarea=$ww x $wh extents=$ext"
+  if {$tw > $ww-$el-$er || $th > $wh-$et-$eb} { continue }
+  wm geometry .application ${from}+$wx+$wy
+  ::reflowTest::waitMs 900
+  set pane [$t leaf board]
+  focus -force $pane
+  catch {::application::focuszoom::focusIn $pane}
+  update
+  set size [::reflowTest::paneSize .application]
+  set base [::reflowTest::paneSize $pane]
+  ::application::focuszoom::enableFollowsSize $t
+  ::reflowTest::waitMs 300
+  wm geometry .application ${to}+$wx+$wy
+  ::reflowTest::waitMs 900
+  set grown [::reflowTest::paneSize $pane]
+  set clickSize [::reflowTest::paneSize .application]
+  # The pane the user clicks is the one the resize grew; the click itself
+  # changes nothing visible, and switching the zoom off returns the grown
+  # arrangement.
+  set on [::action::invoke view.focus_zoom {}]
+  ::application::focuszoom::clicked $pane
+  ::reflowTest::waitMs 400
+  set clicked [::reflowTest::paneSize $pane]
+  set clickedSashes [::application::focuszoom::Snapshot $t]
+  set off [::action::invoke view.focus_zoom {}]
+  update idletasks
+  set immediate [::reflowTest::paneSize $pane]
+  set immediateSashes [::application::focuszoom::Snapshot $t]
+  # Past the reflow debounce, where a second growth would show.
+  ::reflowTest::waitMs 1100
+  set settled [::reflowTest::paneSize $pane]
+  set settledSashes [::application::focuszoom::Snapshot $t]
+  ::reflowTest::say "FOCUS024 screen=[winfo screenwidth .application]x[winfo screenheight .application] size=$size base=$base grown=$grown clicked=$clicked immediate=$immediate settled=$settled sashes=[expr {$settledSashes eq $clickedSashes}] follows=[::application::focuszoom::isFollowsSize $t]"
+  set checks [list \
+   [expr {$on == 1 && $off == 0}] \
+   [expr {[lindex $grown 0] > [lindex $base 0]}] \
+   [expr {$clicked eq $grown}] \
+   [expr {$immediate eq $clicked && $immediateSashes eq $clickedSashes}] \
+   [expr {$settled eq $clicked && $settledSashes eq $clickedSashes}] \
+   [expr {[::reflowTest::paneSize .application] eq $clickSize}] \
+   [expr {[::application::focuszoom::isFollowsSize $t] == 1}]]
+  ::reflowTest::say "FOCUS024 checks=$checks"
+  if {[lsearch -exact $checks 0] >= 0} { lappend bad $to }
+  incr cases
+  ::application::focuszoom::disable $t
+  ::application::focuszoom::disableFollowsSize $t
+ }
+ if {!$cases} { error "no contract screen size fits the work area" }
+ if {[llength $bad]} { error "toggle-off did not restore the click arrangement at: $bad" }
+ return 1
+} -cleanup {
+ ::application::focuszoom::disable $t
+ ::application::focuszoom::disableFollowsSize $t
+ set ::application::focuszoom::duration $oldDuration
+ ::application::reflow::reset
+ wm geometry .application $oldGeometry
+} -result 1
 
 tcltest::cleanupTests

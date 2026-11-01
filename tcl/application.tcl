@@ -986,9 +986,11 @@ namespace eval focuszoom {
 	variable focusPane	;# last leaf that received the user's focus
 	variable baseline	;# sash snapshot taken when switched on
 	variable lastPane	;# last grown leaf per twm
+	variable followGrown	;# per twm: a resize growth the manual toggle has not re-based
 	variable keyAfter {}
 	variable pendingKey 0	;# a Tab/Shift-Tab armed the next FocusIn
 	variable animAfter	;# pending animation timer per panedwindow
+	variable animFinal	;# {horz final} the pending animation lands on
 	namespace import ::tcl::mathfunc::max ::tcl::mathfunc::min
 }
 
@@ -1027,9 +1029,14 @@ proc focuszoom::disableFollowsSize {twm} {
 	variable followsSize
 	variable baseline
 	variable lastPane
+	variable followGrown
 	variable animAfter
+	variable animFinal
 	set followsSize($twm) 0
-	foreach pw [array names animAfter $twm.*] {after cancel $animAfter($pw); unset animAfter($pw)}
+	foreach pw [array names animAfter $twm.*] {
+		after cancel $animAfter($pw); unset animAfter($pw)
+		catch { unset animFinal($pw) }
+	}
 	# Restore the arrangement the last size change grew from. The manual
 	# toggle, if it is on too, keeps working and takes a fresh baseline at
 	# its next click.
@@ -1039,6 +1046,7 @@ proc focuszoom::disableFollowsSize {twm} {
 		unset baseline($twm)
 	}
 	catch { unset lastPane($twm) }
+	catch { unset followGrown($twm) }
 }
 
 
@@ -1072,7 +1080,12 @@ proc focuszoom::enable {twm} {
 
 proc focuszoom::disable {twm} {
  variable animAfter
- foreach pw [array names animAfter $twm.*] {after cancel $animAfter($pw); unset animAfter($pw)}
+ variable animFinal
+ variable followGrown
+ foreach pw [array names animAfter $twm.*] {
+  after cancel $animAfter($pw); unset animAfter($pw)
+  catch { unset animFinal($pw) }
+ }
 	variable enabled
 	variable baseline
 	variable lastPane
@@ -1085,6 +1098,7 @@ proc focuszoom::disable {twm} {
 		unset baseline($twm)
 	}
 	catch { unset lastPane($twm) }
+	catch { unset followGrown($twm) }
  # Content may have changed while the enlargement held the sashes.
  if {$twm eq [::application::reflow::boardTwm]} {
   ::application::reflow::onConfigure .application {*}[WindowSize $twm]
@@ -1106,6 +1120,7 @@ proc focuszoom::windowResized {twm} {
 	variable baseline
 	variable lastPane
 	variable lastSize
+	variable followGrown
 	if {![isEnabled $twm] && ![isFollowsSize $twm]} { return }
 	set size [WindowSize $twm]
 	# Only a changed window size is a resize. A move sends <Configure> too,
@@ -1118,12 +1133,13 @@ proc focuszoom::windowResized {twm} {
 	if {[info exists baseline($twm)] && [lindex $baseline($twm) 0] eq $size} { return }
 	catch { unset baseline($twm) }
 	catch { unset lastPane($twm) }
+	catch { unset followGrown($twm) }
  # Old animation callbacks must not write sashes into the adapted tree.
  variable animAfter
  foreach pw [array names animAfter $twm.*] {after cancel $animAfter($pw); unset animAfter($pw)}
  if {[isFollowsSize $twm]} {
   set pane [FocusedPane $twm]
-  if {$pane ne ""} { growPane $twm $pane 1 }
+  if {$pane ne "" && [growPane $twm $pane 1]} { set followGrown($twm) 1 }
  }
 }
 
@@ -1242,28 +1258,56 @@ proc focuszoom::PaneOfWidget {w} {
 
 
 # A resize-triggered growth (focus follows size) bypasses the manual
-# toggle; the click and keyboard gestures stay gated by it.
+# toggle; the click and keyboard gestures stay gated by it. Returns 1 when
+# the sashes were moved.
 proc focuszoom::growPane {twm pane {ignoreEnabled 0}} {
 	variable lastPane
-	if {(!$ignoreEnabled && ![isEnabled $twm]) || [$twm zoomed] ne {} || ![$twm get $pane zoomable 0]} { return }
-	if {[$twm isfloat [$twm toplevel $pane]]} { return }
-	if {[info exists lastPane($twm)] && $lastPane($twm) eq $pane} { return }
+	if {(!$ignoreEnabled && ![isEnabled $twm]) || [$twm zoomed] ne {} || ![$twm get $pane zoomable 0]} { return 0 }
+	if {[$twm isfloat [$twm toplevel $pane]]} { return 0 }
 	# Grow the child of the enclosing panedwindow; like phase 1, a notebook
 	# (including meta frames) grows as a whole. The twm tree decides the
 	# parenting: panedwindow panes are not path-parents of their leaves.
 	set node $pane
 	while {1} {
 		set pw [$twm parent $node]
-		if {$pw eq "" || $pw eq $twm || ![winfo exists $pw]} { return }
+		if {$pw eq "" || $pw eq $twm || ![winfo exists $pw]} { return 0 }
 		if {[string match *Panedwindow [winfo class $pw]]} { break }
 		set node $pw
 	}
+	# A manual gesture re-bases the restore arrangement before it may
+	# return without growing (VAL-FOCUS-003).
+	if {!$ignoreEnabled} { Rebase $twm }
+	if {[info exists lastPane($twm)] && $lastPane($twm) eq $pane} { return 0 }
 	variable baseline
 	if {![info exists baseline($twm)]} { set baseline($twm) [list [WindowSize $twm] [Snapshot $twm]] }
 	set lastPane($twm) $pane
 	set board ""
 	catch { set board [$twm leaf board] }
-	resize $pw $node $board
+	return [resize $pw $node $board]
+}
+
+
+# The arrangement the user sees at a manual gesture is what switching the
+# manual zoom off must restore. A resize that grew a pane has moved the
+# sashes away from the baseline the resize took, so the gesture replaces it
+# with the current grown arrangement; a growth still animating is settled
+# first, as that is where the animation ends.
+proc focuszoom::Rebase {twm} {
+	variable followGrown
+	variable baseline
+	variable animAfter
+	variable animFinal
+	if {![info exists followGrown($twm)]} { return }
+	unset followGrown($twm)
+	foreach pw [array names animAfter $twm.*] {
+		after cancel $animAfter($pw); unset animAfter($pw)
+		if {![info exists animFinal($pw)]} { continue }
+		lassign [set animFinal($pw)] horz final
+		unset animFinal($pw)
+		catch { Place $pw $horz $final }
+	}
+	update idletasks
+	set baseline($twm) [list [WindowSize $twm] [Snapshot $twm]]
 }
 
 
@@ -1319,11 +1363,11 @@ proc focuszoom::resize {pw node board} {
 	variable pinBoard
 	set panes [$pw panes]
 	set n [llength $panes]
-	if {$n < 2} { return }
+	if {$n < 2} { return 0 }
 	set horz [expr {[$pw cget -orient] eq "horizontal"}]
 	set dim [expr {$horz ? "width" : "height"}]
 	set idx [lsearch -exact $panes $node]
-	if {$idx < 0} { return }
+	if {$idx < 0} { return 0 }
 	set R [setRatio $ratio]
 	set sizes {}
 	set total 0
@@ -1333,7 +1377,7 @@ proc focuszoom::resize {pw node board} {
 		incr total $s
 	}
 	set cur [lindex $sizes $idx]
-	if {$cur <= 0 || $total <= 0} { return }
+	if {$cur <= 0 || $total <= 0} { return 0 }
 	# Minimums: the panedwindow -minsize of every pane; the board can be
 	# pinned so it never shrinks below its current size.
 	set mins {}
@@ -1354,7 +1398,7 @@ proc focuszoom::resize {pw node board} {
 	incr avail [lindex $mins $idx]
 	set target [expr {int(round($cur * $R))}]
 	if {$target > $avail} { set target $avail }
-	if {$target <= $cur} { return }
+	if {$target <= $cur} { return 0 }
 	# The siblings shrink in proportion, each keeping its minimum size.
 	set new [lreplace $sizes $idx $idx $target]
 	set rest [expr {$total - $target}]
@@ -1402,6 +1446,7 @@ proc focuszoom::resize {pw node board} {
 		lappend final [expr {$cum + [lindex $offsets $i]}]
 	}
 	animate $pw $horz $final
+	return 1
 }
 
 
@@ -1409,6 +1454,7 @@ proc focuszoom::animate {pw horz final} {
 	variable duration
 	variable steps
 	variable animAfter
+	variable animFinal
 	if {[info exists animAfter($pw)]} {
 		after cancel $animAfter($pw)
 		unset animAfter($pw)
@@ -1418,23 +1464,29 @@ proc focuszoom::animate {pw horz final} {
 		lassign [$pw sash coord $i] x y
 		lappend start [expr {$horz ? $x : $y}]
 	}
+	set animFinal($pw) [list $horz $final]
 	# Instant when the animation cannot run or keep up.
 	if {$duration <= 0 || $steps <= 1 || [catch { AnimateStep $pw $horz $start $final [clock milliseconds] }]} {
 		catch { Place $pw $horz $final }
+		catch { unset animFinal($pw) }
 	}
 }
 
 
 proc focuszoom::AnimateStep {pw horz start final began} {
- variable duration; variable steps; variable animAfter
+ variable duration; variable steps; variable animAfter; variable animFinal
  catch {unset animAfter($pw)}
- if {![winfo exists $pw]} {return}
+ if {![winfo exists $pw]} {catch {unset animFinal($pw)}; return}
  set fraction [expr {min(1.0, double([clock milliseconds]-$began)/max(1,$duration))}]
  set coords {}
  foreach a $start b $final {lappend coords [expr {int(round($a+($b-$a)*$fraction))}]}
  # A delayed frame catches up immediately, rather than extending animation.
- if {[catch {Place $pw $horz $coords}]} {catch {Place $pw $horz $final}; return}
- if {$fraction >= 1} {return}
+ if {[catch {Place $pw $horz $coords}]} {
+  catch {Place $pw $horz $final}
+  catch {unset animFinal($pw)}
+  return
+ }
+ if {$fraction >= 1} {catch {unset animFinal($pw)}; return}
  set animAfter($pw) [after [expr {max(1,$duration/max(1,$steps))}] \
   [list ::application::focuszoom::AnimateStep $pw $horz $start $final $began]]
 }
