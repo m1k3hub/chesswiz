@@ -1833,6 +1833,7 @@ proc ::menu::RegisterExtras {} {
 	Register view.focus_zoom "Focus follows size" "" "" "" "00.002"
 	Register view.focus_ratio "Zoom ratio" "" "" "" "00.003"
 	Register view.focus_pin "Pin board size" "" "" "" "00.004"
+	Register view.focus_follows_size "Focus follows size on resize" "" "" "" "00.005"
 	# The former Extras 3D entries: PROPOSAL section 5 places them in the
 	# board pane header / View > Panes. They stay registry actions so the
 	# assistant and the palette can reach them when the module is present.
@@ -2715,6 +2716,11 @@ proc ::menu::Do {id} {
 		view.focus_pin {
 			set ::application::focuszoom::pinBoard [expr {![set ::application::focuszoom::pinBoard]}]
 			return [set ::application::focuszoom::pinBoard]
+		}
+		view.focus_follows_size {
+			set twm [PaneTWM]
+			if {$twm eq ""} { return 0 }
+			return [::application::focuszoom::toggleFollowsSize $twm]
 		}
 		view.board3d.open { return [::board3d::openViewer .application] }
 		view.board3d.webgl { return [::board3d::openWebGLViewer] }

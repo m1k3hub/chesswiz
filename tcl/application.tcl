@@ -981,6 +981,8 @@ namespace eval focuszoom {
 	variable duration	150	;# ~150 ms per the spec; 0 is instant
 	variable steps		10
 	variable enabled		;# per layout (twm) on/off
+	variable followsSize	;# per layout: grow the focused pane on a resize
+	variable focusPane	;# last leaf that received the user's focus
 	variable baseline	;# sash snapshot taken when switched on
 	variable lastPane	;# last grown leaf per twm
 	variable keyAfter {}
@@ -993,6 +995,46 @@ namespace eval focuszoom {
 proc focuszoom::isEnabled {twm} {
 	variable enabled
 	return [expr {[info exists enabled($twm)] && $enabled($twm)}]
+}
+
+
+# Focus follows size (GAP-002): a separate opt-in from the click/keyboard
+# zoom above, so switching this on never changes what the manual toggle
+# does. Off by default and per layout, like the other phase-2 settings.
+proc focuszoom::isFollowsSize {twm} {
+	variable followsSize
+	return [expr {[info exists followsSize($twm)] && $followsSize($twm)}]
+}
+
+
+proc focuszoom::toggleFollowsSize {twm} {
+	if {[isFollowsSize $twm]} { disableFollowsSize $twm } else { enableFollowsSize $twm }
+	return [isFollowsSize $twm]
+}
+
+
+proc focuszoom::enableFollowsSize {twm} {
+	variable followsSize
+	set followsSize($twm) 1
+}
+
+
+proc focuszoom::disableFollowsSize {twm} {
+	variable followsSize
+	variable baseline
+	variable lastPane
+	variable animAfter
+	set followsSize($twm) 0
+	foreach pw [array names animAfter $twm.*] {after cancel $animAfter($pw); unset animAfter($pw)}
+	# Restore the arrangement the last size change grew from. The manual
+	# toggle, if it is on too, keeps working and takes a fresh baseline at
+	# its next click.
+	if {[info exists baseline($twm)]} {
+		lassign $baseline($twm) size snapshot
+		if {$size eq [WindowSize $twm]} { Restore $twm $snapshot }
+		unset baseline($twm)
+	}
+	catch { unset lastPane($twm) }
 }
 
 
@@ -1053,17 +1095,24 @@ proc focuszoom::WindowSize {twm} {
 
 
 # A window resize between zooms re-bases the arrangement: the user's
-# sashes at the new size are what switching off returns to.
+# sashes at the new size are what switching off returns to. With focus
+# follows size on, the same resize then grows the pane the user is working
+# in, through the manual gesture's own resize path.
 proc focuszoom::windowResized {twm} {
 	variable baseline
 	variable lastPane
-	if {![isEnabled $twm] || ![info exists baseline($twm)]} { return }
-	if {[lindex $baseline($twm) 0] eq [WindowSize $twm]} { return }
-	unset baseline($twm)
+	if {![isEnabled $twm] && ![isFollowsSize $twm]} { return }
+	set size [WindowSize $twm]
+	if {[info exists baseline($twm)] && [lindex $baseline($twm) 0] eq $size} { return }
+	catch { unset baseline($twm) }
 	catch { unset lastPane($twm) }
  # Old animation callbacks must not write sashes into the adapted tree.
  variable animAfter
  foreach pw [array names animAfter $twm.*] {after cancel $animAfter($pw); unset animAfter($pw)}
+ if {[isFollowsSize $twm]} {
+  set pane [FocusedPane $twm]
+  if {$pane ne ""} { growPane $twm $pane 1 }
+ }
 }
 
 
@@ -1130,6 +1179,13 @@ proc focuszoom::keySwitch {} {
 
 proc focuszoom::focusIn {w} {
 	variable pendingKey
+	variable focusPane
+	# Remember where the user's focus went even when no zoom follows: a
+	# later window resize grows that same pane (focus follows size).
+	if {![catch { set twm [::application::twm] }]} {
+		set pane [LeafOfWidget $twm $w]
+		if {$pane ne ""} { set focusPane($twm) $pane }
+	}
 	if {!$pendingKey} { return }
 	set pendingKey 0
 	if {![winfo exists $w]} { return }
@@ -1138,23 +1194,46 @@ proc focuszoom::focusIn {w} {
 }
 
 
-# Resolve a widget to {twm leaf}; "" when the mode is off for its layout,
-# the widget is in no pane, or the pane may not zoom.
-proc focuszoom::PaneOfWidget {w} {
-	if {[catch { set twm [::application::twm] }]} { return "" }
+# The pane that has (or last had) the user's focus. Programmatic focus and
+# clicks elsewhere leave the recorded pane in place, so a resize still
+# enlarges the view the user was last working in.
+proc focuszoom::FocusedPane {twm} {
+	variable focusPane
+	set pane [LeafOfWidget $twm [focus]]
+	if {$pane ne ""} { return $pane }
+	if {[info exists focusPane($twm)]} { return $focusPane($twm) }
+	return ""
+}
+
+
+# The twm leaf containing a widget, independent of whether zoom is on.
+proc focuszoom::LeafOfWidget {twm w} {
+	if {$w eq "" || ![winfo exists $w]} { return "" }
 	if {$w ne $twm && ![string match "$twm.*" $w]} { return "" }
-	if {![isEnabled $twm]} { return "" }
 	foreach uid [$twm leaves] {
 		set f [$twm leaf $uid]
-		if {$w eq $f || [string match "$f.*" $w]} { return [list $twm $f] }
+		if {$w eq $f || [string match "$f.*" $w]} { return $f }
 	}
 	return ""
 }
 
 
-proc focuszoom::growPane {twm pane} {
+# Resolve a widget to {twm leaf}; "" when the mode is off for its layout,
+# the widget is in no pane, or the pane may not zoom.
+proc focuszoom::PaneOfWidget {w} {
+	if {[catch { set twm [::application::twm] }]} { return "" }
+	if {![isEnabled $twm]} { return "" }
+	set pane [LeafOfWidget $twm $w]
+	if {$pane eq ""} { return "" }
+	return [list $twm $pane]
+}
+
+
+# A resize-triggered growth (focus follows size) bypasses the manual
+# toggle; the click and keyboard gestures stay gated by it.
+proc focuszoom::growPane {twm pane {ignoreEnabled 0}} {
 	variable lastPane
-	if {![isEnabled $twm] || [$twm zoomed] ne {} || ![$twm get $pane zoomable 0]} { return }
+	if {(!$ignoreEnabled && ![isEnabled $twm]) || [$twm zoomed] ne {} || ![$twm get $pane zoomable 0]} { return }
 	if {[$twm isfloat [$twm toplevel $pane]]} { return }
 	if {[info exists lastPane($twm)] && $lastPane($twm) eq $pane} { return }
 	# Grow the child of the enclosing panedwindow; like phase 1, a notebook

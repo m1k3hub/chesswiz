@@ -59,6 +59,7 @@ proc ::zoom2Test::fixture {} {
 	return $twm
 }
 proc ::zoom2Test::cleanup {twm} {
+	catch {::application::focuszoom::disableFollowsSize $twm}
 	catch {::application::focuszoom::disable $twm}
 	catch {destroy .z2test}
 	set ::application::focuszoom::pinBoard 0
@@ -264,7 +265,7 @@ tcltest::test pane-zoom2-menu {the registry exposes the opt-in, the ratio and th
 	catch { destroy .z2menu }
 	menu .z2menu
 	::menu::BuildDropdown .z2menu
-	set ids {view.focus_zoom view.focus_ratio view.focus_pin}
+	set ids {view.focus_zoom view.focus_ratio view.focus_pin view.focus_follows_size}
 	set found {}
 	foreach id $ids {
 		set ok [expr {![catch { ::action::get $id } rec]}]
@@ -284,7 +285,7 @@ tcltest::test pane-zoom2-menu {the registry exposes the opt-in, the ratio and th
 } -cleanup {
 	catch { set ::application::focuszoom::enabled([::application::twm board]) 0 }
 	set ::application::focuszoom::pinBoard 0
-} -result {{1 1 1} 1 {1.2 1.4 1.8 1.8} 1}
+} -result {{1 1 1 1} 1 {1.2 1.4 1.8 1.8} 1}
 
 foreach value {1.2 1.4 1.8 99} {
  tcltest::test pane-zoom2-ratio-$value {R is clamped; siblings stay proportional and unrelated panedwindows retain exact sashes} -setup {
@@ -490,5 +491,112 @@ tcltest::test pane-zoom2-007c-stale-off {VAL-PANE-007C: on at one size, resize, 
  ::application::focuszoom::disable $t
  ::application::reflow::reset
 } -result {1 1 1 1 1}
+
+### focus follows size (GAP-002, VAL-FOCUS-001) ############################
+
+tcltest::test pane-zoom2-follows-size-off-default {focus follows size is a separate opt-in, off by default: a resize only changes the natural geometry} -setup {
+	set t [::zoom2Test::fixture]
+	focus -force [$t leaf editor]
+	set before [::zoom2Test::widths $t]
+	wm geometry .z2test 1300x700
+	update
+	set natural [::zoom2Test::widths $t]
+	::application::focuszoom::windowResized $t
+	update
+} -body {
+	set enabled [list [::application::focuszoom::isEnabled $t] \
+		[::application::focuszoom::isFollowsSize $t]]
+	list $enabled [expr {$before ne $natural}] \
+		[expr {$natural eq [::zoom2Test::widths $t]}]
+} -cleanup { ::zoom2Test::cleanup $t } -result {{0 0} 1 1}
+
+tcltest::test pane-zoom2-follows-size-grow {with focus follows size on, the window resize grows the focused pane by R and shrinks its siblings} -setup {
+	set t [::zoom2Test::fixture]
+	::application::focuszoom::setRatio 1.4
+	::application::focuszoom::enableFollowsSize $t
+	focus -force [$t leaf editor]
+	wm geometry .z2test 1300x700
+	update
+	set base [::zoom2Test::widths $t]
+	::application::focuszoom::windowResized $t
+	update
+	lassign $base b0 e0 g0
+	lassign [::zoom2Test::widths $t] b1 e1 g1
+} -body {
+	list [expr {abs(double($e1)/$e0 - 1.4) < 0.03}] \
+		[expr {$b1 < $b0 && $g1 < $g0}] \
+		[expr {$b1 + $e1 + $g1 == $b0 + $e0 + $g0}] \
+		[expr {$b1 >= 300}]
+} -cleanup { ::zoom2Test::cleanup $t } -result {1 1 1 1}
+
+tcltest::test pane-zoom2-follows-size-focused-pane {the pane the user focused grows, not the last one the manual toggle grew} -setup {
+	set t [::zoom2Test::fixture]
+	::application::focuszoom::setRatio 1.4
+	::application::focuszoom::enableFollowsSize $t
+	# Grow the editor with the manual gesture, then move focus to games.
+	::application::focuszoom::enable $t
+	::application::focuszoom::growPane $t [$t leaf editor]
+	update
+	focus -force [$t leaf games]
+	update
+	wm geometry .z2test 1300x700
+	update
+	set base [::zoom2Test::widths $t]
+	::application::focuszoom::windowResized $t
+	update
+	lassign $base b0 e0 g0
+	lassign [::zoom2Test::widths $t] b1 e1 g1
+} -body {
+	list [expr {$g1 > $g0}] [expr {$b1 < $b0 && $e1 < $e0}]
+} -cleanup { ::zoom2Test::cleanup $t } -result {1 1}
+
+tcltest::test pane-zoom2-follows-size-restore {turning focus follows size off puts back the arrangement at the current size} -setup {
+	set t [::zoom2Test::fixture]
+	::application::focuszoom::enableFollowsSize $t
+	focus -force [$t leaf editor]
+	wm geometry .z2test 1300x700
+	update
+	set base [::zoom2Test::sashes $t]
+	::application::focuszoom::windowResized $t
+	update
+	set grown [::zoom2Test::sashes $t]
+} -body {
+	::application::focuszoom::disableFollowsSize $t
+	update
+	list [expr {$base ne $grown}] [expr {$base eq [::zoom2Test::sashes $t]}] \
+		[::application::focuszoom::isFollowsSize $t]
+} -cleanup { ::zoom2Test::cleanup $t } -result {1 1 0}
+
+tcltest::test pane-zoom2-follows-size-same-size {a Configure at the size already grown from does not grow the pane again} -setup {
+	set t [::zoom2Test::fixture]
+	::application::focuszoom::enableFollowsSize $t
+	focus -force [$t leaf editor]
+	wm geometry .z2test 1300x700
+	update
+	::application::focuszoom::windowResized $t
+	update
+	set once [::zoom2Test::sashes $t]
+	::application::focuszoom::windowResized $t
+	update
+} -body {
+	expr {$once eq [::zoom2Test::sashes $t]}
+} -cleanup { ::zoom2Test::cleanup $t } -result 1
+
+tcltest::test pane-zoom2-follows-size-manual-unchanged {the manual toggle ignores a resize on its own; the click gesture still works} -setup {
+	set t [::zoom2Test::fixture]
+	::application::focuszoom::enable $t
+	focus -force [$t leaf editor]
+	wm geometry .z2test 1300x700
+	update
+	set base [::zoom2Test::sashes $t]
+	::application::focuszoom::windowResized $t
+	update
+	set afterResize [expr {$base eq [::zoom2Test::sashes $t]}]
+	::application::focuszoom::growPane $t [$t leaf editor]
+	update
+} -body {
+	list $afterResize [expr {$base ne [::zoom2Test::sashes $t]}] \
+		[::application::focuszoom::isFollowsSize $t]
+} -cleanup { ::zoom2Test::cleanup $t } -result {1 1 0}
 
 tcltest::cleanupTests
