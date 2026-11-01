@@ -981,4 +981,49 @@ foreach kind {rearranged floating} {
  }
 }
 
+# VAL-FOCUS-002: with focus follows size on, switching the manual zoom off
+# restores the clicked pane exactly. Disabling re-runs the debounced reflow at
+# the unchanged window size; that must not grow the pane a second time.
+tcltest::test pane-reflow-023-focus-follows-size-off {manual zoom off restores exactly with focus follows size on and no resize} -setup {
+ set t [::reflowTest::setup]
+ set oldGeometry [wm geometry .application]
+ set oldDuration $::application::focuszoom::duration
+ set ::application::focuszoom::duration 0
+ wm geometry .application [::scidb::test::app::fitGeometry 1200 800]
+ ::reflowTest::waitMs 650
+ ::application::focuszoom::enableFollowsSize $t
+ ::reflowTest::waitMs 350
+} -body {
+ set results {}
+ set target [$t leaf board]
+ focus -force $target
+ catch {::application::focuszoom::focusIn $target}
+ update
+ set size [list [winfo width .application] [winfo height .application]]
+ set before [::application::focuszoom::Snapshot $t]
+ set width [winfo width $target]
+ ::application::focuszoom::enable $t
+ ::application::focuszoom::clicked $target
+ ::reflowTest::waitMs 250
+ lappend results [expr {[winfo width $target] > $width}]
+ ::application::focuszoom::disable $t
+ update idletasks
+ set immediate [expr {[::application::focuszoom::Snapshot $t] eq $before}]
+ # Past the reflow debounce, with no window resize in between.
+ ::reflowTest::waitMs 700
+ ::reflowTest::say "FOCUS023 size=$size target=$target width=$width -> [winfo width $target] immediate=$immediate follows=[::application::focuszoom::isFollowsSize $t]"
+ lappend results $immediate \
+  [expr {[::application::focuszoom::Snapshot $t] eq $before}] \
+  [expr {[winfo width $target] == $width}] \
+  [expr {[list [winfo width .application] [winfo height .application]] eq $size}] \
+  [expr {[::application::focuszoom::isFollowsSize $t] == 1}]
+ set results
+} -cleanup {
+ ::application::focuszoom::disable $t
+ ::application::focuszoom::disableFollowsSize $t
+ set ::application::focuszoom::duration $oldDuration
+ ::application::reflow::reset
+ wm geometry .application $oldGeometry
+} -result {1 1 1 1 1 1}
+
 tcltest::cleanupTests

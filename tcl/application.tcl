@@ -982,6 +982,7 @@ namespace eval focuszoom {
 	variable steps		10
 	variable enabled		;# per layout (twm) on/off
 	variable followsSize	;# per layout: grow the focused pane on a resize
+	variable lastSize	;# window size last seen by the resize path
 	variable focusPane	;# last leaf that received the user's focus
 	variable baseline	;# sash snapshot taken when switched on
 	variable lastPane	;# last grown leaf per twm
@@ -1015,7 +1016,10 @@ proc focuszoom::toggleFollowsSize {twm} {
 
 proc focuszoom::enableFollowsSize {twm} {
 	variable followsSize
+	variable lastSize
 	set followsSize($twm) 1
+	# Only a size change after the switch grows a pane.
+	set lastSize($twm) [WindowSize $twm]
 }
 
 
@@ -1101,8 +1105,16 @@ proc focuszoom::WindowSize {twm} {
 proc focuszoom::windowResized {twm} {
 	variable baseline
 	variable lastPane
+	variable lastSize
 	if {![isEnabled $twm] && ![isFollowsSize $twm]} { return }
 	set size [WindowSize $twm]
+	# Only a changed window size is a resize. A move sends <Configure> too,
+	# and switching the manual zoom off re-runs the debounced reflow at the
+	# same size; neither may grow the focused pane (VAL-FOCUS-002).
+	set previous {}
+	if {[info exists lastSize($twm)]} { set previous $lastSize($twm) }
+	set lastSize($twm) $size
+	if {$previous eq $size} { return }
 	if {[info exists baseline($twm)] && [lindex $baseline($twm) 0] eq $size} { return }
 	catch { unset baseline($twm) }
 	catch { unset lastPane($twm) }
