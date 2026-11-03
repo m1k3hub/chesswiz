@@ -110,10 +110,32 @@ Position::setup(char const* fen, variant::Type variant)
 void
 Position::setup(uint16_t idn, variant::Type variant)
 {
+	uint32_t const key = (uint32_t(variant) << 16) | idn;
+
+	s_startCacheLock.lock();
+	StartCache::const_iterator it = s_startCache.find(key);
+	if (it != s_startCache.end())
+	{
+		m_stack.top() = it->second.lookup;
+		for (unsigned i = 0; i < 4; ++i)
+			m_rookNumbers[i] = it->second.rookNumbers[i];
+		s_startCacheLock.release();
+		return;
+	}
+	s_startCacheLock.release();
+
 	Board board;
 	board.setup(idn, variant);
-
 	setupBoard(board, variant);
+
+	StartEntry entry;
+	entry.lookup = m_stack.top();
+	for (unsigned i = 0; i < 4; ++i)
+		entry.rookNumbers[i] = m_rookNumbers[i];
+
+	s_startCacheLock.lock();
+	s_startCache.insert(std::make_pair(key, entry));
+	s_startCacheLock.release();
 }
 
 

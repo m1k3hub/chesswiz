@@ -32,6 +32,10 @@
 #include "db_move.h"
 
 #include "m_stack.h"
+#include "sys/sys_mutex.h"
+
+#include <map>
+#include <stdint.h>
 
 namespace db {
 namespace sci {
@@ -83,6 +87,19 @@ private:
 	typedef mstl::stack<Lookup> Stack;
 
 	void setupBoard(Board const& board, db::variant::Type variant);
+
+	// The start position of an idn is a pure function of (idn, variant), so the
+	// finished lookup and rook numbers are cached and reused for later games.
+	struct StartEntry
+	{
+		Lookup	lookup;
+		Byte	rookNumbers[4];
+	};
+
+	typedef std::map<uint32_t, StartEntry> StartCache;
+
+	static StartCache		s_startCache;
+	static sys::Mutex		s_startCacheLock;
 	void reset();
 
 	Stack	m_stack;

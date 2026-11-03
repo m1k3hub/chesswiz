@@ -37,6 +37,9 @@ namespace decoder {
 
 #include "sci_decoder_position_impl.ipp"
 
+Position::StartCache	Position::s_startCache;
+sys::Mutex		Position::s_startCacheLock;
+
 } // namespace decoder
 } // namespace sci
 } // namespace db
