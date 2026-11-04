@@ -101,17 +101,24 @@ tcltest::test inset-surfaceready-tiny {0 while the canvas is mapped but still 1x
 	wm geometry .srTest 1x1+0+0
 	canvas .srTest.video -background black -highlightthickness 0 -borderwidth 0
 	place .srTest.video -x 0 -y 0 -relwidth 1 -relheight 1
-	update idletasks
-	set tiny [expr {[winfo ismapped .srTest.video] && [winfo width .srTest.video] <= 1}]
+	# Windows maps the canvas only after the event loop runs, so wait for it
+	# before reading its state (update idletasks is not enough there).
+	for {set i 0} {$i < 40 && ![winfo ismapped .srTest.video]} {incr i} {
+		update
+		after 25
+	}
+	# SurfaceReady refuses a surface unless both width and height exceed 1.
+	# Windows can enforce a minimum toplevel width (148 px seen on the laptop),
+	# so the precondition checks only the height that the refusal depends on.
+	set tiny [expr {[winfo ismapped .srTest.video] && [winfo height .srTest.video] <= 1}]
 	set r [::mediainset::SurfaceReady .srTest]
-	# The window manager may decorate or move the 1x1 toplevel (+1+22
-	# under openbox); SurfaceReady must judge the canvas size, not its
-	# origin, so assert only the mapped 1x1 surface and the refusal.
-	set diag [list [winfo width .srTest.video] [winfo height .srTest.video] \
-		[winfo ismapped .srTest.video]]
+	# The window manager may decorate or move the toplevel (+1+22 under
+	# openbox); SurfaceReady must judge the canvas size, not its origin, so
+	# report only the height and mapped state.
+	set diag [list [winfo height .srTest.video] [winfo ismapped .srTest.video]]
 	destroy .srTest
 	list $tiny $r $diag
-} -result {1 0 {1 1 1}}
+} -result {1 0 {1 1}}
 
 # FreeRect on a stand-alone canvas: a 400x400 "board" item in a wide or tall pane.
 proc ::scidb::test::freeRect {cw ch bx by} {
