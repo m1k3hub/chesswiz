@@ -6262,7 +6262,8 @@ Node::inspect(AttrSet const& exportList, tcl::DString& str, int horzGap, int ver
 
 	str.startList();
 
-	if (!isRoot() && m_parent->isMetaFrame() && m_parent->isToplevel())
+	// An orphaned node (no parent) has no toplevel metaframe to report offsets from.
+	if (!isRoot() && m_parent && m_parent->isMetaFrame() && m_parent->isToplevel())
 	{
 		str.append(m_objOptX);
 		str.append(m_parent->x() - m_root->x());
