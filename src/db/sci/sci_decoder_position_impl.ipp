@@ -108,6 +108,7 @@ Position::setup(char const* fen, variant::Type variant)
 
 
 void
+#ifdef _SCI_START_CACHE
 Position::setup(uint16_t idn, variant::Type variant)
 {
 	uint32_t const key = (uint32_t(variant) << 16) | idn;
@@ -137,6 +138,17 @@ Position::setup(uint16_t idn, variant::Type variant)
 	s_startCache.insert(std::make_pair(key, entry));
 	s_startCacheLock.release();
 }
+#else // _SCI_START_CACHE
+
+Position::setup(uint16_t idn, variant::Type variant)
+{
+	Board board;
+	board.setup(idn, variant);
+
+	setupBoard(board, variant);
+}
+
+#endif // _SCI_START_CACHE
 
 
 void

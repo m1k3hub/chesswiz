@@ -35,6 +35,8 @@ namespace db {
 namespace sci {
 namespace decoder {
 
+// The main decoder caches start positions; the legacy decoders keep the plain setup.
+#define _SCI_START_CACHE 1
 #include "sci_decoder_position_impl.ipp"
 
 Position::StartCache	Position::s_startCache;
