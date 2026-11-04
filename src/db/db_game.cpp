@@ -3387,11 +3387,13 @@ Game::checkConsistency(MoveNode* node, Board& board, Force flag) const
 			if (truncate)
 			{
 				MoveNode* last = node->getLineEnd();
+				// Copy the comment first: deleteNext() frees the tail that holds `last`.
+				Comment comment(last->comment(move::Post));
 
 				node = node->prev();
 				node->deleteNext();
 				node->setNext(new MoveNode);
-				node->next()->setComment(last->comment(move::Post), move::Post);
+				node->next()->setComment(comment, move::Post);
 
 				return true;
 			}
