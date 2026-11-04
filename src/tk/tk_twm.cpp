@@ -1618,22 +1618,30 @@ WindowEventProc(ClientData clientData, XEvent* event)
 	if (s_liveNodes.find(static_cast<Node*>(clientData)) == s_liveNodes.end())
 		return;
 
-	if (static_cast<Node*>(clientData)->zoomEvent(event))
-		return;
-
-	switch (event->type)
+	// This is a Tk C callback: an exception escaping it terminates the process.
+	// A failed Tcl call inside the layout update is skipped instead.
+	try
 	{
-		case ConfigureNotify:
-		{
-			static_cast<Node*>(clientData)->updateDimen(
-				event->xconfigure.x, event->xconfigure.y,
-				event->xconfigure.width, event->xconfigure.height);
-			break;
-		}
+		if (static_cast<Node*>(clientData)->zoomEvent(event))
+			return;
 
-		case DestroyNotify:	static_cast<Node*>(clientData)->destroyed(false); break;
-		case UnmapNotify:		static_cast<Node*>(clientData)->destroyed(true); break;
-		case MapNotify:		static_cast<Node*>(clientData)->setSelected(); break;
+		switch (event->type)
+		{
+			case ConfigureNotify:
+			{
+				static_cast<Node*>(clientData)->updateDimen(
+					event->xconfigure.x, event->xconfigure.y,
+					event->xconfigure.width, event->xconfigure.height);
+				break;
+			}
+
+			case DestroyNotify:	static_cast<Node*>(clientData)->destroyed(false); break;
+			case UnmapNotify:		static_cast<Node*>(clientData)->destroyed(true); break;
+			case MapNotify:		static_cast<Node*>(clientData)->setSelected(); break;
+		}
+	}
+	catch (...)
+	{
 	}
 }
 
@@ -7066,8 +7074,10 @@ Node::performGetWorkArea()
 
 	Tcl_Obj* result = tcl::call(__func__, pathObj(), m_objCmdWorkArea, nullptr);
 
+	// Called from a Tk event handler: an exception would cross C frames and
+	// terminate the process. Keep the previous work area instead.
 	if (!result)
-		M_THROW(tcl::Error());
+		return;
 		
 	tcl::Array elems = tcl::getElements(result);
 
