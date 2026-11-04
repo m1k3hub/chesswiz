@@ -7074,10 +7074,10 @@ Node::performGetWorkArea()
 
 	Tcl_Obj* result = tcl::call(__func__, pathObj(), m_objCmdWorkArea, nullptr);
 
-	// Called from a Tk event handler: an exception would cross C frames and
-	// terminate the process. Keep the previous work area instead.
+	// A failed call aborts this layout update; WindowEventProc catches the error,
+	// since an exception must not cross the Tk event callback.
 	if (!result)
-		return;
+		M_THROW(tcl::Error());
 		
 	tcl::Array elems = tcl::getElements(result);
 
