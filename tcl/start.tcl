@@ -228,6 +228,14 @@ proc update {} {
 			{Virtual - Brown|1423390755270|purple|gregor}
 			{Winboard|1228820514841|yellow.color|gregor}
 			{Woodgrain|1296150310528|yellow.color|gregor}
+			{Walnut|1792400001000|yellow.color|chesswiz}
+			{Nordic Frost|1792400000000|yellow.color|chesswiz}
+			{Lapis|1792400006000|yellow.color|chesswiz}
+			{Paper|1792400007000|yellow.color|chesswiz}
+			{Midnight Jade|1792400002000|yellow.color|chesswiz}
+			{Rosewood Dusk|1792400003000|yellow.color|chesswiz}
+			{Sandstone Teal|1792400005000|yellow.color|chesswiz}
+			{Graphite|1792400004000|yellow.color|chesswiz}
 		}
 		piece {
 			{Akira|1386332239604|purple|gregor}
@@ -257,6 +265,14 @@ proc update {} {
 			{Virtual|1381586796154|purple|gregor}
 			{Winboard|1228820514952|yellow.color|gregor}
 			{Yellow - Blue|1243787883127|yellow.color|gregor}
+			{Walnut|1792400001002|yellow.color|chesswiz}
+			{Nordic Frost|1792400000002|yellow.color|chesswiz}
+			{Lapis|1792400006002|yellow.color|chesswiz}
+			{Paper|1792400007002|yellow.color|chesswiz}
+			{Midnight Jade|1792400002002|yellow.color|chesswiz}
+			{Rosewood Dusk|1792400003002|yellow.color|chesswiz}
+			{Sandstone Teal|1792400005002|yellow.color|chesswiz}
+			{Graphite|1792400004002|yellow.color|chesswiz}
 		}
 		square {
 			{Akira|1386332477369|purple|gregor}
@@ -296,6 +312,14 @@ proc update {} {
 			{Wood - Brown|1228820485412|yellow.color|gregor}
 			{Wood - Green|1244309414202|yellow.color|gregor}
 			{Woodgrain|1296150231295|yellow.color|gregor}
+			{Walnut|1792400001001|yellow.color|chesswiz}
+			{Nordic Frost|1792400000001|yellow.color|chesswiz}
+			{Lapis|1792400006001|yellow.color|chesswiz}
+			{Paper|1792400007001|yellow.color|chesswiz}
+			{Midnight Jade|1792400002001|yellow.color|chesswiz}
+			{Rosewood Dusk|1792400003001|yellow.color|chesswiz}
+			{Sandstone Teal|1792400005001|yellow.color|chesswiz}
+			{Graphite|1792400004001|yellow.color|chesswiz}
 		}
 	}
 
