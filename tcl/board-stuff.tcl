@@ -484,13 +484,60 @@ proc hilite {w i which} {
 	if {$which eq "off"} {
 		$w.c itemconfigure selected:$i -state hidden
 		$w.c itemconfigure suggested:$i -state hidden
+		if {[info exists Board(legal:from)] && $i == $Board(legal:from)} { clearLegalHints $w }
 	} else {
 		$w.c itemconfigure $which:$i -state normal
 		$w.c raise $which:$i
 		$w.c raise suggested:$i
 		raisePiece $w
 		RaiseInput $w
+		if {$which eq "selected"} { showLegalHints $w $i }
 	}
+}
+
+
+# Legal-move hints: a dot on each empty square the selected piece can move to,
+# and a ring on each square it can capture on. The test is the same legality
+# check the move entry uses, so a hint is never shown for an illegal move.
+proc showLegalHints {w from} {
+	variable [namespace parent]::hilite
+	variable ${w}::Board
+
+	clearLegalHints $w
+	if {!$hilite(legal-hints) || $from < 0 || $from > 63} { return }
+
+	set size $Board(size)
+	set r [expr {$size/7}]
+	set ring [expr {$size/2 - 3}]
+
+	for {set to 0} {$to < 64} {incr to} {
+		if {$to == $from || ![::scidb::pos::legal? $from $to 0]} { continue }
+		lassign [$w.c coords square:$to] x0 y0
+		if {![llength $x0]} { continue }
+		set cx [expr {$x0 + $size/2}]
+		set cy [expr {$y0 + $size/2}]
+		if {[string index $Board(data) $to] eq " "} {
+			$w.c create oval [expr {$cx - $r}] [expr {$cy - $r}] \
+				[expr {$cx + $r}] [expr {$cy + $r}] \
+				-fill #6a8f3c -outline {} -tags legalhint
+		} else {
+			$w.c create oval [expr {$cx - $ring}] [expr {$cy - $ring}] \
+				[expr {$cx + $ring}] [expr {$cy + $ring}] \
+				-outline #6a8f3c -width 4 -tags legalhint
+		}
+	}
+
+	set Board(legal:from) $from
+	$w.c raise legalhint
+	raisePiece $w
+}
+
+
+proc clearLegalHints {w} {
+	variable ${w}::Board
+
+	$w.c delete legalhint
+	set Board(legal:from) -1
 }
 
 

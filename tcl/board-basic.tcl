@@ -289,6 +289,7 @@ array set hilite {
 	show-suggested	1
 	selected			0
 	suggested		2
+	legal-hints		1
 }
 
 array set colors {
