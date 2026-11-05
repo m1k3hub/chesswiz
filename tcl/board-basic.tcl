@@ -255,7 +255,7 @@ dict set NameMap $workingSetId $workingSetId
 variable BoardSizeDict	[dict create]
 variable PieceSizeDict	[dict create]
 variable designSize		150
-variable currentTheme	$workingSetId	;# default for new users; Walnut needs the themes merge
+variable currentTheme	{Walnut|1792400001000|yellow.color|chesswiz}	;# default for new users (Chesswiz 1.0)
 
 array set texture {
 	lite		{}
