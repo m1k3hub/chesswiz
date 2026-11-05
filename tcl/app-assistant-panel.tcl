@@ -437,6 +437,50 @@ proc ::application::assistant::panel::StartupGreeting {} {
 }
 
 
+# A local Ollama server that is already running is the sane default: when
+# no model was chosen, connect the first model it lists. Asynchronous, so a
+# missing server costs nothing at startup.
+proc ::application::assistant::panel::DetectLocalModel {} {
+	if {![info exists ::application::ai::Settings(chosen)] || $::application::ai::Settings(chosen)} { return }
+	::ai::provider::ollamaModelsAsync [list ::application::assistant::panel::OnLocalModels]
+}
+
+
+proc ::application::assistant::panel::OnLocalModels {result} {
+	if {![dict get $result ok]} { return }
+	# Only models that run on this computer: a cloud-backed model would send
+	# the questions to a remote host, which the user did not choose.
+	# Pick a local chat model (an embedding model cannot complete text): the
+	# largest one that fits in 8 GB of files, a sane default for most
+	# computers. Smaller models answer poorly; the user can change the choice.
+	set best ""
+	set bestSize -1
+	foreach m [dict get $result models] {
+		if {[dict get $m remote] || ![dict get $m completion]} { continue }
+		set size [dict get $m size]
+		if {$size > 8000000000 || $size <= $bestSize} { continue }
+		set best [dict get $m name]
+		set bestSize $size
+	}
+	if {$best eq "" || $::application::ai::Settings(chosen)} { return }
+	set model $best
+	::application::ai::choose ollama $model
+	# The no-model hint may already be in the pane; it no longer applies.
+	set hint $::application::assistant::panel::mc::NoModelHint
+	set text ""
+	if {[info exists ::application::assistant::Priv(text)]} { set text $::application::assistant::Priv(text) }
+	if {$text ne "" && [winfo exists $text]} {
+		set at [$text search -exact -- $hint 1.0 end]
+		if {$at ne ""} {
+			$text configure -state normal
+			$text delete "$at linestart" "$at lineend +1c"
+			$text configure -state disabled
+		}
+	}
+	::application::assistant::Append info "Connected to the local model $model found on this computer."
+}
+
+
 proc ::application::assistant::panel::AfterGreeting {} {
 	variable HintShown
 

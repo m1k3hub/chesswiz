@@ -1561,6 +1561,7 @@ proc ::ai::provider::parseModels {data} {
 			name   [dict get $m name] \
 			remote [expr {[dict exists $m remote_host] && [string length [dict get $m remote_host]]}] \
 			tools  [expr {"tools" in $caps}] \
+			completion [expr {"completion" in $caps}] \
 			size   [expr {[dict exists $m size] ? [dict get $m size] : 0}] \
 			details [expr {[dict exists $m details] ? [dict get $m details] : {}}] \
 		]
