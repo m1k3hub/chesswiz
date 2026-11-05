@@ -30,7 +30,7 @@ tcltest::test knowledge-lazy-startup {all operators exist before knowledge synth
         if {$id ni $::knowledge::Exempt && ![dict get $rec operator]} {lappend missing $id}
     }
     set state [::knowledge::RunAction app_state {}]
-    list $::knowledge::Built $::knowledge::PackLoaded [expr {$exposed == 698}] $missing [string match error:* $state]
+    list $::knowledge::Built $::knowledge::PackLoaded [expr {$exposed == 699}] $missing [string match error:* $state]
 } -result {0 0 1 {} 0}
 
 tcltest::test knowledge-lazy-first-help {first public help request synthesizes complete knowledge} -body {
@@ -48,12 +48,12 @@ tcltest::test knowledge-lazy-first-search {first search loads the real pack and 
     ::scidb::test::knowledgeLazy::ready
     set caps [::knowledge::Search {open a database} 4]
     list $::knowledge::PackLoaded [llength $::knowledge::PackActions] [expr {[llength $caps] > 0}]
-} -result {1 698 1}
+} -result {1 699 1}
 
 tcltest::test knowledge-lazy-first-pack {pack enumeration also initializes knowledge when used first} -body {
     ::scidb::test::knowledgeLazy::ready
     set ids [::knowledge::PackIds]
     list $::knowledge::Built [llength $ids]
-} -result {1 698}
+} -result {1 699}
 
 tcltest::cleanupTests

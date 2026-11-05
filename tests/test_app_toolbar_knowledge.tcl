@@ -82,7 +82,7 @@ tcltest::test knowledge-plain-words-guard {all purposes and use cases avoid impl
  }
  puts "KNOWLEDGE_PLAIN_FIELDS $checked"
  list $checked $bad
-} -result {2094 {}}
+} -result {2097 {}}
 tcltest::test knowledge-plain-words-canary {implementation terms in future descriptions fail the guard} -body {
  ::toolbarKnowledge::implementationTerms {Configure a native widget by path and callback in the Tcl registry handler.}
 } -result {native widget path callback tcl registry handler}
