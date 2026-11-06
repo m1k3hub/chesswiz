@@ -48,7 +48,7 @@ array set Config {
 	index     0
 	system    ""
 	options   {}
-	think     auto
+	think     false
 	chatResponses {}
 	chatIndex 0
 	keys      {}
