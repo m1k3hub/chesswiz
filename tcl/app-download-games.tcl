@@ -87,7 +87,8 @@ set BroadcastMinutes			"minutes"
 set BroadcastImport			"Lichess broadcast import"
 set BroadcastImported			"Imported %d new game(s)."
 set BroadcastNoNew			"No new game(s); %d game(s) of the broadcast are already there."
-set BroadcastNext			"%d game(s) imported; the next refresh is in %d minute(s). Cancel stops it."
+set BroadcastUpdated		"%d game(s) updated with new moves."
+set BroadcastNext			"%d game(s) imported, %d updated; the next refresh is in %d minute(s). Cancel stops it."
 set BroadcastFailed			"The broadcast could not be fetched: %s"
 set NoBroadcast				"no Lichess broadcast round or tournament given"
 set Player					"A player's games"
@@ -153,6 +154,8 @@ array set Priv {
 	bcKeys				{}
 	bcGames			0
 	bcImported			0
+	bcUpdated			0
+	bcBodies			{}
 	bcFile				{}
 	bcTimer			{}
 	bcInterval			0
@@ -515,6 +518,8 @@ proc ::application::download::Start {} {
 			set Priv(bcUrls) [broadcastUrls $spec]
 			set Priv(bcUrl) 0
 			set Priv(bcImported) 0
+			set Priv(bcUpdated) 0
+			set Priv(bcBodies) {}
 			set Priv(bcInterval) [RefreshSeconds]
 			set Priv(bcActive) 1
 			set Priv(bcFile) [file join $dir "lichess-broadcast-[broadcastFileId $spec].pgn"]
@@ -788,7 +793,7 @@ proc ::application::download::ScheduleRefresh {} {
 	if {![DialogExists] && (![info exists Priv(doneCmd)] || ![llength $Priv(doneCmd)])} { return }
 	set Priv(bcTimer) [after [expr {$Priv(bcInterval) * 1000}] \
 		[namespace code BroadcastRefresh]]
-	Status [format $mc::BroadcastNext $Priv(bcImported) [RefreshMinutes]]
+	Status [format $mc::BroadcastNext $Priv(bcImported) $Priv(bcUpdated) [RefreshMinutes]]
 	return
 }
 
@@ -913,16 +918,25 @@ proc ::application::download::freeFile {name} {
 
 
 # The games of the fetched PGN that are not in the database yet are
-# written to a file of their own and imported.
+# written to a file of their own and imported; the games that are there
+# and have new moves are replaced in place, so a live game grows.
 proc ::application::download::BroadcastImport {data} {
 	variable Priv
 	variable mc
 
 	set round [broadcastSpecRound $Priv(bcSpec)]
-	lassign [broadcastNewGames [encoding convertfrom utf-8 $data] $Priv(bcKeys) $round] text keys count
+	set pgn [encoding convertfrom utf-8 $data]
+	set changed [broadcastChangedGames $pgn $Priv(bcBodies) $Priv(bcKeys) $round]
+	lassign [broadcastNewGames $pgn $Priv(bcKeys) $round] text keys count
+	set Priv(bcUpdated) [BroadcastUpdate $Priv(base) $changed $round]
+	set Priv(bcBodies) [broadcastBodies $pgn $round]
 	if {!$count} {
 		set Priv(bcImported) 0
-		BroadcastDone [format $mc::BroadcastNoNew $Priv(bcGames)] 1
+		if {$Priv(bcUpdated)} {
+			BroadcastDone [format $mc::BroadcastUpdated $Priv(bcUpdated)] 1
+		} else {
+			BroadcastDone [format $mc::BroadcastNoNew $Priv(bcGames)] 1
+		}
 		return
 	}
 
@@ -1484,6 +1498,121 @@ proc ::application::download::broadcastNewGames {pgn keys {roundId ""}} {
 		append text [broadcastGameText $game]
 	}
 	return [list $text $newKeys $count]
+}
+
+
+# The games of <pgn> that are known (one of their keys is in <keys>) and
+# whose moves are not the ones in <bodies> (first key -> moves) any more.
+# A known game without moves in <bodies> counts as changed: its database
+# copy may be older than this fetch.
+proc ::application::download::broadcastChangedGames {pgn bodies keys {roundId ""}} {
+	set changed {}
+	foreach game [broadcastGames $pgn] {
+		set gameKeys [broadcastKeys [dict get $game tags] $roundId]
+		set known 0
+		foreach key $gameKeys {
+			if {[dict exists $keys $key]} { set known 1; break }
+		}
+		if {!$known} { continue }
+		set first [lindex $gameKeys 0]
+		if {[dict exists $bodies $first] && [dict get $bodies $first] eq [dict get $game body]} {
+			continue
+		}
+		lappend changed $game
+	}
+	return $changed
+}
+
+
+# The moves of each game of <pgn>, by its first key.
+proc ::application::download::broadcastBodies {pgn {roundId ""}} {
+	set bodies [dict create]
+	foreach game [broadcastGames $pgn] {
+		set gameKeys [broadcastKeys [dict get $game tags] $roundId]
+		if {[llength $gameKeys]} { dict set bodies [lindex $gameKeys 0] [dict get $game body] }
+	}
+	return $bodies
+}
+
+
+# The game number of each broadcast game in <base>, by every key it has.
+proc ::application::download::broadcastDbIndex {base {roundId ""}} {
+	set index [dict create]
+	if {[catch { ::scidb::db::count games $base Normal } count]} { return $index }
+	for {set n 0} {$n < $count} {incr n} {
+		if {[catch { ::scidb::db::get tags $n $base Normal } pairs]} { continue }
+		set tags {}
+		foreach pair $pairs { dict set tags {*}$pair }
+		foreach key [broadcastKeys $tags $roundId] { dict set index $key $n }
+	}
+	return $index
+}
+
+
+# Replaces the database copy of each of <games> with its fetched version;
+# returns how many were replaced. A board showing one of them, unmodified,
+# is reloaded and goes to the last move.
+proc ::application::download::BroadcastUpdate {base games roundId} {
+	if {![llength $games]} { return 0 }
+	if {[llength [info commands ::scidb::game::save]] == 0} { return 0 }
+	set index [broadcastDbIndex $base $roundId]
+	set done {}
+	foreach game $games {
+		set number -1
+		foreach key [broadcastKeys [dict get $game tags] $roundId] {
+			if {[dict exists $index $key]} { set number [dict get $index $key]; break }
+		}
+		if {$number < 0} { continue }
+		if {![catch { ReplaceGame $base $number $game } ok] && $ok} {
+			lappend done $number
+		}
+	}
+	if {[llength $done]} {
+		catch { ::application::database::refreshBase $base }
+		ReloadShown $base $done
+	}
+	return [llength $done]
+}
+
+
+# The private slot the replacement is built in (30-32 are taken, see
+# ai-similar.tcl). It is saved by its position, so the game the user is
+# looking at stays current.
+variable ::application::download::ReplaceSlot 33
+
+proc ::application::download::ReplaceGame {base number game} {
+	variable ReplaceSlot
+
+	set slot $ReplaceSlot
+	if {[::scidb::game::query $slot open?]} { ::scidb::game::release $slot }
+	::scidb::game::new $slot
+	set code [catch {
+		set text [broadcastGameText $game]
+		set state [::scidb::game::import $slot $text -encoding utf-8 -database $base -index $number]
+		if {$state < 0} { error "the fetched game could not be read" }
+		set tags [dict get $game tags]
+		::scidb::game::save $base Normal $tags {} {} [namespace current]::ReplaceLog {} \
+			-replace 1 -position $slot
+	} result options]
+	catch { ::scidb::game::release $slot }
+	return -options $options $result
+}
+
+proc ::application::download::ReplaceLog {args} { return }
+
+
+# Boards that show one of the replaced <numbers> of <base>, and that the
+# user has not changed, load the new version and follow it to its end.
+proc ::application::download::ReloadShown {base numbers} {
+	if {[catch { ::game::usedPositions? } positions]} { return }
+	foreach pos $positions {
+		if {[catch { ::scidb::game::link? $pos } link]} { continue }
+		lassign $link b variant n
+		if {$b ne $base || $n ni $numbers} { continue }
+		if {[catch { ::scidb::game::query $pos modified? } modified] || $modified} { continue }
+		if {[catch { ::game::load . $pos $base -variant $variant -number $n }]} { continue }
+		if {$pos == [::scidb::game::current]} { catch { ::scidb::game::go end } }
+	}
 }
 
 

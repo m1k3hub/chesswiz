@@ -304,7 +304,7 @@ public:
 											unsigned flags,
 											::db::copy::Source source,
 											bool useChessPadDiagramNag = false);
-	db::save::State saveGame(Cursor& cursor, bool replace);
+	db::save::State saveGame(Cursor& cursor, bool replace, unsigned position = InvalidPosition);
 	db::save::State updateMoves();
 	db::save::State updateCharacteristics(Cursor& cursor, unsigned index, db::TagSet const& tags);
 	void setupGame(unsigned linebreakThreshold,

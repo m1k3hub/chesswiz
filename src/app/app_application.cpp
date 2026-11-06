@@ -2457,17 +2457,24 @@ Application::invalidateTreeCache(db::Database const& database,
 
 
 save::State
-Application::saveGame(Cursor& cursor, bool replace)
+Application::saveGame(Cursor& cursor, bool replace, unsigned position)
 {
 	M_REQUIRE(cursor.isOpen());
 	M_REQUIRE(!cursor.isReadonly());
-	M_REQUIRE(haveCurrentGame());
+	M_REQUIRE(position != InvalidPosition || haveCurrentGame());
 	M_REQUIRE(!hasTrialMode());
+
+	// A game of another slot is saved without becoming current (a broadcast
+	// refresh replaces games in a private slot while the user reads another).
+	if (position == InvalidPosition)
+		position = m_currentPosition;
+
+	M_REQUIRE(containsGameAt(position));
 
 	stopAllThreads(cursor);
 	M_ASSERT(!cursor.isReferenceBase() || !m_treeAdmin.isRunning());
 
-	EditGame& g = *m_gameMap.find(m_currentPosition)->second;
+	EditGame& g = *m_gameMap.find(position)->second;
 
 	save::State	state;
 
@@ -2475,6 +2482,14 @@ Application::saveGame(Cursor& cursor, bool replace)
 
 	if (replace)
 	{
+		// A game imported and bound to a database game (bindGameToDatabase)
+		// replaces that game.
+		if (g.sink.cursor != &cursor && g.link.databaseName == cursor.name())
+		{
+			g.sink.cursor = &cursor;
+			g.sink.index = g.link.index;
+		}
+
 		M_ASSERT(cursor.name() == g.sink.cursor->name());
 		M_ASSERT(g.sink.index < db.countGames());
 		g.data.game->setIndex(g.sink.index);
@@ -2510,10 +2525,10 @@ Application::saveGame(Cursor& cursor, bool replace)
 		if (m_subscriber)
 		{
 			m_subscriber->updateDatabaseInfo(cursor.name(), cursor.variant());
-			m_subscriber->updateGameInfo(m_currentPosition);
+			m_subscriber->updateGameInfo(position);
 
 			if (g.sink.crcMoves != crcMoves || g.sink.crcMainline != crcMainline)
-				m_subscriber->updateGameData(m_currentPosition, crcMainline != g.sink.crcMainline);
+				m_subscriber->updateGameData(position, crcMainline != g.sink.crcMainline);
 
 			if (m_current == &cursor)
 			{

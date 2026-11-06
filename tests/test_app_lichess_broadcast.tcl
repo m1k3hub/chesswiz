@@ -605,4 +605,45 @@ tcltest::test broadcast-other-sources-finish {a non-broadcast download still rea
 	::scidb::test::broadcast::cleanup
 } -result {1 1}
 
+# Live following: a game that is already there and has new moves is found,
+# an unchanged one is not, and an unknown game is left to the import.
+tcltest::test broadcast-changed-games {known games with new moves are found} -body {
+	set short [::scidb::test::broadcast::roundPgn {AbCdEf12 GhIjKl34}]
+	set long [string map {"3. Bb5 a6 1-0" "3. Bb5 a6 4. Ba4 Nf6 1-0"} $short]
+	lassign [::application::download::broadcastNewGames $short {} roundId] _ keys
+	set keys [::scidb::test::broadcast::keyDict $keys]
+	set bodies [::application::download::broadcastBodies $short roundId]
+	list \
+		[llength [::application::download::broadcastChangedGames $short $bodies $keys roundId]] \
+		[llength [::application::download::broadcastChangedGames $long $bodies $keys roundId]] \
+		[llength [::application::download::broadcastChangedGames $long {} {} roundId]] \
+		[llength [::application::download::broadcastChangedGames $long {} $keys roundId]]
+} -result {0 2 0 2}
+
+# The game in the database is replaced in place: same number of games,
+# the new moves, and the game the user has current stays current.
+tcltest::test broadcast-replace-in-place {a known game gets its new moves in the database} -body {
+	set base [::scidb::db::get clipbase name]
+	set before [::scidb::db::count games $base Normal]
+	set slot 32
+	::scidb::game::new $slot
+	::scidb::game::import $slot [::scidb::test::broadcast::roundPgn {Zz9Yy8Xx}] -encoding utf-8
+	::scidb::game::save $base Normal \
+		{Event {Broadcast round} White player-Zz9Yy8Xx Black opponent-Zz9Yy8Xx Result 1-0} \
+		{} {} ::application::download::ReplaceLog {} -position $slot
+	::scidb::game::release $slot
+	set number [expr {[::scidb::db::count games $base Normal] - 1}]
+	set current [::scidb::game::current]
+	set long [string map {"3. Bb5 a6 1-0" "3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 1-0"} \
+		[::scidb::test::broadcast::roundPgn {Zz9Yy8Xx}]]
+	set ok [::application::download::ReplaceGame $base $number \
+		[lindex [::application::download::broadcastGames $long] 0]]
+	::scidb::game::new $slot
+	::scidb::game::load $slot $base Normal $number
+	set plies [::scidb::game::query $slot length]
+	::scidb::game::release $slot
+	list $ok [expr {[::scidb::db::count games $base Normal] - $before}] $plies \
+		[expr {[::scidb::game::current] == $current}]
+} -result {1 1 10 1}
+
 tcltest::cleanupTests

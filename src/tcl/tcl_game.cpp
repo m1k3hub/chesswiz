@@ -2654,13 +2654,13 @@ cmdPly(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 static int
 cmdSave(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
-	if (objc != 8 && objc != 10)
+	if (objc != 8 && objc != 10 && objc != 12)
 	{
 		Tcl_WrongNumArgs(
 			ti,
 			1, objv,
 			"<database> <variant> <tag-list> <white-ratingtype> <black-ratingtype> "
-			"<log-cmd> <log-arg> ?-replace <bool>?"
+			"<log-cmd> <log-arg> ?-replace <bool>? ?-position <slot>?"
 		);
 		return TCL_ERROR;
 	}
@@ -2674,12 +2674,18 @@ cmdSave(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	tag::ID			ratings[2]	= { tag::ExtraTag, tag::ExtraTag };
 	tcl::Log			log(objv[6], objv[7]);
 
-	if (objc == 10)
-	{
-		if (!equal(stringFromObj(objc, objv, 8), "-replace"))
-			return error(CmdSave, nullptr, nullptr, "unexpected argument %s", stringFromObj(objc, objv, 8));
+	unsigned position = Application::InvalidPosition;
 
-		replace = boolFromObj(objc, objv, 9);
+	for (int i = 8; i + 1 < objc; i += 2)
+	{
+		char const* option = stringFromObj(objc, objv, i);
+
+		if (equal(option, "-replace"))
+			replace = boolFromObj(objc, objv, i + 1);
+		else if (equal(option, "-position"))
+			position = unsignedFromObj(objc, objv, i + 1);
+		else
+			return error(CmdSave, nullptr, nullptr, "unexpected argument %s", option);
 	}
 
 	TagSet tags;
@@ -2690,12 +2696,12 @@ cmdSave(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	{
 		// TODO: check tags
 
-		scidb->game().setTags(tags);
+		scidb->game(position).setTags(tags);
 
-		save::State state = scidb->saveGame(scidb->cursor(db, variant), replace);
+		save::State state = scidb->saveGame(scidb->cursor(db, variant), replace, position);
 
 		setResult(save::isOk(state));
-		log.error(state, Scidb->gameIndex());
+		log.error(state, Scidb->gameIndex(position));
 	}
 
 	return rc;
