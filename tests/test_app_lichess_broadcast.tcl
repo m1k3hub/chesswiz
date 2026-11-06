@@ -621,7 +621,8 @@ tcltest::test broadcast-changed-games {known games with new moves are found} -bo
 } -result {0 2 0 2}
 
 # The game in the database is replaced in place: same number of games,
-# the new moves, and the game the user has current stays current.
+# the new moves, and the game the user has current stays current; the
+# same moves fetched again are not written.
 tcltest::test broadcast-replace-in-place {a known game gets its new moves in the database} -body {
 	set base [::scidb::db::get clipbase name]
 	set before [::scidb::db::count games $base Normal]
@@ -638,12 +639,15 @@ tcltest::test broadcast-replace-in-place {a known game gets its new moves in the
 		[::scidb::test::broadcast::roundPgn {Zz9Yy8Xx}]]
 	set ok [::application::download::ReplaceGame $base $number \
 		[lindex [::application::download::broadcastGames $long] 0]]
+	# the same moves again: nothing to write
+	set again [::application::download::ReplaceGame $base $number \
+		[lindex [::application::download::broadcastGames $long] 0]]
 	::scidb::game::new $slot
 	::scidb::game::load $slot $base Normal $number
 	set plies [::scidb::game::query $slot length]
 	::scidb::game::release $slot
-	list $ok [expr {[::scidb::db::count games $base Normal] - $before}] $plies \
+	list $ok $again [expr {[::scidb::db::count games $base Normal] - $before}] $plies \
 		[expr {[::scidb::game::current] == $current}]
-} -result {1 1 10 1}
+} -result {1 0 1 10 1}
 
 tcltest::cleanupTests

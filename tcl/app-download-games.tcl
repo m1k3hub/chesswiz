@@ -1587,12 +1587,25 @@ proc ::application::download::ReplaceGame {base number game} {
 	if {[::scidb::game::query $slot open?]} { ::scidb::game::release $slot }
 	::scidb::game::new $slot
 	set code [catch {
+		# a game whose moves and result are what the database has is left
+		# alone (the first fetch knows no moves of the games already there)
+		::scidb::game::load $slot $base Normal $number
+		set before [list [::scidb::game::query $slot length] [::scidb::game::query $slot result]]
+		# binding needs a scratch game, not one loaded from the database
+		::scidb::game::release $slot
+		::scidb::game::new $slot
 		set text [broadcastGameText $game]
 		set state [::scidb::game::import $slot $text -encoding utf-8 -database $base -index $number]
 		if {$state < 0} { error "the fetched game could not be read" }
-		set tags [dict get $game tags]
-		::scidb::game::save $base Normal $tags {} {} [namespace current]::ReplaceLog {} \
-			-replace 1 -position $slot
+		set after [list [::scidb::game::query $slot length] [::scidb::game::query $slot result]]
+		if {$after eq $before} {
+			set saved 0
+		} else {
+			set tags [dict get $game tags]
+			set saved [::scidb::game::save $base Normal $tags {} {} [namespace current]::ReplaceLog {} \
+				-replace 1 -position $slot]
+		}
+		set saved
 	} result options]
 	catch { ::scidb::game::release $slot }
 	return -options $options $result
