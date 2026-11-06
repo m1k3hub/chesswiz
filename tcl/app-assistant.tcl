@@ -1480,7 +1480,10 @@ proc ::application::assistant::Later {} {
 
 proc ::application::assistant::WithMenu {name reply} {
 	variable ToolMenu
+	variable Priv
 	if {![dict exists $ToolMenu $name] || [string match "error: *" $reply]} { return $reply }
+	# A step of a larger plan is not the feature the user asked for.
+	if {[info exists Priv(plan)] && $Priv(plan) ne ""} { return $reply }
 	return "$reply\nmenu: [dict get $ToolMenu $name]"
 }
 
