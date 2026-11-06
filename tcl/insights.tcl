@@ -203,7 +203,8 @@ proc ::insights::Place {dlg {parent ""}} {
 		set plan [::util::place::besideBoard $dlg $parent]
 	}
 	set minimum [::util::place::besideMinSize $dlg]
-	if {[llength $minimum] == 2} {
+	# No plan (the board is not shown, e.g. on the Database tab): no geometry.
+	if {[llength $minimum] == 2 && [dict exists $plan geometry]} {
 		lassign [dict get $plan geometry] _ _ w h
 		if {$w >= [lindex $minimum 0] && $h >= [lindex $minimum 1]} {
 			wm minsize $dlg {*}$minimum
@@ -1235,7 +1236,9 @@ proc ::insights::BuildWindow {dlg parent} {
 	set column 1
 	foreach child {playerLabel player baseLabel base gamesLabel games
 						scoreLabel score recordLabel record} {
-		grid $head.$child -row 1 -column $column -sticky w
+		# a small gap after each label, a wider one between fields
+		set pad [expr {[string match *Label $child] ? {0 6} : {0 18}}]
+		grid $head.$child -row 1 -column $column -sticky w -padx $pad
 		incr column 2
 	}
 

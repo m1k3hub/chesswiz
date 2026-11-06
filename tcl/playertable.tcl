@@ -480,8 +480,10 @@ proc popupMenu {menu base variant info {playerCard {}} {playerIndex {}}} {
 	if {[llength [info commands ::context::Build]]} {
 		set name [lindex $info 0]
 		if {$name eq ""} { set name $playerIndex }
-		set object [dict create kind player name $name base $base \
-			parent $parent playerIndex $playerIndex playerCard $playerCard info $info]
+		# The player items (Insights, opening prep) take base, variant and index.
+		set object [dict create kind player name $name base $base variant $variant \
+			parent $parent index $playerIndex playerIndex $playerIndex \
+			playerCard $playerCard info $info]
 		if {[::context::Build C5 $menu $object]} { return }
 		return
 	}
