@@ -1223,6 +1223,19 @@ proc ::application::assistant::PlanText {calls} {
 	return [join $lines \n]
 }
 
+# The plan as a reader sees it: one plain label per step, no ids or arguments.
+proc ::application::assistant::PlanSummary {calls} {
+	set lines {}
+	set i 0
+	foreach call $calls {
+		set fn [dict get $call function]
+		set name [dict get $fn name]
+		set cargs [expr {[dict exists $fn arguments] ? [dict get $fn arguments] : {}}]
+		lappend lines "[incr i]. [PlanLabel $name $cargs]"
+	}
+	return [join $lines \n]
+}
+
 proc ::application::assistant::PlanNeedsConfirm {calls} {
 	foreach call $calls {
 		set name [dict get [dict get $call function] name]
@@ -1284,10 +1297,16 @@ proc ::application::assistant::RunPlan {round calls} {
 		return
 	}
 	set text [PlanText $calls]
-	Append info "$mc::Plan\n$text"
+	set needsConfirm [PlanNeedsConfirm $calls]
+	# The full plan (action ids, raw arguments) is for review: a plan the
+	# user must confirm, or debug mode. Otherwise the chat shows plain steps.
+	if {$needsConfirm || $Priv(debug)} {
+		Append info "$mc::Plan\n$text"
+	} else {
+		Append info "$mc::Plan\n[PlanSummary $calls]"
+	}
 	Notify plan $text
 
-	set needsConfirm [PlanNeedsConfirm $calls]
 	if {$needsConfirm} {
 		set ask [expr {[llength $Priv(reqconfirm)] ? $Priv(reqconfirm) : $Priv(confirm)}]
 		set answer 0
