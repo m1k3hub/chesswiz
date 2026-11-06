@@ -341,10 +341,37 @@ proc ::application::download::open {parent base} {
 
 	SourceChanged
 	RefreshChanged
+	FitHeight $dlg [list $lichess.text $study.text] \
+		[list $twic.detail $lichess.detail $study.detail $bc.detail $player.detail $url.detail]
 	::util::place $dlg -parent $parent -position center
 	wm deiconify $dlg
 	focus $twic.choice
 	return $dlg
+}
+
+
+# On a short screen (1280x800) the dialog was taller than the screen and its
+# buttons fell off the bottom: the descriptions widen to one line each, then
+# the text boxes give up lines, one at least, until the dialog and its title
+# bar fit the work area.
+proc ::application::download::FitHeight {dlg texts labels} {
+	if {[catch { lindex [winfo workarea $dlg] 3 } avail]} {
+		set avail [winfo screenheight $dlg]
+	}
+	set avail [expr {$avail - 40}]
+	update idletasks
+	if {[winfo reqheight $dlg] <= $avail} { return }
+	foreach l $labels { $l configure -wraplength 0 }
+	update idletasks
+	while {[winfo reqheight $dlg] > $avail} {
+		set shrunk 0
+		foreach t $texts {
+			set h [$t cget -height]
+			if {$h > 1} { $t configure -height [expr {$h - 1}]; set shrunk 1 }
+		}
+		if {!$shrunk} { break }
+		update idletasks
+	}
 }
 
 
@@ -378,6 +405,8 @@ proc ::application::download::RefreshChanged {} {
 
 	if {![info exists Priv(refreshWidget)]} { return }
 	if {![winfo exists $Priv(refreshWidget)]} { return }
+	# Show the interval RefreshMinutes will use, not the stored 0 of "off".
+	if {$Priv(refreshOn)} { set Priv(refresh) [RefreshMinutes] }
 	$Priv(refreshWidget) configure -state [expr {$Priv(refreshOn) ? "normal" : "disabled"}]
 	return
 }
