@@ -516,6 +516,8 @@ proc ::application::assistant::panel::NoModel {} {
 	if {[catch { ::ai::provider::configure -name $provider -model $model }]} { return 0 }
 	if {[catch { ::ai::provider::cloudProvider } cloud]} { return 0 }
 	if {!$cloud} { return 0 }
+	# Ollama's cloud models sign in through Ollama itself, not with a key here.
+	if {$provider eq "ollama"} { return 0 }
 	if {[catch { ::ai::provider::apiKey $provider } key]} { return 1 }
 	return [expr {$key eq ""}]
 }
