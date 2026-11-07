@@ -112,7 +112,8 @@ namespace eval ::scidb::test::actions {
                 set result {issue 00000001}
             }
             novelty_label { set result [list fen $Fen san e5] }
-            engine_check_move { set result {move e4} }
+            # its own position: engine_play, probed just before, moves on the board
+            engine_check_move { set result {move e4 fen {rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1}} }
             run_job { set result {job prepare name {Generated White}} }
             annotate_game { set result {prose false depth 4 max_plies 1} }
             opponent_brief { set result {name {Generated White} prose false download 0} }

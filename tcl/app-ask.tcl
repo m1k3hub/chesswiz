@@ -863,6 +863,47 @@ proc ::application::speech::detect {} {
 		cli $cliPath model $modelPath recorder $recPath stub ""]
 }
 
+# Look for whisper-cli and a ggml model where whisper.cpp installs them,
+# for each setting that is empty or points at nothing; set what is found.
+# Returns "name path" phrases for the report.
+proc ::application::speech::search {} {
+	variable Settings
+	set found {}
+	set home [file normalize ~]
+	set trees [list [file join $home whisper.cpp] [file join $home src whisper.cpp] \
+		/usr/local/share/whisper.cpp /usr/share/whisper.cpp /opt/homebrew/share/whisper-cpp]
+	if {[which $Settings(whisperCli)] eq ""} {
+		set dirs [lmap t $trees {file join $t build bin}]
+		lappend dirs /usr/local/bin /opt/homebrew/bin
+		foreach name {whisper-cli whisper-cpp} {
+			set path [which $name]
+			foreach dir $dirs {
+				if {$path ne ""} break
+				if {[file executable [file join $dir $name]]} { set path [file join $dir $name] }
+			}
+			if {$path ne ""} {
+				set Settings(whisperCli) $path
+				lappend found "whisper-cli $path"
+				break
+			}
+		}
+	}
+	if {$Settings(whisperModel) eq "" || ![file isfile $Settings(whisperModel)]} {
+		set dirs [lmap t $trees {file join $t models}]
+		lappend dirs [file join $home .cache whisper] [file join $home .local share whisper] \
+			/usr/local/share/whisper /usr/share/whisper
+		set models {}
+		foreach dir $dirs { lappend models {*}[glob -nocomplain -types f [file join $dir ggml-*.bin]] }
+		if {[llength $models]} {
+			# the smallest model answers fastest; a larger one is the user's choice
+			set best [lindex [lsort -command {apply {{a b} {expr {[file size $a] - [file size $b]}}}} $models] 0]
+			set Settings(whisperModel) $best
+			lappend found "model $best"
+		}
+	}
+	return $found
+}
+
 proc ::application::speech::available {} {
 	return [dict get [detect] available]
 }
@@ -1528,9 +1569,25 @@ proc ::application::ask::RelabelPreferences {} {
 	return
 }
 
+# Detect searches the usual install places for what the fields leave empty
+# (or point at nothing), fills in what it finds, and always reports: what it
+# found, what is still missing and the time, so a click visibly did something.
 proc ::application::ask::PrefsDetect {status} {
+	set found [::application::speech::search]
+	set d [::application::speech::detect]
+	set lines [list "Checked at [clock format [clock seconds] -format %H:%M:%S]."]
+	if {[llength $found]} {
+		lappend lines "Found: [join $found {; }]."
+	}
+	if {[dict get $d available]} {
+		lappend lines "Speech input is ready."
+	} else {
+		lappend lines [dict get $d reason]
+		lappend lines "Searched PATH, ~/whisper.cpp, ~/src/whisper.cpp, ~/.cache/whisper,\
+			~/.local/share/whisper and /usr/(local/)share/whisper.cpp."
+	}
 	if {[winfo exists $status]} {
-		$status configure -text [::application::speech::status]
+		$status configure -text [join $lines \n] -foreground [expr {[dict get $d available] ? "#1d6b2a" : "#7a4b00"}]
 	}
 	::application::speech::SetHint [::application::speech::hint]
 	::application::ask::SyncMic

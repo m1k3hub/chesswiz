@@ -287,11 +287,9 @@ proc ::application::ai::models::show {{parent .application}} {
 		pack $top.speechhead -anchor w
 		set speechHint [::application::speech::hint]
 		if {$speechHint eq ""} { set speechHint "The Ask field can take dictation locally." }
+		# found or not at startup; paths can still be typed in Preferences > Assistant
 		ttk::label $top.speechhint -text $speechHint -wraplength 460 -justify left
 		pack $top.speechhint -fill x -pady [list 0 $::theme::pady]
-		ttk::button $top.speechprefs -text "Assistant Preferences…" \
-			-command [list ::application::ask::Preferences $dlg]
-		pack $top.speechprefs -anchor w
 	}
 
 	::widget::dialogButtons $dlg {ok cancel}

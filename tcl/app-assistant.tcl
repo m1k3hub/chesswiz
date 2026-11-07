@@ -5629,6 +5629,9 @@ proc ::application::assistant::Greet {} {
 	if {[info exists Priv(startup)] && $Priv(startup)
 	 && [llength [info commands ::application::assistant::panel::DetectLocalModel]]} {
 		catch { ::application::assistant::panel::DetectLocalModel }
+		if {[llength [info commands ::application::setupscan::firstStart]]} {
+			after idle { catch { ::application::setupscan::firstStart } }
+		}
 	}
 	if {[llength [info commands ::application::assistant::panel::AfterGreeting]]} {
 		catch { ::application::assistant::panel::AfterGreeting }

@@ -35,6 +35,7 @@ set RecentlyUsed				"Recently used"
 set RemoveSelectedDatabase	"Remove selected database from history"
 set NewsAvailable				"There are updated news available"
 set NoInternetConnection	"Information: Chesswiz cannot connect to Internet."
+set SetupScan				"Find engines, speech input, fonts and game files"
 
 }
 
@@ -192,6 +193,10 @@ proc activate {w flag} {
 	set lbl [set [namespace parent]::database::mc::FileNew]
 	append content "<td class='h2'><img src='[set ::icon::${size}x${size}::databaseNew]'/></td>"
 	append content "<td class='h2'>&nbsp;<a href='NEW'>$lbl</td>"
+	append content "</tr>"
+	append content "<tr>"
+	append content "<td class='h2'><img src='[set ::icon::${size}x${size}::databaseOpen]'/></td>"
+	append content "<td class='h2'>&nbsp;<a href='SCAN'>$mc::SetupScan</td>"
 	append content "</tr>"
 	append content "</table>"
 
@@ -417,6 +422,7 @@ proc Mouse1Down {nodes} {
 				switch $href {
 					OPEN	{ set cmd [list ::menu::dbOpen $Priv(html)] }
 					NEW	{ set cmd [list ::menu::dbNew $Priv(html) Normal] }
+					SCAN	{ after idle ::application::setupscan::run; return }
 				}
 
 				if {[llength $cmd] && ![catch { [{*}$cmd] }]} {
