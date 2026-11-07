@@ -26,10 +26,12 @@
 #include "db_move.h"
 
 #include "m_string.h"
+#include "m_vector.h"
 
 #include <tcl.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 
 using namespace db;
 using namespace tcl;
@@ -41,6 +43,7 @@ static char const* CmdMoveFacts = "::scidb::ai::moveFacts";
 static char const* CmdClaim     = "::scidb::ai::claim";
 static char const* CmdClaimFor  = "::scidb::ai::claimFor";
 static char const* CmdEco       = "::scidb::ai::eco";
+static char const* CmdEcoLines  = "::scidb::ai::ecoLines";
 
 static int
 sideFrom(char const* s)
@@ -322,6 +325,93 @@ cmdEco(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 }
 
 
+// ecoLines words ?max?: the ECO table's openings whose name contains every
+// word (case-insensitive), as {code name moves} with the moves in SAN from the
+// start. The lines come from Chesswiz's own opening table, never from a model.
+static int
+cmdEcoLines(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+	if (objc < 2 || objc > 3)
+	{
+		Tcl_WrongNumArgs(ti, 1, objv, "words ?max?");
+		return TCL_ERROR;
+	}
+
+	int max = 5000;
+	if (objc == 3 && Tcl_GetIntFromObj(ti, objv[2], &max) != TCL_OK)
+		return TCL_ERROR;
+
+	EcoTable const& table = EcoTable::specimen(variant::Index_Normal);
+
+	if (!table.isLoaded())
+	{
+		setResult("ECO table not loaded (::scidb::app::load eco <path>)");
+		return TCL_ERROR;
+	}
+
+	int nwords;
+	Tcl_Obj** words;
+	if (Tcl_ListObjGetElements(ti, objv[1], &nwords, &words) != TCL_OK)
+		return TCL_ERROR;
+
+	mstl::vector<mstl::string> wanted;
+	for (int i = 0; i < nwords; ++i)
+	{
+		mstl::string w(Tcl_GetString(words[i]));
+		for (unsigned k = 0; k < w.size(); ++k) w[k] = ::tolower(w[k]);
+		if (!w.empty()) wanted.push_back(w);
+	}
+
+	Board const startBoard = Board::standardBoard(variant::Normal);
+	Tcl_Obj* result = Tcl_NewListObj(0, nullptr);
+	int count = 0;
+
+	for (Eco::Code c = 1; c <= Eco::Max_Code && count < max; ++c)
+	{
+		Eco const eco(c);
+
+		if (!table.isUsed(eco))
+			continue;
+
+		EcoTable::Opening const& opening = table.getOpening(eco);
+		mstl::string name;
+
+		for (unsigned i = 0; i < EcoTable::Num_Name_Parts; ++i)
+		{
+			if (opening.part[i].empty())
+				continue;
+			if (!name.empty())
+				name += ", ";
+			name += opening.part[i];
+		}
+
+		mstl::string lower(name);
+		for (unsigned k = 0; k < lower.size(); ++k) lower[k] = ::tolower(lower[k]);
+
+		bool all = !wanted.empty();
+		for (unsigned i = 0; all && i < wanted.size(); ++i)
+			all = lower.find(wanted[i]) != mstl::string::npos;
+		if (!all)
+			continue;
+
+		mstl::string moves;
+		table.getLine(eco).print(moves, startBoard, variant::Normal, move::SAN, protocol::Standard, encoding::Latin1);
+		mstl::string code = eco.asShortString();
+
+		Tcl_Obj* row[3] = {
+			Tcl_NewStringObj(code.c_str(), int(code.size())),
+			Tcl_NewStringObj(name.c_str(), int(name.size())),
+			Tcl_NewStringObj(moves.c_str(), int(moves.size())),
+		};
+		Tcl_ListObjAppendElement(ti, result, Tcl_NewListObj(3, row));
+		++count;
+	}
+
+	Tcl_SetObjResult(ti, result);
+	return TCL_OK;
+}
+
+
 namespace tcl {
 namespace ai {
 
@@ -334,6 +424,7 @@ init(Tcl_Interp* ti)
 	createCommand(ti, CmdClaim,		cmdClaim);
 	createCommand(ti, CmdClaimFor,	cmdClaimFor);
 	createCommand(ti, CmdEco,			cmdEco);
+	createCommand(ti, CmdEcoLines,		cmdEcoLines);
 }
 
 } // namespace ai

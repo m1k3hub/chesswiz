@@ -113,4 +113,43 @@ tcltest::test c19-model-memory {the model cannot launder remembered opening move
  array set ::ai::provider::Config $savedProvider
  set ::application::assistant::RouteMode $route
 } -result {1 1}
+tcltest::test c19-opening-line {a named opening's moves come from the ECO table and may then be set up} -setup {
+ array set savedOL [array get ::application::assistant::Priv]
+} -body {
+ set line [::application::assistant::DoOpeningLine {Najdorf} {6.Bg5}]
+ set checks [list [string match {B9? *Najdorf*: 1.e4 c5 2.Nf3 d6 3.d4 cxd4 4.Nxd4 Nf6 5.Nc3 a6 6.Bg5*} $line]]
+ lappend checks [string equal [::application::assistant::DoOpeningLine {Najdorf 6.Bg5} {}] $line]
+ lappend checks [string match {*no opening named*} [::application::assistant::DoOpeningLine {Xyzzy} {}]]
+ set first [lindex [split $line \n] 0]
+ set ::application::assistant::Priv(messages) [list [dict create role user content {Set up the Najdorf after 6.Bg5}] [dict create role tool content $line]]
+ lappend checks [::application::assistant::MovesHaveSource [string range $first [string first : $first]+1 end]]
+ puts [list OPENING_LINE $first]
+ list [llength $checks] [lsort -unique $checks]
+} -cleanup {
+ array unset ::application::assistant::Priv
+ array set ::application::assistant::Priv [array get savedOL]
+} -result {4 1}
+
+tcltest::test c19-engine-play {the engine's best moves are played on the board} -setup {
+ rename ::ai::engine::evaluate ::ai::engine::evaluate.orig
+ rename ::application::assistant::RunningPanes ::application::assistant::RunningPanes.orig
+ rename ::application::assistant::EngineReady ::application::assistant::EngineReady.orig
+ proc ::application::assistant::RunningPanes {} { return 1 }
+ proc ::application::assistant::EngineReady {} { return "" }
+ proc ::ai::engine::evaluate {fen args} {
+  set best [expr {[lindex $fen 1] eq "w" ? "e2e4" : "c7c5"}]
+  if {[string match "*4P3*" [lindex $fen 0]] && [lindex $fen 1] eq "w"} { set best g1f3 }
+  return [dict create fen $fen bestMove $best multipv {}]
+ }
+ ::application::assistant::DoSetPosition {rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1} {}
+} -body {
+ set reply [::application::assistant::DoEnginePlay 3 10]
+ puts [list ENGINE_PLAY $reply]
+ list [string match {*played 1.e4 1...c5 2.Nf3 on the board.} $reply] [lindex [::scidb::pos::fen] 0]
+} -cleanup {
+ rename ::ai::engine::evaluate {}; rename ::ai::engine::evaluate.orig ::ai::engine::evaluate
+ rename ::application::assistant::RunningPanes {}; rename ::application::assistant::RunningPanes.orig ::application::assistant::RunningPanes
+ rename ::application::assistant::EngineReady {}; rename ::application::assistant::EngineReady.orig ::application::assistant::EngineReady
+} -result {1 rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R}
+
 tcltest::cleanupTests

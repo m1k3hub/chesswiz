@@ -237,7 +237,7 @@ dict for {name entry} $Actions {
 	set schemaStr [::application::assistant::_schemaFor $parameters $spec]
 	if {$spec eq "{}"} { set spec {} }
 	# These tools inspect data, even when their implementation caches results.
-	set queries {explain_game_result list_open_databases current_game position_moves database_summary database_trend similar_games player_stats opening_score prepare_against repertoire_check search_games cql_help list_engines engine_options engine_evaluate engine_check_move tablebase engine_analysis app_state recent_errors tool_log list_issues classifier_status structure_profile event_types detect_language diagnose_import comment_kind novelty_label check_results factcheck_annotations voice_status list_procs proc_source read_variable ui_state timers loop_health media_state child_processes hang_dumps find_capability run_job}
+	set queries {opening_line explain_game_result list_open_databases current_game position_moves database_summary database_trend similar_games player_stats opening_score prepare_against repertoire_check search_games cql_help list_engines engine_options engine_evaluate engine_check_move tablebase engine_analysis app_state recent_errors tool_log list_issues classifier_status structure_profile event_types detect_language diagnose_import comment_kind novelty_label check_results factcheck_annotations voice_status list_procs proc_source read_variable ui_state timers loop_health media_state child_processes hang_dumps find_capability run_job}
 	set effectCommand {}
 	if {$name eq "correspondence_games"} {set effectCommand ::application::assistant::CorrespondenceChangesState}
 	::action::register $name [dict create \

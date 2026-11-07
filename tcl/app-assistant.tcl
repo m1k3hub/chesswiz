@@ -309,9 +309,15 @@ variable Actions {
 		{{"type":"object","properties":{"kind":{"type":"string","enum":["player_card","prep_report","crosstable","event_report","opening_report","opening_prep","repertoire_report","duplicates"]},"name":{"type":"string","description":"a player, for player_card and prep_report"},"event":{"type":"string","description":"part of an event name, for crosstable"}},"required":["kind"]}}
 		::application::assistant::DoOpenView
 	}
+	opening_line {
+		0 0 "look up the opening line %s %s"
+		"The moves of a named opening from Chesswiz's own opening table (the ECO classification), as SAN from the start: 'name' is the opening's name or part of it (e.g. 'Najdorf', 'Fried Liver', 'Sicilian Dragon'); 'after' optionally gives moves the line must reach (e.g. '6.Bg5'). Returns the best matching line and a few close ones. When the user names an opening instead of giving moves, call this first, then pass the returned moves to set_position."
+		{{"type":"object","properties":{"name":{"type":"string"},"after":{"type":"string","description":"optional SAN moves the line must contain, e.g. '6.Bg5'"}},"required":["name"]}}
+		::application::assistant::DoOpeningLine
+	}
 	set_position {
 		0 0 "set up a position"
-		"Put a position on the board in a new game (the game on the board stays as it is): from 'fen', from 'moves' played from the start (e.g. '1.e4 c5 2.Nf3 d6 3.d4 cxd4 4.Nxd4 Nf6 5.Nc3 a6 6.Bg5'), or moves played from 'fen'. Use moves only from the user request, the current game, or earlier tool results in this turn. Never supply opening moves from memory; ask for moves or find a database game instead. Every move is checked first; a move that is not legal comes back as an error naming it, and nothing changes."
+		"Put a position on the board in a new game (the game on the board stays as it is): from 'fen', from 'moves' played from the start (e.g. '1.e4 c5 2.Nf3 d6 3.d4 cxd4 4.Nxd4 Nf6 5.Nc3 a6 6.Bg5'), or moves played from 'fen'. Use moves only from the user request, the current game, or earlier tool results in this turn. Never supply opening moves from memory: for a named opening call opening_line and use its moves; otherwise ask for moves or find a database game. Every move is checked first; a move that is not legal comes back as an error naming it, and nothing changes."
 		{{"type":"object","properties":{"fen":{"type":"string"},"moves":{"type":"string","description":"SAN moves, with or without move numbers"}}}}
 		::application::assistant::DoSetPosition
 	}
@@ -368,6 +374,12 @@ variable Actions {
 		"Start an engine on the position on the board in an analysis pane; it follows the board as it changes. Without a pane a free one is used or a new one opened; giving the pane of a running engine replaces or restarts it (e.g. to change lines). lines = number of best lines (MultiPV, 1-8), threads, hash in MB; each defaults to the pane's setting. Then read its lines with engine_analysis."
 		{{"type":"object","properties":{"engine":{"type":"string","description":"engine name or part of it; without it the default analysis engine"},"pane":{"type":"integer","description":"analysis pane number as in its title: 1 for 'Analysis', 2 for 'Analysis (2)'"},"lines":{"type":"integer"},"threads":{"type":"integer"},"hash":{"type":"integer","description":"hash size in MB"}}}}
 		::application::assistant::DoStartEngine
+	}
+	engine_play {
+		0 0 "let the engine play %s moves"
+		"The engine plays its best moves on the board: each one is added to the game on the board (a new variation if the game already goes on from there) and the board follows. 'moves' is how many half-moves to play, 1-20 (default 1). An analysis engine is started first if none is running, so its lines show beside the board. Use it for 'let the engine move', 'play the engine's move', 'continue the game with the engine'."
+		{{"type":"object","properties":{"moves":{"type":"integer","description":"half-moves to play, 1-20, default 1"},"depth":{"type":"integer","description":"search depth per move, default 16"}}}}
+		::application::assistant::DoEnginePlay
 	}
 	engine_evaluate {
 		0 0 "ask the chess engine about a position"
@@ -756,6 +768,8 @@ variable ToolMenu {
 	find_similar	"Database tab > right-click the database > Maintenance > Pattern Search (with the script above)"
 	open_game		"Database tab > double-click the game in the game list"
 	set_position	"Board tab > right-click the board > Set Start Board..."
+	opening_line	"Board tab > ECO pane"
+	engine_play		"Board tab > Analysis pane > right-click a line > Append move"
 	open_view		"Database tab > Players/Events tabs, right-click; or right-click the database > Maintenance"
 	player_stats	"Players tab > right-click the player > Show Player Card"
 	prepare_against	"Players tab > right-click the player > Show Prep Report"
@@ -2424,6 +2438,13 @@ proc ::application::assistant::CheckArgs {name cargs} {
 		open_play_engine {
 			return [dict create color [OptArg $cargs color ""]]
 		}
+		engine_play {
+			set moves [OptArg $cargs moves 1]
+			set depth [OptArg $cargs depth 16]
+			if {![string is integer -strict $moves] || $moves < 1 || $moves > 20} { error "moves must be 1-20" }
+			if {![string is integer -strict $depth] || $depth < 1 || $depth > 30} { error "depth must be 1-30" }
+			return [dict create moves $moves depth $depth]
+		}
 		start_engine {
 			set name [OptArg $cargs engine ""]
 			set result [dict create engine [expr {$name eq "" ? [DefaultEngine] : [EngineNamed $name]}]]
@@ -2546,6 +2567,11 @@ proc ::application::assistant::CheckArgs {name cargs} {
 			if {$kind in {player_card prep_report} && $name eq ""} { error "$kind needs a player name" }
 			if {$kind in {crosstable event_report} && $event eq ""} { error "$kind needs an event" }
 			return [dict create kind $kind name $name event $event]
+		}
+		opening_line {
+			set name [string trim [Arg $cargs name]]
+			if {$name eq ""} { error "name must not be empty" }
+			return [dict create name $name after [OptArg $cargs after ""]]
 		}
 		set_position {
 			set fen [expr {[dict exists $cargs fen] ? [string trim [dict get $cargs fen]] : ""}]
@@ -4195,6 +4221,58 @@ proc ::application::assistant::FenHaveSource {fen} {
 	return 0
 }
 
+# A named opening's moves come from the ECO table, never from the model:
+# the best line is the shortest one whose name has every word and whose
+# moves reach 'after' (so "Najdorf, 6.Bg5" stops at 6.Bg5, not deep in a
+# sideline). Moves in the name ("Najdorf 6.Bg5") count as 'after' too.
+proc ::application::assistant::DoOpeningLine {name after} {
+	set words {}
+	foreach word [regexp -all -inline {[^\s,;:()]+} $name] {
+		if {[llength [MoveTokens $word]] == 1 && [MoveTokens $word] ne "|"} {
+			append after " $word"
+		} elseif {[string tolower $word] ni {the a an of after with line variation defence defense opening}
+				&& [string length $word] > 1} {
+			lappend words $word
+		}
+	}
+	if {![llength $words]} { error "give the opening's name, e.g. Najdorf" }
+	if {[catch {::scidb::ai::ecoLines $words} rows]} { error "the opening table is not available: $rows" }
+	if {![llength $rows]} {
+		return "Chesswiz's opening table has no opening named \"[join $words]\"."
+	}
+	set wanted [MoveTokens $after]
+	set best {}
+	foreach row $rows {
+		lassign $row code label moves
+		set tokens [MoveTokens $moves]
+		set at -1
+		if {[llength $wanted]} {
+			set n [llength $wanted]
+			for {set i 0} {$i + $n <= [llength $tokens]} {incr i} {
+				if {[lrange $tokens $i [expr {$i + $n - 1}]] eq $wanted} { set at $i; break }
+			}
+			if {$at < 0} continue
+		}
+		lappend best [list [llength $tokens] [string length $label] $code $label $moves]
+	}
+	if {![llength $best]} {
+		return "No line of \"[join $words]\" in Chesswiz's opening table reaches [string trim $after]."
+	}
+	# lsort is stable: shortest line first, the shorter name among equals
+	set best [lsort -integer -index 0 [lsort -integer -index 1 $best]]
+	lassign [lindex $best 0] - - code label moves
+	set out "$code $label: $moves"
+	set others {}
+	foreach row [lrange $best 1 end] {
+		lassign $row - - c l m
+		if {$m eq $moves} continue
+		lappend others "$c $l: $m"
+		if {[llength $others] == 4} break
+	}
+	if {[llength $others]} { append out "\nLonger lines in the table:\n[join $others \n]" }
+	return $out
+}
+
 proc ::application::assistant::DoSetPosition {fen {moves ""}} {
 	variable Priv
 	set trusted [expr {[info exists Priv(scriptPosition)] && $Priv(scriptPosition)}]
@@ -4951,6 +5029,35 @@ proc ::application::assistant::EngineLine {fen uciMoves {max 10}} {
 	return [join $out " "]
 }
 
+
+# The engine's best moves go straight onto the board. A visible analysis
+# engine is started when none runs, so the user sees what it thinks; the
+# moves themselves come from the assistant's own engine (::ai::engine), one
+# search per half-move, and stop at mate or stalemate.
+proc ::application::assistant::DoEnginePlay {moves depth} {
+	if {[set err [EngineReady]] ne ""} { return $err }
+	if {![llength [RunningPanes]]} {
+		catch { DoStartEngine [DefaultEngine] "" "" "" "" }
+	}
+	set played {}
+	for {set i 0} {$i < $moves} {incr i} {
+		set fen [::scidb::pos::fen]
+		if {[catch { ::ai::engine::evaluate $fen -depth $depth -multipv 1 } e]} {
+			if {![llength $played]} { return "error: [::ai::engine::label] could not search the position: $e" }
+			break
+		}
+		set uci [dict get $e bestMove]
+		if {$uci eq "" || $uci eq "(none)"} break
+		set san [::playengine::uciToSan $uci]
+		if {$san eq "" || [catch { ::scidb::game::move $san; ::scidb::game::go 1 }]} break
+		set side [lindex $fen 1]
+		set number [lindex $fen 5]
+		# not expr: it would read "1.e4" as the number 10000.0
+		if {$side eq "w"} { lappend played "$number.$san" } else { lappend played "$number...$san" }
+	}
+	if {![llength $played]} { return "The engine has no move here: the game is over (mate or stalemate)." }
+	return "[::ai::engine::label] played [join $played { }] on the board."
+}
 
 proc ::application::assistant::DoEngineEvaluate {fen lines depth} {
 	if {[set err [EngineReady]] ne ""} { return $err }

@@ -644,6 +644,8 @@ foreach {id purpose keywords} {
 	clear_search "Clear the game list filter so it shows every game again." {clear reset filter unfilter all games again list}
 	open_game "Load a game onto the board by number, or a player's most recent game." {load open game number latest recent board put}
 	set_position "Set up a position on the board from a FEN or a move sequence." {set up position fen moves board after play enter}
+	opening_line "The moves of a named opening from Chesswiz's opening table, to set it up on the board." {opening line moves named najdorf dragon variation set up main line eco}
+	engine_play "Let the engine play its best moves on the board, starting an engine if none runs." {engine play move moves continue let best board automatically next}
 	start_engine "Start an engine analysing the board position." {start engine analyse analysis lines run}
 	stop_engine "Stop the analysing engine." {stop engine off halt analysis}
 	open_database "Open a database file, or switch back to an open database." {open database file switch back main active}
