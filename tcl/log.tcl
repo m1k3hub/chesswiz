@@ -163,8 +163,18 @@ proc Show {} {
 
 	update idletasks
 
-	if {$Priv(transient)} {
-		wm transient $Log .application
+	# The log opens during an import or download, usually from a dialog that
+	# holds the grab or the focus: belong to that dialog, or it would open
+	# underneath it.
+	set owner .application
+	foreach w [list [grab current] [focus]] {
+		if {$w ne "" && [winfo exists $w] && [winfo toplevel $w] ne $Log} {
+			set owner [winfo toplevel $w]
+			break
+		}
+	}
+	if {$Priv(transient) || [wm transient $Log] ne $owner} {
+		wm transient $Log $owner
 		set Priv(transient) 0
 	}
 
@@ -172,7 +182,7 @@ proc Show {} {
 		withdrawn - iconic - icon {
 			if {$Priv(center)} {
 				raise $Log
-				::util::place $Log -parent .application -position center
+				::util::place $Log -parent $owner -position center
 				focus $Log
 				set Priv(center) 0
 			}

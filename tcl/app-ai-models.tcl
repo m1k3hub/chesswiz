@@ -290,7 +290,7 @@ proc ::application::ai::models::show {{parent .application}} {
 		ttk::label $top.speechhint -text $speechHint -wraplength 460 -justify left
 		pack $top.speechhint -fill x -pady [list 0 $::theme::pady]
 		ttk::button $top.speechprefs -text "Assistant Preferences…" \
-			-command ::application::ask::Preferences
+			-command [list ::application::ask::Preferences $dlg]
 		pack $top.speechprefs -anchor w
 	}
 

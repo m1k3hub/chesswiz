@@ -1410,11 +1410,20 @@ proc ::application::ask::Preferences {args} {
 	variable Priv
 	variable mc
 
+	# Opened from another dialog (Choose Model), it belongs to that dialog:
+	# transient to the main window it would open underneath it.
+	set parent .application
+	if {[llength $args] && [winfo exists [lindex $args 0]]} { set parent [winfo toplevel [lindex $args 0]] }
 	set dlg .application.assistantPreferences
-	if {[winfo exists $dlg]} { raise $dlg; return }
+	if {[winfo exists $dlg]} {
+		wm transient $dlg $parent
+		raise $dlg
+		focus -force $dlg
+		return
+	}
 	toplevel $dlg -class Dialog
 	wm title $dlg $mc::PrefsTitle
-	wm transient $dlg [winfo toplevel .application]
+	wm transient $dlg $parent
 	set top [ttk::frame $dlg.content -padding 12]
 	pack $top -fill both -expand yes
 
@@ -1480,7 +1489,8 @@ proc ::application::ask::Preferences {args} {
 
 	bind $dlg <Escape> [list destroy $dlg]
 	bind $dlg <F1> [list ::help::open .application Ask-Field -parent $dlg]
-	::util::place $dlg -parent .application -position center
+	::util::place $dlg -parent $parent -position center
+	raise $dlg
 	focus -force $top.whisperCli.entry
 }
 

@@ -2096,7 +2096,8 @@ proc SetupEvalEdges {tree} {
 
 	wm protocol $dlg WM_DELETE_WINDOW [$dlg.cancel cget -command]
 	wm resizable $dlg false false
-	wm transient $dlg .application
+	# an undocked analysis pane is its own window: belong to it, not the main window
+	wm transient $dlg [winfo toplevel $tree]
 	wm title $dlg $mc::SetupEvalEdges
 	::util::place $dlg -parent [winfo parent [winfo parent $tree]] -position above-or-below
 	focus $top.spb14
