@@ -122,6 +122,33 @@ proc ::application::setupscan::StepSpeech {} {
 
 # --- chess engines -------------------------------------------------------
 
+# Folders searched besides PATH, with their subfolders: where engines are
+# put on each platform. On Windows an engine usually sits unpacked in its
+# own folder (Downloads\stockfish\stockfish-windows-x86-64-avx2.exe).
+proc ::application::setupscan::EngineBases {} {
+	set home [file normalize ~]
+	if {$::tcl_platform(platform) eq "windows"} {
+		set bases {}
+		foreach var {ProgramFiles ProgramFiles(x86) LOCALAPPDATA} {
+			if {[info exists ::env($var)]} {
+				set dir [file normalize $::env($var)]
+				if {$var eq "LOCALAPPDATA"} { set dir [file join $dir Programs] }
+				lappend bases $dir
+			}
+		}
+		foreach d {Downloads Desktop Documents engines chess Chess} { lappend bases [file join $home $d] }
+		return $bases
+	}
+	return [list [file join $home engines] [file join $home chess engines] [file join $home Chess Engines] /opt]
+}
+
+proc ::application::setupscan::EngineWhere {} {
+	if {$::tcl_platform(platform) eq "windows"} {
+		return "PATH, Program Files, Downloads, Desktop and Documents"
+	}
+	return "PATH, /usr/games, ~/bin, ~/engines and /opt"
+}
+
 proc ::application::setupscan::EngineCandidates {} {
 	variable EngineNames
 	variable Options
@@ -129,9 +156,19 @@ proc ::application::setupscan::EngineCandidates {} {
 	set dirs [split $::env(PATH) [expr {$::tcl_platform(platform) eq "windows" ? ";" : ":"}]]
 	# snap wrappers start sandboxed desktop apps, never a chess engine
 	set dirs [lmap d $dirs { if {[string match /snap/* $d]} continue; set d }]
-	lappend dirs /usr/games /usr/local/games [file join $home bin] [file join $home .local bin]
-	foreach base [list [file join $home engines] [file join $home chess engines] [file join $home Chess Engines] /opt] {
-		lappend dirs $base {*}[Glob -types d [file join $base *]]
+	if {$::tcl_platform(platform) ne "windows"} {
+		lappend dirs /usr/games /usr/local/games [file join $home bin] [file join $home .local bin]
+	}
+	set pattern [join $EngineNames |]
+	foreach base [EngineBases] {
+		lappend dirs $base
+		foreach sub [Glob -types d [file join $base *]] {
+			lappend dirs $sub
+			# a folder named after an engine may hold it one level further down
+			if {[regexp -nocase "^($pattern)" [file tail $sub]]} {
+				lappend dirs {*}[Glob -types d [file join $sub *]]
+			}
+		}
 	}
 	set seen {}
 	set known {}
@@ -161,7 +198,7 @@ proc ::application::setupscan::EngineCandidates {} {
 
 proc ::application::setupscan::StepEngines {} {
 	variable Options
-	Say "Chess engines: looking in PATH, /usr/games, ~/bin, ~/engines and /opt…"
+	Say "Chess engines: looking in [EngineWhere]…"
 	set have [llength $::engine::Engines]
 	# a kind already in the list (Stockfish, Lc0, ...) is not added again
 	set listed [string tolower [lmap e $::engine::Engines {
