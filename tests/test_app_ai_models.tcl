@@ -495,7 +495,14 @@ tcltest::test aimodels-default-follows-pick {without a choice the model in effec
 	}
 } -result {{gemini g-flash} {ollama qwen3.5:9b}}
 
-tcltest::test aimodels-backups-cloud-only {auto backups are the next cloud models; a chosen local model gets none} -body {
+tcltest::test aimodels-backups-cloud-only {auto backups are the next cloud models; a chosen local model gets none} -setup {
+	# every provider counts as set up, whatever keys this machine has
+	rename ::application::ai::Ready ::scidb::test::aimodels::RealReady
+	proc ::application::ai::Ready {provider} { return 1 }
+} -cleanup {
+	rename ::application::ai::Ready {}
+	rename ::scidb::test::aimodels::RealReady ::application::ai::Ready
+} -body {
 	::scidb::test::aimodels::isolated {
 		set ::ai::provider::Frontier {ollama a:cloud}
 		set ::ai::provider::FrontierRanking {{ollama b:cloud} {gemini g-flash}}

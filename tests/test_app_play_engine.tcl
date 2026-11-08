@@ -579,7 +579,7 @@ tcltest::test playengine-spaced-path {an engine in a directory with spaces launc
 	file delete -force $scratch
 	file mkdir [file dirname $exe]
 	file copy [dict get $::scidb::test::pe::stockfish Command] $exe
-	file attributes $exe -permissions 0755
+	if {$::tcl_platform(platform) eq "unix"} { file attributes $exe -permissions 0755 }
 	set savedEngines $::engine::Engines
 	set entry [dict replace [dict merge $::engine::EmptyEngine $::scidb::test::pe::stockfish] \
 		Name SpacedEngine Command $exe]

@@ -102,6 +102,7 @@ proc ::application::setupscan::Next {steps} {
 # --- AI model ----------------------------------------------------------
 
 # How each provider is set up, for the advice when no good model is ready.
+namespace eval ::application::setupscan {
 variable AiSetup {
 	ollama		"install Ollama (ollama.com) and sign in, free"
 	gemini		"a free Gemini key from aistudio.google.com"
@@ -110,6 +111,7 @@ variable AiSetup {
 	anthropic	"an Anthropic API key (paid)"
 	openai		"an OpenAI API key (paid)"
 }
+} ;# namespace setupscan
 
 proc ::application::setupscan::StepAi {} {
 	if {$::application::ai::Settings(chosen)} {
