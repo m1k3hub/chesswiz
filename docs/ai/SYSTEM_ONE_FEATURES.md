@@ -1,6 +1,9 @@
 # System One Features — what the classifier integration makes possible
 
-**Status:** design proposal. No code has been changed by this document.
+**Status:** mostly built: event-type bucketing (`tcl/app-assistant-jobs.tcl`), comment
+language (`tcl/ai-language.tcl`), import doctor (`tcl/ai-import.tcl`), cloud egress gate
+(`tcl/ai-egress.tcl`) and tier routing (`tcl/ai-tier.tcl`) exist; the sections below are
+the original proposal.
 **Companions:** `SYSTEM_ONE_RESEARCH.md` (what the model class is, plus the reliability
 contract in §4), `JEV_USE_CASES.md` (the decision-model contracts), `AI_PRODUCTS_PLAN.md`
 (the product slate and the firewall), `LLM_REACH_PLAN.md` (C1–C11).

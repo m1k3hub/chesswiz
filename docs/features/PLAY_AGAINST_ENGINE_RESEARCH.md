@@ -1,6 +1,9 @@
 # Play against an engine — research notes (Scid and ScidvsPC)
 
-**Status:** research only (2026-09-30); nothing implemented. Roadmap: `LONG_RANGE_PLAN.md`
+**Status:** implemented (2026-10-17, `aadfb5b5`) as `tcl/play-engine.tcl`, Training > Play
+Against Engine: own UCI pipe, clocks, strength slider with a full-strength stop, time per
+move without a clock, takeback, draws, saved PGN; tests `tests/test_app_play_engine.tcl`.
+This document is the research it started from (2026-09-30). Roadmap: `LONG_RANGE_PLAN.md`
 workstream 11. Sources studied: `~/src/chess/scid-code` ("Scid") and `~/src/chess/scidvspc-code`
 ("SvP"); paths below are relative to their `tcl/` directories. The survey was made by a read-only
 agent over the real code; line numbers are theirs and worth re-checking before quoting.

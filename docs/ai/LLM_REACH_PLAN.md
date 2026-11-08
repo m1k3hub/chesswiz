@@ -2,7 +2,8 @@
 
 **Source:** `LLM_FEATURES_RESEARCH.md` Appendix C (proposal, uncommitted draft, 2026-09).
 **Scope:** turn the C1–C11 proposals into an ordered, verifiable implementation plan.
-**Status:** plan only — no code changed by this document.
+**Status:** partly built: tasks 1, 2, 3, 4 and 9 are done (status table below); the
+others are still planned.
 
 ## Thesis
 

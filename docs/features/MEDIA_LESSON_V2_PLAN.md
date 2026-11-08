@@ -1,6 +1,7 @@
 # Media Lesson v2 — Implementation Plan
 
-**Status: PLANNED — implementation deferred (approved architecture, not yet built).**
+**Status: built** (2026-09-07): WP1 `f3ed9d51`, WP2 `528fc818`, WP3+WP4 `9d1e01e5`,
+WP5 `a80d0612`, WP6 `fe59b9c3`. The plan below is kept as written.
 
 Derived from: `CHESSBASE_MEDIA_RE.md` (corpus-verified RE), the Biel 2015
 fixture set, and the v1 implementation (commits `b39ad57`, `0b17b25`).

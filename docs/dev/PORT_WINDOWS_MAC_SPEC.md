@@ -2,7 +2,10 @@
 
 **Rename done (2026-10-09): the product is Chesswiz.** Programs `chesswiz`/`tkchesswiz`/`tclchesswiz` (`PROGRAM` in Makefile.in, `--program=` in configure), share dir `/usr/share/chesswiz`, user dir `~/.chesswiz` (first start copies `~/.scidb-beta` or `~/.scidb` and rewrites the paths in its settings), desktop entry and icon `chesswiz`, Debian package `chesswiz` (Provides/Replaces/Breaks `scidb-beta`). Kept: `::scidb::*` code names, Tk class `Scidb` of dialogs, font families `Scidb *`, the `.sci` format and its name, upstream URLs and credits. Open: the help pages (`tcl/help/*`) still say Scidb.
 
-Status: proposal, 2026-10-09. Facts below were surveyed from the tree at `bb30e5e`.
+Status: implemented. Windows and Linux builds are released (Windows zip, Linux
+AppImage/.deb/tar.gz); the macOS app and DMG build (`scripts/make-macos-app.sh`) but are
+not released yet. Written as a proposal on 2026-10-09; facts below were surveyed from the
+tree at `bb30e5e`. Progress in §0.
 
 ## 0. Status (2026-10-11)
 

@@ -1,7 +1,8 @@
 # ICCF XFCC Server Integration — Design
 
-**Status:** design (2026-08-24). Not yet implemented. Requires XFCC protocol
-specification and ICCF test credentials.
+**Status:** implemented (2026-08-24, `234fc573`): XFCC SOAP client, credential storage,
+sync UI and auto-submit; fixes in `ae18857c`. Not yet exercised against a live ICCF
+account (needs ICCF credentials).
 
 ## 0. Goal
 
