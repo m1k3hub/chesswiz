@@ -178,6 +178,7 @@ SOURCES = \
 	app-variation.tcl \
 	app-analysis.tcl \
 	play-engine.tcl \
+	ics.tcl \
 	engine-match.tcl \
 	ai-claims.tcl \
 	ai-rhetoric.tcl \

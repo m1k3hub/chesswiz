@@ -210,6 +210,7 @@ namespace eval menu::mc {
 	set EndgameTrainer				"Endgame Trainer…"
 	set GuessTheMove					"Guess the Move…"
 	set PlayAgainstEngine			"Play Against Engine…"
+	set PlayOnline					"Play Online (FICS)…"
 	set EngineMatch					"Engine Match…"
 	set StudyPlan						"Study Plan…"
 	set OpponentBrief					"Opponent Brief…"
@@ -502,6 +503,7 @@ proc ::menu::DefineTree {} {
 			[list cmd menu.training.repertoire TrainRepertoire "" {::menu::ModulePresent reptrainer}] \
 			[list sep] \
 			[list cmd menu.training.play_engine PlayAgainstEngine "" {::menu::ModulePresent playengine}] \
+			[list cmd menu.training.play_online PlayOnline "" {::menu::ModulePresent ics}] \
 			[list cmd menu.training.engine_match EngineMatch "" {::menu::ModulePresent enginematch}] \
 			[list sep] \
 			[list cmd menu.training.studyplan StudyPlan "" {::menu::ModulePresent studyplan}] \
@@ -2629,6 +2631,7 @@ proc ::menu::Do {id} {
 		menu.training.guess { return [::guessmove::start] }
 		menu.training.repertoire { return [::reptrainer::open .application] }
 		menu.training.play_engine { return [::playengine::open .application] }
+		menu.training.play_online { return [::ics::open .application] }
 		menu.training.engine_match { return [::enginematch::open .application] }
 		menu.training.studyplan { return [::ai::studyplan::run .application] }
 		menu.training.brief { return [::ai::brief::ask .application] }

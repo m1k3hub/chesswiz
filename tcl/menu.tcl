@@ -106,6 +106,7 @@ set DownloadGames				"Download &Games from the Internet..."
 set GuessTheMove				"Guess the &Move..."
 set EndgameTrainer			"Endgame &Trainer..."
 set PlayAgainstEngine			"Play Against &Engine..."
+set PlayOnline					"Play &Online (FICS)..."
 set EngineMatch					"Engine Mat&ch..."
 
 # Tools
