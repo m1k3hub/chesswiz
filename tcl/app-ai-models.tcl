@@ -2,8 +2,8 @@
 # ::application::ai::models -- choose the models of the AI features.
 #
 # Extras > "AI: Choose Model" has two sections. The first chooses the
-# language model's provider: Ollama (the default, with its cloud model
-# kimi-k3:cloud), Fireworks, the Qwen token plan, Gemini, Claude
+# language model's provider: Ollama (the default, with the best cloud model
+# that answers, found at startup), Fireworks, the Qwen token plan, Gemini, Claude
 # (Anthropic) or OpenAI. The Ollama choice lists the models of the Ollama
 # server (/api/tags), local and cloud, and marks those that support tool
 # calling (which the assistant needs); Ollama is asked only once that choice
@@ -41,7 +41,7 @@ namespace eval mc {
 
 set Title			"AI Models"
 set LanguageModel	"Language model"
-set Ollama			"Ollama: local and cloud models (default: kimi-k3:cloud)"
+set Ollama			"Ollama: local and cloud models (default: the best cloud model that answers)"
 set Fireworks		"Fireworks"
 set Qwen				"Qwen token plan"
 set Gemini			"Gemini (Google)"
@@ -123,7 +123,8 @@ proc ::application::ai::models::show {{parent .application}} {
 	# never chosen: the default, whatever an older options file left behind
 	if {$Priv(name) eq "" || $::application::ai::Settings(provider) ne "ollama"
 	 || !$::application::ai::Settings(chosen)} {
-		set Priv(name) $::ai::provider::DefaultModel(ollama)
+		lassign [::ai::provider::frontier] fp fm
+		set Priv(name) [expr {$fp eq "ollama" ? $fm : ""}]
 	}
 	set Priv(classifier) [lindex [::application::ai::setting classifier] 1]
 	set Priv(provider) $::application::ai::Settings(provider)
@@ -426,7 +427,7 @@ proc ::application::ai::models::OnModels {generation result} {
 		$Priv(status) configure -text [format $mc::Unreachable [dict get $result error]]
 		return
 	}
-	set Priv(models) [dict get $result models]
+	set Priv(models) [LocalChoices [dict get $result models] $Priv(name)]
 	# RAM-only advice is cheap and useful while the GPU query is pending.
 	set memory {ram_mb 0 vram_mb 0}
 	if {[llength [info commands ::ai::modelfit::memory]]} {
@@ -525,6 +526,26 @@ proc ::application::ai::models::FitAdvice {models {memory {}}} {
 			[dict get $row quant] [dict get $row placement]]
 	}
 	return $advice
+}
+
+
+# Every cloud model, but only the two local models best fit to drive the
+# app: those that can call tools first, then the largest. The chosen model
+# stays listed even when it is not one of the two.
+proc ::application::ai::models::LocalChoices {models chosen {keep 2}} {
+	set local {}
+	foreach m $models {
+		if {![dict get $m remote]} {
+			lappend local [list [dict get $m tools] [ParamsB $m] [dict get $m name]]
+		}
+	}
+	# lsort is stable: tools first, the largest first among equals
+	set best [lsort -integer -decreasing -index 0 [lsort -real -decreasing -index 1 $local]]
+	set best [lmap row [lrange $best 0 $keep-1] { lindex $row 2 }]
+	return [lmap m $models {
+		set name [dict get $m name]
+		if {[dict get $m remote] || $name in $best || $name eq $chosen} { set m } else { continue }
+	}]
 }
 
 
@@ -678,10 +699,12 @@ proc ::application::ai::models::Apply {} {
 	variable mc
 
 	if {$Priv(provider) eq "ollama"} {
+		# empty is the default: the cloud model found at startup, which may
+		# not be known yet
 		set name [string trim $Priv(name)]
-		if {![string length $name]} { return }
-		# the default is saved as "" so a newer default applies later
-		if {$name eq $::ai::provider::DefaultModel(ollama)} { set name "" }
+		# the default is saved as "" so the cloud model found at each
+		# startup applies, not the one in use today
+		if {[list ollama $name] eq [::ai::provider::frontier]} { set name "" }
 		::application::ai::choose ollama $name
 	} else {
 		set model [FullModel $Priv(provider) [string trim $Priv(cloudModel)]]

@@ -24,6 +24,9 @@ set ::env(SCIDB_AI_TRIAGE) 0
 # (e.g. typesafe), to score the router and the model together
 set ::env(SCIDB_AI_CLASSIFIER) [expr {[info exists ::env(SCIDB_CORPUS_CLASSIFIER)] ? $::env(SCIDB_CORPUS_CLASSIFIER) : "off"}]
 source [file join $root tcl chesswiz]
+# a fresh HOME is a first start: skip its language chooser, which waits
+# for a click (English is the default)
+set ::scidb::dir::setup 0
 fconfigure stdout -buffering line
 
 set match *
@@ -92,7 +95,11 @@ proc solved {calls expect} {
 	return 0
 }
 
-set report [open [file join $root tests tmp-app corpus-report.txt] w]
+# SCIDB_CORPUS_REPORT: the report's path, so several models can be scored at once
+set reportFile [expr {[info exists ::env(SCIDB_CORPUS_REPORT)] ? $::env(SCIDB_CORPUS_REPORT)
+	: [file join $root tests tmp-app corpus-report.txt]}]
+set report [open $reportFile w]
+set allSeconds 0.0
 set total 0; set good 0
 array set byJob {}
 foreach {id job request expect} $Corpus {
@@ -106,6 +113,7 @@ foreach {id job request expect} $Corpus {
 	while {$::application::assistant::Priv(busy)} { vwait ::application::assistant::Priv(busy) }
 	after cancel $timer
 	set seconds [expr {([clock milliseconds] - $started) / 1000.0}]
+	set allSeconds [expr {$allSeconds + $seconds}]
 	set calls [calls]
 	set ok [solved $calls $expect]
 	incr total; incr good $ok
@@ -130,8 +138,8 @@ foreach job [lsort [array names byJob]] {
 	set k [tcl::mathop::+ {*}$byJob($job)]
 	puts $report [format "%-4s %d/%d" $job $k $n]
 }
-set line [format "SOLVED %d/%d (%.0f%%) with %s" $good $total [expr {$total ? 100.0 * $good / $total : 0}] \
-	"$::application::ai::Config(provider) [::ai::provider::model]"]
+set line [format "SOLVED %d/%d (%.0f%%) with %s, %.1fs a request" $good $total [expr {$total ? 100.0 * $good / $total : 0}] \
+	"$::application::ai::Config(provider) [::ai::provider::model]" [expr {$total ? $allSeconds / $total : 0}]]
 puts $report $line
 puts $line
 close $report

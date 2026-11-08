@@ -2,8 +2,8 @@
 # ::ai::provider -- provider-agnostic text completion for the language layer.
 #
 # Providers: `ollama` (local models and Ollama's cloud models; the
-# application's default is kimi-k3:cloud, docs/ai/ASSISTANT_COVERAGE_MAP.md
-# P6), `anthropic`, the OpenAI-compatible presets `openai`, `fireworks`,
+# application's default is the frontier cloud model that answers, chosen
+# at startup by ::ai::provider::resolveFrontier, never a fixed name), `anthropic`, the OpenAI-compatible presets `openai`, `fireworks`,
 # `qwen` (Qwen token plan) and `gemini`, and `stub` (deterministic, for
 # tests, and the module's own default). Every provider speaks the same
 # completion and chat calls; nothing here ever uploads a database.
@@ -521,8 +521,9 @@ namespace eval provider {
 # the name shown to the user. The OpenAI-compatible presets all go through
 # the openai adapter.
 variable DefaultModel
+# Ollama has none: its default is the cloud model resolveFrontier found.
 array set DefaultModel {
-	ollama    kimi-k3:cloud
+	ollama    ""
 	anthropic claude-opus-5-5
 	openai    ""
 	fireworks accounts/fireworks/models/glm-5p3
@@ -576,6 +577,10 @@ proc ::ai::provider::model {} {
 	variable DefaultModel
 
 	if {$Config(model) ne ""} { return $Config(model) }
+	if {$Config(name) eq "ollama"} {
+		lassign [frontier] provider model
+		return [expr {$provider eq "ollama" ? $model : ""}]
+	}
 	if {[info exists DefaultModel($Config(name))]} { return $DefaultModel($Config(name)) }
 	return ""
 }
@@ -1573,4 +1578,150 @@ proc ::ai::provider::parseModels {data} {
 proc ::ai::provider::credentialAccounts {} {
 	variable KeyEnv
 	return [array names KeyEnv]
+}
+
+
+# ----------------------------------------------------------------------
+# The default model: no name is fixed. Chesswiz publishes ai-models.json on
+# chesswizapp.com (scripts/score-cloud-models.py): for each cloud model of
+# every provider, how well it drives the app (the assistant corpus), what a
+# typical assistant request costs with it (OpenRouter's prices), and per
+# provider how hard it is to set up (setup: 1 easiest). Only the five most
+# capable models count (best score, then lowest cost); they are ranked by
+# setup, then cost, and resolveFrontier takes the first this user can reach
+# now -- an Ollama cloud model through a
+# running Ollama that answers, another provider's model when its key is
+# there. The reachable ones after it are the backups. With none reachable,
+# the outcome lists what to set up, easiest first. Local models are never
+# picked here: they are the user's choice.
+#
+#   ::ai::provider::resolveFrontier ?-cached {PROVIDER MODEL}? ?-command SCRIPT?
+#   ::ai::provider::frontier           {provider model}, or {} until resolved
+#   ::ai::provider::frontierRanking    the backups, in order
+# ----------------------------------------------------------------------
+
+namespace eval ai {
+namespace eval provider {
+variable Frontier {}
+variable FrontierRanking {}
+# written by scripts/score-cloud-models.py, served from the media bucket
+variable FrontierScores https://videos.chesswizapp.com/ai/ai-models.json
+variable FrontierLocal http://localhost:11434
+} ;# namespace provider
+} ;# namespace ai
+
+proc ::ai::provider::frontier {} {
+	variable Frontier
+	return $Frontier
+}
+
+proc ::ai::provider::frontierRanking {} {
+	variable FrontierRanking
+	return $FrontierRanking
+}
+
+# The five most capable {provider model} pairs of a parsed ai-models.json
+# (best score, then lowest cost), ranked by the provider's setup (easiest
+# first), then cost. A model without a cost counts as the dearest; a
+# provider without a setup rank comes after all others.
+proc ::ai::provider::QualifiedModels {scores {top 5}} {
+	set setup [expr {[dict exists $scores setup] ? [dict get $scores setup] : {}}]
+	set rows {}
+	foreach m [dict get $scores models] {
+		set provider [dict get $m provider]
+		set tier [expr {[dict exists $setup $provider] ? [dict get $setup $provider] : 99}]
+		set cost [expr {[dict exists $m cost] && [string is double -strict [dict get $m cost]] ? [dict get $m cost] : 1e30}]
+		lappend rows [list [list $provider [dict get $m model]] $tier $cost [dict get $m score]]
+	}
+	set rows [lsort -real -index 2 $rows]
+	set rows [lrange [lsort -real -decreasing -index 3 $rows] 0 [expr {$top - 1}]]
+	set rows [lsort -real -index 2 $rows]
+	set rows [lsort -integer -index 1 $rows]
+	return [lmap r $rows { lindex $r 0 }]
+}
+
+proc ::ai::provider::resolveFrontier {args} {
+	variable Frontier
+	array set opts {-cached "" -command ""}
+	array set opts $args
+	# the last pick serves until this resolution finishes
+	if {![llength $Frontier] && [llength $opts(-cached)] == 2} { set Frontier $opts(-cached) }
+	coroutine ::ai::provider::FrontierCo[incr ::ai::provider::FrontierSeq] \
+		::ai::provider::ResolveFrontier $opts(-command)
+}
+
+# One HTTP request inside the resolver coroutine: {status code body}.
+proc ::ai::provider::CoFetch {url timeout {body ""}} {
+	need http
+	if {[string match -nocase https://* $url]} { catch { ::platform::sys::tlsRegister } }
+	set cmd [list ::http::geturl $url -timeout $timeout -binary 1 -command [info coroutine]]
+	if {$body ne ""} { lappend cmd -type application/json -query [encoding convertto utf-8 $body] }
+	if {[catch $cmd token]} { return [list error 0 $token] }
+	set token [yield]
+	set result [list [::http::status $token] [::http::ncode $token] [body $token]]
+	::http::cleanup $token
+	return $result
+}
+
+# 1 when <tag> answers through the local Ollama now (pulling its small
+# cloud stub first if needed): not over a usage limit, not down.
+proc ::ai::provider::OllamaAnswers {tag pulled} {
+	variable FrontierLocal
+	if {$tag ni $pulled} {
+		lassign [CoFetch $FrontierLocal/api/pull 60000 [format {{"model":"%s","stream":false}} $tag]] status code
+		if {$code != 200} { return 0 }
+	}
+	lassign [CoFetch $FrontierLocal/api/chat 30000 [format {{"model":"%s","stream":false,"think":false,"messages":[{"role":"user","content":"Reply OK."}],"options":{"num_predict":2}}} $tag]] status code
+	return [expr {$status eq "ok" && $code == 200}]
+}
+
+proc ::ai::provider::ResolveFrontier {command} {
+	variable Frontier
+	variable FrontierRanking
+	variable FrontierScores
+	variable FrontierLocal
+	variable Label
+
+	set outcome ""
+	if {[catch {
+		need json
+		lassign [CoFetch $FrontierScores 10000] status code data
+		if {$status ne "ok" || $code != 200} { error "the model scores did not load ($status $code)" }
+		set qualified [QualifiedModels [json::json2dict $data]]
+		set pulled ""
+		lassign [CoFetch $FrontierLocal/api/tags 3000] status code data
+		if {$status eq "ok" && $code == 200} { set pulled [lmap m [parseModels $data] { dict get $m name }] }
+		set reachable {}
+		set setup {}
+		foreach pair $qualified {
+			lassign $pair provider model
+			if {$provider eq "ollama"} {
+				set ok [expr {$pulled ne ""}]
+			} else {
+				set ok [expr {[info exists Label($provider)] && [apiKey $provider] ne ""}]
+			}
+			if {$ok} {
+				lappend reachable $pair
+			} elseif {![dict exists $setup $provider]} {
+				# the cheapest good model each setup would give, easiest first
+				dict set setup $provider $model
+			}
+		}
+		set i -1
+		foreach pair $reachable {
+			incr i
+			lassign $pair provider model
+			if {$provider eq "ollama" && ![OllamaAnswers $model $pulled]} continue
+			set Frontier $pair
+			set FrontierRanking [lrange $reachable [expr {$i + 1}] end]
+			set outcome [list ok 1 provider $provider model $model]
+			break
+		}
+		if {$outcome eq ""} {
+			set outcome [list ok 0 error "no qualified cloud model is reachable" setup $setup]
+		}
+	} err]} {
+		set outcome [list ok 0 error $err setup {}]
+	}
+	if {$command ne ""} { after 0 [list {*}$command $outcome] }
 }

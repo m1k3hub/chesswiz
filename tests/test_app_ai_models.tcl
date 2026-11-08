@@ -55,7 +55,9 @@ proc ::scidb::test::aimodels::isolated {body} {
 		}
 		return
 	}
+	set frontier [list $::ai::provider::Frontier $::ai::provider::FrontierRanking]
 	set rc [catch { uplevel 1 $body } result]
+	lassign $frontier ::ai::provider::Frontier ::ai::provider::FrontierRanking
 	catch { file delete [::application::ai::KeyFile] }
 	rename ::application::ai::KeyFile {}
 	rename ::scidb::test::aimodels::realKeyFile ::application::ai::KeyFile
@@ -78,6 +80,15 @@ proc ::scidb::test::aimodels::isolated {body} {
 	if {$rc} { return -code error $result }
 	return $result
 }
+
+tcltest::test aimodels-two-local {all cloud models, the two best local ones, and the chosen one} -body {
+	set models {}
+	foreach {name remote tools} {
+		a:cloud 1 1  small:1b 0 1  big:70b 0 0  mid:8b 0 1  tiny:0.5b 0 1  b:cloud 1 0  huge:30b 0 1
+	} { lappend models [dict create name $name remote $remote tools $tools] }
+	list [lmap m [::application::ai::models::LocalChoices $models ""] { dict get $m name }] \
+		[lmap m [::application::ai::models::LocalChoices $models tiny:0.5b] { dict get $m name }]
+} -result {{a:cloud mid:8b b:cloud huge:30b} {a:cloud mid:8b tiny:0.5b b:cloud huge:30b}}
 
 tcltest::test aimodels-saved-setting {the saved choice is in effect without overrides} -body {
 	::scidb::test::aimodels::isolated {
@@ -202,22 +213,24 @@ tcltest::test aimodels-dialog-shows-override {the dialog says when a flag overri
 	}
 } -result {1 1}
 
-tcltest::test aimodels-default-cloud {without a choice the default is kimi-k3:cloud on Ollama, whatever an old setting says} -body {
+tcltest::test aimodels-default-cloud {without a choice the default is the resolved cloud model on Ollama, whatever an old setting says} -body {
 	::scidb::test::aimodels::isolated {
+		set ::ai::provider::Frontier {ollama frontier-x:cloud}
 		array set ::application::ai::Settings {provider anthropic model old chosen 0}
 		::application::ai::applySettings
 		::ai::provider::configure -name $::application::ai::Config(provider) -model $::application::ai::Config(model)
 		list $::application::ai::Config(provider) $::application::ai::Config(model) [::ai::provider::model] \
 			[::ai::provider::cloudProvider]
 	}
-} -result {ollama {} kimi-k3:cloud 1}
+} -result {ollama frontier-x:cloud frontier-x:cloud 1}
 
-tcltest::test aimodels-dialog-cloud-default {the dialog opens on Ollama with kimi-k3:cloud selected} -body {
+tcltest::test aimodels-dialog-cloud-default {the dialog opens on Ollama with the resolved cloud model selected} -body {
 	::scidb::test::aimodels::isolated {
+		set ::ai::provider::Frontier {ollama frontier-x:cloud}
 		set ::application::ai::Settings(chosen) 0
 		rename ::ai::provider::ollamaModels ::scidb::test::aimodels::realModels
 		proc ::ai::provider::ollamaModels {args} {
-			return [list [dict create name kimi-k3:cloud remote 1 tools 1 size 1] \
+			return [list [dict create name frontier-x:cloud remote 1 tools 1 size 1] \
 				[dict create name qwen3.5:9b remote 0 tools 1 size 1]]
 		}
 		::application::ai::models::show .application
@@ -232,7 +245,7 @@ tcltest::test aimodels-dialog-cloud-default {the dialog opens on Ollama with kim
 		rename ::scidb::test::aimodels::realModels ::ai::provider::ollamaModels
 		set out
 	}
-} -result {ollama 1 0 kimi-k3:cloud ollama {}}
+} -result {ollama 1 0 frontier-x:cloud ollama {}}
 
 tcltest::test aimodels-dialog-cloud-apply {a cloud choice saves the model and the key, the key file is private} -body {
 	::scidb::test::aimodels::isolated {
@@ -460,5 +473,39 @@ tcltest::test aimodels-help-lists-flags {--help documents the AI flags} -body {
 
 # ----------------------------------------------------------------------
 
-::tcltest::cleanupTests
+::tcltest::test aimodels-frontier-qualified {the five most capable models count, ranked by setup ease, then cost} -body {
+	::ai::provider::QualifiedModels [dict create setup {ollama 1 gemini 2 anthropic 3} models [list \
+		[dict create provider anthropic model opus score 99 cost 0.02] \
+		[dict create provider ollama model big:cloud score 98 cost 0.005] \
+		[dict create provider ollama model weak:cloud score 80 cost 0.0001] \
+		[dict create provider gemini model g-flash score 97 cost 0.001] \
+		[dict create provider ollama model mid:cloud score 97 cost 0.002] \
+		[dict create provider anthropic model haiku score 96 cost 0.001] \
+		[dict create provider ollama model also:cloud score 96 cost 0.003]]]
+} -result {{ollama mid:cloud} {ollama big:cloud} {gemini g-flash} {anthropic haiku} {anthropic opus}}
+
+tcltest::test aimodels-default-follows-pick {without a choice the model in effect is the search's pick, whatever its provider} -body {
+	::scidb::test::aimodels::isolated {
+		set ::ai::provider::Frontier {gemini g-flash}
+		array set ::application::ai::Settings {provider ollama model "" chosen 0}
+		::application::ai::applySettings
+		set auto [list $::application::ai::Config(provider) $::application::ai::Config(model)]
+		::application::ai::choose ollama qwen3.5:9b
+		list $auto [list $::application::ai::Config(provider) $::application::ai::Config(model)]
+	}
+} -result {{gemini g-flash} {ollama qwen3.5:9b}}
+
+tcltest::test aimodels-backups-cloud-only {auto backups are the next cloud models; a chosen local model gets none} -body {
+	::scidb::test::aimodels::isolated {
+		set ::ai::provider::Frontier {ollama a:cloud}
+		set ::ai::provider::FrontierRanking {{ollama b:cloud} {gemini g-flash}}
+		array set ::application::ai::Settings {backup1 auto backup2 auto}
+		array set ::application::ai::Config {provider ollama model ""}
+		set cloud [::application::ai::backups]
+		array set ::application::ai::Config {provider ollama model qwen3.5:9b}
+		list $cloud [::application::ai::backups]
+	}
+} -result {{{ollama b:cloud} {gemini g-flash}} {}}
+
+tcltest::cleanupTests
 return

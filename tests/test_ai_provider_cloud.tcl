@@ -937,8 +937,9 @@ test aipc-preset-endpoint-10.1 {configure -name takes the endpoint from the Endp
 } -result OK
 
 test aipc-preset-model-10.2 {model falls back to the per-provider DefaultModel} -body {
+	set ::ai::provider::Frontier {ollama frontier-x:cloud}
 	foreach {p want} {
-		ollama    kimi-k3:cloud
+		ollama    frontier-x:cloud
 		fireworks accounts/fireworks/models/glm-5p3
 		qwen      qwen3.8-max
 		gemini    gemini-3.8-flash
@@ -1017,6 +1018,7 @@ test aipc-cloudprovider-12.1 {cloudProvider knows the presets and ollama's cloud
 	}
 	# ollama: only its cloud models are forwarded
 	::ai::provider::configure -name stub -model ""
+	set ::ai::provider::Frontier {ollama frontier-x:cloud}
 	::ai::provider::configure -name ollama -model kimi-k3:cloud
 	Assert {[::ai::provider::cloudProvider] == 1} "ollama cloud model"
 	::ai::provider::configure -model qwen3.5:9b

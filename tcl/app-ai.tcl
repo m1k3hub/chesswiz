@@ -19,10 +19,11 @@ package require Tk 8.5
 namespace eval application {
 namespace eval ai {
 
-# The language model defaults to a strong cloud model, kimi-k3:cloud
-# through Ollama; a model that runs on this machine, Claude, OpenAI and the
-# other presets are a choice in AI: Choose Model (docs/ai/ASSISTANT_COVERAGE_MAP.md
-# P6). An empty model means the provider's default (::ai::provider::model).
+# The language model defaults to the frontier cloud model that answers,
+# through Ollama; no name is fixed (::ai::provider::resolveFrontier ranks
+# Ollama's cloud catalogue at startup). A model that runs on this machine,
+# Claude, OpenAI and the other presets are the user's choice in AI: Choose
+# Model. An empty model means the provider's default (::ai::provider::model).
 variable Config
 array set Config {
 	provider   ollama
@@ -56,17 +57,20 @@ if {[info exists ::env(SCIDB_AI_MODEL)] && $::env(SCIDB_AI_MODEL) ne ""} {
 # me is the user's name as written in their games (the assistant's
 # remember_me tool).
 variable Settings
+# autoModel is the {provider model} chosen on the first start (or by the
+# setup scan) when the user has not chosen one, autoRanking its backups.
 array set Settings [list provider $Config(provider) model $Config(model) classifier auto \
-	chosen 0 cloudNotice 0 me ""]
+	chosen 0 cloudNotice 0 me "" autoModel "" autoRanking ""]
 
 # The backup models tried in turn when the chosen one is down (no reply,
 # timeout, busy, server error): each "provider ?model?", "auto" for the
-# first ready provider not already in use, or "" for none.
+# next cloud model, or "" for none. "auto" never picks a local model: a
+# model on this machine is only ever the user's own choice.
 array set Settings {backup1 auto backup2 auto}
 
-# The order "auto" picks backups in: a provider is ready when it needs no
-# key (Ollama) or its key is there.
-variable BackupOrder {ollama fireworks qwen anthropic gemini openai}
+# The cloud providers "auto" tries after Ollama's ranked cloud models, each
+# when its key is there.
+variable BackupOrder {fireworks qwen anthropic gemini openai}
 
 # API keys live in their own file (mode 0600), never in the options file.
 variable Keys {}
@@ -111,6 +115,18 @@ proc ::application::ai::applySettings {} {
 	foreach key {provider model} {
 		set Config($key) [lindex [setting $key] 1]
 	}
+	UseDefault
+	# The default is no fixed name: on the first start, of the five most
+	# capable cloud models the one ready with the least setup; kept after
+	# that (the setup scan searches again). Not in the test harness, which
+	# must not reach the network or pull models.
+	if {[llength $Settings(autoModel)] == 2} {
+		set ::ai::provider::Frontier $Settings(autoModel)
+		set ::ai::provider::FrontierRanking $Settings(autoRanking)
+	} elseif {![namespace exists ::scidb::test::app] && ![info exists ::env(CHESSWIZ_NO_FRONTIER)]} {
+		findModel
+	}
+	UseDefault
 	if {[llength [info commands ::ai::systemone::configure]]} {
 		lassign [setting classifier] source backend
 		if {[catch { ::ai::systemone::configure -backend $backend }]} {
@@ -128,6 +144,42 @@ proc ::application::ai::applySettings {} {
 }
 
 
+# What to set up for the AI, easiest first, when no good model is in
+# reach: {provider model ...}, from the last search.
+variable SetupAdvice {}
+
+# Search for the default model; <command> gets the search's outcome.
+proc ::application::ai::findModel {{command ""}} {
+	if {![llength [info commands ::ai::provider::resolveFrontier]]} { return }
+	::ai::provider::resolveFrontier -command [list ::application::ai::FrontierFound $command]
+}
+
+proc ::application::ai::FrontierFound {command result} {
+	variable Settings
+	variable SetupAdvice
+	if {[dict get $result ok]} {
+		set Settings(autoModel) [list [dict get $result provider] [dict get $result model]]
+		set Settings(autoRanking) [::ai::provider::frontierRanking]
+		set SetupAdvice {}
+		UseDefault
+	} else {
+		set SetupAdvice [dict get $result setup]
+	}
+	if {$command ne ""} { {*}$command $result }
+}
+
+# Without the user's choice (and no override), the model in effect is the
+# one the search found, whichever provider it is from.
+proc ::application::ai::UseDefault {} {
+	variable Config
+	variable Settings
+	if {$Settings(chosen)} { return }
+	if {[lindex [setting provider] 0] ne "settings" || [lindex [setting model] 0] ne "settings"} { return }
+	set pick [::ai::provider::frontier]
+	if {[llength $pick] == 2} { lassign $pick Config(provider) Config(model) }
+}
+
+
 # The backup models in effect, as a list of {provider model} (model "" is
 # the provider's default), at most two, none the same as the chosen model.
 proc ::application::ai::backups {} {
@@ -136,15 +188,19 @@ proc ::application::ai::backups {} {
 	variable BackupOrder
 
 	set used [list [list $Config(provider) [Model $Config(provider) $Config(model)]]]
+	# a model on this machine, the user's choice, is never backed by the cloud
+	set local [expr {$Config(provider) eq "ollama" && $Config(model) ne "" && ![string match *cloud* $Config(model)]}]
 	set result {}
 	foreach key {backup1 backup2} {
 		set value [string trim $Settings($key)]
 		if {$value eq ""} { continue }
 		if {$value eq "auto"} {
-			foreach provider $BackupOrder {
-				set pick [list $provider [Model $provider ""]]
-				if {$pick ni $used && [Ready $provider]} { break }
-				set pick {}
+			set pick {}
+			if {$local} { continue }
+			foreach candidate [concat [::ai::provider::frontierRanking] \
+				[lmap provider $BackupOrder { list $provider [Model $provider ""] }]] {
+				if {$candidate ni $used && [lindex $candidate 1] ne ""
+				 && [Ready [lindex $candidate 0]]} { set pick $candidate; break }
 			}
 		} else {
 			set provider [lindex $value 0]
@@ -162,6 +218,10 @@ proc ::application::ai::backups {} {
 
 proc ::application::ai::Model {provider model} {
 	if {$model ne ""} { return $model }
+	if {$provider eq "ollama"} {
+		lassign [::ai::provider::frontier] p m
+		return [expr {$p eq "ollama" ? $m : ""}]
+	}
 	if {[info exists ::ai::provider::DefaultModel($provider)]} {
 		return $::ai::provider::DefaultModel($provider)
 	}

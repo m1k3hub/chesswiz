@@ -21,7 +21,7 @@ namespace eval setupscan {
 array set Options { done 0 rejected {} }
 array set Priv { running 0 }
 
-variable Steps {speech engines fonts databases}
+variable Steps {ai speech engines fonts databases}
 
 # Only names no ordinary program uses: "obsidian", "dragon", "fruit", "seer"
 # or "clover" would start a notes app or a game to ask it "uci".
@@ -79,7 +79,7 @@ proc ::application::setupscan::run {} {
 	variable Steps
 	if {$Priv(running)} { return }
 	set Priv(running) 1
-	Say "Looking for what Chesswiz can set up for you: speech input, chess engines, chess fonts and game files…"
+	Say "Looking for what Chesswiz can set up for you: the AI model, speech input, chess engines, chess fonts and game files…"
 	after 50 [list ::application::setupscan::Next $Steps]
 }
 
@@ -96,6 +96,48 @@ proc ::application::setupscan::Next {steps} {
 		Say "The $step check failed: $err"
 	}
 	after 50 [list ::application::setupscan::Next [lrange $steps 1 end]]
+}
+
+
+# --- AI model ----------------------------------------------------------
+
+# How each provider is set up, for the advice when no good model is ready.
+variable AiSetup {
+	ollama		"install Ollama (ollama.com) and sign in, free"
+	gemini		"a free Gemini key from aistudio.google.com"
+	fireworks	"a Fireworks API key (paid)"
+	qwen		"a Qwen token plan key (paid)"
+	anthropic	"an Anthropic API key (paid)"
+	openai		"an OpenAI API key (paid)"
+}
+
+proc ::application::setupscan::StepAi {} {
+	if {$::application::ai::Settings(chosen)} {
+		Say "AI model: you chose [::ai::provider::label $::application::ai::Config(provider)] $::application::ai::Config(model); kept."
+		return
+	}
+	# the test harness never reaches the network
+	if {[namespace exists ::scidb::test::app]} { return }
+	Say "AI model: looking for the most capable cloud model that is ready with the least setup…"
+	# the search answers later; the other steps go on meanwhile
+	::application::ai::findModel ::application::setupscan::AiFound
+}
+
+proc ::application::setupscan::AiFound {result} {
+	variable AiSetup
+	if {[dict get $result ok]} {
+		Say "AI model: using [::ai::provider::label [dict get $result provider]] [dict get $result model]. To use another, or one on this computer, choose it in Extras > AI: Choose Model."
+		return
+	}
+	set advice {}
+	foreach {provider model} [dict get $result setup] {
+		if {[dict exists $AiSetup $provider]} { lappend advice "[dict get $AiSetup $provider] (for $model)" }
+	}
+	if {[llength $advice]} {
+		Say "AI model: none is ready. Easiest first: [join $advice {; }]. Then run this again. Or run a model on this computer: Extras > AI: Choose Model."
+	} else {
+		Say "AI model: none found ([dict get $result error]). Choose one in Extras > AI: Choose Model, in the cloud or on this computer."
+	}
 }
 
 
