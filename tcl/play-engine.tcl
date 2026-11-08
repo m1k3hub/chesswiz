@@ -297,24 +297,49 @@ proc ::playengine::StrengthRows {} {
 	set name $Priv(dlg:engine)
 	set features [EngineFeatures $name]
 	set row [ttk::frame $f.row]
+	set key ""
 	if {[dict exists $features limitStrength]} {
 		lassign [dict get $features limitStrength] min max
-		if {$Options(elo) < $min} { set Options(elo) $min }
-		if {$Options(elo) > $max} { set Options(elo) $max }
-		ttk::label $row.label -text "$mc::StrengthElo ($min-$max)"
-		ttk::spinbox $row.spin -from $min -to $max -increment 50 -width 5 \
-			-textvariable [namespace current]::Options(elo)
+		lassign {elo 50} key step
+		ttk::label $row.label -text $mc::StrengthElo
 	} elseif {[dict exists $features skillLevel]} {
 		lassign [dict get $features skillLevel] min max
-		if {$Options(skill) < $min} { set Options(skill) $min }
-		if {$Options(skill) > $max} { set Options(skill) $max }
-		ttk::label $row.label -text "$mc::StrengthSkill ($min-$max)"
-		ttk::spinbox $row.spin -from $min -to $max -width 3 \
-			-textvariable [namespace current]::Options(skill)
+		lassign {skill 1} key step
+		ttk::label $row.label -text $mc::StrengthSkill
 	} else {
 		ttk::label $row.label -text "$mc::Strength $mc::StrengthFull"
 	}
-	pack $row -anchor w
+	grid $row.label -row 0 -column 0 -columnspan 3 -sticky w
+	if {$key ne ""} {
+		set Options($key) [expr {max($min, min($max, $Options($key)))}]
+		set Priv(dlg:slider) $Options($key)
+		ttk::label $row.value -text $Options($key)
+		grid configure $row.label -columnspan 1
+		grid $row.value -row 0 -column 1 -sticky w -padx $::theme::padx
+		set line [ttk::frame $row.line]
+		ttk::label $line.min -text $min
+		ttk::scale $row.slider -from $min -to $max -length 220 \
+			-variable [namespace current]::Priv(dlg:slider) \
+			-command [namespace code [list StrengthSlid $key $min $max $step $row.value]]
+		ttk::label $line.max -text $max
+		pack $line.min -in $line -side left
+		pack $line.max -in $line -side right
+		pack $row.slider -in $line -side left -fill x -expand yes -padx $::theme::padx
+		grid $line -row 1 -column 0 -columnspan 2 -sticky ew
+		grid columnconfigure $row 1 -weight 1
+	}
+	pack $row -fill x
+}
+
+
+# The slider snaps to whole steps (50 Elo, one skill level) counted from
+# the engine's minimum; its far end is the maximum, off the step grid or not.
+proc ::playengine::StrengthSlid {key min max step value position} {
+	variable Options
+	set v [expr {$min + int(round(($position - $min) / double($step))) * $step}]
+	if {$position >= $max - $step / 2.0} { set v $max }
+	set Options($key) [expr {max($min, min($max, $v))}]
+	$value configure -text $Options($key)
 }
 
 

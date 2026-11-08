@@ -327,18 +327,30 @@ tcltest::test playengine-dialog {the setup dialog lists engines; Start turns it 
 	set dlg [::playengine::open .application]
 	update
 	set engines [[::util::place::playingBody $dlg].top.setup.engine.engine cget -values]
-	set strength [[::util::place::playingBody $dlg].top.setup.strength.row.label cget -text]
+	set row [::util::place::playingBody $dlg].top.setup.strength.row
+	set strength [$row.label cget -text]
+	# on screen, not only created: the user must be able to set the strength
+	set shown [list [winfo ismapped $row.label] [winfo ismapped $row.slider]]
+	# the slider snaps from the minimum and reaches the maximum
+	lassign [list [$row.slider cget -from] [$row.slider cget -to]] lo hi
+	set snaps {}
+	foreach p [list $lo [expr {$lo + 74}] $hi] {
+		$row.slider set $p
+		lappend snaps [expr {$::playengine::Options(elo) - $lo}]
+	}
+	lappend shown [expr {[lindex $snaps 0] == 0 && [lindex $snaps 1] == 50
+		&& [lindex $snaps 2] == $hi - $lo}]
 	[::util::place::playingBody $dlg].ok invoke
 	update
 	set status [[::util::place::playingBody $dlg].top.play.status cget -text]
 	set active $::playengine::Priv(active)
 	set panel [expr {[winfo manager [::util::place::playingBody $dlg].top.play] eq "pack"}]
 	::playengine::Close
-	list $engines [string match {*Elo*} $strength] $panel $status $active \
+	list $engines [string match {*Elo*} $strength] $shown $panel $status $active \
 		$::playengine::Priv(active) [winfo exists $dlg]
 } -cleanup {
 	::scidb::test::pe::unstub
-} -result {StubEngine 1 1 {Your move.} 1 0 0}
+} -result {StubEngine 1 {1 1 1} 1 {Your move.} 1 0 0}
 
 
 tcltest::test playengine-flag {a side out of time loses on the ticker} -setup {
