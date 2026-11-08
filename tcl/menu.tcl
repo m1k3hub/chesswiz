@@ -153,6 +153,11 @@ if {[info exists ::i18n::languages]} {
 set BugTracker "https://chesswizapp.com/feedback.html#bug"
 set FeatureRequestTracker "https://chesswizapp.com/feedback.html#feature"
 set SupportURL "https://chesswizapp.com/support.html"
+# the Donate button in the top strip offers these; an empty list hides it
+set DonateURLs {
+	PayPal	https://paypal.me/MGThomas
+	Ko-fi	https://ko-fi.com/michaelthomas13477
+}
 
 variable Fullscreen			0
 variable HideMenu				0

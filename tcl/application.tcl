@@ -50,6 +50,8 @@ set ShortcutScheme			"Shortcut scheme:"
 set ShortcutChesswiz		"Chesswiz (default)"
 set ShortcutChessBase		"ChessBase"
 set MainMenu					"&Main Menu"
+set Donate						"♥ Donate"
+set DonateTip					"Support Chesswiz with a donation (PayPal or Ko-fi)"
 
 set ChessInfoDatabase		"Chess Information Data Base"
 set Shutdown					"Shutdown..."
@@ -190,6 +192,32 @@ proc open {} {
 	bind $m <Configure> [namespace code PlaceMenues]
 	set Vars(menu:main) $m
 	set Vars(menu:updates) $nb.menu_updates
+
+	# Donate, left of the drop-down in the top strip: a click offers PayPal
+	# and Ko-fi
+	set Vars(donate) $nb.donate
+	if {[llength $::menu::DonateURLs]} {
+		set dm [menu $nb.donate_menu -tearoff 0]
+		foreach {name url} $::menu::DonateURLs {
+			$dm add command -label $name -command [list ::web::open .application $url]
+		}
+		tk::button $Vars(donate) \
+			-borderwidth 1 \
+			-relief raised \
+			-padx 4 \
+			-pady 0 \
+			-background $Defaults(menu:background) \
+			-activebackground [::dropdownbutton::activebackground] \
+			-foreground #c0143c \
+			-activeforeground white \
+			-text $mc::Donate \
+			-command [list apply {{b m} {
+				tk_popup $m [winfo rootx $b] [expr {[winfo rooty $b] + [winfo height $b]}]
+			}} $nb.donate $dm] \
+			;
+		::tooltip::tooltip $Vars(donate) [namespace current]::mc::DonateTip
+		bind $Vars(donate) <<LanguageChanged>> [list $Vars(donate) configure -text $mc::Donate]
+	}
 	# The drop-down rows are actions in the registry; register them now, not on
 	# the first post, so ::action::run and the assistant reach them from startup.
 	after idle {
@@ -2257,6 +2285,12 @@ proc PlaceMenues {} {
 	}
 	$m configure -height $height
 	place $m -x $x -y 0
+
+	set d $Vars(donate)
+	if {[winfo exists $d]} {
+		set x [expr {$x - [winfo reqwidth $d] - 2}]
+		place $d -x $x -y 0 -height [winfo height $m]
+	}
 
 	# the Ask field sits immediately left of the drop-down, in the top
 	# strip, in every layout including fullscreen (VAL-PAL-002)
