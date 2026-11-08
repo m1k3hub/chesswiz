@@ -12,6 +12,7 @@
 #       -minutes <n> -increment <s>        (0 minutes = no clock)
 #       -movetime <ms>                     ("go movetime" without a clock)
 #       -elo <n> | -skill <n>              (per the engine's features)
+#       -full 1                            (no strength limit)
 #
 # The engine move request is ::playengine::RequestMove; the tests replace
 # it (no engine needed), user moves are ::playengine::UserMove <san>.
@@ -40,11 +41,13 @@ set TimeControl			"Time control:"
 set Clock					"Clock:"
 set ClockDetail			"minutes each, plus seconds increment per move"
 set NoClock				"No clock"
-set NoClockDetail		"the engine thinks %s ms per move"
+set NoClockDetail		"the engine thinks"
+set NoClockUnit		"s per move"
 set Strength				"Strength:"
 set StrengthElo			"Engine strength (Elo):"
 set StrengthSkill		"Skill level:"
 set StrengthFull		"full strength (this engine cannot be weakened)"
+set FullStrength		"Full strength"
 set Start					"Start"
 set Cancel					"Cancel"
 set NewGame				"New Game"
@@ -91,6 +94,7 @@ array set Options {
 	movetime		1000
 	elo			1600
 	skill			5
+	full			0
 }
 
 variable MoveTimeout 2000			;# grace added to a move's clock, ms
@@ -200,7 +204,10 @@ proc ::playengine::open {parent} {
 	set noclock [ttk::frame $f.noclock]
 	ttk::radiobutton $noclock.choice -text $mc::NoClock -value noclock \
 		-variable [namespace current]::Priv(dlg:clock)
-	ttk::label $noclock.detail -text [format $mc::NoClockDetail $Options(movetime)]
+	ttk::label $noclock.detail -text $mc::NoClockDetail
+	ttk::spinbox $noclock.seconds -from 1 -to 600 -width 3 \
+		-textvariable [namespace current]::Priv(dlg:seconds)
+	ttk::label $noclock.unit -text $mc::NoClockUnit
 	# The detail goes on its own line so the dialog fits a strip beside the
 	# board and inset without squeezing a control (VAL-DLG-016).
 	grid $tf.clock $tf.minutes $tf.plus $tf.increment $tf.s -sticky w
@@ -208,6 +215,8 @@ proc ::playengine::open {parent} {
 	grid columnconfigure $tf 5 -weight 1
 	pack $noclock.choice -side left
 	pack $noclock.detail -side left -padx [list $::theme::padx 0]
+	pack $noclock.seconds -side left -padx [list $::theme::padx 0]
+	pack $noclock.unit -side left -padx [list $::theme::padx 0]
 	pack $tf -anchor w
 	pack $noclock -anchor w -pady [list 0 $::theme::pady]
 
@@ -260,6 +269,7 @@ proc ::playengine::open {parent} {
 	set Priv(dlg:clock) [expr {$Options(minutes) > 0 ? "clock" : "noclock"}]
 	set Priv(dlg:minutes) [expr {max(1, $Options(minutes))}]
 	set Priv(dlg:increment) $Options(increment)
+	set Priv(dlg:seconds) [expr {max(1, $Options(movetime) / 1000)}]
 	$ef.engine configure -values $names
 	StrengthRows
 
@@ -312,16 +322,18 @@ proc ::playengine::StrengthRows {} {
 	grid $row.label -row 0 -column 0 -columnspan 3 -sticky w
 	if {$key ne ""} {
 		set Options($key) [expr {max($min, min($max, $Options($key)))}]
-		set Priv(dlg:slider) $Options($key)
-		ttk::label $row.value -text $Options($key)
+		# one stop past the maximum: full strength, no limit at all
+		set full [expr {$max + $step}]
+		set Priv(dlg:slider) [expr {$Options(full) ? $full : $Options($key)}]
+		ttk::label $row.value -text [expr {$Options(full) ? $mc::FullStrength : $Options($key)}]
 		grid configure $row.label -columnspan 1
 		grid $row.value -row 0 -column 1 -sticky w -padx $::theme::padx
 		set line [ttk::frame $row.line]
 		ttk::label $line.min -text $min
-		ttk::scale $row.slider -from $min -to $max -length 220 \
+		ttk::scale $row.slider -from $min -to $full -length 220 \
 			-variable [namespace current]::Priv(dlg:slider) \
 			-command [namespace code [list StrengthSlid $key $min $max $step $row.value]]
-		ttk::label $line.max -text $max
+		ttk::label $line.max -text $mc::FullStrength
 		pack $line.min -in $line -side left
 		pack $line.max -in $line -side right
 		pack $row.slider -in $line -side left -fill x -expand yes -padx $::theme::padx
@@ -333,9 +345,16 @@ proc ::playengine::StrengthRows {} {
 
 
 # The slider snaps to whole steps (50 Elo, one skill level) counted from
-# the engine's minimum; its far end is the maximum, off the step grid or not.
+# the engine's minimum; the engine's maximum is a stop, off the step grid
+# or not, and one step past it is full strength.
 proc ::playengine::StrengthSlid {key min max step value position} {
 	variable Options
+	variable mc
+	set Options(full) [expr {$position >= $max + $step / 2.0}]
+	if {$Options(full)} {
+		$value configure -text $mc::FullStrength
+		return
+	}
 	set v [expr {$min + int(round(($position - $min) / double($step))) * $step}]
 	if {$position >= $max - $step / 2.0} { set v $max }
 	set Options($key) [expr {max($min, min($max, $v))}]
@@ -360,12 +379,13 @@ proc ::playengine::Start {} {
 
 	set name [string trim $Priv(dlg:engine)]
 	if {$name eq ""} { return }
-	foreach {key dflt low high} {minutes 10 1 180 increment 2 0 60} {
+	foreach {key dflt low high} {minutes 10 1 180 increment 2 0 60 seconds 1 1 600} {
 		set v $Priv(dlg:$key)
 		if {![string is integer -strict $v]} { set v $dflt }
 		set v [expr {max($low, min($high, $v))}]
 		set Priv(dlg:$key) $v
 	}
+	set Options(movetime) [expr {$Priv(dlg:seconds) * 1000}]
 	set Options(engine) $name
 	set Options(color) $Priv(dlg:color)
 	set Options(increment) $Priv(dlg:increment)
@@ -379,6 +399,7 @@ proc ::playengine::Start {} {
 		-movetime $Options(movetime) \
 		-elo $Options(elo) \
 		-skill $Options(skill) \
+		-full $Options(full) \
 	]
 }
 
@@ -429,6 +450,7 @@ proc ::playengine::StartGame {spec} {
 		-movetime 1000 \
 		-elo 1600 \
 		-skill 5 \
+		-full 0 \
 	]
 	array set opts $spec
 
@@ -453,6 +475,7 @@ proc ::playengine::StartGame {spec} {
 	set Priv(movetime) [expr {max(1, $opts(-movetime))}]
 	set Priv(elo) $opts(-elo)
 	set Priv(skill) $opts(-skill)
+	set Priv(full) [expr {$opts(-full) ? 1 : 0}]
 	set Priv(clock:w) [expr {$Priv(minutes) * 60 * 1000}]
 	set Priv(clock:b) [expr {$Priv(minutes) * 60 * 1000}]
 	set Priv(eval:cp) {}
@@ -716,11 +739,23 @@ proc ::playengine::Send {line} {
 
 
 # Strength comes from the setting of the dialog (UCI_LimitStrength /
-# UCI_Elo when the engine has it, else its Skill Level option).
+# UCI_Elo when the engine has it, else its Skill Level option). At full
+# strength the limit is switched off and the skill set to its top, since
+# the engine may still hold a weaker setting from an earlier game.
 proc ::playengine::SendOptions {} {
 	variable Priv
 
 	set features [EngineFeatures $Priv(engine)]
+	if {$Priv(full)} {
+		set Priv(limited) 0
+		if {[dict exists $features limitStrength]} {
+			Send "setoption name UCI_LimitStrength value false"
+		}
+		if {[dict exists $features skillLevel]} {
+			Send "setoption name Skill Level value [lindex [dict get $features skillLevel] 1]"
+		}
+		return
+	}
 	set Priv(limited) [expr {[dict exists $features limitStrength] || [dict exists $features skillLevel]}]
 	if {[dict exists $features limitStrength]} {
 		lassign [dict get $features limitStrength] min max

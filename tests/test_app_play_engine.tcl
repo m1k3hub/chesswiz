@@ -89,6 +89,46 @@ tcltest::test playengine-limited-movetime {a strength-limited engine gets a per-
 		[::playengine::limitedMoveTime 500 0]
 } -result {1500 6000 500 100}
 
+tcltest::test playengine-full-strength {full strength lifts the limit; otherwise the Elo is sent} -setup {
+	::scidb::test::pe::stub {}
+	rename ::playengine::Send ::scidb::test::pe::realSend
+	proc ::playengine::Send {line} { lappend ::scidb::test::pe::sent $line }
+} -body {
+	set result {}
+	foreach full {1 0} {
+		set ::scidb::test::pe::sent {}
+		array set ::playengine::Priv [list engine StubEngine elo 1800 skill 5 full $full]
+		::playengine::SendOptions
+		lappend result $::scidb::test::pe::sent $::playengine::Priv(limited)
+	}
+	set result
+} -cleanup {
+	rename ::playengine::Send {}
+	rename ::scidb::test::pe::realSend ::playengine::Send
+	::scidb::test::pe::unstub
+} -result {{{setoption name UCI_LimitStrength value false} {setoption name Skill Level value 20}} 0 {{setoption name UCI_LimitStrength value true} {setoption name UCI_Elo value 1800}} 1}
+
+tcltest::test playengine-noclock-seconds {without a clock the engine thinks the seconds set in the dialog} -setup {
+	::scidb::test::pe::stub {}
+	set saved $::playengine::Options(movetime)
+} -body {
+	set dlg [::playengine::open .application]
+	update
+	set nc [::util::place::playingBody $dlg].top.setup.noclock
+	set shown [winfo ismapped $nc.seconds]
+	set ::playengine::Priv(dlg:clock) noclock
+	set ::playengine::Priv(dlg:seconds) 7
+	[::util::place::playingBody $dlg].ok invoke
+	update
+	list $shown $::playengine::Priv(noclock) $::playengine::Priv(movetime) \
+		[::playengine::goLine "" "" "" $::playengine::Priv(movetime)]
+} -cleanup {
+	::playengine::Close
+	set ::playengine::Options(movetime) $saved
+	set ::playengine::Options(minutes) 10
+	::scidb::test::pe::unstub
+} -result {1 1 7000 {go movetime 7000}}
+
 tcltest::test playengine-formatclock {m:ss, h:mm:ss, tenths below 10 s, negatives} -body {
 	list \
 		[::playengine::FormatClock 600000] \
@@ -331,15 +371,16 @@ tcltest::test playengine-dialog {the setup dialog lists engines; Start turns it 
 	set strength [$row.label cget -text]
 	# on screen, not only created: the user must be able to set the strength
 	set shown [list [winfo ismapped $row.label] [winfo ismapped $row.slider]]
-	# the slider snaps from the minimum and reaches the maximum
-	lassign [list [$row.slider cget -from] [$row.slider cget -to]] lo hi
+	# the slider snaps from the minimum, stops at the maximum (3190, off the
+	# 50 grid), and one step past it is full strength
 	set snaps {}
-	foreach p [list $lo [expr {$lo + 74}] $hi] {
+	foreach p {1320 1394 3180 3240} {
 		$row.slider set $p
-		lappend snaps [expr {$::playengine::Options(elo) - $lo}]
+		lappend snaps $::playengine::Options(elo) $::playengine::Options(full) [$row.value cget -text]
 	}
-	lappend shown [expr {[lindex $snaps 0] == 0 && [lindex $snaps 1] == 50
-		&& [lindex $snaps 2] == $hi - $lo}]
+	$row.slider set 1600
+	lappend shown [expr {$snaps eq {1320 0 1320 1370 0 1370 3190 0 3190 3190 1 {Full strength}}
+		&& !$::playengine::Options(full)}]
 	[::util::place::playingBody $dlg].ok invoke
 	update
 	set status [[::util::place::playingBody $dlg].top.play.status cget -text]
