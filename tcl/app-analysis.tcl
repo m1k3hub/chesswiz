@@ -1590,6 +1590,7 @@ proc UpdateInfo {tree id type info} {
 		bestscore	{ set Vars(lines:best) [lindex $info 2] }
 		clear		{ array unset Vars lines:* }
 	}
+	if {[namespace which ::stream::engineInfo] ne ""} { ::stream::engineInfo $type $info }
 
 	if {[winfo exists $tree]} {
 		Display($type) $tree {*}$info

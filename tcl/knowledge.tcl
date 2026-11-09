@@ -594,6 +594,7 @@ foreach {id purpose keywords} {
 	menu.training.play_engine "Play a game against a chess engine (the computer)." {play against computer engine stockfish game opponent bot}
 	menu.training.play_online "Play people online on the Free Internet Chess Server (FICS)." {play online internet server fics people human opponent seek}
 	menu.training.play_lichess "Play people or the Lichess computer online on lichess.org." {play online internet lichess people human opponent seek computer}
+	menu.training.stream "Show your board, eval and clocks on Twitch or YouTube through OBS." {stream streaming livestream twitch youtube obs overlay broadcast live}
 	menu.training.tactics "Open the tactics trainer with puzzles." {tactics puzzles puzzle trainer exercises combinations}
 	menu.training.endgame "Open the endgame trainer." {endgame endgames trainer practise practice}
 	menu.training.repertoire "Train your opening repertoire move by move." {train repertoire opening trainer practise drill}
@@ -2295,6 +2296,7 @@ dict set ::knowledge::Explicit menu.training.guess when {When practicing predict
 dict set ::knowledge::Explicit menu.training.play_engine when {When you want the computer to play the opposing side.}
 dict set ::knowledge::Explicit menu.training.play_online when {When you want to play a person over the internet.}
 dict set ::knowledge::Explicit menu.training.play_lichess when {When you want to play on Lichess.}
+dict set ::knowledge::Explicit menu.training.stream when {When you stream or broadcast your chess live.}
 dict set ::knowledge::Explicit menu.training.repertoire when {When rehearsing the moves of your prepared openings.}
 dict set ::knowledge::Explicit menu.training.studyplan when {When deciding what to practice based on your own games.}
 dict set ::knowledge::Explicit menu.training.tactics when {When practicing concrete tactical puzzles.}
