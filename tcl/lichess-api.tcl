@@ -56,7 +56,17 @@ proc ::lichess::api::TokenDelete {} {
 	if {[OsStore]} { return [::scidb::sys::credential delete Chesswiz lichess] }
 	file delete [TokenFile]
 }
-proc ::lichess::api::OpenBrowser {url} { ::web::open .application $url }
+# The URL is already query-encoded: ::web::open would escape each '&', and
+# cmd.exe's start would split the query at it, so neither may see it.
+proc ::lichess::api::OpenBrowser {url} {
+	if {$::tcl_platform(platform) eq "windows"} {
+		exec rundll32 url.dll,FileProtocolHandler $url &
+	} elseif {$::tcl_platform(os) eq "Darwin"} {
+		exec open $url &
+	} else {
+		exec xdg-open $url &
+	}
+}
 proc ::lichess::api::token {} {
 	if {[catch {TokenLoad} tok]} { return {} }
 	return $tok
