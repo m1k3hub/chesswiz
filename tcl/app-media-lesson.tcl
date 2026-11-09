@@ -72,6 +72,17 @@ proc get {videoPath} {
 	return [build $videoPath]
 }
 
+# True when get would have to run ffprobe: nothing cached, no fresh
+# sidecar, and no text export beside the video.
+proc needsProbe {videoPath} {
+	variable Cache
+	set k [key $videoPath]
+	if {[info exists Cache($k)] && [inputsMatch $k $Cache($k)]} { return 0 }
+	if {[dict size [loadFromSidecar $videoPath]]} { return 0 }
+	if {![file exists $k] || [file exists [file rootname $k].txt]} { return 0 }
+	return 1
+}
+
 # Versioned source metadata also invalidates lessons written by older decoders.
 # Include missing files so adding/removing the text export changes the signature.
 proc inputSignature {videoPath} {

@@ -540,15 +540,96 @@ proc _cp_patch_resync {data p n} {
 	return -1
 }
 
-proc decode {wmvPath} {
-	set cmdline [list ffprobe -v error -select_streams d \
+variable Probed		;# array: normalized path -> ffprobe JSON from probeAsync
+variable Probe
+array set Probe { chan {} pid {} out {} cmd {} path {} deadline {} }
+variable ProbeTimeout	60000		;# ms
+variable ProbeLimit		67108864	;# bytes of ffprobe output kept at most
+
+proc ProbeCmdline {wmvPath} {
+	return [list ffprobe -v error -select_streams d \
 		-show_packets -show_data -of json [file normalize $wmvPath]]
-	if {[catch { set fh [open [concat | $cmdline] r] } err]} {
+}
+
+# Runs ffprobe without blocking the GUI and keeps its output for the next
+# decode of the same file. Calls <cmd> with 1 on success, 0 otherwise.
+# One probe at a time; a new one cancels the running one.
+proc probeAsync {wmvPath cmd} {
+	variable Probe
+	variable ProbeTimeout
+	probeCancel
+	if {[catch { set chan [open [concat | [ProbeCmdline $wmvPath]] r] } err]} {
 		log "ffprobe pipeline failed: $err"
-		return [list]
+		after 0 [list {*}$cmd 0]
+		return
 	}
-	set json [read $fh]
-	catch { ::close $fh }
+	fconfigure $chan -blocking 0 -translation binary
+	array set Probe [list chan $chan pid [pid $chan] out {} cmd $cmd \
+		path [file normalize $wmvPath]]
+	set Probe(deadline) [after $ProbeTimeout [namespace code [list ProbeDone 0 "timed out"]]]
+	fileevent $chan readable [namespace code ProbeReadable]
+}
+
+proc probeCancel {} {
+	variable Probe
+	if {$Probe(chan) eq ""} { return }
+	set cmd $Probe(cmd)
+	ProbeClose
+	if {[llength $cmd]} { after 0 [list {*}$cmd 0] }
+}
+
+proc ProbeReadable {} {
+	variable Probe
+	variable ProbeLimit
+	if {[catch { append Probe(out) [read $Probe(chan)] } err]} {
+		ProbeDone 0 $err
+	} elseif {[eof $Probe(chan)]} {
+		ProbeDone 1 ""
+	} elseif {[string length $Probe(out)] > $ProbeLimit} {
+		ProbeDone 0 "output over [expr {$ProbeLimit >> 20}] MB"
+	}
+}
+
+proc ProbeClose {} {
+	variable Probe
+	after cancel $Probe(deadline)
+	catch { fileevent $Probe(chan) readable {} }
+	# a stuck ffprobe would keep close waiting, so kill it first
+	foreach p $Probe(pid) { catch { ::platform::sys::kill $p -KILL } }
+	catch { fconfigure $Probe(chan) -blocking 1 }
+	catch { ::close $Probe(chan) }
+	array set Probe { chan {} pid {} out {} cmd {} path {} deadline {} }
+}
+
+proc ProbeDone {ok why} {
+	variable Probe
+	variable Probed
+	set cmd $Probe(cmd)
+	if {$ok} {
+		set Probed($Probe(path)) $Probe(out)
+	} else {
+		log "ffprobe $Probe(path): $why"
+	}
+	set Probe(cmd) {}
+	set Probe(pid) [expr {$ok ? {} : $Probe(pid)}]
+	ProbeClose
+	if {[llength $cmd]} { {*}$cmd $ok }
+}
+
+proc decode {wmvPath} {
+	variable Probed
+	set key [file normalize $wmvPath]
+	if {[info exists Probed($key)]} {
+		set json $Probed($key)
+		unset Probed($key)
+	} else {
+		if {[catch { set fh [open [concat | [ProbeCmdline $wmvPath]] r] } err]} {
+			log "ffprobe pipeline failed: $err"
+			return [list]
+		}
+		set json [read $fh]
+		catch { ::close $fh }
+	}
 
 	# ffprobe -of json emits one flat object per packet; pair each
 	# packet's data hex with its pts_time (media seconds)

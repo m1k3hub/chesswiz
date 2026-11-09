@@ -1256,16 +1256,45 @@ proc application::media::LoadDbInteractive {base} {
 proc application::media::PrebuildLessons {} {
 	variable Priv
 
-	set n 0
+	set paths {}
 	foreach item [MediaRows] {
 		lassign [$Priv(tree) item $item -values] typeLabel title path galleryIndex
 		if {![string length $path] || ![file exists $path]} { continue }
 		if {[ClassifyFile $path] != 3} { continue }
-		after idle [namespace code [list catch [list ::media::lesson::get $path]]]
-		incr n
-		if {$n >= 8} break
+		lappend paths $path
+		if {[llength $paths] >= 8} break
 	}
-	if {$n} { MediaDebug "PrebuildLessons: scheduled $n lesson(s)" }
+	# a new tree replaces the old queue (and stops its running probe)
+	set Priv(prebuild) $paths
+	::media::decoder::probeCancel
+	if {[llength $paths]} {
+		MediaDebug "PrebuildLessons: scheduled [llength $paths] lesson(s)"
+		PrebuildNext
+	}
+}
+
+
+# One lesson at a time: ffprobe runs in the background (probeAsync), then
+# the lesson is built from its kept output, so the GUI never waits on it.
+proc application::media::PrebuildNext {} {
+	variable Priv
+
+	if {![info exists Priv(prebuild)] || ![llength $Priv(prebuild)]} { return }
+	set path [lindex $Priv(prebuild) 0]
+	set Priv(prebuild) [lrange $Priv(prebuild) 1 end]
+	if {![::media::lesson::needsProbe $path]} {
+		# cheap without ffprobe: build it now
+		catch { ::media::lesson::get $path }
+		after idle [namespace code PrebuildNext]
+		return
+	}
+	::media::decoder::probeAsync $path [namespace code [list PrebuildProbed $path]]
+}
+
+
+proc application::media::PrebuildProbed {path ok} {
+	if {$ok} { catch { ::media::lesson::get $path } }
+	after idle [namespace code PrebuildNext]
 }
 
 
