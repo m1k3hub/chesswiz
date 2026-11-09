@@ -23,7 +23,10 @@ set Title					"Play Online (Lichess)"
 set SignIn					"Sign in with Lichess"
 set UseToken				"Use a personal token"
 set Token					"Personal token:"
-set TokenDetail				"A personal token needs the board:play scope. It is stored only in the Chesswiz credential store."
+set SignInExplain			"Play on Lichess with your own Lichess account.\n\nSigning in opens lichess.org in your web browser, once. Log in there and allow Chesswiz to play games for you. Chesswiz never sees your Lichess password.\n\nAfter that, every game is played here in Chesswiz. The sign-in stays saved on this computer (%s) until you sign out. Chesswiz has no server of its own: it talks only to lichess.org."
+set SavedKeychain			"in the system keychain"
+set SavedFile				"in a file only your user account can read"
+set TokenDetail				"Advanced: instead of signing in, paste a personal token created on lichess.org with the permission \"Play games with the board API\". It is saved the same way."
 set WaitingBrowser			"Waiting for the browser…"
 set SignedInAs				"Signed in as %s."
 set SignedOut				"Signed out of Lichess."
@@ -156,19 +159,20 @@ proc ::lichess::open {parent} {
 	### sign in ############################################################
 	set s [ttk::frame $top.signin]
 	set Priv(widget:signin) $s
-	grid [ttk::button $s.signin -text $mc::SignIn -command [namespace code SignIn]] \
-		-row 0 -column 0 -columnspan 2 -sticky w
-	grid [ttk::label $s.tokenLabel -text $mc::Token] -row 1 -column 0 -sticky w \
+	set saved [expr {[::lichess::api::OsStore] ? $mc::SavedKeychain : $mc::SavedFile}]
+	grid [ttk::label $s.explain -text [format $mc::SignInExplain $saved] -wraplength 380 -justify left] \
+		-row 0 -column 0 -columnspan 2 -sticky w -pady [list 0 $::theme::pady]
+	grid [ttk::label $s.tokenLabel -text $mc::Token] -row 2 -column 0 -sticky w \
 		-pady [list $::theme::pady 0]
 	grid [ttk::entry $s.token -width 28 -show * \
-		-textvariable [namespace current]::Priv(dlg:token)] -row 1 -column 1 -sticky ew \
+		-textvariable [namespace current]::Priv(dlg:token)] -row 2 -column 1 -sticky ew \
 		-padx [list $::theme::padx 0] -pady [list $::theme::pady 0]
 	grid [ttk::button $s.useToken -text $mc::UseToken -command [namespace code UseToken]] \
-		-row 2 -column 1 -sticky w -padx [list $::theme::padx 0]
+		-row 3 -column 1 -sticky w -padx [list $::theme::padx 0]
 	grid [ttk::label $s.detail -text $mc::TokenDetail -wraplength 340 -justify left] \
-		-row 3 -column 0 -columnspan 2 -sticky w -pady [list $::theme::pady 0]
+		-row 4 -column 0 -columnspan 2 -sticky w -pady [list $::theme::pady 0]
 	grid [ttk::button $s.signout -text $mc::SignOut -command [namespace code SignOut]] \
-		-row 4 -column 0 -sticky w -pady [list $::theme::pady 0]
+		-row 5 -column 0 -sticky w -pady [list $::theme::pady 0]
 	grid columnconfigure $s 1 -weight 1
 
 	### lobby ##############################################################
