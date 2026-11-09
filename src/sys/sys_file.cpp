@@ -426,9 +426,12 @@ Mapping::resize(unsigned newSize)
 	}
 	else if (m_size < newSize)
 	{
+		// grow the file first: if that fails (disk full), the old mapping stays
+		// valid and size() is unchanged; mapping past the file end would SIGBUS
+		if (::ftruncate(m_fd, newSize) != 0)
+			return;
+
 		::munmap(m_address, m_size);
-		// suppress compiler warning, we do not expect errors
-		int rc __attribute__((unused)) = ::ftruncate(m_fd, newSize);
 		m_address = static_cast<char*>(::mmap(0, newSize, PROT_READ | PROT_WRITE, MAP_SHARED, m_fd, 0));
 
 		if (m_address == MAP_FAILED)

@@ -578,20 +578,20 @@ vector<T>::erase(iterator first, iterator last)
 	M_REQUIRE(last <= end());
 	M_REQUIRE(first <= last);
 
-	iterator i;
-
 	if (is_movable<T>::value)
 	{
+		// destroy the erased elements, then relocate the tail over them;
+		// the tail's old bytes now belong to the moved elements
 		size_t distance = mstl::distance(last, end());
+		mstl::bits::destroy(pointer(first), pointer(last));
 		::memmove(static_cast<void*>(first), last, distance*sizeof(value_type));
-		i = first + distance;
 	}
 	else
 	{
-		i = mstl::copy(last, end(), first);
+		iterator i = mstl::copy(last, end(), first);
+		mstl::bits::destroy(pointer(i), pointer(end()));
 	}
 
-	mstl::bits::destroy(pointer(i), pointer(end()));
 	this->m_finish = this->m_finish - (last - first);
 
 	return first;
@@ -623,11 +623,14 @@ vector<T>::insert(iterator position, Iterator first, Iterator last)
 	if (n == 0)
 		return;
 
-	if (size_type(this->m_end_of_storage - this->m_finish) >= n)
+	if (is_movable<T>::value && size_type(this->m_end_of_storage - this->m_finish) >= n)
 	{
-		mstl::uninitialized_move(const_pointer(position), const_pointer(position) + n, this->m_finish);
-		bits::destroy(pointer(position), pointer(position) + n);
-		this->m_finish = mstl::uninitialized_copy(first, last, pointer(position));
+		// relocate the whole tail n places right, then fill the gap
+		::memmove(	static_cast<void*>(pointer(position) + n),
+						static_cast<void const*>(pointer(position)),
+						(this->m_finish - pointer(position))*sizeof(value_type));
+		mstl::uninitialized_copy(first, last, pointer(position));
+		this->m_finish += n;
 	}
 	else
 	{

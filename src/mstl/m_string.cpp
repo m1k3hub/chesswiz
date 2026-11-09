@@ -219,7 +219,7 @@ string::string(size_type n, mstl::string const& s)
 		char* data = m_data;
 		char* end  = data + m_size;
 
-		for ( ; data < end; data += n)
+		for ( ; data < end; data += s.m_size)
 			::copy(data, s.m_data, s.m_size);
 
 		*end = '\0';
@@ -575,6 +575,12 @@ string::assign(size_type n, const_reference c)
 string&
 string::assign(size_type n, string const& s)
 {
+	if (&s == this)
+	{
+		string copy(s);
+		return assign(n, copy);
+	}
+
 	if (!s.empty())
 	{
 		unsigned nbytes = n*s.m_size;
@@ -584,7 +590,7 @@ string::assign(size_type n, string const& s)
 		char* data = m_data;
 		char* end  = data + nbytes;
 
-		for ( ; data < end; data += n)
+		for ( ; data < end; data += s.m_size)
 			::copy(data, s.m_data, s.m_size);
 
 		*end = '\0';
@@ -897,20 +903,26 @@ string::vformat(const_pointer fmt, va_list args)
 
 	value_type buffer[2048];
 
+	// each pass needs its own copy: the first one consumes the list
+	va_list again;
+	va_copy(again, args);
 	int size = ::vsnprintf(buffer, sizeof(buffer), fmt, args);
 
 	if (size >= (int)sizeof(buffer))
 	{
 		value_type* buf = nullptr;
-		size = ::vasprintf(&buf, fmt, args);
-		if (size)
+		size = ::vasprintf(&buf, fmt, again);
+		if (size > 0)
 			append(buf, size);
-		::free(buf);
+		if (size >= 0)
+			::free(buf);
 	}
-	else if (size)
+	else if (size > 0)
 	{
 		append(buffer, size);
 	}
+
+	va_end(again);
 
 	return size;
 }
