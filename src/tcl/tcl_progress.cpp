@@ -32,6 +32,28 @@ static char const* CmdInterruptable	= "::scidb::progress::interruptable?";
 
 static Progress* m_currentProgress = 0;
 
+// How many progress callbacks are running. The operation is suspended
+// below them, so it cannot finish until they return.
+static int m_callbackDepth = 0;
+
+namespace {
+
+struct CallbackDepth
+{
+	CallbackDepth() { ++m_callbackDepth; }
+	~CallbackDepth() { --m_callbackDepth; }
+};
+
+template <typename... Args>
+int
+callback(Args... args)
+{
+	CallbackDepth depth;
+	return tcl::invoke(args...);
+}
+
+} // namespace
+
 static Tcl_Obj* m_open				= 0;
 static Tcl_Obj* m_close				= 0;
 static Tcl_Obj* m_start				= 0;
@@ -89,7 +111,7 @@ Progress::Progress(Tcl_Obj* cmd, Tcl_Obj* arg)
 	,m_checkInterruption(false)
 {
 	m_currentProgress = this;
-	invoke(__func__, m_cmd, ::m_open, m_arg, nullptr);
+	callback(__func__, m_cmd, ::m_open, m_arg, nullptr);
 }
 
 
@@ -98,7 +120,7 @@ Progress::~Progress() throw()
 	if (m_sendFinish)
 		sendFinish();
 
-	invoke(__func__, m_cmd, ::m_close, m_arg, nullptr);
+	callback(__func__, m_cmd, ::m_close, m_arg, nullptr);
 	m_currentProgress = 0;
 
 	if (m_inform)
@@ -190,7 +212,7 @@ Progress::start(unsigned total)
 {
 	Tcl_Obj* maximum = Tcl_NewWideIntObj(m_maximum = total);
 	Tcl_IncrRefCount(maximum);
-	int rc = invoke(__func__, m_cmd, ::m_start, m_arg, maximum, nullptr);
+	int rc = callback(__func__, m_cmd, ::m_start, m_arg, maximum, nullptr);
 	Tcl_DecrRefCount(maximum);
 	m_sendFinish = rc == TCL_OK;
 	m_sendMessage = true;
@@ -213,7 +235,7 @@ Progress::message(mstl::string const& msg)
 	{
 		Tcl_Obj* message = Tcl_NewStringObj(msg, msg.size());
 		Tcl_IncrRefCount(message);
-		invoke(__func__, m_cmd, ::m_message, m_arg, message, nullptr);
+		callback(__func__, m_cmd, ::m_message, m_arg, message, nullptr);
 		Tcl_DecrRefCount(message);
 
 		if (m_checkInterruption && interrupted())
@@ -231,7 +253,7 @@ Progress::tick(unsigned count)
 {
 	Tcl_Obj* value = Tcl_NewWideIntObj(count);
 	Tcl_IncrRefCount(value);
-	invoke(__func__, m_cmd, ::m_tick, m_arg, value, nullptr);
+	callback(__func__, m_cmd, ::m_tick, m_arg, value, nullptr);
 	Tcl_DecrRefCount(value);
 
 	if (m_checkInterruption && interrupted())
@@ -244,7 +266,7 @@ Progress::update(unsigned progress)
 {
 	Tcl_Obj* value = Tcl_NewWideIntObj(progress);
 	Tcl_IncrRefCount(value);
-	invoke(__func__, m_cmd, ::m_update, m_arg, value, nullptr);
+	callback(__func__, m_cmd, ::m_update, m_arg, value, nullptr);
 	Tcl_DecrRefCount(value);
 
 	if (m_checkInterruption && interrupted())
@@ -257,7 +279,7 @@ Progress::sendFinish() throw()
 {
 	Tcl_Obj* maximum = Tcl_NewWideIntObj(m_maximum);
 	Tcl_IncrRefCount(maximum);
-	int rc = invoke(__func__, m_cmd, ::m_finish, m_arg, maximum, nullptr);
+	int rc = callback(__func__, m_cmd, ::m_finish, m_arg, maximum, nullptr);
 	Tcl_DecrRefCount(maximum);
 	return rc;
 }
@@ -297,7 +319,10 @@ cmdInterrupt(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	{
 		m_currentProgress->interrupt(inform);
 	
-		if (wait)
+		// Called from inside one of the operation's own callbacks, waiting
+		// would never end: the operation cannot unwind until we return. Then
+		// only ask it to stop; the result (0) says it is still running.
+		if (wait && m_callbackDepth == 0)
 		{
 			while (m_currentProgress)
 				Tcl_DoOneEvent(TCL_ALL_EVENTS);

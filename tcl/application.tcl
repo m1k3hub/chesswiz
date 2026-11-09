@@ -1964,7 +1964,12 @@ proc SmInteractRequest {shutdown} {
 	]
 	if {$reply eq "cancel"} { return 0 }
 	::log::suppress yes
-	::scidb::progress::interrupt -wait yes
+	if {![::scidb::progress::interrupt -wait yes]} {
+		# the write is stopping but has not finished: refuse this logout, the
+		# next attempt finds the database closed properly
+		::log::suppress no
+		return 0
+	}
 	return 1
 }
 
