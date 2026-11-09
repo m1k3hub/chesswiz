@@ -42,18 +42,23 @@ set Page(block/eval)		"Eval bar and best line"
 set Page(block/clocks)		"Clocks and players"
 set Page(block/moves)		"Move list"
 set EngineOff		"Engine help is off until this game ends (fair play)."
+set Delay			"Delay during your games (seconds)"
+set DelayExplain	"While you play a person online, your stream shows each move this many seconds late, so viewers can't pass you moves. Chesswiz delays only its own pages. To delay your camera and voice by the same amount, set Stream Delay in OBS (Settings, Advanced) instead and set this to 0."
+set Delayed			"Your stream is delayed %d s so viewers can't pass you moves."
+set CatchingUp		"Your stream is catching up with the board: %d s left."
 
 }
 
 variable Pages {scene/analysis scene/playing scene/board block/board block/eval block/clocks block/moves}
 
 variable Options
-array set Options { port 8765 }
+array set Options { port 8765 delay 60 }
 ::options::hookWriter [namespace current]::WriteOptions
 
 variable Priv
 array set Priv {
 	server {} token {} clients {} after {} last {} serial 0 window {}
+	queue {} release 0 shown {}
 	eval:score {} eval:mate 0 eval:depth 0 eval:pv {} eval:fen {}
 }
 
@@ -79,6 +84,9 @@ proc stop {} {
 	if {$Priv(server) ne ""} { catch { close $Priv(server) } }
 	set Priv(server) {}
 	set Priv(last) {}
+	set Priv(queue) {}
+	set Priv(release) 0
+	set Priv(shown) {}
 }
 
 
@@ -155,6 +163,8 @@ proc state {} {
 		set d [MainBoard]
 		dict set d live 0
 	}
+	variable Options
+	dict set d delay [expr {[dict get $d live] ? max(0, min(300, int($Options(delay)))) : 0}]
 	if {[dict get $d live]} {
 		dict set d engine off
 		dict set d engineNote $mc::EngineOff
@@ -223,7 +233,7 @@ proc Json {d} {
 				foreach s $v { lappend items [JsonString $s] }
 				set val "\[[join $items ,]\]"
 			}
-			current - clockW - clockB - ticking - flip - live - score - mate - depth {
+			current - clockW - clockB - ticking - flip - live - score - mate - depth - delay {
 				set val [expr {[string is double -strict $v] ? $v : 0}]
 			}
 			default { set val [JsonString $v] }
@@ -239,16 +249,59 @@ proc JsonString {s} {
 }
 
 
+# The scene is sampled every 250 ms; each change is queued and released
+# to the pages after the stream delay that applied when it happened
+# (§6), so a delay that ends with the game still lets the queue drain in
+# order. New pages get the last released state, never a newer one.
 proc Poll {} {
 	variable Priv
 	set Priv(after) [after 250 [namespace code Poll]]
-	if {![llength $Priv(clients)]} { return }
-	if {[catch { Json [state] } json]} { return }
-	# clocks tick inside the page; only changes of state are sent
-	set key [regsub {"clock[WB]":[0-9.-]+,?} $json ""]
-	if {$key eq $Priv(last)} { return }
-	set Priv(last) $key
-	Broadcast $json
+	if {![catch { state } d] && ![catch { Json $d } json]} {
+		# clocks tick inside the page; only changes of state are sent
+		set key [regsub {"clock[WB]":[0-9.-]+,?} $json ""]
+		if {$key ne $Priv(last)} {
+			set Priv(last) $key
+			set now [clock milliseconds]
+			set release [expr {max($now + 1000 * [dict get $d delay], $Priv(release))}]
+			set Priv(release) $release
+			lappend Priv(queue) [list $release $json]
+		}
+	}
+	Release
+	if {[info exists d] && [dict exists $d delay]} { ShowDelay [dict get $d delay] }
+}
+
+
+# While a game is live the setting is shown; afterwards, how long the
+# pages still lag behind.
+proc ShowDelay {live} {
+	variable Priv
+	set label $Priv(window).f.delay.now
+	if {![winfo exists $label]} { return }
+	set text ""
+	if {$live > 0} {
+		set text [format $mc::Delayed $live]
+	} elseif {[set n [delay]] > 0} {
+		set text [format $mc::CatchingUp $n]
+	}
+	$label configure -text $text
+}
+
+
+proc Release {} {
+	variable Priv
+	set now [clock milliseconds]
+	while {[llength $Priv(queue)] && [lindex $Priv(queue) 0 0] <= $now} {
+		set Priv(shown) [lindex $Priv(queue) 0 1]
+		set Priv(queue) [lrange $Priv(queue) 1 end]
+		Broadcast $Priv(shown)
+	}
+}
+
+
+proc delay {} {
+	variable Priv
+	return [expr {max(0, ($Priv(release) - [clock milliseconds] + 999) / 1000)}]
 }
 
 
@@ -309,10 +362,7 @@ proc ReadRequest {chan} {
 		puts $chan "Cache-Control: no-cache"
 		puts $chan "Connection: keep-alive"
 		puts $chan ""
-		if {![catch { Json [state] } json]} {
-			puts -nonewline $chan "data: $json\n\n"
-			set Priv(last) [regsub {"clock[WB]":[0-9.-]+,?} $json ""]
-		}
+		if {$Priv(shown) ne ""} { puts -nonewline $chan "data: $Priv(shown)\n\n" }
 		flush $chan
 		lappend Priv(clients) $chan
 		fileevent $chan readable [namespace code [list ClientGone $chan]]
@@ -508,6 +558,15 @@ proc open {parent} {
 	ttk::label $r.status -anchor w
 	grid $r.lport $r.port $r.toggle $r.status -padx 2 -sticky w
 	grid columnconfigure $r 3 -weight 1
+	set d [ttk::frame $f.delay]
+	ttk::label $d.l -text $mc::Delay
+	ttk::spinbox $d.s -from 0 -to 300 -increment 10 -width 5 \
+		-textvariable [namespace current]::Options(delay)
+	ttk::label $d.explain -text $mc::DelayExplain -wraplength 560 -justify left -foreground #555555
+	ttk::label $d.now -anchor w -font TkHeadingFont
+	grid $d.l $d.s -sticky w -padx 2
+	grid $d.explain -columnspan 2 -sticky w -pady {2 0}
+	grid $d.now -columnspan 2 -sticky w -pady {2 0}
 	set p [ttk::labelframe $f.pages -text $mc::Pages -padding 6]
 	set row 0
 	foreach page $Pages {
@@ -525,6 +584,7 @@ proc open {parent} {
 	grid $f.explain -sticky w
 	grid $f.private -sticky w -pady {6 8}
 	grid $f.run -sticky ew
+	grid $f.delay -sticky ew -pady {8 0}
 	grid $f.pages -sticky nsew -pady 8
 	grid $f.close -sticky e
 	grid columnconfigure $f 0 -weight 1

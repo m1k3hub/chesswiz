@@ -53,14 +53,15 @@ proc ::scidb::test::stream::Token {} {
 }
 
 proc ::scidb::test::stream::EventJson {} {
+	::scidb::test::wait::until {$::stream::Priv(shown) ne ""} 3000
 	lassign [Get /[Token]/events] status text
 	regexp {data: (\{.*\})\n\n} $text -> json
 	return $json
 }
 
-proc ::scidb::test::stream::OnlineGame {side} {
+proc ::scidb::test::stream::OnlineGame {side {white Alice}} {
 	set v [::online::window::gameTab test:stream Stream list $side]
-	::online::view::setGame $v Alice Bob startpos {e2e4 e7e5}
+	::online::view::setGame $v $white Bob startpos {e2e4 e7e5}
 	::online::window::select test:stream
 	update
 	return $v
@@ -135,6 +136,44 @@ tcltest::test stream-stale-eval {an eval for another position is not shown} -set
 } -body {
 	dict get [::stream::state] engine
 } -result none
+
+tcltest::test stream-delay-field {the delay applies only while playing a person, clamped to 300 s} -setup {
+	set saved $::stream::Options(delay)
+} -body {
+	set ::stream::Options(delay) 999
+	set board [dict get [::stream::state] delay]
+	set v [::scidb::test::stream::OnlineGame w]
+	set live [dict get [::stream::state] delay]
+	::online::window::closeTab test:stream
+	set v [::scidb::test::stream::OnlineGame {}]
+	set watch [dict get [::stream::state] delay]
+	list $board $live $watch
+} -cleanup {
+	::online::window::closeTab test:stream
+	wm withdraw .online
+	set ::stream::Options(delay) $saved
+} -result {0 300 0}
+
+tcltest::test stream-delay-release {a live game reaches the pages only after the delay} -setup {
+	set saved $::stream::Options(delay)
+	set ::stream::Options(delay) 1
+	::stream::stop
+	::stream::start $::scidb::test::stream::Port
+	::scidb::test::wait::until {$::stream::Priv(shown) ne ""} 3000
+} -body {
+	set t0 [clock milliseconds]
+	set v [::scidb::test::stream::OnlineGame w Carol]
+	::scidb::test::wait::until {[llength $::stream::Priv(queue)]} 3000
+	set early [string match *Carol* $::stream::Priv(shown)]
+	::scidb::test::wait::until {[string match *Carol* $::stream::Priv(shown)]} 5000
+	set waited [expr {[clock milliseconds] - $t0 >= 950}]
+	set json [::scidb::test::stream::EventJson]
+	list $early $waited [string match {*"delay":1*} $json]
+} -cleanup {
+	::online::window::closeTab test:stream
+	wm withdraw .online
+	set ::stream::Options(delay) $saved
+} -result {0 1 1}
 
 tcltest::test stream-stop {stop closes the port} -body {
 	::stream::stop
