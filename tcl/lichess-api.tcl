@@ -26,9 +26,36 @@ namespace eval ::lichess::api {
 	}
 }
 
-proc ::lichess::api::TokenStore {tok} { ::scidb::sys::credential set Chesswiz lichess $tok }
-proc ::lichess::api::TokenLoad {} { ::scidb::sys::credential get Chesswiz lichess }
-proc ::lichess::api::TokenDelete {} { ::scidb::sys::credential delete Chesswiz lichess }
+# Windows and macOS keep the token in the OS credential store. Linux has
+# none here, so it goes in a file only the user can read, like the AI keys
+# (::application::ai::KeyFile).
+proc ::lichess::api::OsStore {} {
+	return [expr {$::tcl_platform(platform) eq "windows" || $::tcl_platform(os) eq "Darwin"}]
+}
+proc ::lichess::api::TokenFile {} {
+	if {![info exists ::scidb::dir::user]} { error "no user directory" }
+	return [file join $::scidb::dir::user config lichess-token]
+}
+proc ::lichess::api::TokenStore {tok} {
+	if {[OsStore]} { return [::scidb::sys::credential set Chesswiz lichess $tok] }
+	set file [TokenFile]
+	file mkdir [file dirname $file]
+	# created private before the token is written into it
+	set f [::open $file {WRONLY CREAT TRUNC} 0600]
+	try { puts -nonewline $f $tok } finally { ::close $f }
+	catch { file attributes $file -permissions 0600 }
+}
+proc ::lichess::api::TokenLoad {} {
+	if {[OsStore]} { return [::scidb::sys::credential get Chesswiz lichess] }
+	set file [TokenFile]
+	if {![file readable $file]} { return "" }
+	set f [::open $file r]
+	try { return [string trim [read $f]] } finally { ::close $f }
+}
+proc ::lichess::api::TokenDelete {} {
+	if {[OsStore]} { return [::scidb::sys::credential delete Chesswiz lichess] }
+	file delete [TokenFile]
+}
 proc ::lichess::api::OpenBrowser {url} { ::web::open .application $url }
 proc ::lichess::api::token {} {
 	if {[catch {TokenLoad} tok]} { return {} }
@@ -313,8 +340,7 @@ proc ::lichess::api::claimVictory {id cmd} { Action $id claim-victory $cmd }
 # PKCE uses OS entropy, never Tcl's non-cryptographic rand(). A platform
 # without an entropy source fails closed and offers personal-token sign in.
 proc ::lichess::api::Random {} {
-	set f [::open /dev/urandom rb]
-	try { set bytes [read $f 32] } finally { ::close $f }
+	set bytes [::scidb::sys::randomBytes 32]
 	if {[string length $bytes] != 32} { error "No secure random source" }
 	return [Base64 $bytes]
 }

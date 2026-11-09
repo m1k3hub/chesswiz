@@ -5,8 +5,12 @@
 #include <windows.h>
 #include <wincred.h>
 #include <string>
+#include <ntsecapi.h>	// RtlGenRandom (advapi32)
 #elif defined(__APPLE__)
 #include <Security/Security.h>
+#include <stdlib.h>	// arc4random_buf
+#else
+#include <unistd.h>	// getentropy
 #endif
 
 #if defined(_WIN32) || defined(__APPLE__)
@@ -91,7 +95,35 @@ static int credential(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[
     return TCL_OK;
 }
 
+// ::scidb::sys::randomBytes n: n (1-256) bytes from the OS's secure random
+// source, as a byte array, for secrets such as OAuth PKCE verifiers.
+static int randomBytes(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
+{
+    int n;
+    if (objc != 2) { Tcl_WrongNumArgs(ti, 1, objv, "count"); return TCL_ERROR; }
+    if (Tcl_GetIntFromObj(ti, objv[1], &n) != TCL_OK) return TCL_ERROR;
+    if (n < 1 || n > 256) { Tcl_SetObjResult(ti, Tcl_NewStringObj("count must be 1-256", -1)); return TCL_ERROR; }
+    unsigned char buf[256];
+#if defined(_WIN32)
+    bool ok = RtlGenRandom(buf, ULONG(n));
+#elif defined(__APPLE__)
+    arc4random_buf(buf, size_t(n));
+    bool ok = true;
+#else
+    bool ok = getentropy(buf, size_t(n)) == 0;
+#endif
+    if (!ok) {
+        Tcl_SetObjResult(ti, Tcl_NewStringObj("no secure random source", -1));
+        Tcl_SetErrorCode(ti, "SCIDB", "RANDOM", "UNAVAILABLE", NULL);
+        return TCL_ERROR;
+    }
+    Tcl_SetObjResult(ti, Tcl_NewByteArrayObj(buf, n));
+    std::memset(buf, 0, sizeof(buf));
+    return TCL_OK;
+}
+
 void initCredentials(Tcl_Interp* ti)
 {
     Tcl_CreateObjCommand(ti, "::scidb::sys::credential", credential, NULL, NULL);
+    Tcl_CreateObjCommand(ti, "::scidb::sys::randomBytes", randomBytes, NULL, NULL);
 }

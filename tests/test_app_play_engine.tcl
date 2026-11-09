@@ -576,6 +576,8 @@ tcltest::test playengine-spaced-path {an engine in a directory with spaces launc
 -constraints playengineRealUCI -setup {
 	set scratch [file join $::scidb::test::app::testDir tmp-app spaced-engine]
 	set exe [file join $scratch {engine dir} {my stockfish}]
+	# Windows runs only files with a program extension
+	if {$::tcl_platform(platform) eq "windows"} { append exe .exe }
 	file delete -force $scratch
 	file mkdir [file dirname $exe]
 	file copy [dict get $::scidb::test::pe::stockfish Command] $exe

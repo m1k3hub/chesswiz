@@ -495,7 +495,12 @@ proc ::lichess::fake::PkceChallenge {verifier} {
 			if {![catch {$command -bin $verifier} digest]} { break }
 		}
 	}
-	if {$digest eq {}} { error "a tcllib SHA-256 command is required" }
+	# the app bundles on Windows and macOS have no tcllib sha256: use the
+	# client's own pure-Tcl digest (checked against RFC 7636 in its tests)
+	if {$digest eq {} && [llength [info commands ::lichess::api::Sha256]]} {
+		set digest [::lichess::api::Sha256 $verifier]
+	}
+	if {$digest eq {}} { error "a SHA-256 command is required" }
 	set encoded [binary encode base64 -maxlen 0 $digest]
 	return [string map [list + - / _ = {} \r {} \n {}] $encoded]
 }
