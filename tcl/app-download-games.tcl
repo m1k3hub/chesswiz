@@ -158,6 +158,7 @@ array set Priv {
 	bcBodies			{}
 	bcFile				{}
 	bcTimer			{}
+	run				0
 	bcInterval			0
 	bcActive			0
 }
@@ -460,6 +461,7 @@ proc ::application::download::Start {} {
 	set dir [Dir]
 	file mkdir $dir
 	set Priv(cancel) 0
+	incr Priv(run)
 	set Priv(fetched) {}
 	set Priv(failures) {}
 	set queue {}
@@ -850,22 +852,25 @@ proc ::application::download::BroadcastTry {} {
 	}
 	incr Priv(bcUrl)
 	Status [format $mc::Fetching [broadcastLabel $Priv(bcSpec)]]
-	Get $url [namespace code [list OnBroadcast $url 0]]
+	Get $url [namespace code [list OnBroadcast $Priv(run) $url 0]]
 	return
 }
 
 
 # The broadcast was fetched: the new games are imported.
-proc ::application::download::OnBroadcast {url retry result} {
+proc ::application::download::OnBroadcast {run url retry result} {
 	variable Priv
 	variable RetryDelay
 	variable mc
+
+	# the answer to a fetch of an earlier run must not touch this one
+	if {$run != $Priv(run)} { return }
 
 	set ok [dict get $result ok]
 	set code [dict get $result code]
 	if {!$ok && $retry == 0 && ($code eq "timeout" || $code eq "eof" || $code >= 500 || $code == 429 || $code == 408)} {
 		set Priv(bcTimer) [after $RetryDelay \
-			[list [namespace current]::Get $url [namespace code [list OnBroadcast $url 1]]]]
+			[list [namespace current]::Get $url [namespace code [list OnBroadcast $run $url 1]]]]
 		return
 	}
 	if {!$ok} {

@@ -103,6 +103,7 @@ array set Priv {
 	eventHandle		{}
 	seekHandle		{}
 	gameHandle		{}
+	gameGen			0
 	active			0
 	busy			0
 	pos				0
@@ -456,7 +457,10 @@ proc ::lichess::OpenGame {game} {
 		set Priv(userSide) [string index [dict get $game color] 0]
 	}
 	Status $mc::OpeningGame
-	set Priv(gameHandle) [::lichess::api::streamGame $id [namespace code OnGame]]
+	# events of an older stream (its "closed" comes after this one opens)
+	# carry an older generation and are dropped
+	set Priv(gameHandle) [::lichess::api::streamGame $id \
+		[namespace code [list OnGame [incr Priv(gameGen)]]]]
 }
 
 
@@ -606,9 +610,10 @@ proc ::lichess::ChallengeResult {reply} {
 # Game stream and board synchronisation
 # ======================================================================
 
-proc ::lichess::OnGame {event} {
+proc ::lichess::OnGame {gen event} {
 	variable Priv
 	variable mc
+	if {$gen != $Priv(gameGen)} { return }
 	if {![dict exists $event type]} { return }
 	switch -- [dict get $event type] {
 		gameFull {

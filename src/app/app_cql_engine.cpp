@@ -199,6 +199,7 @@ Engine::searchMate(Mode mode, unsigned arg)
 	M_REQUIRE(thread());
 
 	setupMode(mode, arg);
+	m_currentThread->prepareSleep();
 	m_impl->startAnalysis(m_game);
 	m_currentThread->sleep();
 
@@ -212,6 +213,7 @@ Engine::evaluate(Mode mode, unsigned arg)
 	M_REQUIRE(thread());
 
 	setupMode(mode, arg);
+	m_currentThread->prepareSleep();
 	m_impl->startAnalysis(m_game);
 	m_currentThread->sleep();
 
@@ -227,6 +229,7 @@ Engine::evaluate(Mode mode, unsigned arg, ::db::Move const& move)
 	setupMode(mode, arg);
 	m_game->addMove(move);
 	m_game->forward();
+	m_currentThread->prepareSleep();
 	m_impl->startAnalysis(m_game);
 	m_currentThread->sleep();
 	m_game->truncateVariation(move::Ante);

@@ -612,6 +612,9 @@ proc ::application::voice::Stop {} {
 
 	if {!$Priv(recording)} { return 0 }
 	set Priv(recording) 0
+	# busy until Finish fails or the transcript arrives, so a new recording
+	# cannot start on top of the files this one is still finishing
+	set Priv(busy) 1
 	catch { after cancel $Priv(pollId) }
 	catch { after cancel $Priv(maxId) }
 	set Priv(pollId) {}
@@ -646,12 +649,14 @@ proc ::application::voice::Finish {pid} {
 	set Priv(pid) {}
 
 	if {![file exists $Priv(raw)]} {
+		set Priv(busy) 0
 		Message [format $mc::Failed "the recorder wrote nothing"]
 		return
 	}
 
 	set trimmed [trim $Priv(raw) $Priv(wav) $Rate]
 	if {![dict get $trimmed ok]} {
+		set Priv(busy) 0
 		if {[dict get $trimmed error] eq "silence"} {
 			Message $mc::Nothing
 		} else {
@@ -660,7 +665,6 @@ proc ::application::voice::Finish {pid} {
 		return
 	}
 
-	set Priv(busy) 1
 	Message $mc::Transcribing
 	Transcribe $Priv(wav) [namespace code [list OnTranscript]]
 	return
@@ -901,9 +905,11 @@ proc ::application::voice::ServerReadable {} {
 	if {![string length $chan]} { return }
 
 	if {[eof $chan]} {
-		# the transcriber died: report to whoever is waiting, then forget it
+		# the transcriber died: forget it, then report to whoever is waiting
+		# (ServerStop clears the waiting script, so take it first)
+		set script $Priv(serverScript)
 		ServerStop
-		ServerDeliver [list ok 0 error "the speech-to-text process stopped"]
+		if {[llength $script]} { {*}$script [list ok 0 error "the speech-to-text process stopped"] }
 		return
 	}
 	append Priv(serverOut) [read $chan]

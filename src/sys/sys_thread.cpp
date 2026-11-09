@@ -588,13 +588,30 @@ Thread::joinThread()
 }
 
 
-void
-Thread::doSleep()
+void Thread::initCondition()
 {
 	InitializeConditionVariable(&m_condition);
 	InitializeCriticalSection(&m_condMutex);
+}
+
+
+void Thread::destroyCondition() { DeleteCriticalSection(&m_condMutex); }
+
+
+void
+Thread::prepareSleep()
+{
 	EnterCriticalSection(&m_condMutex);
 	m_wakeUp = false;
+	LeaveCriticalSection(&m_condMutex);
+}
+
+
+void
+Thread::doSleep()
+{
+	// the flag is reset by prepareSleep(), so a wake that comes early is kept
+	EnterCriticalSection(&m_condMutex);
 	while (!m_wakeUp)
 		SleepConditionVariableCS(&m_condition, &m_condMutex, INFINITE);
 	LeaveCriticalSection(&m_condMutex);
@@ -604,8 +621,10 @@ Thread::doSleep()
 void
 Thread::doAwake()
 {
+	EnterCriticalSection(&m_condMutex);
 	m_wakeUp = true;
 	WakeConditionVariable(&m_condition);
+	LeaveCriticalSection(&m_condMutex);
 }
 
 #elif defined(__unix__) || defined(__APPLE__) //////////////////////////////////////
@@ -650,12 +669,35 @@ Thread::joinThread()
 
 
 void
-Thread::doSleep()
+Thread::initCondition()
 {
 	pthread_cond_init(&m_condition, 0);
 	pthread_mutex_init(&m_condMutex, 0);
+}
+
+
+void
+Thread::destroyCondition()
+{
+	pthread_cond_destroy(&m_condition);
+	pthread_mutex_destroy(&m_condMutex);
+}
+
+
+void
+Thread::prepareSleep()
+{
 	pthread_mutex_lock(&m_condMutex);
 	m_wakeUp = false;
+	pthread_mutex_unlock(&m_condMutex);
+}
+
+
+void
+Thread::doSleep()
+{
+	// the flag is reset by prepareSleep(), so a wake that comes early is kept
+	pthread_mutex_lock(&m_condMutex);
 	while (!m_wakeUp)
 		pthread_cond_wait(&m_condition, &m_condMutex);
 	pthread_mutex_unlock(&m_condMutex);
@@ -665,8 +707,10 @@ Thread::doSleep()
 void
 Thread::doAwake()
 {
+	pthread_mutex_lock(&m_condMutex);
 	m_wakeUp = true;
 	pthread_cond_signal(&m_condition);
+	pthread_mutex_unlock(&m_condMutex);
 }
 
 #else ///////////////////////////////////////////////////////////////////////////////
@@ -699,6 +743,7 @@ Thread::Thread(ThreadId threadId)
 	,m_wakeUp(false)
 {
 	initialize();
+	initCondition();
 }
 
 
@@ -707,6 +752,7 @@ Thread::Thread()
 	,m_wakeUp(false)
 {
 	initialize();
+	initCondition();
 
 	Guard::initLock(m_lock);
 	atomic_set(&m_cancel, 1);
@@ -724,6 +770,7 @@ Thread::~Thread()
 
 	delete m_exception;
 	Guard::destroy(m_lock);
+	destroyCondition();
 }
 
 
@@ -899,8 +946,6 @@ Thread::sleep()
 {
 	if (isMainThread())
 	{
-		m_wakeUp = false;
-
 		while (!m_wakeUp)
 			Tcl_DoOneEvent(TCL_ALL_EVENTS);
 	}

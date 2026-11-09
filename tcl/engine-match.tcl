@@ -86,6 +86,7 @@ set NoOpenings			"no openings found in %s"
 set BadSuiteMove		"the opening suite holds the illegal move %s"
 set EngineGone			"%s disappeared"
 set EngineMissing		"the program of %s is missing: %s"
+set EngineNoAnswer		"%s started but did not answer"
 set IllegalMove			"%s played the illegal move %s"
 set NoMove				"%s gave no move"
 set Flag				"%s loses on time"
@@ -132,6 +133,7 @@ array set Options {
 
 variable StartFen		{rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1}
 variable MoveTimeout	2000	;# grace added to a move's clock, ms
+variable StartTimeout	30000	;# uciok + readyok must arrive within this, ms
 variable ResignCp		800		;# agree on a win from this |centipawns|
 variable ResignPlies	5		;# ... over this many plies
 variable DrawCp			10		;# a flat score stays below this |centipawns|
@@ -981,7 +983,20 @@ proc ::enginematch::Connect {side} {
 	set Priv(pipeState:$side) starting
 	fileevent $pipe readable [namespace code [list OnReadable $side]]
 	Send $side uci
+	variable StartTimeout
+	after $StartTimeout [namespace code [list OnStartTimeout $side $pipe]]
 	return 1
+}
+
+
+# An engine that starts but never finishes the handshake forfeits, like
+# one that dies; otherwise a match without clocks would wait forever.
+proc ::enginematch::OnStartTimeout {side pipe} {
+	variable Priv
+	variable mc
+	if {$Priv(pipe:$side) ne $pipe} { return }
+	if {$Priv(pipeState:$side) ne "starting"} { return }
+	EngineDied $side [format $mc::EngineNoAnswer [EngineName $side]]
 }
 
 
@@ -1042,12 +1057,12 @@ proc ::enginematch::GotMove {side uci} {
 	variable Priv
 	variable mc
 
-	after cancel $Priv(watchdog)
-	set Priv(watchdog) {}
 	set Priv(pipeState:$side) ready
 	if {!$Priv(running) || $Priv(phase) ne "play" || $Priv(side) ne $side} {
-		return ;# a stale answer (flag fell, the game is over, ...)
+		return ;# a stale answer (flag fell, the game is over, ...); the watchdog stays
 	}
+	after cancel $Priv(watchdog)
+	set Priv(watchdog) {}
 	if {[::scidb::game::current] != $Priv(pos)} { return }
 
 	# a move that arrives after its clock ran out loses on time anyway

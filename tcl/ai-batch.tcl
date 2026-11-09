@@ -238,7 +238,8 @@ proc ::ai::batch::Drain {id reason} {
 	}
 	dict set run queue {}
 	set Runs($id) $run
-	Finish $id
+	# requests still out answer through OnOne, which pumps again
+	if {[dict get $run active] == 0} { Finish $id }
 	return
 }
 

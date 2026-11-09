@@ -74,6 +74,7 @@ public:
 	bool start(Runnable runnable, Signal signal);
 
 	void join();
+	void prepareSleep();	// call before starting the work whose awake() sleep() waits for
 	void sleep();
 	void awake();
 
@@ -104,7 +105,8 @@ private:
 	void doSleep();
 	void doAwake();
 
-	void initMutex();
+	void initCondition();
+	void destroyCondition();
 
 #ifdef __WIN32__
 	typedef CRITICAL_SECTION	Mutex;
