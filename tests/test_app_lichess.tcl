@@ -128,12 +128,7 @@ proc ::scidb::test::lichess::Stub {} {
 
 proc ::scidb::test::lichess::Unstub {} {
 	variable savedProcs
-	set pos $::lichess::Priv(pos)
 	catch { ::lichess::Close }
-	if {$pos > 0} {
-		catch { ::application::pgn::release $pos }
-		catch { ::game::release $pos }
-	}
 	foreach name {
 		token signedIn? signIn useToken signOut account
 		streamEvents streamGame close seek challengeAi
@@ -169,6 +164,28 @@ proc ::scidb::test::lichess::ReplyAction {dict} {
 	variable actionCmds
 	set cmd [lindex $actionCmds end]
 	uplevel #0 [list {*}$cmd $dict]
+}
+
+# Tags of a PGN text as {name value} pairs.
+proc ::scidb::test::lichess::Tags {pgn} {
+	set tags {}
+	foreach {_ name value} [regexp -all -inline -line {^\[(\w+) "(.*)"\]$} $pgn] {
+		lappend tags [list $name $value]
+	}
+	return $tags
+}
+
+# A field of the current game view's state.
+proc ::scidb::test::lichess::View {key} {
+	return [set ::online::view::${::lichess::Priv(view)}::V($key)]
+}
+
+proc ::scidb::test::lichess::Fen {} {
+	return [lindex [::online::view::fen $::lichess::Priv(view)] 0]
+}
+
+proc ::scidb::test::lichess::Shown {key} {
+	return [expr {[llength [grid info [View $key]]] > 0}]
 }
 
 # ----------------------------------------------------------------------
@@ -216,13 +233,16 @@ tcltest::test lichess-uci-from-fens {normal, capture, castling both sides/colour
 } -result {e2e4 e4d5 e1g1 e1c1 e8g8 e8c8 e5f6 d4e3 a7a8q a7a8n a7b8r a2b1b}
 
 tcltest::test lichess-clock-countdown {only the ticking side to move counts down between snapshots} -setup {
-	set saved [array get ::lichess::Priv]
-	array set ::lichess::Priv {clock:w 15000 clock:b 12000 clockAt 50000 clockStm b ticking 1}
+	set v [::online::window::gameTab test:clock Clock list w]
 } -body {
-	list [::lichess::Remaining w 50400] [::lichess::Remaining b 50400] [::lichess::Remaining b 51250]
+	::online::view::clocks $v 15000 12000 b 1
+	set ::online::view::${v}::V(clockAt) [expr {[clock milliseconds] - 400}]
+	list [::online::view::Remaining $v w] \
+		[expr {abs([::online::view::Remaining $v b] - 11600) < 80}] \
+		[::online::view::FormatClock 61000] [::online::view::FormatClock 9500]
 } -cleanup {
-	array set ::lichess::Priv $saved
-} -result {15000 11600 10750}
+	::online::window::closeTab test:clock
+} -result {15000 1 1:01 0:09.5}
 
 # ----------------------------------------------------------------------
 # Sign-in states, token privacy, seek speed rule, AI challenge
@@ -363,7 +383,7 @@ tcltest::test lichess-game-white {full game as White: moves both ways, echo igno
 		state {type gameState moves "" wtime 600000 btime 600000 winc 5000 binc 5000 status started}]
 	update
 
-	set initialTags [::scidb::game::tags]
+	set initialTags [::scidb::test::lichess::Tags [::lichess::BoardPgn $::lichess::Priv(gameInfo) *]]
 
 	# User plays 1. e4 -> sends e2e4
 	set m1 [::lichess::UserMove e4]
@@ -379,28 +399,28 @@ tcltest::test lichess-game-white {full game as White: moves both ways, echo igno
 	::scidb::test::lichess::EmitGame [dict create \
 		type gameState moves "e2e4 e7e5" wtime 599000 btime 598000 status started]
 	set plyAfterOpp [::lichess::BoardPly]
-	set fenAfterOpp [lindex [::scidb::pos::fen] 0]
+	set fenAfterOpp [::scidb::test::lichess::Fen]
 
 	# User plays 2. Nf3, server rejects with {ok 0} -> rolled back to ply 2
 	set m2 [::lichess::UserMove Nf3]
 	set plyBeforeReject [::lichess::BoardPly]
 	::scidb::test::lichess::ReplyMove {ok 0 error "Not your turn"}
 	set plyAfterReject [::lichess::BoardPly]
-	set fenAfterReject [lindex [::scidb::pos::fen] 0]
+	set fenAfterReject [::scidb::test::lichess::Fen]
 
 	# Server jumps ahead by 3 plies -> triggers Resync (re-imports initialFen + all moves)
 	::scidb::test::lichess::EmitGame [dict create \
 		type gameState moves "e2e4 e7e5 g1f3 b8c6 f1b5" wtime 595000 btime 594000 status started]
 	set plyAfterJump [::lichess::BoardPly]
-	set fenAfterJump [lindex [::scidb::pos::fen] 0]
+	set fenAfterJump [::scidb::test::lichess::Fen]
 
 	# Opponent plays 3... a6 with a draw offer (bdraw 1)
 	::scidb::test::lichess::EmitGame [dict create \
 		type gameState moves "e2e4 e7e5 g1f3 b8c6 f1b5 a7a6" \
 		wtime 595000 btime 590000 status started bdraw 1]
 	set drawOffered [list $::lichess::Priv(drawOffer) \
-		[$::lichess::Priv(widget:accept) instate !disabled] \
-		[$::lichess::Priv(widget:decline) instate !disabled]]
+		[::scidb::test::lichess::Shown offer] \
+		[[::scidb::test::lichess::View button:resign] instate !disabled]]
 	::lichess::OfferDraw
 	::scidb::test::lichess::ReplyAction {ok 1}
 	::lichess::DeclineDraw
@@ -410,7 +430,7 @@ tcltest::test lichess-game-white {full game as White: moves both ways, echo igno
 	::scidb::test::lichess::EmitGame [dict create \
 		type opponentGone gone 1 claimWinInSeconds 10]
 	set goneState [list $::lichess::Priv(opponentGone) \
-		[$::lichess::Priv(widget:claim) instate !disabled]]
+		[[::scidb::test::lichess::View button:claim] instate !disabled]]
 	::lichess::ClaimVictory
 	::scidb::test::lichess::ReplyAction {ok 1}
 
@@ -418,12 +438,9 @@ tcltest::test lichess-game-white {full game as White: moves both ways, echo igno
 	::scidb::test::lichess::EmitGame [dict create \
 		type gameState moves "e2e4 e7e5 g1f3 b8c6 f1b5 a7a6" \
 		wtime 595000 btime 590000 status resign winner white]
-	set finalTags [::scidb::game::tags]
-	set backEnabled [$::lichess::Priv(widget:back) instate !disabled]
-	set posW $::lichess::Priv(pos)
+	set finalTags [::scidb::test::lichess::Tags $::lichess::Priv(finalPgn)]
+	set backEnabled [::scidb::test::lichess::Shown result]
 	set backOk [::lichess::BackToLobby]
-	catch { ::application::pgn::release $posW }
-	catch { ::game::release $posW }
 
 	list \
 		[expr {[lsearch -exact $initialTags {Event {Lichess rated rapid game}}] >= 0}] \
@@ -467,9 +484,9 @@ tcltest::test lichess-game-black-and-results {full game as Black against AI (boa
 		state {type gameState moves "d2d4" wtime 180000 btime 180000 winc 2000 binc 2000 status started}]
 	update
 
-	set rotated $::lichess::Priv(rotated)
-	set tagsB [::scidb::game::tags]
-	set whiteLabel [$::lichess::Priv(widget:white) cget -text]
+	set rotated [::scidb::test::lichess::View flip]
+	set tagsB [::scidb::test::lichess::Tags [::lichess::BoardPgn $::lichess::Priv(gameInfo) *]]
+	set whiteLabel [[::scidb::test::lichess::View card:top].name cget -text]
 
 	# Black replies 1... d5 -> sends d7d5
 	set mBlack [::lichess::UserMove d5]
@@ -485,11 +502,8 @@ tcltest::test lichess-game-black-and-results {full game as Black against AI (boa
 	# Check mate result header (Black wins by mate -> 0-1)
 	::scidb::test::lichess::EmitGame [dict create \
 		type gameState moves "d2d4 d7d5 c2c4" wtime 179000 btime 179000 status mate winner black]
-	set mateResult [lsearch -inline [::scidb::game::tags] {Result *}]
-	set posB $::lichess::Priv(pos)
+	set mateResult [lsearch -inline [::scidb::test::lichess::Tags $::lichess::Priv(finalPgn)] {Result *}]
 	::lichess::BackToLobby
-	catch { ::application::pgn::release $posB }
-	catch { ::game::release $posB }
 
 	# Check draw and abort result headers on fresh games
 	set results {}
@@ -504,13 +518,9 @@ tcltest::test lichess-game-black-and-results {full game as Black against AI (boa
 			type gameFull id $gid rated 0 speed rapid initialFen startpos \
 			white {id alice name Alice} black {id bob name Bob} \
 			state $stateDict]
-		set pgn [::scidb::game::toPGN modified -position $::lichess::Priv(pos)]
-		regexp {\[Result "([^"]+)"\]} $pgn -> resTag
+		regexp {\[Result "([^"]+)"\]} $::lichess::Priv(finalPgn) -> resTag
 		lappend results $gid $resTag
-		set pos $::lichess::Priv(pos)
 		::lichess::BackToLobby
-		catch { ::application::pgn::release $pos }
-		catch { ::game::release $pos }
 	}
 
 	list \
@@ -525,6 +535,6 @@ tcltest::test lichess-game-black-and-results {full game as Black against AI (boa
 } -cleanup {
 	::scidb::test::lichess::Unstub
 	array set ::lichess::Options $savedOpts
-} -result {1 1 1 1 1 1 1 {White: Stockfish level 5} 1 1 {Result 0-1} {gDraw 1/2-1/2 gStale 1/2-1/2 gAbort *}}
+} -result {1 1 1 1 1 1 1 {○ Stockfish level 5} 1 1 {Result 0-1} {gDraw 1/2-1/2 gStale 1/2-1/2 gAbort *}}
 
 tcltest::cleanupTests

@@ -140,22 +140,16 @@ proc ::lichess::open {parent} {
 		::application::analysis::stopEngine $number
 	}
 
-	set dlg $parent.lichess
-	if {[winfo exists $dlg]} {
-		raise $dlg
+	# The lobby is a tab of the Chesswiz Online window.
+	set dlg [::online::window::tab lichess Lichess]
+	::online::window::select lichess
+	if {[info exists Priv(widget:signin)] && [winfo exists $Priv(widget:signin)]} {
 		return $dlg
 	}
 	set Priv(dialog) $dlg
 
-	toplevel $dlg -class Scidb
-	wm title $dlg $mc::Title
-	wm transient $dlg [winfo toplevel $parent]
-	wm withdraw $dlg
-	wm protocol $dlg WM_DELETE_WINDOW [namespace code Close]
-	bind $dlg <Escape> [namespace code Close]
-
-	set top [ttk::frame [::util::place::playingBody $dlg].top]
-	pack $top -fill both -expand yes -padx $::theme::padx -pady $::theme::pady
+	set top [ttk::frame $dlg.top]
+	pack $top -fill both -expand yes
 
 	### sign in ############################################################
 	set s [ttk::frame $top.signin]
@@ -235,52 +229,16 @@ proc ::lichess::open {parent} {
 	ttk::button $l.signout -text $mc::SignOut -command [namespace code SignOut]
 	pack $l.signout -anchor w
 
-	### game ###############################################################
-	set g [ttk::frame $top.game]
-	set Priv(widget:game) $g
-	set clocks [ttk::frame $g.clocks]
-	ttk::label $clocks.white -width 29 -anchor w
-	ttk::label $clocks.whiteclock -font $::font::text(text:normal) -width 9 -anchor e
-	ttk::label $clocks.black -width 29 -anchor w
-	ttk::label $clocks.blackclock -font $::font::text(text:normal) -width 9 -anchor e
-	grid $clocks.white -row 0 -column 0 -sticky w
-	grid $clocks.whiteclock -row 0 -column 1 -sticky e
-	grid $clocks.black -row 1 -column 0 -sticky w
-	grid $clocks.blackclock -row 1 -column 1 -sticky e
-	grid columnconfigure $clocks 0 -weight 1
-	pack $clocks -fill x
-	set Priv(widget:white) $clocks.white
-	set Priv(widget:black) $clocks.black
-	set Priv(widget:whiteclock) $clocks.whiteclock
-	set Priv(widget:blackclock) $clocks.blackclock
-
-	set buttons [ttk::frame $g.buttons]
-	ttk::button $buttons.resign -text $mc::Resign -command [namespace code Resign]
-	ttk::button $buttons.draw -text $mc::OfferDraw -command [namespace code OfferDraw]
-	ttk::button $buttons.accept -text $mc::AcceptDraw -command [namespace code AcceptDraw]
-	ttk::button $buttons.decline -text $mc::DeclineDraw -command [namespace code DeclineDraw]
-	ttk::button $buttons.abort -text $mc::Abort -command [namespace code Abort]
-	ttk::button $buttons.claim -text $mc::ClaimVictory -command [namespace code ClaimVictory]
-	pack $buttons.resign -side left
-	pack $buttons.draw -side left -padx [list $::theme::padx 0]
-	pack $buttons.accept -side left -padx [list $::theme::padx 0]
-	pack $buttons.decline -side left -padx [list $::theme::padx 0]
-	pack $buttons.abort -side left -padx [list $::theme::padx 0]
-	pack $buttons.claim -side left
-	pack $buttons -anchor w -pady [list $::theme::pady]
-	foreach key {resign draw accept decline abort claim} {
-		set Priv(widget:$key) $buttons.$key
-	}
-
-	# The right pad keeps the status text clear of the Pin box.
-	ttk::label $top.status -wraplength 330 -justify left
-	pack $top.status -fill x -pady [list $::theme::pady 0] -padx [list 0 40]
-	set Priv(widget:status) $top.status
-
-	::util::place::playingButtons $dlg {ok cancel}
-	set ok [::util::place::playingBody $dlg].ok
-	set cancel [::util::place::playingBody $dlg].cancel
-	$cancel configure -text $mc::Close -command [namespace code Close]
+	set buttons [ttk::frame $dlg.buttons]
+	ttk::button $buttons.ok
+	ttk::button $buttons.cancel -text $mc::Close -command [namespace code Close]
+	pack $buttons.ok $buttons.cancel -side left -padx [list 0 $::theme::padx]
+	pack $buttons -side bottom -anchor w -pady [list $::theme::pady 0]
+	ttk::label $dlg.status -wraplength 600 -justify left
+	pack $dlg.status -side bottom -fill x -pady [list $::theme::pady 0]
+	set Priv(widget:status) $dlg.status
+	set ok $buttons.ok
+	set cancel $buttons.cancel
 	set Priv(widget:ok) $ok
 	set Priv(widget:cancel) $cancel
 	set Priv(widget:back) $ok
@@ -305,8 +263,6 @@ proc ::lichess::open {parent} {
 		Status {}
 	}
 
-	::util::place::besideBoard $dlg $parent
-	wm deiconify $dlg
 	return $dlg
 }
 
@@ -334,7 +290,9 @@ proc ::lichess::ShowView {view} {
 	variable mc
 
 	if {![DialogExists]} { return }
-	foreach name {signin lobby game} {
+	# A game runs in its own tab; the lobby stays usable meanwhile.
+	if {$view eq "game"} { set view lobby }
+	foreach name {signin lobby} {
 		if {[info exists Priv(widget:$name)]} { pack forget $Priv(widget:$name) }
 	}
 	pack $Priv(widget:$view) -fill both -expand yes
@@ -352,12 +310,6 @@ proc ::lichess::ShowView {view} {
 				$Priv(widget:account) configure -text {}
 			}
 		}
-		game {
-			$Priv(widget:ok) configure -text $mc::BackToLobby -command [namespace code BackToLobby]
-			UpdateGameButtons
-			DrawNames
-			DrawClocks
-		}
 	}
 	Status $Priv(statusText)
 }
@@ -372,7 +324,7 @@ proc ::lichess::DialogExists {} {
 proc ::lichess::Status {text} {
 	variable Priv
 	set Priv(statusText) $text
-	::online::panel::status $text
+	if {[ViewExists]} { ::online::view::status $Priv(view) $text }
 	if {[DialogExists] && [info exists Priv(widget:status)]} {
 		$Priv(widget:status) configure -text $text
 	}
@@ -541,7 +493,8 @@ proc ::lichess::Close {} {
 	ReleaseStreams
 	FinishBoard
 	if {[info exists Priv(dlg:token)]} { set Priv(dlg:token) {} }
-	if {[string length $Priv(dialog)] && [winfo exists $Priv(dialog)]} { destroy $Priv(dialog) }
+	if {[ViewExists]} { ::online::window::closeTab lichess:$Priv(gameId) }
+	::online::window::closeTab lichess
 	set Priv(dialog) {}
 }
 
@@ -675,7 +628,9 @@ proc ::lichess::OnGame {event} {
 		gameState { if {$Priv(active)} { SyncState $event } }
 		chatLine {
 			if {[dict exists $event username] && [dict exists $event text]} {
-				::online::panel::chat [dict get $event username] [dict get $event text]
+				if {[ViewExists]} {
+					::online::view::chat $Priv(view) [dict get $event username] [dict get $event text]
+				}
 			}
 		}
 		opponentGone {
@@ -689,7 +644,6 @@ proc ::lichess::OnGame {event} {
 			if {[SessionExpired $event]} { return }
 			if {$Priv(active) && $Priv(state) eq "playing"} {
 				Status $mc::GameStreamClosed
-				UpdateBoardInput
 			}
 		}
 	}
@@ -701,8 +655,6 @@ proc ::lichess::StartBoard {full} {
 	variable mc
 
 	FinishBoard
-	::menu::gameNew .application
-	set Priv(pos) [::scidb::game::current]
 	set Priv(gameInfo) [dict merge $Priv(gameInfo) $full]
 	if {[dict exists $full id]} { set Priv(gameId) [dict get $full id] }
 	set Priv(initialFen) [InitialFen $full]
@@ -720,23 +672,10 @@ proc ::lichess::StartBoard {full} {
 	}
 	if {$Priv(userSide) ni {w b}} { set Priv(userSide) w }
 
-	set pgn [BoardPgn $Priv(gameInfo) *]
-	set Priv(busy) 1
-	set code [catch { ImportGame $Priv(pos) $pgn } err]
-	set Priv(busy) 0
-	if {$code} { return -code error $err }
-	::scidb::game::go end
-
-	# The user's side is at the bottom; FinishBoard restores the rotation.
-	set Priv(rotated) 0
-	if {[catch { ::application::board::rotated? } rotated] == 0
-	 && $rotated != ($Priv(userSide) eq "b")} {
-		RotateBoard
-		set Priv(rotated) 1
-	}
-	::scidb::game::subscribe board $Priv(pos) [namespace current]::Update
-	::scidb::db::subscribe gameClose [namespace current]::GameClosed
-	::scidb::db::subscribe gameSwitch [namespace current]::GameSwitched
+	# Each game has its own tab in the Online window, with its own board.
+	set Priv(view) [::online::window::gameTab lichess:$Priv(gameId) \
+		"Lichess: [OpponentName]" [namespace code ViewAction] $Priv(userSide)]
+	::online::view::setGame $Priv(view) [Card white] [Card black] $Priv(initialFen) {}
 	set Priv(active) 1
 	set Priv(state) playing
 	set Priv(serverMoves) {}
@@ -744,46 +683,35 @@ proc ::lichess::StartBoard {full} {
 	set Priv(drawOffer) 0
 	set Priv(takebackOffer) 0
 	set Priv(opponentGone) 0
+	set Priv(finalPgn) {}
 	ShowView game
 	if {[dict exists $full state]} {
 		SyncState [dict get $full state]
 	} else {
-		UpdateBoardInput
 		StatusForTurn
-		StartTick
 	}
-	after cancel $Priv(inputAfter)
-	set Priv(inputAfter) [after idle [namespace code [list SettledBoardInput $Priv(pos)]]]
-	# Opening the panel rebuilds the board, which can run queued stream
-	# events; open it only once the game above is fully set up.
-	after idle [namespace code OpenPanel]
 	return 1
 }
 
 
-proc ::lichess::OpenPanel {} {
+# A player card for the game view: name, title and rating.
+proc ::lichess::Card {key} {
 	variable Priv
-	if {!$Priv(active) || [::online::panel::exists]} { return }
-	::online::panel::open [namespace code PanelAction] $Priv(userSide)
-	# The panel replaces the dialog while the game runs.
-	if {[DialogExists]} { wm withdraw $Priv(dialog) }
-	DrawNames
-	UpdateGameButtons
-	::online::panel::clocks $Priv(clock:w) $Priv(clock:b) $Priv(clockStm) $Priv(ticking)
-	::online::panel::refresh
-	::online::panel::status $Priv(statusText)
-	if {$Priv(state) eq "over"} { ::online::panel::result $Priv(statusText) }
-	# The panel's board rebuild can re-enable input; settle it again.
-	UpdateBoardInput
-	after cancel $Priv(inputAfter)
-	set Priv(inputAfter) [after idle [namespace code [list SettledBoardInput $Priv(pos)]]]
+	set card [dict create name ?]
+	if {[dict exists $Priv(gameInfo) $key]} {
+		set player [dict get $Priv(gameInfo) $key]
+		dict set card name [PlayerName $player]
+		foreach field {title rating} {
+			if {[dict exists $player $field]} { dict set card $field [dict get $player $field] }
+		}
+	}
+	return $card
 }
 
 
-proc ::lichess::SettledBoardInput {position} {
+proc ::lichess::ViewExists {} {
 	variable Priv
-	set Priv(inputAfter) {}
-	if {$Priv(active) && $position == $Priv(pos)} { UpdateBoardInput }
+	return [expr {[info exists Priv(view)] && [::online::view::exists $Priv(view)]}]
 }
 
 
@@ -863,16 +791,6 @@ proc ::lichess::ImportGame {pos pgn} {
 proc ::lichess::ImportLog {_ args} { return }
 
 
-proc ::lichess::ApplyMoves {moves} {
-	foreach uci $moves {
-		set san [uciToSan $uci]
-		if {$san eq ""} { return -code error "illegal UCI move $uci" }
-		::scidb::game::move $san
-		::scidb::game::go 1
-	}
-}
-
-
 proc ::lichess::Moves {state} {
 	if {![dict exists $state moves]} { return {} }
 	return [regexp -all -inline {\S+} [dict get $state moves]]
@@ -882,31 +800,23 @@ proc ::lichess::Moves {state} {
 proc ::lichess::SyncState {state} {
 	variable Priv
 	variable mc
-	if {!$Priv(active)} { return }
+	if {!$Priv(active) || ![ViewExists]} { return }
 	set moves [Moves $state]
-	set before [BoardPly]
-	set count [llength $moves]
-	set delta [expr {$count - $before}]
-	set failed 0
-
-	if {$delta == 1} {
-		set san [uciToSan [lindex $moves end]]
-		if {$san eq ""} {
-			set failed 1
+	set have [::online::view::ucis $Priv(view)]
+	if {$moves ne $have} {
+		if {[llength $moves] == [llength $have] + 1 && [lrange $moves 0 end-1] eq $have} {
+			::online::view::addMove $Priv(view) [lindex $moves end]
+		} elseif {[::online::view::pending $Priv(view)] ne "" && [lrange $have 0 end-1] eq $moves} {
+			# Our move is still on its way; the server has not seen it yet.
 		} else {
-			Busy on
-			set code [catch { ::scidb::game::move $san; ::scidb::game::go 1 } err]
-			Busy off
-			if {$code || [BoardPly] != $before + 1} { set failed 1 }
+			# A jump, a takeback, or a rejected move: adopt the server's game.
+			::online::view::setGame $Priv(view) [Card white] [Card black] $Priv(initialFen) $moves
 		}
-	} elseif {$delta != 0} {
-		set failed 1
+	} elseif {[::online::view::pending $Priv(view)] ne ""} {
+		::online::view::addMove $Priv(view) [lindex $moves end]
 	}
-	# Zero is the ordinary echo of a locally entered move. A jump, a
-	# negative delta, or a failed single move all need a complete snapshot.
-	if {$failed && ![Resync $state $moves]} { return }
 	set Priv(serverMoves) $moves
-	set Priv(pendingMove) {}
+	if {[::online::view::pending $Priv(view)] eq ""} { set Priv(pendingMove) {} }
 	SetClocks $state
 
 	set Priv(drawOffer) 0
@@ -923,106 +833,86 @@ proc ::lichess::SyncState {state} {
 		return
 	}
 	UpdateGameButtons
-	UpdateBoardInput
-	DrawNames
-	DrawClocks
 	if {$Priv(drawOffer)} {
-		Status $mc::DrawOffered
+		::online::view::offer $Priv(view) $mc::DrawOffered
 	} elseif {$Priv(takebackOffer)} {
-		Status $mc::TakebackOffered
+		::online::view::offer $Priv(view) $mc::TakebackOffered
 	} else {
-		StatusForTurn
+		::online::view::offer $Priv(view) {}
 	}
-	::online::panel::refresh
-	StartTick
+	StatusForTurn
 }
-
-
-proc ::lichess::Resync {state moves} {
-	variable Priv
-	variable mc
-	if {!$Priv(active)} { return 0 }
-	set pgn [BoardPgn $Priv(gameInfo) *]
-	set Priv(busy) 1
-	set code [catch {
-		ImportGame $Priv(pos) $pgn
-		ApplyMoves $moves
-		::scidb::game::go end
-	} err]
-	set Priv(busy) 0
-	if {$code} {
-		catch { ::debuglog::log lichess "resync import failed: $err" }
-		Status [format $mc::ImportFailed $err]
-		return 0
-	}
-	set Priv(pendingMove) {}
-	return 1
-}
-
 
 proc ::lichess::BoardPly {} {
 	variable Priv
-	if {[catch { ::scidb::game::query mainline } plies]} { return 0 }
-	return [llength $plies]
+	if {![ViewExists]} { return 0 }
+	return [llength [::online::view::ucis $Priv(view)]]
 }
 
-
-proc ::lichess::Update {position cmd data promoted} {
+proc ::lichess::UserMove {move} {
 	variable Priv
-	variable mc
-	if {!$Priv(active) || $Priv(busy) || $position != $Priv(pos)} { return }
-	if {$cmd ne "move"} { return }
-	if {[llength $data] && ![lindex $data end]} { return }
-	if {![::scidb::game::position atEnd?] || ![::scidb::game::position isMainline?]} {
-		RejectMove $mc::NotAtEnd
-		return
-	}
-
-	set plies [::scidb::game::query mainline]
-	if {![llength $plies]} {
-		RejectMove $mc::InvalidMove
-		return
-	}
-	set fenBefore [lindex $plies end 2]
-	if {$Priv(state) ne "playing" || $Priv(pendingMove) ne "" || ![WasMyTurn $fenBefore]} {
-		RejectMove $mc::NotYourTurn
-		return
-	}
-	set fenAfter [::scidb::pos::fen]
-	set uci [uciFromFens $fenBefore $fenAfter]
-	if {$uci eq ""} {
-		RejectMove $mc::InvalidMove
-		return
-	}
-	set gameId $Priv(gameId)
-	set ply [BoardPly]
-	set Priv(pendingMove) $uci
-	SettleClock
-	UpdateBoardInput
-	Status [format $mc::WaitingMove [OpponentName]]
-	if {[catch {
-		::lichess::api::move $gameId $uci [namespace code [list MoveResult $gameId $uci $ply]]
-	} err]} {
-		MoveResult $gameId $uci $ply [dict create ok 0 error $err]
-	}
-}
-
-
-proc ::lichess::UserMove {san} {
-	variable Priv
-	variable mc
 	if {!$Priv(active) || $Priv(state) ne "playing" || $Priv(pendingMove) ne "" || ![MyTurn]} {
 		return 0
 	}
-	if {![::scidb::game::position atEnd?] || ![::scidb::game::position isMainline?]} {
-		Status $mc::NotAtEnd
-		return 0
-	}
-	set before [BoardPly]
-	::move::addMove menu $san
-	return [expr {[BoardPly] > $before}]
+	return [::online::view::play $Priv(view) $move]
 }
 
+
+# The game view sends the user's moves and button presses here.
+proc ::lichess::ViewAction {action args} {
+	variable Priv
+	variable mc
+	switch -- $action {
+		move {
+			lassign $args uci san
+			if {!$Priv(active) || $Priv(state) ne "playing" || $Priv(gameHandle) eq ""} {
+				::online::view::rejectMove $Priv(view) $mc::NotYourTurn
+				return
+			}
+			set gameId $Priv(gameId)
+			# The view has already shown the move: ply counts it.
+			set ply [BoardPly]
+			set Priv(pendingMove) $uci
+			Status [format $mc::WaitingMove [OpponentName]]
+			if {[catch {
+				::lichess::api::move $gameId $uci [namespace code [list MoveResult $gameId $uci $ply]]
+			} err]} {
+				MoveResult $gameId $uci $ply [dict create ok 0 error $err]
+			}
+		}
+		resign	{ Resign }
+		draw		{ OfferDraw }
+		abort		{ Abort }
+		claim		{ ClaimVictory }
+		accept	{ if {$Priv(takebackOffer)} { Takeback yes } else { AcceptDraw } }
+		decline	{ if {$Priv(takebackOffer)} { Takeback no } else { DeclineDraw } }
+		takeback	{ Takeback yes }
+		chat {
+			if {$Priv(gameId) ne ""} {
+				::lichess::api::chat $Priv(gameId) [lindex $args 0] [namespace code ActionResult]
+				::online::view::chat $Priv(view) $Priv(username) [lindex $args 0]
+			}
+		}
+		analyse	{ Analyse }
+		close {
+			if {$Priv(active) && $Priv(state) eq "playing"} { return }
+			BackToLobby
+			::online::window::closeTab lichess:$Priv(gameId)
+			::online::window::select lichess
+		}
+	}
+}
+
+
+# Open the finished game on the main board for analysis.
+proc ::lichess::Analyse {} {
+	variable Priv
+	if {$Priv(finalPgn) eq ""} { return }
+	::menu::gameNew .application
+	ImportGame [::scidb::game::current] $Priv(finalPgn)
+	::scidb::game::go end
+	raise .application
+}
 
 proc ::lichess::MoveResult {gameId uci ply reply} {
 	variable Priv
@@ -1036,31 +926,18 @@ proc ::lichess::MoveResult {gameId uci ply reply} {
 	RejectMove [format $mc::MoveRejected $uci]
 }
 
-
 proc ::lichess::RejectMove {why} {
 	variable Priv
-	Busy on
-	catch { ::scidb::game::go -1; ::scidb::game::strip truncate }
-	Busy off
 	set Priv(pendingMove) {}
-	UpdateBoardInput
+	if {[ViewExists]} { ::online::view::rejectMove $Priv(view) $why }
 	Status $why
 }
 
-
 proc ::lichess::MyTurn {} {
 	variable Priv
-	if {$Priv(userSide) ni {w b} || [catch { ::scidb::pos::fen } fen]} { return 0 }
-	return [expr {[lindex $fen 1] eq $Priv(userSide)}]
+	if {$Priv(userSide) ni {w b} || ![ViewExists]} { return 0 }
+	return [expr {[lindex [::online::view::fen $Priv(view)] 1] eq $Priv(userSide)}]
 }
-
-proc ::lichess::WasMyTurn {fenBefore} {
-	variable Priv
-	if {$Priv(userSide) ni {w b}} { return 0 }
-	return [expr {[lindex $fenBefore 1] eq $Priv(userSide)}]
-}
-
-
 proc ::lichess::OpponentName {} {
 	variable Priv
 	set key [expr {$Priv(userSide) eq "w" ? "black" : "white"}]
@@ -1081,40 +958,6 @@ proc ::lichess::StatusForTurn {} {
 }
 
 
-proc ::lichess::BoardInput {on} {
-	if {$on eq "on"} { ::move::enable } else { ::move::disable }
-}
-
-
-proc ::lichess::UpdateBoardInput {} {
-	variable Priv
-	if {$Priv(active) && $Priv(state) eq "playing"
-	 && ($Priv(pendingMove) ne "" || $Priv(gameHandle) eq "" || ![MyTurn])} {
-		BoardInput off
-	} else {
-		BoardInput on
-	}
-}
-
-
-proc ::lichess::Busy {on} {
-	variable Priv
-	set Priv(busy) [expr {$on eq "on" ? 1 : 0}]
-}
-
-
-proc ::lichess::GameClosed {position} {
-	variable Priv
-	if {$Priv(active) && $position == $Priv(pos)} { LeaveBoard }
-}
-
-
-proc ::lichess::GameSwitched {oldPos newPos} {
-	variable Priv
-	if {$Priv(active) && $newPos != $Priv(pos)} { LeaveBoard }
-}
-
-
 proc ::lichess::LeaveBoard {} {
 	variable Priv
 	if {$Priv(active) && $Priv(state) eq "playing"} {
@@ -1130,32 +973,12 @@ proc ::lichess::LeaveBoard {} {
 
 proc ::lichess::FinishBoard {} {
 	variable Priv
-	if {$Priv(active)} {
-		catch { ::scidb::game::unsubscribe board $Priv(pos) [namespace current]::Update }
-		catch { ::scidb::db::unsubscribe gameClose [namespace current]::GameClosed }
-		catch { ::scidb::db::unsubscribe gameSwitch [namespace current]::GameSwitched }
-	}
 	after cancel $Priv(tick)
-	after cancel $Priv(inputAfter)
 	set Priv(tick) {}
-	set Priv(inputAfter) {}
 	set Priv(active) 0
 	set Priv(ticking) 0
 	set Priv(pendingMove) {}
-	::online::panel::close
-	if {[DialogExists]} { wm deiconify $Priv(dialog) }
-	if {$Priv(rotated)} {
-		RotateBoard
-		set Priv(rotated) 0
-	}
-	BoardInput on
 }
-
-
-proc ::lichess::RotateBoard {} {
-	catch { ::application::board::Rotate $::application::board::Vars(widget:frame) }
-}
-
 
 # ======================================================================
 # Game commands and result
@@ -1244,73 +1067,30 @@ proc ::lichess::EndGame {result reason} {
 	if {[catch { StoreResult $result } err]} {
 		catch { ::debuglog::log lichess "StoreResult $result failed: $err" }
 	}
-	UpdateBoardInput
 	UpdateGameButtons
-	DrawClocks
-	::online::panel::refresh
 	Status [format $mc::GameOver $result $reason]
-	::online::panel::result [format $mc::GameOver $result $reason]
+	if {[ViewExists]} { ::online::view::result $Priv(view) [format $mc::GameOver $result $reason] }
+	ShowView lobby
 }
 
 
 proc ::lichess::StoreResult {result} {
 	variable Priv
-	set pos $Priv(pos)
-	set pgn [::scidb::game::toPGN modified -position $pos]
-	if {![regsub -- {\[Result "[^"]*"\]} $pgn [format {[Result "%s"]} $result] pgn]} {
-		set gap [string first "\n\n" $pgn]
-		if {$gap < 0} { set gap [string length $pgn]; append pgn "\n" }
-		set pgn [string replace $pgn $gap $gap "\n[format {[Result "%s"]} $result]"]
-	}
-	if {![regsub -- {(\*|1-0|0-1|1/2-1/2)\s*$} $pgn $result pgn]} {
-		set pgn "[string trimright $pgn]\n$result\n"
-	}
-	set Priv(busy) 1
-	ImportGame $pos $pgn
-	set Priv(busy) 0
-	::scidb::game::go end
+	if {![ViewExists]} { return }
+	set pgn [BoardPgn $Priv(gameInfo) $result]
+	set tags [string range $pgn 0 [string first "\n\n" $pgn]]
+	set moves [::online::view::pgn $Priv(view) {} $result]
+	regsub -all -line {^\[.*\]\n} $moves {} moves
+	set Priv(finalPgn) "$tags[string trimleft $moves \n]"
 }
-
 
 proc ::lichess::UpdateGameButtons {} {
 	variable Priv
-	if {![DialogExists] || ![info exists Priv(widget:resign)]} { return }
+	if {![ViewExists]} { return }
 	set playing [expr {$Priv(active) && $Priv(state) eq "playing"}]
-	foreach key {resign draw abort} {
-		$Priv(widget:$key) state [expr {$playing ? "!disabled" : "disabled"}]
-	}
-	foreach key {accept decline} {
-		$Priv(widget:$key) state [expr {$playing && $Priv(drawOffer) ? "!disabled" : "disabled"}]
-	}
-	$Priv(widget:claim) state [expr {$playing && $Priv(opponentGone) ? "!disabled" : "disabled"}]
-	$Priv(widget:back) state [expr {$Priv(active) && $Priv(state) eq "over" ? "!disabled" : "disabled"}]
-	set offer [expr {$Priv(drawOffer) || $Priv(takebackOffer)}]
-	::online::panel::actions [dict create resign $playing draw $playing takeback $playing \
-		abort $playing accept [expr {$playing && $offer}] decline [expr {$playing && $offer}] \
-		claim [expr {$playing && $Priv(opponentGone)}]]
+	::online::view::actions $Priv(view) [dict create resign $playing draw $playing \
+		takeback $playing abort $playing claim [expr {$playing && $Priv(opponentGone)}]]
 }
-
-
-proc ::lichess::PanelAction {action args} {
-	variable Priv
-	switch -- $action {
-		resign	{ Resign }
-		draw		{ OfferDraw }
-		abort		{ Abort }
-		claim		{ ClaimVictory }
-		accept	{ if {$Priv(takebackOffer)} { Takeback yes } else { AcceptDraw } }
-		decline	{ if {$Priv(takebackOffer)} { Takeback no } else { DeclineDraw } }
-		takeback	{ Takeback yes }
-		chat {
-			if {$Priv(gameId) ne ""} {
-				::lichess::api::chat $Priv(gameId) [lindex $args 0] [namespace code ActionResult]
-				::online::panel::chat $Priv(username) [lindex $args 0]
-			}
-		}
-		lobby - analyse { BackToLobby }
-	}
-}
-
 
 proc ::lichess::Takeback {answer} {
 	variable Priv
@@ -1344,95 +1124,12 @@ proc ::lichess::SetClocks {state} {
 	variable Priv
 	if {[dict exists $state wtime]} { set Priv(clock:w) [dict get $state wtime] }
 	if {[dict exists $state btime]} { set Priv(clock:b) [dict get $state btime] }
-	if {![catch { ::scidb::pos::fen } fen]} { set Priv(clockStm) [lindex $fen 1] }
+	if {[ViewExists]} { set Priv(clockStm) [lindex [::online::view::fen $Priv(view)] 1] }
 	set status [expr {[dict exists $state status] ? [dict get $state status] : "started"}]
 	set Priv(ticking) [expr {$Priv(active) && $status in {started created} && $Priv(state) ne "over"}]
 	set Priv(clockAt) [clock milliseconds]
-	::online::panel::clocks $Priv(clock:w) $Priv(clock:b) $Priv(clockStm) $Priv(ticking)
-}
-
-
-proc ::lichess::SettleClock {} {
-	variable Priv
-	set now [clock milliseconds]
-	if {$Priv(clockStm) in {w b}} {
-		set Priv(clock:$Priv(clockStm)) [Remaining $Priv(clockStm) $now]
-	}
-	if {![catch { ::scidb::pos::fen } fen]} { set Priv(clockStm) [lindex $fen 1] }
-	set Priv(clockAt) $now
-	::online::panel::clocks $Priv(clock:w) $Priv(clock:b) $Priv(clockStm) $Priv(ticking)
-	::online::panel::refresh
-}
-
-
-proc ::lichess::Remaining {colour now} {
-	variable Priv
-	set ms $Priv(clock:$colour)
-	if {$Priv(ticking) && $Priv(clockStm) eq $colour} {
-		set ms [expr {$ms - ($now - $Priv(clockAt))}]
-	}
-	return $ms
-}
-
-
-proc ::lichess::StartTick {} {
-	variable Priv
-	variable TickInterval
-	after cancel $Priv(tick)
-	if {$Priv(active) && $Priv(state) ne "over"} {
-		set Priv(tick) [after $TickInterval [namespace code Tick]]
-	}
-}
-
-
-proc ::lichess::Tick {} {
-	variable Priv
-	variable TickInterval
-	set Priv(tick) {}
-	if {!$Priv(active) || $Priv(state) eq "over"} { return }
-	DrawClocks
-	set Priv(tick) [after $TickInterval [namespace code Tick]]
-}
-
-
-proc ::lichess::DrawNames {} {
-	variable Priv
-	variable mc
-	if {![DialogExists] || ![info exists Priv(widget:white)]} { return }
-	foreach {key widget label} {white white WhiteClock black black BlackClock} {
-		if {![dict exists $Priv(gameInfo) $key]} { continue }
-		set player [dict get $Priv(gameInfo) $key]
-		set name [PlayerName $player]
-		if {[dict exists $player rating] && [dict get $player rating] ne ""} {
-			append name " ([dict get $player rating])"
-		}
-		$Priv(widget:$widget) configure -text "[set mc::$label]: $name"
-	}
-	set cards {}
-	foreach key {white black} {
-		set card [dict create name ?]
-		if {[dict exists $Priv(gameInfo) $key]} {
-			set player [dict get $Priv(gameInfo) $key]
-			dict set card name [PlayerName $player]
-			foreach field {title rating} {
-				if {[dict exists $player $field]} { dict set card $field [dict get $player $field] }
-			}
-		}
-		lappend cards $card
-	}
-	::online::panel::players {*}$cards
-}
-
-
-proc ::lichess::DrawClocks {} {
-	variable Priv
-	if {![DialogExists] || ![info exists Priv(widget:whiteclock)]} { return }
-	set now [clock milliseconds]
-	foreach colour {w b} {
-		set widget [expr {$colour eq "w" ? "whiteclock" : "blackclock"}]
-		$Priv(widget:$widget) configure -text [FormatClock [expr {max(0, [Remaining $colour $now])}]]
-		set active [expr {$Priv(ticking) && $Priv(clockStm) eq $colour}]
-		$Priv(widget:$widget) configure -font $::font::text([expr {$active ? "text:bold" : "text:normal"}])
+	if {[ViewExists]} {
+		::online::view::clocks $Priv(view) $Priv(clock:w) $Priv(clock:b) $Priv(clockStm) $Priv(ticking)
 	}
 }
 

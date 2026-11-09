@@ -91,13 +91,14 @@ tcltest::test ics-game-end-parser {resignation, mate, timeout, draw and abort en
 } -result {42 {GuestAAAA resigns} 0-1 42 {GuestAAAA checkmated} 0-1 42 {GuestAAAA forfeits on time} 0-1 42 {Game drawn by repetition} 1/2-1/2 42 {Game aborted on move 1} *}
 
 tcltest::test ics-clock-countdown {only the ticking side to move counts down between server snapshots} -setup {
-	set saved [array get ::ics::Priv]
-	array set ::ics::Priv {clock:w 10000 clock:b 8000 clockAt 100000 clockStm w ticking 1}
+	set v [::online::window::gameTab test:clock Clock list w]
 } -body {
-	list [::ics::Remaining w 100250] [::ics::Remaining b 100250] [::ics::Remaining w 101100]
+	::online::view::clocks $v 10000 8000 w 1
+	set ::online::view::${v}::V(clockAt) [expr {[clock milliseconds] - 250}]
+	list [expr {abs([::online::view::Remaining $v w] - 9750) < 80}] [::online::view::Remaining $v b]
 } -cleanup {
-	array set ::ics::Priv $saved
-} -result {9750 8000 8900}
+	::online::window::closeTab test:clock
+} -result {1 8000}
 
 # ----------------------------------------------------------------------
 # Loopback FICS server. Its replies are real byte streams, including
@@ -270,11 +271,25 @@ proc ::scidb::test::ics::Stop {} {
 }
 
 proc ::scidb::test::ics::Release {} {
-	set pos $::ics::Priv(pos)
 	::ics::Close
-	catch { ::application::pgn::release $pos }
-	catch { ::game::release $pos }
 	Stop
+}
+
+# The current game view's board, PGN tags and read-only state.
+proc ::scidb::test::ics::Fen {} { return [::online::view::fen $::ics::Priv(view)] }
+proc ::scidb::test::ics::Moves {} { return [llength [::online::view::ucis $::ics::Priv(view)]] }
+proc ::scidb::test::ics::ReadOnly {} {
+	return [expr {[set ::online::view::${::ics::Priv(view)}::V(side)] eq ""}]
+}
+proc ::scidb::test::ics::Tags {pgn} {
+	set tags {}
+	foreach {_ name value} [regexp -all -inline -line {^\[(\w+) "(.*)"\]$} $pgn] {
+		lappend tags [list $name $value]
+	}
+	return $tags
+}
+proc ::scidb::test::ics::HeaderTags {} {
+	return [Tags [::ics::BoardPgn $::ics::Priv(gameInfo) [dict create fen $::ics::Priv(startFen)] 0 *]]
 }
 
 proc ::scidb::test::ics::Connect {{handle ""} {password ""} {kind ""}} {
@@ -287,7 +302,7 @@ proc ::scidb::test::ics::Connect {{handle ""} {password ""} {kind ""}} {
 	set dlg [::ics::open .application]
 	update
 	set ::ics::Priv(dlg:password) $password
-	[::util::place::playingBody $dlg].ok invoke
+	$::ics::Priv(widget:ok) invoke
 	return $dlg
 }
 
@@ -368,21 +383,21 @@ tcltest::test ics-guest-game {guest login, seeks, moves, clocks, illegal rollbac
 	$tree selection set 6
 	::ics::PlaySelected
 	::scidb::test::wait::until {$::ics::Priv(active) && $::ics::Priv(gameNumber) == 42}
-	set initialFen [::scidb::pos::fen]
-	set initialTags [::scidb::game::tags]
+	set initialFen [::scidb::test::ics::Fen]
+	set initialTags [::scidb::test::ics::HeaderTags]
 	puts "EVIDENCE ics-initial-tags=$initialTags"
 	puts "EVIDENCE ics-initial-info=$::ics::Priv(gameInfo)"
 	set accepted [::ics::UserMove e4]
 	::scidb::test::wait::until {[::ics::BoardPly] == 2 && [lsearch -exact $::scidb::test::ics::received e4] >= 0}
-	set afterPair [::scidb::pos::fen]
+	set afterPair [::scidb::test::ics::Fen]
 	set clocks [list $::ics::Priv(clock:w) $::ics::Priv(clock:b)]
 	set illegalAccepted [::ics::UserMove Nf3]
 	::scidb::test::wait::until {$::scidb::test::ics::nf3 == 1 && $::ics::Priv(pendingMove) eq ""}
-	set rollback [list [::ics::BoardPly] [lindex [::scidb::pos::fen] 0] $::ics::Priv(relation)]
+	set rollback [list [::ics::BoardPly] [lindex [::scidb::test::ics::Fen] 0] $::ics::Priv(relation)]
 	set secondAccepted [::ics::UserMove Nf3]
 	::scidb::test::wait::until {$::ics::Priv(state) eq "over"}
-	set finalFen [::scidb::pos::fen]
-	set finalTags [::scidb::game::tags]
+	set finalFen [::scidb::test::ics::Fen]
+	set finalTags [::scidb::test::ics::Tags $::ics::Priv(finalPgn)]
 	set finalClocks [list $::ics::Priv(clock:w) $::ics::Priv(clock:b)]
 	list \
 		$::ics::Priv(handle) $::ics::Options(handle) $rows $guestRated \
@@ -400,7 +415,7 @@ tcltest::test ics-guest-game {guest login, seeks, moves, clocks, illegal rollbac
 		$illegalAccepted $rollback $secondAccepted \
 		[lindex $finalFen 0] $finalClocks \
 		[expr {[lsearch -exact $finalTags {Result 1-0}] >= 0}] \
-		[$::ics::Priv(widget:back) instate !disabled]
+		[expr {[llength [grid info [set ::online::view::${::ics::Priv(view)}::V(result)]]] > 0}]
 } -cleanup {
 	::scidb::test::ics::Release
 	array set ::ics::Options $saved
@@ -412,28 +427,27 @@ tcltest::test ics-observe {a mid-game observed board imports SetUp/FEN, stays re
 	set dlg [::scidb::test::ics::Connect]
 	::scidb::test::wait::until {$::ics::Priv(state) eq "lobby"}
 	::ics::Watch
-	::scidb::test::wait::until {$::ics::Priv(active) && $::ics::Priv(gameNumber) == 21 && $::move::Disabled}
-	set tags [::scidb::game::tags]
-	set pgn [::scidb::game::toPGN modified -position $::ics::Priv(pos)]
+	::scidb::test::wait::until {$::ics::Priv(active) && $::ics::Priv(gameNumber) == 21 && [::scidb::test::ics::ReadOnly]}
+	set tags [::scidb::test::ics::HeaderTags]
+	set pgn [::online::view::pgn $::ics::Priv(view) {} *]
 	set headerPgn [::ics::BoardPgn $::ics::Priv(gameInfo) [::ics::parseStyle12 $::scidb::test::ics::style12] 1 *]
 	puts "EVIDENCE ics-observe-tags=$tags"
 	puts "EVIDENCE ics-observe-pgn=$pgn"
-	puts "EVIDENCE ics-observe-state=active=$::ics::Priv(active) observing=$::ics::Priv(observing) relation=$::ics::Priv(relation) disabled=$::move::Disabled"
-	set fen [::scidb::pos::fen]
-	set before [list [::ics::BoardPly] $::move::Disabled \
+	puts "EVIDENCE ics-observe-state=active=$::ics::Priv(active) observing=$::ics::Priv(observing) relation=$::ics::Priv(relation) readOnly=[::scidb::test::ics::ReadOnly]"
+	set fen [::scidb::test::ics::Fen]
+	set before [list [::ics::BoardPly] [::scidb::test::ics::ReadOnly] \
 		$::ics::Priv(clock:w) $::ics::Priv(clock:b)]
 	set refused [::ics::UserMove Qg4]
-	::move::addMove menu Qg4
 	set unchanged [::ics::BoardPly]
 	::ics::Send next
 	::scidb::test::wait::until {[::ics::BoardPly] == 51}
-	set moved [list [lindex [::scidb::pos::fen] 0] [::scidb::game::query length] $::move::Disabled]
+	set moved [list [lindex [::scidb::test::ics::Fen] 0] [::scidb::test::ics::Moves] [::scidb::test::ics::ReadOnly]]
 	::ics::Send mismatch
-	::scidb::test::wait::until {[::ics::BoardPly] == 52 && [::scidb::game::query length] == 0}
-	set resynced [list [lindex [::scidb::pos::fen] 0] [::scidb::game::query length] $::move::Disabled]
+	::scidb::test::wait::until {[::ics::BoardPly] == 52 && [::scidb::test::ics::Moves] == 0}
+	set resynced [list [lindex [::scidb::test::ics::Fen] 0] [::scidb::test::ics::Moves] [::scidb::test::ics::ReadOnly]]
 	::ics::Send jump
 	::scidb::test::wait::until {[::ics::BoardPly] == 58}
-	set jumped [list [::ics::BoardPly] [::scidb::game::query length] $::move::Disabled]
+	set jumped [list [::ics::BoardPly] [::scidb::test::ics::Moves] [::scidb::test::ics::ReadOnly]]
 	::ics::BackToLobby
 	::scidb::test::wait::until {"unobserve" in $::scidb::test::ics::received}
 	list \

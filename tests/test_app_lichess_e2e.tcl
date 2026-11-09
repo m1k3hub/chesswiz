@@ -271,7 +271,6 @@ proc ::scidb::test::lichess::Ai {color replies} {
 	set ::lichess::Priv(dlg:aiColor) [::lichess::ColourLabel $color]
 	::lichess::ChallengeAi
 	::scidb::test::wait::until {$::lichess::Priv(state) eq "playing"}
-	lappend Positions $::lichess::Priv(pos)
 	return $::lichess::Priv(gameId)
 }
 proc ::scidb::test::lichess::MovesAre {moves} {
@@ -279,8 +278,15 @@ proc ::scidb::test::lichess::MovesAre {moves} {
 }
 proc ::scidb::test::lichess::ResultIs {result} {
 	::scidb::test::wait::until {$::lichess::Priv(state) eq "over"}
-	set tags [::scidb::game::tags]
-	return [expr {[lsearch -exact $tags [list Result $result]] >= 0}]
+	return [expr {[lsearch -exact [Tags] [list Result $result]] >= 0}]
+}
+# Tags of the finished game's PGN, as {name value} pairs.
+proc ::scidb::test::lichess::Tags {} {
+	set tags {}
+	foreach {_ name value} [regexp -all -inline -line {^\[(\w+) "(.*)"\]$} $::lichess::Priv(finalPgn)] {
+		lappend tags [list $name $value]
+	}
+	return $tags
 }
 
 namespace eval ::scidb::test::lichess {
@@ -288,7 +294,6 @@ namespace eval ::scidb::test::lichess {
 		Setup
 	} -body {
 		set id [Ai white {e7e5 b8c6}]
-		set tags [::scidb::game::tags]
 		set first [::lichess::UserMove e4]
 		MovesAre {e2e4 e7e5}
 		::lichess::fake::RejectNextMove $id
@@ -299,14 +304,15 @@ namespace eval ::scidb::test::lichess {
 		MovesAre {e2e4 e7e5 g1f3 b8c6}
 		::lichess::Resign
 		set result [ResultIs 0-1]
-		set pgn [::scidb::game::toPGN modified -position $::lichess::Priv(pos)]
+		set tags [Tags]
+		set pgn $::lichess::Priv(finalPgn)
 		list $first $rejected $restored $retry $result \
 			[expr {[lsearch -exact $tags {White Bob}] >= 0}] \
 			[expr {[lsearch -exact $tags {Black {Stockfish level 3}}] >= 0}] \
 			[expr {[lsearch -exact $tags {TimeControl 300+2}] >= 0}] \
 			[expr {[lsearch -exact $tags [list Site https://lichess.org/$id]] >= 0}] \
 			[expr {[lsearch -exact $tags {Event {Lichess casual blitz game}}] >= 0}] \
-			[expr {[string first "1.e4 e5 2.Nf3 Nc6" $pgn] >= 0}] \
+			[expr {[string first "1. e4 e5 2. Nf3 Nc6" $pgn] >= 0}] \
 			[expr {[string first $Credential $pgn] < 0}]
 	} -cleanup { Cleanup } -result {1 1 1 1 1 1 1 1 1 1 1 1}
 
@@ -338,7 +344,6 @@ namespace eval ::scidb::test::lichess {
 		::lichess::fake::Set pairDelay 30
 		::lichess::Seek
 		::scidb::test::wait::until {$::lichess::Priv(state) eq "playing"}
-		lappend Positions $::lichess::Priv(pos)
 		set id $::lichess::Priv(gameId)
 		::lichess::fake::OpponentGone $id
 		::scidb::test::wait::until {$::lichess::Priv(opponentGone)}
