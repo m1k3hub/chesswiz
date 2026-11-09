@@ -607,7 +607,13 @@ tcltest::test playengine-spaced-path {an engine in a directory with spaces launc
 	catch {::application::pgn::release $pos}
 	catch {::game::release $pos}
 	set ::engine::Engines $savedEngines
-	file delete -force [file join $::scidb::test::app::testDir tmp-app spaced-engine]
+	# Windows keeps a running program's file locked: the engine Finish
+	# shut down may still be exiting, so retry for up to five seconds
+	set dir [file join $::scidb::test::app::testDir tmp-app spaced-engine]
+	for {set try 0} {[catch {file delete -force $dir}] && $try < 50} {incr try} {
+		after 100 {set ::scidb::test::pe::wake 1}
+		vwait ::scidb::test::pe::wake
+	}
 } -result {1 2 ready over 1}
 
 
