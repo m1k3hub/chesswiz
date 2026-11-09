@@ -773,6 +773,10 @@ proc ::lichess::OpenPanel {} {
 	::online::panel::refresh
 	::online::panel::status $Priv(statusText)
 	if {$Priv(state) eq "over"} { ::online::panel::result $Priv(statusText) }
+	# The panel's board rebuild can re-enable input; settle it again.
+	UpdateBoardInput
+	after cancel $Priv(inputAfter)
+	set Priv(inputAfter) [after idle [namespace code [list SettledBoardInput $Priv(pos)]]]
 }
 
 

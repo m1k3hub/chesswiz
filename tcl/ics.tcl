@@ -116,6 +116,7 @@ array set Priv {
 	observing		0
 	pendingMove		{}
 	gameInfo		{}
+	offer			{}
 	clock:w			0
 	clock:b			0
 	clockAt			0
@@ -369,6 +370,7 @@ proc ::ics::DialogExists {} {
 proc ::ics::Status {text} {
 	variable Priv
 	set Priv(statusText) $text
+	::online::panel::status $text
 	if {[DialogExists] && [info exists Priv(widget:status)]} {
 		$Priv(widget:status) configure -text $text
 	}
@@ -670,6 +672,19 @@ proc ::ics::ProcessLine {line} {
 		LogText $line
 		return
 	}
+	if {$Priv(active) && [regexp {^([A-Za-z]+)(?:\([^)]*\))*(?:\[[0-9]+\])? (says|kibitzes|whispers|tells you): (.*)$} \
+			$line -> who _ text]} {
+		::online::panel::chat $who $text
+	}
+	if {$Priv(active) && !$Priv(observing)} {
+		if {[regexp {^[A-Za-z]+ offers you a draw\.} $line]} {
+			set Priv(offer) draw
+			UpdateGameButtons
+		} elseif {[regexp {^[A-Za-z]+ would like to take back} $line]} {
+			set Priv(offer) takeback
+			UpdateGameButtons
+		}
+	}
 	if {[string match -nocase {*Illegal move*} $line] && $Priv(pendingMove) ne ""} {
 		RejectMove [format $mc::IllegalMove $Priv(pendingMove)] 1
 	}
@@ -866,6 +881,7 @@ proc ::ics::HandleStyle12 {style} {
 	DrawNames
 	DrawClocks
 	StatusForTurn
+	::online::panel::refresh
 	StartTick
 }
 
@@ -934,7 +950,48 @@ proc ::ics::StartBoard {style} {
 	StatusForTurn
 	after cancel $Priv(inputAfter)
 	set Priv(inputAfter) [after idle [namespace code [list SettledBoardInput $Priv(pos)]]]
+	set Priv(offer) {}
+	after idle [namespace code OpenPanel]
 	StartTick
+}
+
+
+proc ::ics::OpenPanel {} {
+	variable Priv
+	if {!$Priv(active) || [::online::panel::exists]} { return }
+	::online::panel::open [namespace code PanelAction] \
+		[expr {$Priv(userSide) eq "" ? "w" : $Priv(userSide)}]
+	if {[DialogExists]} { wm withdraw $Priv(dialog) }
+	DrawNames
+	UpdateGameButtons
+	::online::panel::clocks $Priv(clock:w) $Priv(clock:b) $Priv(clockStm) $Priv(ticking)
+	::online::panel::refresh
+	::online::panel::status $Priv(statusText)
+	if {$Priv(state) eq "over"} { ::online::panel::result $Priv(statusText) }
+	# The panel's board rebuild can re-enable input; settle it again.
+	UpdateBoardInput
+	after cancel $Priv(inputAfter)
+	set Priv(inputAfter) [after idle [namespace code [list SettledBoardInput $Priv(pos)]]]
+}
+
+
+proc ::ics::PanelAction {action args} {
+	variable Priv
+	switch -- $action {
+		resign	{ Resign }
+		draw		{ OfferDraw }
+		abort		{ Abort }
+		takeback	{ if {$Priv(active) && !$Priv(observing) && $Priv(state) eq "playing"} { Send "takeback 1" } }
+		accept	{ if {$Priv(offer) ne ""} { Send accept; set Priv(offer) {}; UpdateGameButtons } }
+		decline	{ if {$Priv(offer) ne ""} { Send decline; set Priv(offer) {}; UpdateGameButtons } }
+		chat {
+			set text [lindex $args 0]
+			# Players talk with "say"; observers kibitz to the game.
+			Send "[expr {$Priv(observing) ? "kibitz" : "say"}] $text"
+			::online::panel::chat $Priv(handle) $text
+		}
+		lobby - analyse { BackToLobby }
+	}
 }
 
 
@@ -1159,6 +1216,8 @@ proc ::ics::FinishBoard {} {
 	set Priv(active) 0
 	set Priv(ticking) 0
 	set Priv(pendingMove) {}
+	::online::panel::close
+	if {[DialogExists]} { wm deiconify $Priv(dialog) }
 	if {[info exists Priv(rotated)] && $Priv(rotated)} {
 		RotateBoard
 		set Priv(rotated) 0
@@ -1208,7 +1267,9 @@ proc ::ics::EndGame {result reason} {
 	UpdateBoardInput
 	UpdateGameButtons
 	DrawClocks
+	::online::panel::refresh
 	Status [format $mc::GameOver $result $reason]
+	::online::panel::result [format $mc::GameOver $result $reason]
 }
 
 
@@ -1239,6 +1300,10 @@ proc ::ics::UpdateGameButtons {} {
 	} else {
 		foreach key {resign draw abort} { $Priv(widget:$key) state !disabled }
 	}
+	set playing [expr {!$Priv(observing) && $Priv(state) eq "playing"}]
+	set offer [expr {$playing && [info exists Priv(offer)] && $Priv(offer) ne ""}]
+	::online::panel::actions [dict create resign $playing draw $playing takeback $playing \
+		abort $playing accept $offer decline $offer]
 	if {$Priv(state) eq "over" || $Priv(observing)} {
 		$Priv(widget:back) state !disabled
 		$Priv(widget:ok) state !disabled
@@ -1270,6 +1335,7 @@ proc ::ics::SetClocks {style} {
 	set Priv(clockStm) [dict get $style stm]
 	set Priv(ticking) [expr {[dict get $style ticking] && $Priv(state) ni {over offline}}]
 	set Priv(clockAt) [clock milliseconds]
+	::online::panel::clocks $Priv(clock:w) $Priv(clock:b) $Priv(clockStm) $Priv(ticking)
 }
 
 
@@ -1315,6 +1381,15 @@ proc ::ics::DrawNames {} {
 		}
 		$Priv(widget:$widget) configure -text "[set mc::[expr {$key eq "white" ? "WhiteClock" : "BlackClock"}]]: $name"
 	}
+	set cards {}
+	foreach key {white black} {
+		set card [dict create name [dict get $Priv(gameInfo) $key]]
+		if {[dict exists $Priv(gameInfo) ${key}Rating]} {
+			dict set card rating [dict get $Priv(gameInfo) ${key}Rating]
+		}
+		lappend cards $card
+	}
+	::online::panel::players {*}$cards
 }
 
 
