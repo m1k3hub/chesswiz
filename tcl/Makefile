@@ -178,6 +178,7 @@ SOURCES = \
 	app-variation.tcl \
 	app-analysis.tcl \
 	play-engine.tcl \
+	online-panel.tcl \
 	ics.tcl \
 	lichess-api.tcl \
 	lichess.tcl \

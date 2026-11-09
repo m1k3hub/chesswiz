@@ -53,6 +53,7 @@ set White					"white"
 set Black					"black"
 set OpeningGame				"Opening the game…"
 set EventStreamClosed		"The Lichess event stream closed."
+set TakebackOffered		"Your opponent asks to take back the last move."
 set GameStreamClosed		"The Lichess game stream closed."
 set WhiteClock				"White"
 set BlackClock				"Black"
@@ -371,6 +372,7 @@ proc ::lichess::DialogExists {} {
 proc ::lichess::Status {text} {
 	variable Priv
 	set Priv(statusText) $text
+	::online::panel::status $text
 	if {[DialogExists] && [info exists Priv(widget:status)]} {
 		$Priv(widget:status) configure -text $text
 	}
@@ -671,6 +673,11 @@ proc ::lichess::OnGame {event} {
 			}
 		}
 		gameState { if {$Priv(active)} { SyncState $event } }
+		chatLine {
+			if {[dict exists $event username] && [dict exists $event text]} {
+				::online::panel::chat [dict get $event username] [dict get $event text]
+			}
+		}
 		opponentGone {
 			if {!$Priv(active)} { return }
 			set Priv(opponentGone) [expr {[dict exists $event gone] && [dict get $event gone] ? 1 : 0}]
@@ -735,6 +742,7 @@ proc ::lichess::StartBoard {full} {
 	set Priv(serverMoves) {}
 	set Priv(pendingMove) {}
 	set Priv(drawOffer) 0
+	set Priv(takebackOffer) 0
 	set Priv(opponentGone) 0
 	ShowView game
 	if {[dict exists $full state]} {
@@ -746,7 +754,25 @@ proc ::lichess::StartBoard {full} {
 	}
 	after cancel $Priv(inputAfter)
 	set Priv(inputAfter) [after idle [namespace code [list SettledBoardInput $Priv(pos)]]]
+	# Opening the panel rebuilds the board, which can run queued stream
+	# events; open it only once the game above is fully set up.
+	after idle [namespace code OpenPanel]
 	return 1
+}
+
+
+proc ::lichess::OpenPanel {} {
+	variable Priv
+	if {!$Priv(active) || [::online::panel::exists]} { return }
+	::online::panel::open [namespace code PanelAction] $Priv(userSide)
+	# The panel replaces the dialog while the game runs.
+	if {[DialogExists]} { wm withdraw $Priv(dialog) }
+	DrawNames
+	UpdateGameButtons
+	::online::panel::clocks $Priv(clock:w) $Priv(clock:b) $Priv(clockStm) $Priv(ticking)
+	::online::panel::refresh
+	::online::panel::status $Priv(statusText)
+	if {$Priv(state) eq "over"} { ::online::panel::result $Priv(statusText) }
 }
 
 
@@ -882,6 +908,9 @@ proc ::lichess::SyncState {state} {
 	set Priv(drawOffer) 0
 	set opponent [expr {$Priv(userSide) eq "w" ? "bdraw" : "wdraw"}]
 	if {[dict exists $state $opponent] && [dict get $state $opponent]} { set Priv(drawOffer) 1 }
+	set Priv(takebackOffer) 0
+	set opponent [expr {$Priv(userSide) eq "w" ? "btakeback" : "wtakeback"}]
+	if {[dict exists $state $opponent] && [dict get $state $opponent]} { set Priv(takebackOffer) 1 }
 
 	set status [expr {[dict exists $state status] ? [dict get $state status] : "started"}]
 	set result [ResultForState $state]
@@ -895,9 +924,12 @@ proc ::lichess::SyncState {state} {
 	DrawClocks
 	if {$Priv(drawOffer)} {
 		Status $mc::DrawOffered
+	} elseif {$Priv(takebackOffer)} {
+		Status $mc::TakebackOffered
 	} else {
 		StatusForTurn
 	}
+	::online::panel::refresh
 	StartTick
 }
 
@@ -1106,6 +1138,8 @@ proc ::lichess::FinishBoard {} {
 	set Priv(active) 0
 	set Priv(ticking) 0
 	set Priv(pendingMove) {}
+	::online::panel::close
+	if {[DialogExists]} { wm deiconify $Priv(dialog) }
 	if {$Priv(rotated)} {
 		RotateBoard
 		set Priv(rotated) 0
@@ -1209,7 +1243,9 @@ proc ::lichess::EndGame {result reason} {
 	UpdateBoardInput
 	UpdateGameButtons
 	DrawClocks
+	::online::panel::refresh
 	Status [format $mc::GameOver $result $reason]
+	::online::panel::result [format $mc::GameOver $result $reason]
 }
 
 
@@ -1244,6 +1280,39 @@ proc ::lichess::UpdateGameButtons {} {
 	}
 	$Priv(widget:claim) state [expr {$playing && $Priv(opponentGone) ? "!disabled" : "disabled"}]
 	$Priv(widget:back) state [expr {$Priv(active) && $Priv(state) eq "over" ? "!disabled" : "disabled"}]
+	set offer [expr {$Priv(drawOffer) || $Priv(takebackOffer)}]
+	::online::panel::actions [dict create resign $playing draw $playing takeback $playing \
+		abort $playing accept [expr {$playing && $offer}] decline [expr {$playing && $offer}] \
+		claim [expr {$playing && $Priv(opponentGone)}]]
+}
+
+
+proc ::lichess::PanelAction {action args} {
+	variable Priv
+	switch -- $action {
+		resign	{ Resign }
+		draw		{ OfferDraw }
+		abort		{ Abort }
+		claim		{ ClaimVictory }
+		accept	{ if {$Priv(takebackOffer)} { Takeback yes } else { AcceptDraw } }
+		decline	{ if {$Priv(takebackOffer)} { Takeback no } else { DeclineDraw } }
+		takeback	{ Takeback yes }
+		chat {
+			if {$Priv(gameId) ne ""} {
+				::lichess::api::chat $Priv(gameId) [lindex $args 0] [namespace code ActionResult]
+				::online::panel::chat $Priv(username) [lindex $args 0]
+			}
+		}
+		lobby - analyse { BackToLobby }
+	}
+}
+
+
+proc ::lichess::Takeback {answer} {
+	variable Priv
+	if {$Priv(active) && $Priv(state) eq "playing"} {
+		::lichess::api::takeback $Priv(gameId) $answer [namespace code ActionResult]
+	}
 }
 
 
@@ -1275,6 +1344,7 @@ proc ::lichess::SetClocks {state} {
 	set status [expr {[dict exists $state status] ? [dict get $state status] : "started"}]
 	set Priv(ticking) [expr {$Priv(active) && $status in {started created} && $Priv(state) ne "over"}]
 	set Priv(clockAt) [clock milliseconds]
+	::online::panel::clocks $Priv(clock:w) $Priv(clock:b) $Priv(clockStm) $Priv(ticking)
 }
 
 
@@ -1286,6 +1356,8 @@ proc ::lichess::SettleClock {} {
 	}
 	if {![catch { ::scidb::pos::fen } fen]} { set Priv(clockStm) [lindex $fen 1] }
 	set Priv(clockAt) $now
+	::online::panel::clocks $Priv(clock:w) $Priv(clock:b) $Priv(clockStm) $Priv(ticking)
+	::online::panel::refresh
 }
 
 
@@ -1332,6 +1404,19 @@ proc ::lichess::DrawNames {} {
 		}
 		$Priv(widget:$widget) configure -text "[set mc::$label]: $name"
 	}
+	set cards {}
+	foreach key {white black} {
+		set card [dict create name ?]
+		if {[dict exists $Priv(gameInfo) $key]} {
+			set player [dict get $Priv(gameInfo) $key]
+			dict set card name [PlayerName $player]
+			foreach field {title rating} {
+				if {[dict exists $player $field]} { dict set card $field [dict get $player $field] }
+			}
+		}
+		lappend cards $card
+	}
+	::online::panel::players {*}$cards
 }
 
 

@@ -346,6 +346,11 @@ proc ::lichess::api::resign {id cmd} { Action $id resign $cmd }
 proc ::lichess::api::abort {id cmd} { Action $id abort $cmd }
 proc ::lichess::api::draw {id answer cmd} { Action $id draw/[Segment $answer] $cmd }
 proc ::lichess::api::claimVictory {id cmd} { Action $id claim-victory $cmd }
+proc ::lichess::api::takeback {id answer cmd} { Action $id takeback/[Segment $answer] $cmd }
+proc ::lichess::api::chat {id text cmd} {
+	Request POST /api/board/game/[Segment $id]/chat [list room player text $text] \
+		[list ::lichess::api::ActionReply $cmd 0]
+}
 
 # PKCE uses OS entropy, never Tcl's non-cryptographic rand(). A platform
 # without an entropy source fails closed and offers personal-token sign in.
