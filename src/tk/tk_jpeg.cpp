@@ -166,7 +166,7 @@ process_image(	Tcl_Interp* ti,
 		return TCL_OK;
 	if (src_x + width > image.width())
 		width = image.width() - src_x;
-	if (src_y + width > image.height())
+	if (src_y + height > image.height())
 		height = image.height() - src_y;
 
 	if (Tk_PhotoExpand(ti, image_handle, dst_x + width, dst_y + height) == TCL_ERROR)

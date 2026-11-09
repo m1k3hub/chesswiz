@@ -1369,6 +1369,9 @@ Codec::loadAnnotationItems(unsigned gameIndex, mstl::vector<CbaItem>& items)
 	uint32_t const cbaDataSize = readLE32(hdr + 0x08);
 	if (cbaDataSize < 10)
 		return false;
+	// a corrupt size must not cause a huge allocation
+	if (int64_t(cbaOff) + int64_t(sizeof(hdr)) + int64_t(cbaDataSize) > m_annotationStream.size())
+		return false;
 	uint32_t const adSize = cbaDataSize;
 	mstl::string adata(adSize, '\0');
 

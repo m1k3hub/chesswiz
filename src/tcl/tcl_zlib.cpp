@@ -88,10 +88,11 @@ cmdZlibInflate(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const o
 		char outBuf[ChunkSize];
 
 		int avail = Tcl_Read(srcChan, inBuf, mstl::min(remaining, int(ChunkSize)));
-		if (avail < 0)
+		if (avail <= 0)
 		{
-			deflateEnd(&strm);
-			Tcl_SetResult(ti, const_cast<char*>("read failed"), TCL_STATIC);
+			// a zero read before the stream ends would loop forever
+			inflateEnd(&strm);
+			Tcl_SetResult(ti, const_cast<char*>(avail < 0 ? "read failed" : "unexpected end of input"), TCL_STATIC);
 			return TCL_ERROR;
 		}
 

@@ -1986,6 +1986,9 @@ tk_set_alpha(	char const* subcmd,
 
 		if (strcmp(option, "-composite") == 0)
 		{
+			if (arg >= objc)
+				return tcl_usage(subcmd, options, args);
+
 			composite = Tcl_GetString(objv[arg++]);
 
 			if (strcmp(composite, "set") != 0 && strcmp(composite, "overlay") != 0)

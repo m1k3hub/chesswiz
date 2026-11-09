@@ -204,7 +204,7 @@ Mapping::Mapping(char const* filename, Mode mode)
 	m_mapping = CreateFileMappingA(
 							m_file,
 							0,
-							PAGE_READONLY,
+							mode & Writeable ? PAGE_READWRITE : PAGE_READONLY,
 							0,
 							0,
 							filename);
@@ -222,6 +222,15 @@ Mapping::Mapping(char const* filename, Mode mode)
 						0,
 						0,
 						0);
+
+	if (m_address == 0)
+	{
+		CloseHandle(m_mapping);
+		CloseHandle(m_file);
+		m_mapping = 0;
+		m_file = INVALID_HANDLE_VALUE;
+		return;
+	}
 
 	m_capacity = m_size = GetFileSize(m_file, 0);
 }

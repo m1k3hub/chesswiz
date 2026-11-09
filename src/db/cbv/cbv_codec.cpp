@@ -306,6 +306,9 @@ decompressLZ77(unsigned char const* data, unsigned dataLen)
 				else
 				{
 					// Back-reference
+					if (pos >= dataLen)
+						goto done;
+
 					unsigned offset = ((data[pos] << 4) + low + 3);
 					++pos;
 

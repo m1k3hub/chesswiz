@@ -317,6 +317,14 @@ MoveListThread::retrieve(	Cursor& cursor,
 	}
 	else
 	{
+		if (m_runnable)
+		{
+			// the previous batch is finished; release it before starting the next
+			stop();
+			delete m_runnable;
+			m_runnable = nullptr;
+		}
+
 		m_runnable = new Runnable(	cursor,
 											database,
 											m_resultList,
