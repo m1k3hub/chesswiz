@@ -247,5 +247,18 @@ check "error: the rest answer" [expr {
 }]
 ::scidb::test::b::stop
 
+# --- the backend changes mid-run: nothing more is sent under the old name -
+proc ::scidb::test::b::switchModel {done total} {
+	if {$done == 1} { ::ai::systemone::configure -model another-model }
+}
+::scidb::test::b::start
+set r [::scidb::test::b::collect {{k1 s1} {k2 s2} {k3 s3}} $Q -concurrency 1 \
+	-progress ::scidb::test::b::switchModel]
+set res [dict get $r results]
+check "switch: no request after the switch" [expr {[llength $::scidb::test::b::Requests] == 1}]
+check "switch: the first answer stands" [expr {[dict get $res k1 ok]}]
+check "switch: the rest fall back" [expr {![dict get $res k2 ok] && ![dict get $res k3 ok]}]
+::scidb::test::b::stop
+
 puts "AI-BATCH-FAILURES: $failures"
 exit $failures

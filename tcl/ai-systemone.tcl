@@ -442,7 +442,8 @@ proc ::ai::systemone::chooseManySync {feature state questions args} {
 	array set opts {-timeout 3000 -threshold 0.6}
 	array set opts $args
 
-	if {![enabled]} { return {} }
+	# the same eligibility gate as chooseSync: no calibration, no action
+	if {![enabled] || ![qualified $feature]} { return {} }
 	if {![dict size $questions]} { return {} }
 
 	set saved $Config(timeoutMs)

@@ -467,7 +467,10 @@ extractCBV(mstl::string const& cbvPath, mstl::string const& outDir, Progress& pr
 	}
 
 	if (entryRecordSize < 140)
+	{
+		delete[] fileData;
 		IO_RAISE(Archive, Corrupted, "CBV entry record too small (%u) in '%s'", entryRecordSize, cbvPath.c_str());
+	}
 
 	// File data is laid out sequentially immediately after the header and the
 	// file-list section. Each member's payload occupies exactly its
@@ -481,6 +484,13 @@ extractCBV(mstl::string const& cbvPath, mstl::string const& outDir, Progress& pr
 	// which only matched one specific archive and caused every member of every
 	// other archive to be silently skipped (e.g. all TWIC .cbv archives).
 	uint64_t dataOffset = uint64_t(headerSize) + uint64_t(numEntries) * entryRecordSize;
+
+	// the member table must lie inside the file before any record is read
+	if (dataOffset > fileSize)
+	{
+		delete[] fileData;
+		IO_RAISE(Archive, Corrupted, "CBV member table extends past end of file in '%s'", cbvPath.c_str());
+	}
 
 	for (unsigned i = 0; i < numEntries; ++i)
 	{
@@ -506,9 +516,23 @@ extractCBV(mstl::string const& cbvPath, mstl::string const& outDir, Progress& pr
 		}
 
 		if (dataOffset + storedSize > fileSize)
+		{
+			delete[] fileData;
 			IO_RAISE(Archive, Corrupted,
 			         "CBV member '%s' extends past end of file in '%s'",
 			         fname.c_str(), cbvPath.c_str());
+		}
+
+		// a member is a plain file name: "../x" or "/x" would write outside outDir
+		if (	fname == "." || fname == ".."
+			|| fname.find('/') != mstl::string::npos
+			|| fname.find('\\') != mstl::string::npos
+			|| fname.find(':') != mstl::string::npos)
+		{
+			delete[] fileData;
+			IO_RAISE(Archive, Corrupted, "CBV member name '%s' is not a plain file name in '%s'",
+			         fname.c_str(), cbvPath.c_str());
+		}
 
 		// compressed_size and decompressed_size at record offsets 132/136
 		// are not needed for block-based extraction (and may overflow int32_t).

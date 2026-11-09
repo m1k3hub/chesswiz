@@ -50,6 +50,7 @@
 #include <stdlib.h>
 
 #include <ctype.h>
+#include <stdio.h>
 
 #define U64 UINT64_C
 
@@ -66,11 +67,13 @@ readList(mstl::istream& strm, mstl::string& s)
 {
 	s.clear();
 
-	char c;
+	// int, not char: EOF must stay distinguishable, or a list without its
+	// closing brace appends forever
+	int c;
 
 	do
 		c = strm.get();
-	while (::isspace(c));
+	while (c != EOF && ::isspace(c));
 
 	if (c != '{')
 		return false;
@@ -79,9 +82,9 @@ readList(mstl::istream& strm, mstl::string& s)
 
 	while (level > 0)
 	{
-		s.append(c);
+		s.append(char(c));
 
-		if ((c = strm.get()) == '\0')
+		if ((c = strm.get()) == EOF || c == '\0')
 			return false;
 
 		if (c == '}')
@@ -1413,11 +1416,11 @@ Book::countEntries() const
 void
 Book::readScidMaskFile(mstl::ifstream& strm)
 {
-	char c;
+	int c;
 
 	do
 		c = strm.get();
-	while (c != '{' && c != '\0');
+	while (c != '{' && c != '\0' && c != EOF);
 
 	mstl::string sbuffer;
 	mstl::string sfen;

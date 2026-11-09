@@ -140,16 +140,44 @@ testLongFormat()
 }
 
 
+// CORE-05/06: a value taken from the container itself survives growth
+static void
+testSelfReference()
+{
+	mstl::vector<mstl::string> v;
+	v.push_back(str("first-long-string-value"));
+	v.reserve(1);
+	while (v.size() < v.capacity())
+		v.push_back(str("filler-long-string-value"));
+	v.push_back(v[0]);	// full: this grows the storage
+	CHECK(v.back() == "first-long-string-value");
+
+	mstl::vector<int> w;
+	w.push_back(7);
+	while (w.size() < w.capacity())
+		w.push_back(1);
+	w.push_back(w[0]);
+	CHECK(w.back() == 7);
+
+	mstl::string s("abcdefghijklmnop");
+	s.append(s.c_str(), s.size());	// growth while reading from itself
+	CHECK(s == "abcdefghijklmnopabcdefghijklmnop");
+	s.append(s.c_str() + 4, 4);
+	CHECK(s.size() == 36 && ::strcmp(s.c_str() + 32, "efgh") == 0);
+}
+
+
 int
 main(int argc, char** argv)
 {
-	// an optional argument runs one section: erase, insert, repeat or format
+	// an optional argument runs one section: erase, insert, repeat, format or self
 	char const* only = argc > 1 ? argv[1] : "";
 
 	if (!*only || ::strcmp(only, "erase") == 0) testEraseStrings();
 	if (!*only || ::strcmp(only, "insert") == 0) testInsertRange();
 	if (!*only || ::strcmp(only, "repeat") == 0) testRepeat();
 	if (!*only || ::strcmp(only, "format") == 0) testLongFormat();
+	if (!*only || ::strcmp(only, "self") == 0) testSelfReference();
 
 	if (failures)
 		printf("mstl core: %d failure(s)\n", failures);

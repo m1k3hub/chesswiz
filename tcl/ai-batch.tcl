@@ -197,6 +197,13 @@ proc ::ai::batch::Pump {id} {
 		Drain $id "no System One backend is configured"
 		return
 	}
+	# answers are cached under the run's backend and model: after a switch,
+	# a new request would be answered by another model under that name
+	if {$::ai::systemone::Config(endpoint) ne [dict get $run endpoint]
+		|| $::ai::systemone::Config(model) ne [dict get $run model]} {
+		Drain $id "the System One backend changed during the run"
+		return
+	}
 
 	while {[dict get $run active] < [dict get $run concurrency] \
 		&& [llength [dict get $run queue]]} {

@@ -347,8 +347,20 @@ inline
 void
 vector<T>::push_back(const_reference v)
 {
-	reserve(size() + 1);
-	mstl::bits::construct(this->m_finish++, v);
+	if (	this->m_finish == this->m_end_of_storage
+		&& &v >= this->m_start
+		&& &v < this->m_finish)
+	{
+		// v lives in the storage that growing frees: copy it first
+		T copy(v);
+		reserve(size() + 1);
+		mstl::bits::construct(this->m_finish++, copy);
+	}
+	else
+	{
+		reserve(size() + 1);
+		mstl::bits::construct(this->m_finish++, v);
+	}
 }
 
 

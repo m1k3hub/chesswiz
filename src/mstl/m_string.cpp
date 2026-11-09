@@ -402,7 +402,18 @@ string::append(const_pointer s, size_type len)
 
 	if (len)
 	{
-		reserve(m_size + len);
+		if (s >= m_data && s < m_data + m_size)
+		{
+			// s points into this string, whose buffer reserve may replace
+			size_type offset = s - m_data;
+			reserve(m_size + len);
+			s = m_data + offset;
+		}
+		else
+		{
+			reserve(m_size + len);
+		}
+
 		::copy(m_data + m_size, s, len);
 		m_data[m_size += len] = '\0';
 	}
