@@ -41,6 +41,7 @@ proc ::capability::DefineAll {} {
 	Define download    {expr {[llength [info commands ::application::download::openActive]] > 0}}
 	Define playengine  {expr {[llength [info commands ::playengine::open]] > 0}}
 	Define ics         {expr {[llength [info commands ::ics::open]] > 0}}
+	Define lichess     {expr {[llength [info commands ::lichess::open]] > 0}}
 	Define enginematch {expr {[llength [info commands ::enginematch::open]] > 0}}
 	Define guessmove   {expr {[llength [info commands ::guessmove::start]] > 0}}
 	Define endtrainer  {expr {[llength [info commands ::endtrainer::open]] > 0}}

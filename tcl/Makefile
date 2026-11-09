@@ -179,6 +179,8 @@ SOURCES = \
 	app-analysis.tcl \
 	play-engine.tcl \
 	ics.tcl \
+	lichess-api.tcl \
+	lichess.tcl \
 	engine-match.tcl \
 	ai-claims.tcl \
 	ai-rhetoric.tcl \
