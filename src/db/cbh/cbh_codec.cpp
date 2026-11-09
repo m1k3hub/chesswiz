@@ -2651,7 +2651,12 @@ Codec::startDecoding(ByteStream& gameStream,
 				if (!m_annotationStream.read(annotationStream->base(), 4))
 					IO_RAISE(Annotation, Corrupted, "unexpected end of file");
 
-				size = annotationStream->uint32() - 14;
+				size = annotationStream->uint32();
+
+				if (size < 14)
+					IO_RAISE(Annotation, Corrupted, "bad data");
+
+				size -= 14;
 
 				annotationStream->resetg();
 				annotationStream->reserve(size);

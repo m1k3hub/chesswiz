@@ -185,10 +185,10 @@ proc writeItem {chan var {lowercaseOnly 1}} {
 		writeArray $chan [array get $var] $lowercaseOnly
 		puts $chan "}"
 	} elseif {[info exists $var]} {
-		switch [llength [set $var]] {
-			0			{ puts $chan "set $var {}" }
-			1			{ puts $chan "set $var [set $var]" }
-			default	{ puts $chan "set $var {[set $var]}" }
+		if {[set $var] eq ""} {
+			puts $chan "set $var {}"
+		} else {
+			puts $chan [list set $var [set $var]]
 		}
 	}
 }
@@ -198,7 +198,7 @@ proc writeList {chan var} {
 	if {[llength [set $var]] == 0} {
 		puts $chan "set $var {}"
 	} else {
-		puts $chan "set $var {[set $var]}"
+		puts $chan [list set $var [set $var]]
 	}
 }
 
@@ -206,8 +206,7 @@ proc writeList {chan var} {
 proc writeArray {chan arr {lowercaseOnly 1}} {
 	set maxlength 0
 	foreach {key val} $arr {
-		set length [string length $key]
-		if {[llength $key] > 1} { incr length 2 }
+		set length [string length [list $key]]
 		set maxlength [max $maxlength $length]
 	}
 	set lst {}
@@ -215,12 +214,12 @@ proc writeArray {chan arr {lowercaseOnly 1}} {
 	foreach elem [lsort -index 0 $lst] {
 		lassign $elem key val
 		if {!$lowercaseOnly || ![string is upper [string index $key 0]]} {
-			if {[llength $key] > 1} { set key [list $key] }
+			set key [list $key]
 			set spaces [string repeat " " [expr {$maxlength - [string length $key] + 1}]]
-			if {[llength $val] == 0} {
+			if {[string trim $val] eq ""} {
 				puts $chan "  $key$spaces{}"
 			} else {
-				puts $chan "  $key$spaces{$val}"
+				puts $chan "  $key$spaces[list $val]"
 			}
 		}
 	}

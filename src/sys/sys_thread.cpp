@@ -421,7 +421,7 @@ socketpair(SOCKET socks[2])
 			&& getsockname(listener, &addr.addr, &addrlen) != SOCKET_ERROR
 			&& listen(listener, 1) != SOCKET_ERROR)
 		{
-			if (	(socks[0] = WSASocket(AF_INET, SOCK_STREAM, 0, 0, 0, 0) != INVALID_SOCKET)
+			if (	(socks[0] = WSASocket(AF_INET, SOCK_STREAM, 0, 0, 0, 0)) != INVALID_SOCKET
 				&& connect(socks[0], &addr.addr, sizeof(addr.inaddr)) != SOCKET_ERROR
 				&& (socks[1] = accept(listener, 0, 0)) != INVALID_SOCKET)
 			{

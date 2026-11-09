@@ -62,7 +62,7 @@ using namespace app::polyglot;
 
 
 static bool
-readList(mstl::istream& strm, mstl::string s)
+readList(mstl::istream& strm, mstl::string& s)
 {
 	s.clear();
 

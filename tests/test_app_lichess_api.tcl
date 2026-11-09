@@ -262,6 +262,11 @@ namespace eval ::lichess::apitest {
 			[expr {[string first $Stored [dict get $bad error]] < 0}]
 	} -cleanup { Stop } -result {game1234 level=3&clock.limit=300&clock.increment=2&color=white {1 1 1 1 1 1} {/api/board/game/game1234/move/e2e4 /api/board/game/game1234/resign /api/board/game/game1234/abort /api/board/game/game1234/draw/yes /api/board/game/game1234/draw/no /api/board/game/game1234/claim-victory} 400 1}
 
+	tcltest::test lichess-api-chat {chat posts form data, not a Tcl list} -setup { Start; set Stored test-secret } -body {
+		set ok [dict get [Call chat game1234 {good game & thanks}] ok]
+		list $ok [lindex $Seen 0 1] [lindex $Seen 0 2]
+	} -cleanup { Stop } -result {1 /api/board/game/game1234/chat room=player&text=good%20game%20%26%20thanks}
+
 	tcltest::test lichess-api-429 {global one-minute cooldown delays new requests and allows cancellation} -setup { Start; set Stored test-secret } -body {
 		set Status 429
 		set limited [Call account]

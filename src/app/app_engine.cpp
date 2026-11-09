@@ -287,14 +287,14 @@ findVersionNumber(char const* s)
 static char const*
 findRomanNumber(char const* s)
 {
-	if (::strchr("XIV", ::toupper(*s)) == 0)
+	if (*s == '\0' || ::strchr("XIV", ::toupper(*s)) == 0)
 		return 0;
 
 	++s;
 
 	char const* numbers = ::strchr("XIV", *s) ? "XIV" : "xiv";
 
-	while (::strchr(numbers, *s))
+	while (*s && ::strchr(numbers, *s))
 		++s;
 
 	if (isalnum(*s))

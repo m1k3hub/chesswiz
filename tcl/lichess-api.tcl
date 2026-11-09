@@ -348,7 +348,7 @@ proc ::lichess::api::draw {id answer cmd} { Action $id draw/[Segment $answer] $c
 proc ::lichess::api::claimVictory {id cmd} { Action $id claim-victory $cmd }
 proc ::lichess::api::takeback {id answer cmd} { Action $id takeback/[Segment $answer] $cmd }
 proc ::lichess::api::chat {id text cmd} {
-	Request POST /api/board/game/[Segment $id]/chat [list room player text $text] \
+	Request POST /api/board/game/[Segment $id]/chat [::http::formatQuery room player text $text] \
 		[list ::lichess::api::ActionReply $cmd 0]
 }
 
