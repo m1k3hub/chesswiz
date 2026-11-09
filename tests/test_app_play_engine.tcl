@@ -659,7 +659,7 @@ tcltest::test playengine-flag-engine {an engine flag fall ends the game 1-0 with
 	list $::playengine::Priv(phase) \
 		[expr {[lsearch -exact [::scidb::game::tags] {Result 1-0}] >= 0}] \
 		[expr {[string first {[Result "1-0"]} $pgn] >= 0}] \
-		[string match {*1-0*} [string range $pgn end-4 end]]
+		[regexp {\s1-0$} [string trimright $pgn]]
 } -cleanup {
 	::scidb::test::pe::unstub
 } -result {over 1 1 1}
