@@ -354,7 +354,7 @@ tcltest::test panel-hide-writes-option {Hide writes the choice at once, so it su
 	set chan [open $::scidb::file::options r]
 	set data [read $chan]
 	close $chan
-	set saved [regexp {assistant:startup\s+\{0\}} $data]
+	set saved [regexp {assistant:startup\s+\{?0\}?\s} $data]
 	::application::assistant::panel::Show
 	set saved
 } -result 1
@@ -382,7 +382,7 @@ tcltest::test panel-option-written {the startup choice is saved in the options f
 	close $chan
 	file delete $path
 	::application::assistant::panel::SetEnabled 1
-	regexp {assistant:startup\s+\{0\}} $data
+	regexp {assistant:startup\s+\{?0\}?\s} $data
 } -result 1
 
 tcltest::test panel-preference-applies {the Preferences checkbox hides or shows the pane at once} -body {

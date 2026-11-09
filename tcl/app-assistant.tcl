@@ -998,10 +998,67 @@ proc ::application::assistant::ConfigureProvider {} {
 }
 
 
+# The request budget: a long conversation would otherwise send every
+# earlier turn and tool reply again on each round, until the provider
+# refuses it. Characters of message content, roughly 4 per token.
+namespace eval ::application::assistant {
+	variable HistoryBudget	120000
+	variable OldToolReply	2000	;# tool replies of earlier turns are cut to this
+}
+
+
+# What is sent from the history: the system prompt and the current turn
+# always; earlier turns (each starts at a user message, so a tool call is
+# never parted from its reply) newest first while they fit, with their
+# tool replies shortened. Priv(messages) itself stays complete.
+proc ::application::assistant::BudgetMessages {messages} {
+	variable HistoryBudget
+	variable OldToolReply
+
+	set head {}
+	if {[llength $messages] && [dict get [lindex $messages 0] role] eq "system"} {
+		set head [lrange $messages 0 0]
+		set messages [lrange $messages 1 end]
+	}
+	set turns {}
+	set turn {}
+	foreach m $messages {
+		if {[dict get $m role] eq "user" && [llength $turn]} {
+			lappend turns $turn
+			set turn {}
+		}
+		lappend turn $m
+	}
+	if {[llength $turn]} { lappend turns $turn }
+	if {![llength $turns]} { return $head }
+
+	set kept [list [lindex $turns end]]
+	set used 0
+	foreach m [concat $head [lindex $turns end]] {
+		if {[dict exists $m content]} { incr used [string length [dict get $m content]] }
+	}
+	for {set i [expr {[llength $turns] - 2}]} {$i >= 0} {incr i -1} {
+		set short {}
+		set size 0
+		foreach m [lindex $turns $i] {
+			if {[dict get $m role] eq "tool" && [string length [dict get $m content]] > $OldToolReply} {
+				dict set m content "[string range [dict get $m content] 0 $OldToolReply-1] …(shortened)"
+			}
+			if {[dict exists $m content]} { incr size [string length [dict get $m content]] }
+			lappend short $m
+		}
+		if {$used + $size > $HistoryBudget} { break }
+		incr used $size
+		set kept [linsert $kept 0 $short]
+	}
+	return [concat $head {*}$kept]
+}
+
+
 proc ::application::assistant::Step {round} {
 	variable Priv
 	variable ResultProseInstructions
-	set messages $Priv(messages)
+	set messages [BudgetMessages $Priv(messages)]
 
 	# Bound each attempt so an unavailable service reaches its backups and
 	# leaves Tk responsive. Restore the caller's timeout when this turn ends.
