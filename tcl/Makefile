@@ -183,6 +183,7 @@ SOURCES = \
 	ics.tcl \
 	lichess-api.tcl \
 	lichess.tcl \
+	stream-chat.tcl \
 	stream.tcl \
 	engine-match.tcl \
 	ai-claims.tcl \

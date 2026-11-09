@@ -175,6 +175,70 @@ tcltest::test stream-delay-release {a live game reaches the pages only after the
 	set ::stream::Options(delay) $saved
 } -result {0 1 1}
 
+
+# ----------------------------------------------------------------------
+# Twitch chat, replayed from recorded IRC lines (no network)
+# ----------------------------------------------------------------------
+
+proc ::scidb::test::stream::Replay {lines} {
+	set ::stream::chat::Priv(lines) {}
+	foreach l $lines { ::stream::chat::handle $l }
+	lmap l [::stream::chat::lines] { list [dict get $l name] [dict get $l text] }
+}
+
+tcltest::test stream-chat-parse {tags, prefix, command and trailing text} -body {
+	lassign [::stream::chat::Parse {@badge-info=;color=#1E90FF;display-name=Chess\sFan;id=a1 :chessfan!chessfan@chessfan.tmi.twitch.tv PRIVMSG #wiz :hello there: e4!}] tags prefix cmd params
+	list [dict get $tags display-name] [dict get $tags color] $prefix $cmd $params
+} -result {{Chess Fan} #1E90FF chessfan!chessfan@chessfan.tmi.twitch.tv PRIVMSG {{#wiz} {hello there: e4!}}}
+
+tcltest::test stream-chat-messages {display names, /me actions, fallback to login} -body {
+	::scidb::test::stream::Replay {
+		{@color=#FF0000;display-name=Magnus;id=m1 :magnus!magnus@magnus.tmi.twitch.tv PRIVMSG #wiz :Nf3 is best}
+		"@display-name=;id=m2 :anon42!anon42@anon42.tmi.twitch.tv PRIVMSG #wiz :\x01ACTION waves\x01"
+		{:tmi.twitch.tv PING :tmi.twitch.tv}
+	}
+} -result {{Magnus {Nf3 is best}} {anon42 waves}}
+
+tcltest::test stream-chat-moderation {deleted messages and timed-out users disappear} -body {
+	list [::scidb::test::stream::Replay {
+		{@display-name=A;id=1 :a!a@a.tmi.twitch.tv PRIVMSG #wiz :one}
+		{@display-name=B;id=2 :b!b@b.tmi.twitch.tv PRIVMSG #wiz :spam}
+		{@display-name=A;id=3 :a!a@a.tmi.twitch.tv PRIVMSG #wiz :two}
+		{@login=a;target-msg-id=1 :tmi.twitch.tv CLEARMSG #wiz :one}
+		{@ban-duration=600 :tmi.twitch.tv CLEARCHAT #wiz :b}
+	}] [::scidb::test::stream::Replay {
+		{@display-name=A;id=1 :a!a@a.tmi.twitch.tv PRIVMSG #wiz :one}
+		{:tmi.twitch.tv CLEARCHAT #wiz}
+	}]
+} -result {{{A two}} {}}
+
+tcltest::test stream-chat-keep {only the last 50 lines are kept} -body {
+	set lines {}
+	for {set i 1} {$i <= 60} {incr i} {
+		lappend lines "@display-name=U;id=$i :u!u@u.tmi.twitch.tv PRIVMSG #wiz :line $i"
+	}
+	set got [::scidb::test::stream::Replay $lines]
+	list [llength $got] [lindex $got 0 1]
+} -result {50 {line 11}}
+
+tcltest::test stream-chat-bad-channel {channel names are checked before connecting} -body {
+	list [catch { ::stream::chat::connect "no spaces!" }] [::stream::chat::state]
+} -result {1 off}
+
+tcltest::test stream-chat-event {pages receive chat as its own event, escaped} -setup {
+	::stream::stop
+	::stream::start $::scidb::test::stream::Port
+	::scidb::test::wait::until {$::stream::Priv(shown) ne ""} 3000
+	::scidb::test::stream::Replay {
+		{@color=#00FF00;display-name=Fan;id=9 :fan!fan@fan.tmi.twitch.tv PRIVMSG #wiz :<b>"hi"</b>}
+	}
+} -body {
+	lassign [::scidb::test::stream::Get /[::scidb::test::stream::Token]/events] status text
+	::scidb::test::wait::until {1} 100
+	regexp {event: chat\ndata: (\{[^\n]*\})} $text -> json
+	set json
+} -result {{"chat":[{"name":"Fan","colour":"#00FF00","text":"<b>\"hi\"</b>","platform":"twitch"}]}}
+
 tcltest::test stream-stop {stop closes the port} -body {
 	::stream::stop
 	list [::stream::running?] [catch { socket 127.0.0.1 $::scidb::test::stream::Port }]

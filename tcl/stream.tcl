@@ -41,6 +41,17 @@ set Page(block/board)		"Board only (for your own layout)"
 set Page(block/eval)		"Eval bar and best line"
 set Page(block/clocks)		"Clocks and players"
 set Page(block/moves)		"Move list"
+set Page(block/chat)		"Chat"
+set Chat			"Twitch chat"
+set ChatChannel		"Your Twitch channel"
+set ChatConnect		"Show chat"
+set ChatDisconnect	"Hide chat"
+set ChatExplain		"Chesswiz reads your channel's public chat, like a viewer who isn't signed in. Lines your moderators delete disappear here too."
+set ChatState(off)			""
+set ChatState(connecting)	"Connecting to Twitch\u2026"
+set ChatState(joined)		"Showing chat of #%s."
+set ChatState(retrying)		"Connection lost; trying again\u2026"
+set ChatBadName		"A Twitch channel name has 1 to 25 letters, digits or underscores."
 set EngineOff		"Engine help is off until this game ends (fair play)."
 set Delay			"Delay during your games (seconds)"
 set DelayExplain	"While you play a person online, your stream shows each move this many seconds late, so viewers can't pass you moves. Chesswiz delays only its own pages. To delay your camera and voice by the same amount, set Stream Delay in OBS (Settings, Advanced) instead and set this to 0."
@@ -49,10 +60,10 @@ set CatchingUp		"Your stream is catching up with the board: %d s left."
 
 }
 
-variable Pages {scene/analysis scene/playing scene/board block/board block/eval block/clocks block/moves}
+variable Pages {scene/analysis scene/playing scene/board block/board block/eval block/clocks block/moves block/chat}
 
 variable Options
-array set Options { port 8765 delay 60 }
+array set Options { port 8765 delay 60 chat:channel {} }
 ::options::hookWriter [namespace current]::WriteOptions
 
 variable Priv
@@ -305,11 +316,30 @@ proc delay {} {
 }
 
 
-proc Broadcast {json} {
+# Chat is not delayed: viewers read it on the platform anyway.
+proc ChatChanged {} {
+	variable Priv
+	Broadcast [ChatJson] chat
+	ChatShow
+}
+
+
+proc ChatJson {} {
+	set items {}
+	foreach l [::stream::chat::lines] {
+		lappend items "{[JsonString name]:[JsonString [dict get $l name]],[JsonString colour]:[JsonString [dict get $l colour]],[JsonString text]:[JsonString [dict get $l text]],[JsonString platform]:[JsonString [dict get $l platform]]}"
+	}
+	return "{\"chat\":\[[join $items ,]\]}"
+}
+
+
+proc Broadcast {json {event {}}} {
 	variable Priv
 	set keep {}
+	set msg [expr {$event ne "" ? "event: $event\n" : ""}]
+	append msg "data: $json\n\n"
 	foreach chan $Priv(clients) {
-		if {[catch { puts -nonewline $chan "data: $json\n\n"; flush $chan }]} {
+		if {[catch { puts -nonewline $chan $msg; flush $chan }]} {
 			catch { close $chan }
 		} else {
 			lappend keep $chan
@@ -363,6 +393,7 @@ proc ReadRequest {chan} {
 		puts $chan "Connection: keep-alive"
 		puts $chan ""
 		if {$Priv(shown) ne ""} { puts -nonewline $chan "data: $Priv(shown)\n\n" }
+		puts -nonewline $chan "event: chat\ndata: [ChatJson]\n\n"
 		flush $chan
 		lappend Priv(clients) $chan
 		fileevent $chan readable [namespace code [list ClientGone $chan]]
@@ -399,12 +430,13 @@ proc Reply {chan code type body} {
 proc Page {page} {
 	set blocks [dict get {
 		scene/analysis {board eval moves}
-		scene/playing {board clocks moves}
+		scene/playing {board clocks moves chat}
 		scene/board {board}
 		block/board {board}
 		block/eval {eval}
 		block/clocks {clocks}
 		block/moves {moves}
+		block/chat {chat}
 	} $page]
 	set scene [string match scene/* $page]
 	set html [string map [list @BLOCKS@ [join $blocks " "] @SCENE@ $scene] [PageTemplate]]
@@ -437,12 +469,15 @@ body:not(.scene) #wrap{padding:0;gap:0}
 #moves{flex:1;overflow:hidden;font-size:2.8vh;line-height:1.5}
 #moves .cur{background:#ffd54f;color:#111;border-radius:.4vh;padding:0 .4vh}
 #moves .num{opacity:.55}
+#chat{flex:1;overflow:hidden;font-size:2.6vh;line-height:1.45;display:flex;flex-direction:column;justify-content:flex-end}
+#chat .who{font-weight:bold}
 .hide{display:none!important}
 </style></head>
 <body><div id="wrap"><div id="board"></div><div id="side">
 <div id="clockTop" class="card player hide"><span class="name"></span><span class="clock"></span></div>
 <div id="eval" class="card hide"><div class="score"></div><div class="bar"><div></div></div><div class="line"></div><div class="note"></div></div>
 <div id="moves" class="card hide"></div>
+<div id="chat" class="card hide"></div>
 <div id="clockBottom" class="card player hide"><span class="name"></span><span class="clock"></span></div>
 </div></div>
 <script>
@@ -453,6 +488,7 @@ if(!has("board"))document.getElementById("board").classList.add("hide");
 if(!has("board"))document.getElementById("side").style.height="100%";
 if(has("eval"))document.getElementById("eval").classList.remove("hide");
 if(has("moves"))document.getElementById("moves").classList.remove("hide");
+if(has("chat"))document.getElementById("chat").classList.remove("hide");
 if(has("clocks"))for(const id of["clockTop","clockBottom"])document.getElementById(id).classList.remove("hide");
 const glyph={K:"♔",Q:"♕",R:"♖",B:"♗",N:"♘",P:"♙",
   k:"♚",q:"♛",r:"♜",b:"♝",n:"♞",p:"♟"};
@@ -531,6 +567,13 @@ function draw(){drawBoard();drawEval();drawMoves();drawClocks()}
 const es=new EventSource("../events");
 es.onmessage=e=>{S=JSON.parse(e.data);stamp=Date.now();draw()};
 setInterval(drawClocks,100);
+es.addEventListener("chat",e=>{
+  if(!has("chat"))return;
+  const lines=JSON.parse(e.data).chat.slice(-30);
+  document.getElementById("chat").innerHTML=lines.map(l=>{
+    const c=/^#[0-9a-fA-F]{6}$/.test(l.colour)?l.colour:"#9ecbff";
+    return `<div><span class="who" style="color:${c}">${esc(l.name)}</span> ${esc(l.text)}</div>`}).join("");
+});
 </script></body></html>
 }
 }
@@ -567,6 +610,20 @@ proc open {parent} {
 	grid $d.l $d.s -sticky w -padx 2
 	grid $d.explain -columnspan 2 -sticky w -pady {2 0}
 	grid $d.now -columnspan 2 -sticky w -pady {2 0}
+	set c [ttk::labelframe $f.chat -text $mc::Chat -padding 6]
+	ttk::label $c.l -text $mc::ChatChannel
+	ttk::entry $c.e -width 24 -textvariable [namespace current]::Options(chat:channel)
+	ttk::button $c.b -command [namespace code ChatToggle]
+	ttk::label $c.explain -text $mc::ChatExplain -wraplength 560 -justify left -foreground #555555
+	ttk::label $c.state -anchor w
+	text $c.t -height 6 -width 60 -wrap word -state disabled -borderwidth 1 -relief solid
+	$c.t tag configure who -font TkHeadingFont
+	grid $c.l $c.e $c.b -sticky w -padx 2
+	grid $c.explain -columnspan 3 -sticky w -pady {2 0}
+	grid $c.state -columnspan 3 -sticky w
+	grid $c.t -columnspan 3 -sticky ew -pady {4 0}
+	grid columnconfigure $c 2 -weight 1
+	bind $c.e <Return> [namespace code ChatToggle]
 	set p [ttk::labelframe $f.pages -text $mc::Pages -padding 6]
 	set row 0
 	foreach page $Pages {
@@ -585,11 +642,13 @@ proc open {parent} {
 	grid $f.private -sticky w -pady {6 8}
 	grid $f.run -sticky ew
 	grid $f.delay -sticky ew -pady {8 0}
+	grid $f.chat -sticky ew -pady {8 0}
 	grid $f.pages -sticky nsew -pady 8
 	grid $f.close -sticky e
 	grid columnconfigure $f 0 -weight 1
 	set Priv(window) $top
 	Refresh
+	ChatShow
 	return $top
 }
 
@@ -629,12 +688,50 @@ proc Refresh {{message {}}} {
 }
 
 
+proc ChatToggle {{message {}}} {
+	variable Options
+	if {[::stream::chat::state] ne "off"} {
+		::stream::chat::disconnect
+	} elseif {[catch { ::stream::chat::connect $Options(chat:channel) }]} {
+		ChatShow $mc::ChatBadName
+		return
+	}
+	ChatShow
+}
+
+
+proc ChatShow {{message {}}} {
+	variable Priv
+	set c $Priv(window).f.chat
+	if {![winfo exists $c]} { return }
+	set st [::stream::chat::state]
+	$c.b configure -text [expr {$st eq "off" ? $mc::ChatConnect : $mc::ChatDisconnect}]
+	if {$message eq ""} { set message [format $mc::ChatState($st) [::stream::chat::channel]] }
+	$c.state configure -text $message
+	$c.t configure -state normal
+	$c.t delete 1.0 end
+	foreach l [lrange [::stream::chat::lines] end-19 end] {
+		set tag who[incr n]
+		$c.t tag configure $tag -font TkHeadingFont
+		if {[regexp {^#[0-9a-fA-F]{6}$} [dict get $l colour]]} {
+			$c.t tag configure $tag -foreground [dict get $l colour]
+		}
+		$c.t insert end [dict get $l name] $tag " [dict get $l text]\n"
+	}
+	$c.t see end
+	$c.t configure -state disabled
+}
+
+
 proc CopyUrl {page} {
 	if {![running?]} { return }
 	clipboard clear
 	clipboard append [url $page]
 	Refresh $mc::Copied
 }
+
+
+::stream::chat::subscribe [namespace current]::ChatChanged
 
 
 proc WriteOptions {chan} {
