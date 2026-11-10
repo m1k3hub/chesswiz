@@ -58,4 +58,31 @@ tcltest::test cbv-truncated-table {an entry table past the end of the file is re
 	file delete -force $dir
 } -result {1 1}
 
+# review findings DB-06/DB-07: incomplete blocks are errors, not empty output
+tcltest::test cbv-truncated-block {a member ending inside a block header is rejected} -setup {
+	set dir $::scidb::test::cbv::dir
+	file mkdir $dir
+	set cbv [file join $dir block.cbv]
+	::scidb::test::cbv::Write $cbv 1 [::scidb::test::cbv::Record a.cbh 3] xxx
+} -body {
+	lassign [::scidb::test::cbv::Open $cbv] rc msg
+	list $rc [string match "*block header is truncated*" $msg]
+} -cleanup {
+	file delete -force $dir
+} -result {1 1}
+
+tcltest::test cbv-truncated-huffman {Huffman data that runs out is rejected, not padded with zero bits} -setup {
+	set dir $::scidb::test::cbv::dir
+	file mkdir $dir
+	set cbv [file join $dir huffman.cbv]
+	# block of 4 bytes: Huffman flag, decoded size 100, one byte of tree
+	set block [binary format ssccc 4 0 2 0 100][binary format c 0]
+	::scidb::test::cbv::Write $cbv 1 [::scidb::test::cbv::Record a.cbh 8] $block
+} -body {
+	lassign [::scidb::test::cbv::Open $cbv] rc msg
+	list $rc [string match "*Huffman block is truncated*" $msg]
+} -cleanup {
+	file delete -force $dir
+} -result {1 1}
+
 tcltest::cleanupTests

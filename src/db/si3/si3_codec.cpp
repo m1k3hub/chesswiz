@@ -1187,6 +1187,17 @@ Codec::readIndexHeader(mstl::fstream& fstrm, unsigned* retNumGames)
 
 	GameInfoList& infoList = gameInfoList();
 	unsigned numGames = bstrm.uint24();
+
+	// a corrupt count must not allocate entries the file cannot hold
+	int64_t fileSize = fstrm.size();
+	int64_t indexStart = int64_t(m_headerSize) + 8;
+
+	if (	fileSize >= 0
+		&& int64_t(numGames) > (mstl::max(fileSize, indexStart) - indexStart)/m_indexEntrySize)
+	{
+		IO_RAISE(Index, Corrupted, "index declares %u games but holds fewer", numGames);
+	}
+
 	infoList.resize(retNumGames ? 1 : numGames);
 	if (retNumGames)
 		*retNumGames = numGames;
@@ -1636,6 +1647,9 @@ Codec::reloadNamebase(	ByteIStream& bstrm,
 
 	str.hook(buf, 1024);
 
+	// a prefix may only reuse bytes the previous name supplied
+	unsigned prevLength = 0;
+
 	for (unsigned i = 0; i < count; ++i)
 	{
 		if (m_progressReportAfter == i)
@@ -1664,11 +1678,13 @@ Codec::reloadNamebase(	ByteIStream& bstrm,
 		{
 			unsigned prefix = bstrm.get();
 
-			if (prefix > length)
+			if (prefix > length || prefix > prevLength)
 				IO_RAISE(Namebase, Corrupted, "namebase file is broken");
 
 			bstrm.get(buf + prefix, length - prefix);
 		}
+
+		prevLength = length;
 
 		str.set_size(length);
 
@@ -1807,6 +1823,9 @@ Codec::preloadNamebase(ByteIStream& bstrm, unsigned maxFreq, unsigned count, uti
 
 	char buf[256];
 
+	// a prefix may only reuse bytes the previous name supplied
+	unsigned prevLength = 0;
+
 	for (unsigned i = 0; i < count; ++i)
 	{
 		if (m_progressReportAfter == i)
@@ -1832,11 +1851,13 @@ Codec::preloadNamebase(ByteIStream& bstrm, unsigned maxFreq, unsigned count, uti
 		{
 			unsigned prefix = bstrm.get();
 
-			if (prefix > length)
+			if (prefix > length || prefix > prevLength)
 				IO_RAISE(Namebase, Corrupted, "namebase file is broken");
 
 			bstrm.get(buf + prefix, length - prefix);
 		}
+
+		prevLength = length;
 
 		HandleData(buf, length);
 	}
@@ -1884,6 +1905,9 @@ Codec::readNamebase(	ByteIStream& bstrm,
 	shadowBase.reserve(count);
 	str.hook(buf, sizeof(buf));
 
+	// a prefix may only reuse bytes the previous name supplied
+	unsigned prevLength = 0;
+
 	for (unsigned i = 0; i < count; ++i)
 	{
 		if (m_progressReportAfter == i)
@@ -1911,11 +1935,13 @@ Codec::readNamebase(	ByteIStream& bstrm,
 		{
 			prefix = bstrm.get();
 
-			if (prefix > length)
+			if (prefix > length || prefix > prevLength)
 				IO_RAISE(Namebase, Corrupted, "namebase file is broken");
 
 			bstrm.get(buf + prefix, length - prefix);
 		}
+
+		prevLength = length;
 
 		unsigned stripped	= ::strippedLength(str, length);
 		char remember = str.c_str()[stripped];

@@ -168,15 +168,25 @@ deleteHuffmanTree(HuffmanNode* node)
 }
 
 
+// Frees the tree on every return and exception.
+struct HuffmanTreeOwner
+{
+	explicit HuffmanTreeOwner(HuffmanNode* root) :m_root(root) {}
+	~HuffmanTreeOwner() { deleteHuffmanTree(m_root); }
+
+	HuffmanNode* m_root;
+};
+
+
 // Read a bit from a byte array at the given bit position.
-// Returns 0 if the position is past the end of the buffer (safe default for malformed data).
+// Running out of input means the block is truncated: raise, never invent zero bits.
 inline
 unsigned
 readBit(unsigned char const* data, uint64_t bitPos, uint64_t dataLen)
 {
 	uint64_t bytePos = bitPos / 8;
 	if (bytePos >= dataLen)
-		return 0;
+		IO_RAISE(Archive, Corrupted, "CBV Huffman block is truncated");
 	return (data[bytePos] >> (7 - (bitPos % 8))) & 1;
 }
 
@@ -221,7 +231,8 @@ decodeHuffman(unsigned char const* data, uint64_t bitPos, uint64_t dataLen, unsi
 		codes[i] = code;
 	}
 
-	HuffmanNode* tree = buildHuffmanTree(bitLengths, codes);
+	HuffmanTreeOwner owner(buildHuffmanTree(bitLengths, codes));
+	HuffmanNode* tree = owner.m_root;
 
 	mstl::string result;
 	result.reserve(decompressedSize);
@@ -237,13 +248,12 @@ decodeHuffman(unsigned char const* data, uint64_t bitPos, uint64_t dataLen, unsi
 
 			node = (bit == 0) ? node->left : node->right;
 			if (!node)
-				return mstl::string(); // malformed Huffman tree
+				IO_RAISE(Archive, Corrupted, "CBV Huffman code has no symbol");
 		}
 
 		result += char(node->value & 0xFF);
 	}
 
-	deleteHuffmanTree(tree);
 	return result;
 }
 
@@ -356,13 +366,13 @@ unsigned
 extractBlock(unsigned char const* blockData, unsigned remainingSize, mstl::ofstream& out)
 {
 	if (remainingSize < 4)
-		return remainingSize;
+		IO_RAISE(Archive, Corrupted, "CBV block header is truncated");
 
 	unsigned blockSize = readU16(blockData);
 	/* unsigned unknown = readU16(blockData + 2); */
 
 	if (4 + blockSize > remainingSize)
-		return remainingSize;
+		IO_RAISE(Archive, Corrupted, "CBV block extends past the end of its member");
 
 	unsigned char const* data = blockData + 4;
 
@@ -385,7 +395,7 @@ extractBlock(unsigned char const* blockData, unsigned remainingSize, mstl::ofstr
 	{
 		// Read big-endian u16 decompressed size
 		if (dataLen < 2)
-			return 4 + blockSize;
+			IO_RAISE(Archive, Corrupted, "CBV Huffman block has no size");
 
 		unsigned decompressedSize = (unsigned(data[0]) << 8) | data[1];
 
@@ -409,7 +419,8 @@ extractBlock(unsigned char const* blockData, unsigned remainingSize, mstl::ofstr
 		result = temp;
 	}
 
-	out.write(result.c_str(), result.size());
+	if (!out.write(result.c_str(), result.size()))
+		IO_RAISE(Archive, Write_Failed, "cannot write extracted CBV member");
 
 	return 4 + blockSize;
 }
@@ -440,7 +451,8 @@ extractCBV(mstl::string const& cbvPath, mstl::string const& outDir, Progress& pr
 	if (headerSize != 8)
 		IO_RAISE(Archive, Corrupted, "unexpected CBV header size (%u) in '%s'", headerSize, cbvPath.c_str());
 
-	if (entryRecordSize < 33 || entryRecordSize > 1024)
+	// every record holds a 132-byte name and two sizes
+	if (entryRecordSize < 140 || entryRecordSize > 1024)
 		IO_RAISE(Archive, Corrupted, "suspicious CBV entry record size (%u) in '%s'", entryRecordSize, cbvPath.c_str());
 
 	if (numEntries == 0 || numEntries > 1000)
@@ -458,19 +470,18 @@ extractCBV(mstl::string const& cbvPath, mstl::string const& outDir, Progress& pr
 	uint64_t fileSize = strm.tellg();
 	strm.seekg(0, mstl::ios_base::beg);
 
-	unsigned char* fileData = new unsigned char[fileSize];
+	// the buffer is freed on every raise below
+	struct Buffer
+	{
+		explicit Buffer(uint64_t size) :m_data(new unsigned char[size]) {}
+		~Buffer() { delete [] m_data; }
+		unsigned char* m_data;
+	}
+	buffer(fileSize);
+	unsigned char* fileData = buffer.m_data;
 
 	if (!strm.read(reinterpret_cast<char*>(fileData), fileSize))
-	{
-		delete[] fileData;
 		IO_RAISE(Archive, Corrupted, "cannot read CBV data from '%s'", cbvPath.c_str());
-	}
-
-	if (entryRecordSize < 140)
-	{
-		delete[] fileData;
-		IO_RAISE(Archive, Corrupted, "CBV entry record too small (%u) in '%s'", entryRecordSize, cbvPath.c_str());
-	}
 
 	// File data is laid out sequentially immediately after the header and the
 	// file-list section. Each member's payload occupies exactly its
@@ -488,7 +499,6 @@ extractCBV(mstl::string const& cbvPath, mstl::string const& outDir, Progress& pr
 	// the member table must lie inside the file before any record is read
 	if (dataOffset > fileSize)
 	{
-		delete[] fileData;
 		IO_RAISE(Archive, Corrupted, "CBV member table extends past end of file in '%s'", cbvPath.c_str());
 	}
 
@@ -517,7 +527,6 @@ extractCBV(mstl::string const& cbvPath, mstl::string const& outDir, Progress& pr
 
 		if (dataOffset + storedSize > fileSize)
 		{
-			delete[] fileData;
 			IO_RAISE(Archive, Corrupted,
 			         "CBV member '%s' extends past end of file in '%s'",
 			         fname.c_str(), cbvPath.c_str());
@@ -529,7 +538,6 @@ extractCBV(mstl::string const& cbvPath, mstl::string const& outDir, Progress& pr
 			|| fname.find('\\') != mstl::string::npos
 			|| fname.find(':') != mstl::string::npos)
 		{
-			delete[] fileData;
 			IO_RAISE(Archive, Corrupted, "CBV member name '%s' is not a plain file name in '%s'",
 			         fname.c_str(), cbvPath.c_str());
 		}
@@ -545,7 +553,6 @@ extractCBV(mstl::string const& cbvPath, mstl::string const& outDir, Progress& pr
 
 		if (!out)
 		{
-			delete[] fileData;
 			IO_RAISE(Archive, Write_Failed, "cannot create extracted file '%s'", outPath.c_str());
 		}
 
@@ -565,13 +572,14 @@ extractCBV(mstl::string const& cbvPath, mstl::string const& outDir, Progress& pr
 
 		out.close();
 
+		if (!out)
+			IO_RAISE(Archive, Write_Failed, "cannot write extracted file '%s'", outPath.c_str());
+
 		dataOffset += storedSize;
 
 		if (fname.size() >= 4 && fname.substr(fname.size() - 4) == ".cbh")
 			extractedRoot = outPath.substr(0, outPath.size() - 4);
 	}
-
-	delete[] fileData;
 
 	progress.update(numEntries);
 
