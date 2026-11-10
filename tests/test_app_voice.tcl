@@ -315,4 +315,47 @@ tcltest::test voice-run-ok {a normal command still completes with its output} -c
 	list $ran [::scidb::test::voice::leftover]
 } -result {{{ok 1 text hello}} 0}
 
+# review finding UI-10: Piper synthesises in the background, and the reply
+# plays once it is done
+tcltest::test voice-piper-async {Speak returns before Piper is done; the reply plays after} -constraints unix -setup {
+	set dir [file join $::env(HOME) fake-piper]
+	file mkdir $dir
+	set f [open [file join $dir piper] w]
+	puts $f {#!/bin/sh
+out=""
+while [ $# -gt 0 ]; do [ "$1" = --output_file ] && out=$2; shift; done
+sleep 1
+cat > "$out"}
+	close $f
+	file attributes [file join $dir piper] -permissions 0755
+	set ::scidb::test::voice::path $::env(PATH)
+	set ::env(PATH) $dir:$::env(PATH)
+	rename ::application::voice::ttsEngine ::scidb::test::voice::realTtsEngine
+	proc ::application::voice::ttsEngine {} { return piper }
+	rename ::application::voice::Play ::scidb::test::voice::realPlay
+	proc ::application::voice::Play {wav} {
+		set f [open $wav]; set ::scidb::test::voice::played [string trim [read $f]]; close $f
+		return 1
+	}
+	set ::scidb::test::voice::mode $::application::voice::Settings(ttsMode)
+	set ::application::voice::Settings(ttsMode) always
+	set ::scidb::test::voice::played {}
+} -body {
+	set t0 [clock milliseconds]
+	set ok [::application::voice::Speak "a long reply"]
+	set took [expr {[clock milliseconds] - $t0}]
+	set id [after 8000 {set ::scidb::test::voice::played timeout}]
+	vwait ::scidb::test::voice::played
+	after cancel $id
+	list $ok [expr {$took < 500}] $::scidb::test::voice::played
+} -cleanup {
+	set ::env(PATH) $::scidb::test::voice::path
+	rename ::application::voice::ttsEngine {}
+	rename ::scidb::test::voice::realTtsEngine ::application::voice::ttsEngine
+	rename ::application::voice::Play {}
+	rename ::scidb::test::voice::realPlay ::application::voice::Play
+	set ::application::voice::Settings(ttsMode) $::scidb::test::voice::mode
+	file delete -force [file join $::env(HOME) fake-piper]
+} -result {1 1 {a long reply}}
+
 tcltest::cleanupTests

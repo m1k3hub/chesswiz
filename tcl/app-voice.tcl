@@ -1064,15 +1064,26 @@ proc ::application::voice::Speak {text} {
 
 	switch -- $engine {
 		piper {
+			# in the background: a long reply or a cold model must not hold
+			# the interface, and each reply gets its own file, so a reply
+			# does not overwrite the one still being played
+			variable Priv
+			set n [incr Priv(speechCount)]
+			set wav [file join $dir speech-$n.wav]
+			set txt [file join $dir speech-$n.txt]
 			if {[catch {
-				# a list: a model path with spaces stays one argument
-				set chan [open |[list piper --model $Settings(ttsVoice) --output_file $wav] w]
+				set chan [open $txt w]
 				fconfigure $chan -encoding utf-8
 				puts $chan $text
 				close $chan
-			} err]} {
+			}]} {
+				catch { file delete $txt }
 				return 0
 			}
+			# a list: a model path with spaces stays one argument
+			RunAsync [list piper --model $Settings(ttsVoice) --output_file $wav < $txt] \
+				[namespace code [list Spoken $wav $txt]]
+			return 1
 		}
 		espeak-ng {
 			if {[catch { ::platform::sys::speak $text $wav } err]} { return 0 }
@@ -1088,6 +1099,27 @@ proc ::application::voice::Speak {text} {
 	Play $wav
 	Message $mc::Speaking
 	return 1
+}
+
+
+# Piper is done with one reply: play it, and drop the files of the reply
+# before it (which has had all this time to play).
+proc ::application::voice::Spoken {wav txt result} {
+	variable Priv
+	variable mc
+
+	catch { file delete $txt }
+	if {![dict get $result ok] || ![file exists $wav]} {
+		catch { file delete $wav }
+		return
+	}
+	if {[info exists Priv(lastWav)] && $Priv(lastWav) ne $wav} {
+		catch { file delete $Priv(lastWav) }
+	}
+	set Priv(lastWav) $wav
+	Play $wav
+	Message $mc::Speaking
+	return
 }
 
 
