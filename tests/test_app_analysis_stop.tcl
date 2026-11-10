@@ -461,4 +461,36 @@ tcltest::test analysis-time-only-info {time-only info lines update the pane's sp
 	::scidb::test::pane::restore
 } -result 1
 
+# review finding APP-11: a flood of engine output is handled in batches, so
+# timers keep running while it lasts
+proc ::scidb::test::pane::Beat {} {
+	set now [clock milliseconds]
+	if {$::scidb::test::pane::lastBeat} {
+		set gap [expr {$now - $::scidb::test::pane::lastBeat}]
+		if {$gap > $::scidb::test::pane::maxGap} { set ::scidb::test::pane::maxGap $gap }
+	}
+	set ::scidb::test::pane::lastBeat $now
+	set ::scidb::test::pane::beat [after 10 ::scidb::test::pane::Beat]
+}
+
+tcltest::test analysis-output-flood {the event loop keeps running while an engine floods its output} \
+		-constraints unix -setup {
+	::scidb::test::pane::isolate
+	set program [file join [file dirname [info script]] fixtures fake-uci-flood.sh]
+	set name [::scidb::test::pane::addEngine $program]
+	lassign [::scidb::test::pane::start $name 1] number tree
+	set ::scidb::test::pane::lastBeat 0
+	set ::scidb::test::pane::maxGap 0
+} -body {
+	::scidb::test::pane::Beat
+	set until [expr {[clock milliseconds] + 4000}]
+	::scidb::test::pane::waitUntil {[clock milliseconds] > $until} 6000
+	after cancel $::scidb::test::pane::beat
+	expr {$::scidb::test::pane::maxGap < 500 ? 1 : "longest gap $::scidb::test::pane::maxGap ms"}
+} -cleanup {
+	namespace upvar ::application::analysis ${tree}::Vars Vars
+	catch { $Vars(widget:button:close) invoke }
+	::scidb::test::pane::restore
+} -result 1
+
 tcltest::cleanupTests

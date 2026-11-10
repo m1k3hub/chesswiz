@@ -1024,7 +1024,11 @@ Engine::readyRead()
 
 	mstl::string line;
 
-	while (m_process->gets(line) > 0)
+	// A bounded batch: Tcl calls us again while lines stay buffered, so a
+	// verbose engine cannot keep the event loop from everything else.
+	unsigned budget = 256;
+
+	while (budget-- > 0 && m_process->gets(line) > 0)
 	{
 		line.trim();
 
