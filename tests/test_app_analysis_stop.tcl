@@ -443,4 +443,22 @@ tcltest::test analysis-stop-winboard-keeps-engine {Stop on a WinBoard engine sen
 	::scidb::test::pane::restore
 } -result {1 1 1 1 {} disabled normal stopped}
 
+# review finding APP-09: "info time ... nodes ... nps ..." without a depth
+# reaches the pane (the NPS label shows the engine's 7654321, not 1000)
+tcltest::test analysis-time-only-info {time-only info lines update the pane's speed} \
+		-constraints unix -setup {
+	::scidb::test::pane::isolate
+	set program [file join [file dirname [info script]] fixtures fake-uci-timeinfo.tcl]
+	set name [::scidb::test::pane::addEngine $program]
+	lassign [::scidb::test::pane::start $name 1] number tree
+	namespace upvar ::application::analysis ${tree}::Vars Vars
+	set nps [::toolbar::lookupChild $Vars(widget:nps)]
+} -body {
+	::scidb::test::pane::waitUntil {[string match {7*} [$nps cget -text]]} 5000
+	string match {7*} [$nps cget -text]
+} -cleanup {
+	catch { $Vars(widget:button:close) invoke }
+	::scidb::test::pane::restore
+} -result 1
+
 tcltest::cleanupTests

@@ -1084,26 +1084,31 @@ winboard::Engine::parseFeatures(char const* msg)
 				break;
 
 			case 'v':
-				if (::strncmp(key, "variants=", 9) == 0)
+				// the list is only the quoted value: later features are not variants
+				if (	::strncmp(key, "variants=", 9) == 0
+					&& val[0] == '"'
+					&& end - val >= 3
+					&& end[-1] == '"')
 				{
 					unsigned count = 0;
+					char const* last = end - 1;
 
 					removeVariant(variant::Normal);
 					++val;
 
 					do
 					{
-						char const* p = ::strchr(val, ',');
+						char const* p = static_cast<char const*>(::memchr(val, ',', last - val));
 
 						if (p == 0)
-							p = val + ::strlen(val) - 1;
+							p = last;
 
 						mstl::string variant(val, p);
 						variant.trim();
 
 						count += 1;
 
-						switch (variant[0])
+						switch (variant.empty() ? 0 : variant[0])
 						{
 							case 'b':
 								if (::strcmp(variant, "bughouse") == 0)
@@ -1158,9 +1163,9 @@ winboard::Engine::parseFeatures(char const* msg)
 								break;
 						}
 
-						val = skip_spaces(p + 1);
+						val = p < last ? skip_spaces(p + 1) : last;
 					}
-					while (*val);
+					while (val < last);
 
 					m_featureVariant = (count > 1);
 				}

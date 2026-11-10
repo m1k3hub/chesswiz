@@ -747,6 +747,9 @@ View::dumpGame(unsigned index,
 	unsigned		count	= 0;
 	LengthList	lengths;
 
+	// at least one slot; a nonstandard start needs a second one for the moves
+	split = mstl::max(split, 1u);
+
 	if (moves == 0)
 	{
 		lengths.push_back(0);
@@ -771,6 +774,8 @@ View::dumpGame(unsigned index,
 	}
 	else
 	{
+		split = mstl::max(split, 2u);
+
 		unsigned	size	= mstl::min(moves + 1, split);
 		double	delta	= double(moves)/double(mstl::min(moves, split - 1));
 

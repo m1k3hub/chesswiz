@@ -601,18 +601,18 @@ uci::Engine::parseBestMove(char const* msg)
 		error(msg);
 	}
 
-	s = skip_non_spaces(s);
+	s = skip_spaces(skip_non_spaces(s));
 
-	if (::strncmp(s, "ponder ", 6) == 0)
+	if (move.isLegal() && ::strncmp(s, "ponder ", 7) == 0)
 	{
-		s = skip_spaces(s + 6);
+		s = skip_spaces(s + 7);
 
 		currentBoard().prepareUndo(move);
 		currentBoard().doMove(move, m_variant);
 		Move ponder(currentBoard().parseLAN(s));
 		currentBoard().undoMove(move, m_variant);
 
-		if (move.isLegal())
+		if (ponder.isLegal())
 		{
 			setPonder(ponder);
 			updateBestMove();
@@ -773,7 +773,10 @@ uci::Engine::parseInfo(char const* s)
 				{
 					case 'i':
 						if (::sscanf(s, "time %u", &value) == 1)
+						{
 							setTime(value/1000.0);
+							haveTime = true;
+						}
 						break;
 
 					case 'b':
@@ -862,12 +865,10 @@ uci::Engine::parseInfo(char const* s)
 
 		updatePvInfo(varno);
 	}
-	else if (haveTime)
+	else if (haveDepth || haveTime)
 	{
-		updateTimeInfo(); 		// "info time 1008 nodes 1010000 nps 1002409 cpuload 925"
-	}
-	else if (haveDepth)
-	{
+		// "info time 1008 nodes 1010000 nps 1002409": the depth update also
+		// carries nodes and nps (updateTimeInfo is a no-op)
 		updateDepthInfo();
 	}
 }

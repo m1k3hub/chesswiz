@@ -207,6 +207,18 @@ tcltest::test engines-winboard-dotted-pv {a WinBoard PV with "1... " move number
 	::scidb::test::engines::restore
 } -result {1 1}
 
+# review finding APP-08: the variants list ends at its closing quote
+tcltest::test engines-winboard-variants {variants followed by other features are all recognised} -constraints unix -setup {
+	::scidb::test::engines::isolate
+	set program [file join [file dirname [info script]] fixtures fake-xboard-variants.tcl]
+	::scidb::test::engines::tool add_engine [list path $program]
+} -body {
+	set variants [dict get [lindex $::engine::Engines 0] Variants]
+	list [expr {"standard" in $variants}] [expr {"suicide" in $variants}]
+} -cleanup {
+	::scidb::test::engines::restore
+} -result {1 1}
+
 tcltest::test engines-analysis-waits {engine_analysis with seconds answers later, through the tool loop} -constraints uciEngine -setup {
 	# ask also serves callers without a UI; transcript assertions need a pane.
 	::application::assistant::show

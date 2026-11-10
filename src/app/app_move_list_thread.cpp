@@ -244,6 +244,7 @@ MoveListThread::MoveListThread()
 	:m_runnable(0)
 	,m_databaseId(0)
 	,m_viewId(0)
+	,m_length(0)
 	,m_notation(db::move::Alphabetic)
 {
 }
@@ -275,12 +276,14 @@ MoveListThread::retrieve(	Cursor& cursor,
 
 	if (	m_databaseId != database.id()
 		|| m_viewId != view
+		|| m_length != length	// cached strings were cut to the old length
 		|| m_notation != notation
 		|| (fen ? m_fen != *fen : !m_fen.empty()))
 	{
 		clear();
 		m_databaseId = database.id();
 		m_viewId = view;
+		m_length = length;
 		m_notation = notation;
 		m_fen = fen ? *fen : mstl::string::empty_string;
 	}

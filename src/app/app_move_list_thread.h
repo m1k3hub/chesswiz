@@ -84,6 +84,7 @@ private:
 	Runnable*		m_runnable;
 	unsigned			m_databaseId;
 	unsigned			m_viewId;
+	unsigned			m_length;
 	Notation			m_notation;
 	mstl::string	m_fen;
 	ResultList		m_resultList;
