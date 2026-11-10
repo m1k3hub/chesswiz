@@ -647,11 +647,19 @@ proc ::ai::decide {feature state question script args} {
 	array set opts {-fallback {} -threshold 0.6}
 	array set opts $args
 
+	# fix the backend and its threshold now: the user may switch backends
+	# while the answer is on its way
+	set backend ""
+	catch { set backend $::ai::systemone::Config(backend) }
+	if {[llength [info commands ::ai::systemone::threshold]]} {
+		set opts(-threshold) [::ai::systemone::threshold $feature $opts(-threshold)]
+	}
+
 	# Record the decision (if journaling is on) without touching it: the
 	# journal sink forwards to the caller's script unchanged.
 	set sink $script
 	if {[llength [info commands ::ai::journal::logged]]} {
-		set sink [list ::ai::journal::logged $feature $state $script]
+		set sink [list ::ai::journal::logged $feature $state $script $backend]
 	}
 
 	if {[llength [info commands ::ai::systemone::enabled]] == 0
@@ -671,7 +679,8 @@ proc ::ai::decide {feature state question script args} {
 
 
 proc ::ai::systemone::Decided {feature question script opts result} {
-	set threshold [threshold $feature [dict get $opts -threshold]]
+	# resolved by ::ai::decide for the backend the question went to
+	set threshold [dict get $opts -threshold]
 	set decision {}
 	if {[dict get $result ok]
 	 && ![catch { dict get $result answers $feature } answer]
@@ -687,7 +696,8 @@ proc ::ai::systemone::Decided {feature question script opts result} {
 				set i [expr {$n > 1 ? int(round($s * ($n - 1))) : 0}]
 				if {$i < 0} { set i 0 }
 				if {$i >= $n} { set i [expr {$n - 1}] }
-				set decision [list ok 1 label [lindex $levels $i] confidence $s source classifier]
+				set decision [list ok 1 label [lindex $levels $i] \
+					confidence [dict get $answer confidence] score $s source classifier]
 			}
 		} elseif {[dict get $answer confidence] >= $threshold} {
 			set decision [list ok 1 label [dict get $answer choice] \

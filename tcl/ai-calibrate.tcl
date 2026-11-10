@@ -134,6 +134,10 @@ proc ::ai::calibrate::OnMeasured {id result} {
 proc ::ai::calibrate::sweep {scored args} {
 	array set opts {-step 0.05}
 	array set opts $args
+	# a step of 0 or less would never end the loop below
+	if {![string is double -strict $opts(-step)] || !($opts(-step) >= 0.001)} {
+		error "-step must be a number of at least 0.001: $opts(-step)"
+	}
 
 	set n [llength $scored]
 	set out {}

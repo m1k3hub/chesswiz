@@ -85,12 +85,16 @@ proc ::ai::batch::LoadCache {runVar} {
 	if {$path eq "" || ![file exists $path]} { return }
 
 	set cache {}
-	if {[catch {
-		set chan [open $path r]
+	if {[catch { open $path r } chan]} { return }
+	# the channel is closed also when reading fails
+	try {
 		fconfigure $chan -encoding utf-8 -translation binary
 		set text [read $chan]
-		close $chan
-	}]} { return }
+	} on error {} {
+		return
+	} finally {
+		catch { close $chan }
+	}
 
 	foreach line [split $text "\n"] {
 		if {$line eq "" || [string index $line 0] eq "#"} { continue }
@@ -108,12 +112,14 @@ proc ::ai::batch::LoadCache {runVar} {
 proc ::ai::batch::CacheAppend {run key answer} {
 	set path [dict get $run cacheFile]
 	if {$path eq ""} { return }
-	if {[catch {
-		set chan [open $path a]
+	if {[catch { open $path a } chan]} { return }
+	try {
 		fconfigure $chan -encoding utf-8 -translation binary
 		puts $chan "[Escape $key]\t[Escape $answer]"
-		close $chan
-	}]} { return }
+	} on error {} {
+	} finally {
+		catch { close $chan }
+	}
 	return
 }
 
@@ -145,6 +151,7 @@ proc ::ai::batch::run {items question script args} {
 		model       $::ai::systemone::Config(model) \
 		byState     {} \
 		queue       {} \
+		next        0 \
 		active      0 \
 		results     {} \
 		cache       {} \
@@ -159,9 +166,10 @@ proc ::ai::batch::run {items question script args} {
 		if {[dict exists $byState $state]} {
 			dict set byState $state [linsert [dict get $byState $state] end $key]
 		} else {
+			# first time this state is seen (a dict lookup, not a list scan)
 			dict set byState $state [list $key]
+			lappend seen $state
 		}
-		if {$state ni $seen} { lappend seen $state }
 	}
 	dict set run byState $byState
 
@@ -206,9 +214,10 @@ proc ::ai::batch::Pump {id} {
 	}
 
 	while {[dict get $run active] < [dict get $run concurrency] \
-		&& [llength [dict get $run queue]]} {
-		set state [lindex [dict get $run queue] 0]
-		dict set run queue [lrange [dict get $run queue] 1 end]
+		&& [dict get $run next] < [llength [dict get $run queue]]} {
+		# a cursor: slicing the queue per request copies it each time
+		set state [lindex [dict get $run queue] [dict get $run next]]
+		dict incr run next
 		dict incr run active
 
 		if {[catch {
@@ -225,7 +234,7 @@ proc ::ai::batch::Pump {id} {
 	}
 
 	set Runs($id) $run
-	if {[dict get $run active] == 0 && [llength [dict get $run queue]] == 0} {
+	if {[dict get $run active] == 0 && [dict get $run next] >= [llength [dict get $run queue]]} {
 		Finish $id
 	}
 	return
@@ -237,13 +246,14 @@ proc ::ai::batch::Pump {id} {
 proc ::ai::batch::Drain {id reason} {
 	variable Runs
 	set run $Runs($id)
-	foreach state [dict get $run queue] {
+	foreach state [lrange [dict get $run queue] [dict get $run next] end] {
 		foreach handle [dict get $run byState $state] {
 			dict set run results $handle [list ok 0 error $reason]
 			dict incr run done
 		}
 	}
 	dict set run queue {}
+	dict set run next 0
 	set Runs($id) $run
 	# requests still out answer through OnOne, which pumps again
 	if {[dict get $run active] == 0} { Finish $id }

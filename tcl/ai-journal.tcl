@@ -6,10 +6,10 @@
 # can be refit from real labels later.
 #
 #   ::ai::journal::configure -file PATH        (empty disables; env default)
-#   ::ai::journal::logged <feature> <state> <script> <decision>
+#   ::ai::journal::logged <feature> <state> <script> ?<backend>? <decision>
 #       The sink ::ai::decide installs in front of the caller's script: it
 #       records the decision, then delivers it unchanged.
-#   ::ai::journal::decision <feature> <state> <decision>
+#   ::ai::journal::decision <feature> <state> <decision> ?<backend>?
 #   ::ai::journal::override <feature> <state> <proposed> <corrected>
 #   ::ai::journal::read ?file?                 -> list of record dicts
 #
@@ -70,19 +70,24 @@ proc ::ai::journal::Append {fields} {
 	if {$File eq ""} { return }
 	set line {}
 	foreach value $fields { lappend line [Escape $value] }
-	if {[catch {
-		set chan [open $File a]
+	if {[catch { open $File a } chan]} { return }
+	# a failed write must not leave the channel open
+	try {
 		fconfigure $chan -encoding utf-8 -translation binary
 		puts $chan [join $line "\t"]
-		close $chan
-	}]} { return }
+	} on error {} {
+	} finally {
+		catch { close $chan }
+	}
 	return
 }
 
 
-proc ::ai::journal::decision {feature state decision} {
-	set backend ""
-	catch { set backend $::ai::systemone::Config(backend) }
+# <backend> is the one the question went to; empty means the selected one
+proc ::ai::journal::decision {feature state decision {backend ""}} {
+	if {$backend eq ""} {
+		catch { set backend $::ai::systemone::Config(backend) }
+	}
 	set label ""
 	set confidence ""
 	set source ""
@@ -106,8 +111,16 @@ proc ::ai::journal::override {feature state proposed corrected} {
 
 # The sink ::ai::decide installs before the caller's script. It records and
 # then delivers, so a journaling failure cannot affect the decision.
-proc ::ai::journal::logged {feature state script decision} {
-	catch { ::ai::journal::decision $feature $state $decision }
+# called as <sink> <decision>: the sink carries the backend when it was
+# built by ::ai::decide (older sinks put the decision in its place)
+proc ::ai::journal::logged {feature state script args} {
+	if {[llength $args] == 2} {
+		lassign $args backend decision
+	} else {
+		lassign $args decision
+		set backend ""
+	}
+	catch { ::ai::journal::decision $feature $state $decision $backend }
 	uplevel #0 [list {*}$script $decision]
 	return
 }

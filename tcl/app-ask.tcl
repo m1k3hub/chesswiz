@@ -1133,6 +1133,11 @@ proc ::application::speech::PollTranscribe {} {
 	variable Priv
 
 	if {$Priv(state) ne "transcribing"} { Cleanup; return }
+	# the deadline holds on every path, also while there is no output file
+	if {[clock milliseconds] - $Priv(transcribeStart) > 120000} {
+		Cancel
+		return
+	}
 	set out $Priv(transcribeOut)
 	if {$out eq "" || ![file exists $out]} {
 		if {![Alive? $Priv(transcribePids)]} { FinishTranscribe } else { Schedule 120 PollTranscribe }
@@ -1141,10 +1146,6 @@ proc ::application::speech::PollTranscribe {} {
 	set size [file size $out]
 	if {$size == $Priv(lastSize)} { incr Priv(stable) } else { set Priv(stable) 0; set Priv(lastSize) $size }
 	if {![Alive? $Priv(transcribePids)] && $Priv(stable) >= 1} { FinishTranscribe; return }
-	if {[clock milliseconds] - $Priv(transcribeStart) > 120000} {
-		Cancel
-		return
-	}
 	Schedule 120 PollTranscribe
 }
 

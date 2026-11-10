@@ -1268,6 +1268,17 @@ proc ::knowledge::PackTopicList {} {
 # ----------------------------------------------------------------------
 # Pack directory and files.
 # ----------------------------------------------------------------------
+
+# a JSON file as a dict; the channel is closed also when parsing fails
+proc ::knowledge::ReadJson {path} {
+	set f [open $path r]
+	try {
+		return [::json::json2dict [read $f]]
+	} finally {
+		close $f
+	}
+}
+
 proc ::knowledge::Dir {} {
 	variable PackDir
 	if {$PackDir ne "" && [file isfile [file join $PackDir actions.json]]} { return $PackDir }
@@ -1303,12 +1314,8 @@ proc ::knowledge::Load {} {
 		set dir [Dir]
 		if {$dir ne ""} {
 			if {![catch {
-				set f [open [file join $dir actions.json] r]
-				set PackActions [::json::json2dict [read $f]]
-				close $f
-				set f [open [file join $dir topics.json] r]
-				set PackTopics [::json::json2dict [read $f]]
-				close $f
+				set PackActions [ReadJson [file join $dir actions.json]]
+				set PackTopics [ReadJson [file join $dir topics.json]]
 			}]} {
 				# json2dict turns arrays into Tcl lists; normalise the
 				# fields the planner uses.

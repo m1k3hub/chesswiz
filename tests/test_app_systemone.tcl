@@ -779,6 +779,40 @@ tcltest::test systemone-comment-assistant {comment_kind checks args and answers}
 	::scidb::test::s1::stop
 } -result {{text {keeps the tension}} 1 {missing argument 'text'} later:}
 
+# review finding AI-04: an answer is judged by the threshold of the
+# backend it was asked of, and journaled under that backend
+tcltest::test systemone-decide-backend-switch {switching backends while a question is out does not change its threshold} -setup {
+	set saved $::ai::systemone::Thresholds
+	set savedFile $::ai::journal::File
+	set journal [file join $::env(HOME) s1-journal.tsv]
+	file delete $journal
+	set ::ai::journal::File $journal
+	::scidb::test::s1::start [list [::scidb::test::s1::choice noise 0.7]]
+	set backend $::ai::systemone::Config(backend)
+	set ::ai::systemone::Thresholds [list verdict [list $backend 0.6 other 0.95]]
+} -body {
+	unset -nocomplain ::scidb::test::s1::Decision
+	::ai::decide verdict "some state" $::scidb::test::s1::Verdict {set ::scidb::test::s1::Decision}
+	# the switch, while the answer is on its way
+	set ::ai::systemone::Config(backend) other
+	set d [::scidb::test::s1::wait ::scidb::test::s1::Decision]
+	set ::ai::systemone::Config(backend) $backend
+	set logged [lindex [::ai::journal::read $journal] 0]
+	list [dict get $d label] [expr {[dict get $logged backend] eq $backend}]
+} -cleanup {
+	set ::ai::systemone::Config(backend) $backend
+	::scidb::test::s1::stop
+	set ::ai::systemone::Thresholds $saved
+	set ::ai::journal::File $savedFile
+	file delete $journal
+} -result {noise 1}
+
+tcltest::test calibrate-sweep-step {a step of zero or less is refused, not looped on} -body {
+	list [catch { ::ai::calibrate::sweep {{a a 0.9}} -step 0 }] \
+		[catch { ::ai::calibrate::sweep {{a a 0.9}} -step -0.1 }] \
+		[llength [::ai::calibrate::sweep {{a a 0.9}} -step 0.5]]
+} -result {1 1 2}
+
 # --- the score primitive (previously unhandled) -----------------------------
 
 tcltest::test systemone-score-valid {valid checks the score shape} -body {
@@ -796,10 +830,10 @@ tcltest::test systemone-score-level {a score maps to an ordered level} -setup {
 	::ai::decide quality x {type score criteria {low medium high}} \
 		{set ::scidb::test::s1::Score}
 	set d [::scidb::test::s1::wait ::scidb::test::s1::Score]
-	list [dict get $d label] [dict get $d confidence] [dict get $d source]
+	list [dict get $d label] [dict get $d confidence] [dict get $d score] [dict get $d source]
 } -cleanup {
 	::scidb::test::s1::stop
-} -result {high 0.8 classifier}
+} -result {high 0.9 0.8 classifier}
 
 tcltest::test systemone-score-gate {a low-confidence score falls back} -setup {
 	::scidb::test::s1::start [list [::scidb::test::s1::level quality 0.8 0.3]]
