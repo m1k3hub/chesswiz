@@ -85,4 +85,19 @@ tcltest::test cbv-truncated-huffman {Huffman data that runs out is rejected, not
 	file delete -force $dir
 } -result {1 1}
 
+# review finding DB-10: members are streamed a block at a time; the real
+# TWIC archives still open with all their games
+tcltest::test cbv-real-archives {the TWIC .cbv fixtures open and hold games} -body {
+	set out {}
+	set fixtures [file join [file dirname [file dirname [file normalize [info script]]]] opening-report tests fixtures]
+	foreach name {twic1639_grenke_freestyle_open.cbv twic1654.cbv} {
+		set path [file join $fixtures $name]
+		set rc [catch { ::scidb::db::load $path {list} {} -readonly 1 } msg]
+		set games [expr {$rc ? $msg : [::scidb::db::count games $path Normal] > 0}]
+		catch { ::scidb::db::close $path }
+		lappend out $rc $games
+	}
+	set out
+} -result {0 1 0 1}
+
 tcltest::cleanupTests

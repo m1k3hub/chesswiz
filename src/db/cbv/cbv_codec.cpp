@@ -465,23 +465,35 @@ extractCBV(mstl::string const& cbvPath, mstl::string const& outDir, Progress& pr
 
 	mstl::string extractedRoot;
 
-	// Read the entire file into memory for block-based decompression
-	strm.seekg(0, mstl::ios_base::end);
+	// Only the member table is held in memory; the members are streamed a
+	// block at a time (a block is at most 4 + 65535 bytes), so an archive of
+	// any size needs no more than that.
+	if (!strm.seekg(int64_t(0), mstl::ios_base::end))
+		IO_RAISE(Archive, Corrupted, "cannot seek in CBV archive '%s'", cbvPath.c_str());
 	uint64_t fileSize = strm.tellg();
-	strm.seekg(0, mstl::ios_base::beg);
+	if (!strm)
+		IO_RAISE(Archive, Corrupted, "cannot tell the size of CBV archive '%s'", cbvPath.c_str());
 
-	// the buffer is freed on every raise below
 	struct Buffer
 	{
-		explicit Buffer(uint64_t size) :m_data(new unsigned char[size]) {}
+		explicit Buffer(size_t size) :m_data(new unsigned char[size]) {}
 		~Buffer() { delete [] m_data; }
 		unsigned char* m_data;
-	}
-	buffer(fileSize);
-	unsigned char* fileData = buffer.m_data;
+	};
 
-	if (!strm.read(reinterpret_cast<char*>(fileData), fileSize))
-		IO_RAISE(Archive, Corrupted, "cannot read CBV data from '%s'", cbvPath.c_str());
+	size_t tableSize = size_t(numEntries) * entryRecordSize;
+
+	if (uint64_t(headerSize) + tableSize > fileSize)
+		IO_RAISE(Archive, Corrupted, "CBV member table extends past end of file in '%s'", cbvPath.c_str());
+
+	Buffer table(tableSize);
+	Buffer block(4 + 65535);
+
+	if (	!strm.seekg(int64_t(headerSize), mstl::ios_base::beg)
+		|| !strm.read(reinterpret_cast<char*>(table.m_data), tableSize))
+	{
+		IO_RAISE(Archive, Corrupted, "cannot read the CBV member table from '%s'", cbvPath.c_str());
+	}
 
 	// File data is laid out sequentially immediately after the header and the
 	// file-list section. Each member's payload occupies exactly its
@@ -494,19 +506,13 @@ extractCBV(mstl::string const& cbvPath, mstl::string const& outDir, Progress& pr
 	// earlier version of this code checked a hardcoded 4-byte signature there,
 	// which only matched one specific archive and caused every member of every
 	// other archive to be silently skipped (e.g. all TWIC .cbv archives).
-	uint64_t dataOffset = uint64_t(headerSize) + uint64_t(numEntries) * entryRecordSize;
-
-	// the member table must lie inside the file before any record is read
-	if (dataOffset > fileSize)
-	{
-		IO_RAISE(Archive, Corrupted, "CBV member table extends past end of file in '%s'", cbvPath.c_str());
-	}
+	uint64_t dataOffset = uint64_t(headerSize) + tableSize;
 
 	for (unsigned i = 0; i < numEntries; ++i)
 	{
 		progress.update(i);
 
-		unsigned char const* recordBuf = fileData + headerSize + i * entryRecordSize;
+		unsigned char const* recordBuf = table.m_data + size_t(i) * entryRecordSize;
 
 		// Member name: leading non-zero bytes within the first 132 bytes.
 		unsigned nameLen = 0;
@@ -556,18 +562,28 @@ extractCBV(mstl::string const& cbvPath, mstl::string const& outDir, Progress& pr
 			IO_RAISE(Archive, Write_Failed, "cannot create extracted file '%s'", outPath.c_str());
 		}
 
-		// Decompress block by block
-		unsigned char const* fileDataStart = fileData + dataOffset;
+		// Decompress block by block, reading each block as it comes
+		if (!strm.seekg(int64_t(dataOffset), mstl::ios_base::beg))
+			IO_RAISE(Archive, Corrupted, "cannot seek to CBV member '%s' in '%s'", fname.c_str(), cbvPath.c_str());
+
 		uint64_t pos = 0;
 
 		while (pos < storedSize)
 		{
-			unsigned consumed = extractBlock(fileDataStart + pos, unsigned(storedSize - pos), out);
+			uint64_t left = storedSize - pos;
 
-			if (consumed == 0)
-				break;
+			if (left < 4 || !strm.read(reinterpret_cast<char*>(block.m_data), 4))
+				IO_RAISE(Archive, Corrupted, "CBV block header is truncated");
 
-			pos += consumed;
+			unsigned blockSize = readU16(block.m_data);
+
+			if (4 + blockSize > left)
+				IO_RAISE(Archive, Corrupted, "CBV block extends past the end of its member");
+
+			if (blockSize > 0 && !strm.read(reinterpret_cast<char*>(block.m_data + 4), blockSize))
+				IO_RAISE(Archive, Corrupted, "cannot read CBV data from '%s'", cbvPath.c_str());
+
+			pos += extractBlock(block.m_data, 4 + blockSize, out);
 		}
 
 		out.close();
