@@ -2285,6 +2285,15 @@ tk_copy_image(	char const* subcmd,
 
 	Tk_PhotoImageBlock dstBlock;
 
+	// the buffers this function allocates, freed on every return
+	struct Owned
+	{
+		unsigned char* scaled = nullptr;
+		unsigned char* rotated = nullptr;
+		~Owned() { delete [] scaled; delete [] rotated; }
+	}
+	owned;
+
 	int wd = (rotate & 1 ? height : width);
 	int ht = (rotate & 1 ? width : height);
 
@@ -2294,7 +2303,7 @@ tk_copy_image(	char const* subcmd,
 		dstBlock.height = ht;
 		dstBlock.pixelSize = srcBlock.pixelSize;
 		dstBlock.pitch = compute_pitch(dstBlock.width, dstBlock.pixelSize);
-		dstBlock.pixelPtr = new unsigned char[dstBlock.pitch*dstBlock.height];
+		dstBlock.pixelPtr = owned.scaled = new unsigned char[dstBlock.pitch*dstBlock.height];
 		memcpy(&dstBlock.offset, &srcBlock.offset, sizeof(dstBlock.offset));
 
 		double scale_x = scale*(double(dstBlock.width)/double(srcBlock.width));
@@ -2304,7 +2313,7 @@ tk_copy_image(	char const* subcmd,
 
 	if (rotate)
 	{
-		if (srcBlock.width != wd || srcBlock.height != ht)
+		if (owned.scaled)
 			srcBlock = dstBlock;
 
 		dstBlock.width = width;
@@ -2314,26 +2323,21 @@ tk_copy_image(	char const* subcmd,
 			dstBlock.pitch = srcBlock.pitch;
 		else
 			dstBlock.pitch = compute_pitch(dstBlock.width, dstBlock.pixelSize);
-		dstBlock.pixelPtr = new unsigned char[dstBlock.pitch*dstBlock.height];
+		dstBlock.pixelPtr = owned.rotated = new unsigned char[dstBlock.pitch*dstBlock.height];
 		memcpy(&dstBlock.offset, &srcBlock.offset, sizeof(dstBlock.offset));
 
 		processImage(srcBlock, dstBlock, Rotate(rotate));
-
-		if (srcBlock.width != wd || srcBlock.height != ht)
-			delete [] srcBlock.pixelPtr;
 	}
 
 	if (!blend)
 	{
-		M_ASSERT(rotate || srcBlock.width != wd || srcBlock.height != ht);
-		rc = Tk_PhotoPutBlock(ti, dstHandle, &dstBlock, 0, 0, width, height, TK_PHOTO_COMPOSITE_SET);
-		delete [] dstBlock.pixelPtr;
-		return rc;
+		M_ASSERT(owned.scaled || owned.rotated);
+		return Tk_PhotoPutBlock(ti, dstHandle, &dstBlock, 0, 0, width, height, TK_PHOTO_COMPOSITE_SET);
 	}
 
 	typedef pixbuf<RGBA> pixbuf;
 
-	if (rotate || srcBlock.width != wd || srcBlock.height != ht)
+	if (owned.scaled || owned.rotated)
 		srcBlock = dstBlock;
 
 	Tk_PhotoGetImage(dstHandle, &dstBlock);
@@ -2344,12 +2348,7 @@ tk_copy_image(	char const* subcmd,
 	pixbuf dst_pixb(dstBlock);
 	dst_pixb.blend(pixbuf(srcBlock));
 
-	rc = Tk_PhotoPutBlock(ti, dstHandle, &dstBlock, 0, 0, width, height, TK_PHOTO_COMPOSITE_SET);
-
-	if (rotate || srcBlock.width != wd || srcBlock.height != ht)
-		delete [] srcBlock.pixelPtr;
-
-	return rc;
+	return Tk_PhotoPutBlock(ti, dstHandle, &dstBlock, 0, 0, width, height, TK_PHOTO_COMPOSITE_SET);
 }
 
 

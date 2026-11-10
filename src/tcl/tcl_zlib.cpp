@@ -58,6 +58,12 @@ cmdZlibInflate(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const o
 
 	int remaining = intFromObj(objc, objv, 3);
 
+	if (remaining <= 0)
+	{
+		Tcl_SetResult(ti, const_cast<char*>("zlib::inflate needs a positive input size"), TCL_STATIC);
+		return TCL_ERROR;
+	}
+
 	z_stream strm;
 
 	strm.zalloc = 0;
@@ -140,12 +146,26 @@ cmdZlibInflate(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const o
 
 		objs[2] = Tcl_NewWideIntObj(total);
 		Tcl_IncrRefCount(objs[2]);
-		Tcl_EvalObjv(ti, 3, objs, TCL_EVAL_GLOBAL);
+		int rc = Tcl_EvalObjv(ti, 3, objs, TCL_EVAL_GLOBAL);
 		Tcl_DecrRefCount(objs[2]);
+
+		// a failing progress command cancels, with its error as the result
+		if (rc != TCL_OK)
+		{
+			inflateEnd(&strm);
+			return rc;
+		}
 	}
 	while (remaining > 0 && ret != Z_STREAM_END);
 
 	inflateEnd(&strm);
+
+	// all input read is not enough: the stream must have ended (checksum seen)
+	if (ret != Z_STREAM_END)
+	{
+		Tcl_SetResult(ti, const_cast<char*>("zlib::inflate: truncated stream"), TCL_STATIC);
+		return TCL_ERROR;
+	}
 
 	if (remaining > 0)
 	{
@@ -254,8 +274,14 @@ cmdZlibDeflate(ClientData clientData, Tcl_Interp* ti, int objc, Tcl_Obj* const o
 
 		objs[2] = Tcl_NewWideIntObj(avail);
 		Tcl_IncrRefCount(objs[2]);
-		Tcl_EvalObjv(ti, 3, objs, TCL_EVAL_GLOBAL);
+		int rc = Tcl_EvalObjv(ti, 3, objs, TCL_EVAL_GLOBAL);
 		Tcl_DecrRefCount(objs[2]);
+
+		if (rc != TCL_OK)
+		{
+			deflateEnd(&strm);
+			return rc;
+		}
 	}
 	while (flush != Z_FINISH);
 

@@ -202,8 +202,14 @@ Progress::interrupt(Tcl_Obj* inform)
 {
 	m_interrupted = true;
 
-	if ((m_inform = inform))
-		Tcl_IncrRefCount(m_inform);
+	// a later -inform replaces the earlier one; none keeps it
+	if (inform)
+	{
+		Tcl_IncrRefCount(inform);
+		if (m_inform)
+			Tcl_DecrRefCount(m_inform);
+		m_inform = inform;
+	}
 }
 
 
