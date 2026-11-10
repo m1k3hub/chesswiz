@@ -276,4 +276,43 @@ tcltest::test voice-tts-modes {replies are spoken only when they should be} -bod
 	}
 } -result {{a short answer} {spoken again}}
 
+# review finding UI-12: a speech command that never ends, or floods its
+# output, is killed and fails once instead of leaving the voice busy
+proc ::scidb::test::voice::runAsync {argv timeout} {
+	set ::application::voice::RunTimeout $timeout
+	set ::scidb::test::voice::ran {}
+	::application::voice::RunAsync $argv {apply {{r} { lappend ::scidb::test::voice::ran $r }}}
+	set id [after 5000 {lappend ::scidb::test::voice::ran gave-up}]
+	vwait ::scidb::test::voice::ran
+	after cancel $id
+	# a late second completion would show up here
+	after 300 {set ::scidb::test::voice::settled 1}
+	vwait ::scidb::test::voice::settled
+	set ::application::voice::RunTimeout 120000
+	return $::scidb::test::voice::ran
+}
+
+proc ::scidb::test::voice::leftover {} {
+	llength [array names ::application::voice::Priv {[ode][ure]*,*}]
+}
+
+tcltest::test voice-run-deadline {a command past its deadline is killed and fails once} -constraints unix -body {
+	set t0 [clock milliseconds]
+	set ran [::scidb::test::voice::runAsync {sh -c {exec sleep 30}} 300]
+	list [llength $ran] [dict get [lindex $ran 0] ok] \
+		[string match "*did not finish*" [dict get [lindex $ran 0] error]] \
+		[expr {[clock milliseconds] - $t0 < 3000}] [::scidb::test::voice::leftover]
+} -result {1 0 1 1 0}
+
+tcltest::test voice-run-output-cap {a command that floods its output is stopped} -constraints unix -body {
+	set ran [::scidb::test::voice::runAsync {sh -c {exec yes transcript}} 10000]
+	list [llength $ran] [dict get [lindex $ran 0] ok] \
+		[string match "*more than*" [dict get [lindex $ran 0] error]] [::scidb::test::voice::leftover]
+} -result {1 0 1 0}
+
+tcltest::test voice-run-ok {a normal command still completes with its output} -constraints unix -body {
+	set ran [::scidb::test::voice::runAsync {sh -c {echo hello; echo noise >&2}} 10000]
+	list $ran [::scidb::test::voice::leftover]
+} -result {{{ok 1 text hello}} 0}
+
 tcltest::cleanupTests

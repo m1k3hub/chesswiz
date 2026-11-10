@@ -780,20 +780,30 @@ proc ::application::voice::TempDir {} {
 # transcription or a recorder.
 # ======================================================================
 
-# <script> is called with {ok 1 text OUTPUT} or {ok 0 error MESSAGE}.
+# <script> is called once with {ok 1 text OUTPUT} or {ok 0 error MESSAGE}.
+# A command that is still running after RunTimeout ms, or prints more than
+# RunMaxOutput bytes, is killed and fails.
+namespace eval ::application::voice {
+	variable RunTimeout 120000
+	variable RunMaxOutput 1048576
+}
+
 proc ::application::voice::RunAsync {argv script} {
 	variable Priv
+	variable RunTimeout
 
 	set dir [TempDir]
 	file mkdir $dir
 	set errFile [file join $dir voice-cmd-[incr Priv(asyncCount)].err]
 	if {[catch { set chan [open "|[list {*}$argv] 2>$errFile" r] } err]} {
+		catch { file delete $errFile }
 		after 0 [list {*}$script [list ok 0 error $err]]
 		return
 	}
 	fconfigure $chan -blocking 0 -buffering none
 	set Priv(out,$chan) ""
 	set Priv(err,$chan) $errFile
+	set Priv(deadline,$chan) [after $RunTimeout [namespace code [list RunTimedOut $chan $script]]]
 	fileevent $chan readable [namespace code [list OnReadable $chan $script]]
 	return
 }
@@ -801,27 +811,19 @@ proc ::application::voice::RunAsync {argv script} {
 
 proc ::application::voice::OnReadable {chan script} {
 	variable Priv
+	variable RunMaxOutput
 
+	if {![info exists Priv(out,$chan)]} { return }
 	if {[eof $chan]} {
 		fileevent $chan readable {}
-		set out [expr {[info exists Priv(out,$chan)] ? $Priv(out,$chan) : ""}]
-		unset -nocomplain Priv(out,$chan)
-		set out [string trim $out]
+		set out [string trim $Priv(out,$chan)]
 		set failed [catch { close $chan } err]
-		set errFile [expr {[info exists Priv(err,$chan)] ? $Priv(err,$chan) : ""}]
-		unset -nocomplain Priv(err,$chan)
 		set detail $err
-		if {$failed && $errFile ne "" && [file readable $errFile]} {
-			catch {
-				set fh [open $errFile r]
-				# bounded: a noisy script must not fill the message
-				set said [string trim [read $fh 4096]]
-				close $fh
-				if {[string length $said]} { set detail $said }
-			}
+		if {$failed} {
+			set said [ReadErr $Priv(err,$chan)]
+			if {[string length $said]} { set detail $said }
 		}
-		# the stderr file is ours: remove it on success and failure alike
-		if {$errFile ne ""} { catch { file delete $errFile } }
+		RunDone $chan
 		if {$failed} {
 			after 0 [list {*}$script [list ok 0 error [string trim $detail]]]
 		} else {
@@ -829,8 +831,63 @@ proc ::application::voice::OnReadable {chan script} {
 		}
 		return
 	}
-	append Priv(out,$chan) [read $chan]
+	# bounded reads: a command that writes as fast as it is read would
+	# otherwise keep one read going for ever
+	append Priv(out,$chan) [read $chan 65536]
+	if {[string length $Priv(out,$chan)] > $RunMaxOutput} {
+		RunKill $chan
+		after 0 [list {*}$script [list ok 0 error "speech command printed more than $RunMaxOutput bytes"]]
+	}
 	return
+}
+
+
+proc ::application::voice::RunTimedOut {chan script} {
+	variable Priv
+	variable RunTimeout
+
+	if {![info exists Priv(out,$chan)]} { return }
+	unset Priv(deadline,$chan)
+	RunKill $chan
+	after 0 [list {*}$script [list ok 0 error "speech command did not finish within [expr {$RunTimeout/1000}] s"]]
+	return
+}
+
+
+# Stop a command that is still running: kill it, drop the channel (a
+# nonblocking close does not wait) and forget it.
+proc ::application::voice::RunKill {chan} {
+	fileevent $chan readable {}
+	catch { ::platform::sys::kill [pid $chan] }
+	catch { close $chan }
+	RunDone $chan
+	return
+}
+
+
+# Forget <chan>: its deadline, its buffers and its stderr file.
+proc ::application::voice::RunDone {chan} {
+	variable Priv
+
+	if {[info exists Priv(deadline,$chan)]} { after cancel $Priv(deadline,$chan) }
+	if {[info exists Priv(err,$chan)]} { catch { file delete $Priv(err,$chan) } }
+	unset -nocomplain Priv(out,$chan) Priv(err,$chan) Priv(deadline,$chan)
+	return
+}
+
+
+# What a failed command said on stderr; bounded, so a noisy script does
+# not fill the message.
+proc ::application::voice::ReadErr {errFile} {
+	set said ""
+	if {$errFile ne "" && [file readable $errFile]} {
+		catch {
+			set fh [open $errFile r]
+			set said [string trim [read $fh 4096]]
+			close $fh
+		}
+	}
+	return $said
 }
 
 
