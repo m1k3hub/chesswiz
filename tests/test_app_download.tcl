@@ -367,4 +367,59 @@ tcltest::test download-run-invalid {run() with no URL, IDs or player completes w
 	::scidb::test::download::cleanup
 } -result {0 0 0}
 
+# review finding UI-07: a download that cannot be written (the downloads
+# folder is a file here; a full disk is the same) completes with an error
+tcltest::test download-run-write-error {run() reports a destination that cannot be written} -setup {
+	::scidb::test::download::captureImport
+	::scidb::test::download::stubGet [list [list ok 1 data "\[Event \"x\"\]\n\n1. e4 *\n" code 200]]
+} -body {
+	::scidb::test::download::isolated {
+		set ::application::download::Priv(dialog) {}
+		set f [open [::application::download::Dir] w]
+		close $f
+		set ::result {}
+		::application::download::run test-base {-source url -url https://example.com/x.pgn} \
+			{apply {{r} {set ::result $r}}}
+		::scidb::test::download::tick
+		list [expr {[llength $::result] ? [dict get $::result ok] : "none"}] \
+			[llength $::scidb::test::download::importCalls] \
+			$::application::download::Priv(running)
+	}
+} -cleanup {
+	::scidb::test::download::unstubGet
+	::scidb::test::download::uncaptureImport
+	::scidb::test::download::cleanup
+} -result {0 0 0}
+
+tcltest::test download-queue-write-error {a fetched file that cannot be written is a failure, not a hang} -setup {
+	::scidb::test::download::captureImport
+	::scidb::test::download::stubGet [list [list ok 1 data "\[Event \"x\"\]\n\n1. e4 *\n" code 200]]
+} -body {
+	::scidb::test::download::isolated {
+		set dir [::application::download::Dir]
+		file mkdir $dir
+		set f [open [file join $dir blocked] w]
+		close $f
+		set ::application::download::Priv(base) test-base
+		set ::application::download::Priv(title) test-import
+		set ::application::download::Priv(dialog) {}
+		set ::application::download::Priv(cancel) 0
+		set ::application::download::Priv(running) 1
+		set ::application::download::Priv(fetched) {}
+		set ::application::download::Priv(failures) {}
+		set ::application::download::Priv(queue) [list \
+			[list https://example.com/a.pgn [file join $dir blocked a.pgn] A] \
+			[list https://example.com/b.pgn [file join $dir b.pgn] B]]
+		::application::download::FetchNext
+		list [llength $::application::download::Priv(failures)] \
+			[llength $::scidb::test::download::importCalls] \
+			[lsort [glob -nocomplain -tails -directory $dir *]] \
+			$::application::download::Priv(running)
+	}
+} -cleanup {
+	::scidb::test::download::unstubGet
+	::scidb::test::download::uncaptureImport
+	::scidb::test::download::cleanup
+} -result {1 1 {b.pgn blocked} 0}
+
 tcltest::cleanupTests

@@ -459,7 +459,10 @@ proc ::application::download::Start {} {
 	if {$Priv(running)} { return }
 
 	set dir [Dir]
-	file mkdir $dir
+	if {[catch { file mkdir $dir } err]} {
+		Refuse $err
+		return
+	}
 	set Priv(cancel) 0
 	incr Priv(run)
 	set Priv(fetched) {}
@@ -681,15 +684,41 @@ proc ::application::download::OnFetched {url file label retry result} {
 		}
 		lappend Priv(failures) [format $mc::Failed $label $error]
 	} else {
-		file mkdir [file dirname $file]
-		set chan [::open $file wb]
-		fconfigure $chan -translation binary
-		puts -nonewline $chan [dict get $result data]
-		close $chan
-		lappend Priv(fetched) $file
-		Status [format $mc::Fetched $label [size [file size $file]]]
+		if {[catch { WriteFile $file [dict get $result data] } err]} {
+			lappend Priv(failures) [format $mc::Failed $label $err]
+		} else {
+			lappend Priv(fetched) $file
+			Status [format $mc::Fetched $label [size [file size $file]]]
+		}
 	}
 	FetchNext
+}
+
+
+# Write <data> to <file> through a temporary sibling that replaces it only
+# once all of it is written: a full disk or a lost mount raises an error and
+# leaves neither a channel open nor a truncated file (nor a truncated copy
+# of the previous one).
+proc ::application::download::WriteFile {file data} {
+	file mkdir [file dirname $file]
+	set tmp $file.part
+	set chan [::open $tmp wb]
+	try {
+		puts -nonewline $chan $data
+	} on error {err opts} {
+		catch { close $chan }
+		catch { file delete $tmp }
+		return -options $opts $err
+	}
+	if {[catch { close $chan } err opts]} {
+		catch { file delete $tmp }
+		return -options $opts $err
+	}
+	if {[catch { file rename -force $tmp $file } err opts]} {
+		catch { file delete $tmp }
+		return -options $opts $err
+	}
+	return
 }
 
 
@@ -902,12 +931,11 @@ proc ::application::download::OnBroadcast {run url retry result} {
 	}
 
 	# the round as it was fetched is kept in the downloads directory
-	set file $Priv(bcFile)
-	file mkdir [file dirname $file]
-	set chan [::open $file wb]
-	fconfigure $chan -translation binary
-	puts -nonewline $chan [dict get $result data]
-	close $chan
+	if {[catch { WriteFile $Priv(bcFile) [dict get $result data] } err]} {
+		lappend Priv(failures) [format $mc::Failed [broadcastLabel $Priv(bcSpec)] $err]
+		BroadcastDone [format $mc::BroadcastFailed $err] 0
+		return
+	}
 
 	BroadcastImport [dict get $result data]
 	return
@@ -954,11 +982,10 @@ proc ::application::download::BroadcastImport {data} {
 	}
 
 	set file [freeFile [file join [Dir] "[file rootname [file tail $Priv(bcFile)]]-new.pgn"]]
-	file mkdir [file dirname $file]
-	set chan [::open $file wb]
-	fconfigure $chan -translation binary
-	puts -nonewline $chan [encoding convertto utf-8 $text]
-	close $chan
+	if {[catch { WriteFile $file [encoding convertto utf-8 $text] } err]} {
+		BroadcastDone [format $mc::Failed $mc::Broadcast $err] 0
+		return
+	}
 
 	set parent .
 	if {[DialogExists]} { set parent [winfo parent $Priv(dialog)] }
