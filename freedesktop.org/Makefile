@@ -16,7 +16,7 @@ ifneq ($(wildcard ../Makefile.in),)
 endif
 
 ifneq ($(XDGDIR),)
-	export XDG_DATA_DIRS=$(XDGDIR)/share
+	export XDG_DATA_DIRS="$(XDGDIR)/share"
 endif
 
 ### MIME ICONS & TYPES #################################################
@@ -25,8 +25,8 @@ prepare-install-mime:
 	@# Without these directories xdg-icon-resource will fail.
 	@if [ -n "$(XDGDIR)" ]; then                        \
 		echo "Create icon directories";                  \
-		install -m 755 -d $(XDGDIR)/share/icons/hicolor; \
-		install -m 755 -d $(XDGDIR)/share/mime/packages; \
+		install -m 755 -d "$(XDGDIR)/share/icons/hicolor"; \
+		install -m 755 -d "$(XDGDIR)/share/mime/packages"; \
 	fi
 
 install-mime-icons:
@@ -69,12 +69,12 @@ install-mime-types:
 	@if case `xdg-mime --version` in "xdg-mime 1.0"*) true;; *) false;; esac; then \
 		if [ "`id -u`" -eq 0 ]; then mode="system"; else mode="user"; fi;           \
 	   dir="/tmp/scidb.037738378737";                                              \
-		mkdir -p $$dir;                                                             \
+		mkdir -p "$$dir";                                                             \
 		for f in `ls *.xml`; do                                                     \
-			cat $$f | grep -v "generic-icon name=" > $$dir/$$f;                      \
-			xdg-mime install --mode $$mode $$dir/$$f;                                \
+			cat $$f | grep -v "generic-icon name=" > "$$dir/$$f";                      \
+			xdg-mime install --mode $$mode "$$dir/$$f";                                \
 		done;                                                                       \
-		rm -rf $$dir;                                                               \
+		rm -rf "$$dir";                                                               \
 	else                                                                           \
 		for f in `ls *.xml`; do                                                     \
 			xdg-mime install $$f;                                                    \
@@ -109,7 +109,7 @@ update-mime-database:
 			fi;                                                            \
 		fi;                                                               \
 		if [ -n "$(shell update-mime-database -V 2>/dev/null)" ]; then    \
-			update-mime-database $$xdgdir/mime >/dev/null 2>/dev/null;     \
+			update-mime-database "$$xdgdir/mime" >/dev/null 2>/dev/null;     \
 		fi;                                                               \
 	else                                                                 \
 		echo "SKIP - Update mime database";                               \
@@ -126,9 +126,9 @@ prepare-install-desktop:
 	@# Without these directories xdg-xxx will fail.
 	@if [ -n "$(XDGDIR)" ]; then                              \
 		echo "Create desktop directories";                     \
-		install -m 755 -d $(XDGDIR)/share/icons/hicolor;       \
-		install -m 755 -d $(XDGDIR)/share/applications;        \
-		install -m 755 -d $(XDGDIR)/share/desktop-directories; \
+		install -m 755 -d "$(XDGDIR)/share/icons/hicolor";       \
+		install -m 755 -d "$(XDGDIR)/share/applications";        \
+		install -m 755 -d "$(XDGDIR)/share/desktop-directories"; \
 	fi
 
 install-app-icons:
@@ -159,7 +159,7 @@ install-desktop-menu-entry:
 		xdg-desktop-menu install --novendor chesswiz.desktop;         \
 		xdg-desktop-menu forceupdate;                              \
 	else                                                          \
-		install -m 644 chesswiz.desktop $(XDGDIR)/share/applications; \
+		install -m 644 chesswiz.desktop "$(XDGDIR)/share/applications"; \
 	fi
 
 uninstall-desktop-menu-entry:
@@ -197,9 +197,9 @@ install-desktop-database:
 					fi;                                                         \
 				fi;                                                            \
 			fi;                                                               \
-			appdir=$$xdgdir/applications;                                     \
-			./update-mimeapps.list.tcl add $$appdir/mimeapps.list;            \
-			update-desktop-database $$appdir 2>/dev/null;                     \
+			appdir="$$xdgdir/applications";                                     \
+			./update-mimeapps.list.tcl add "$$appdir/mimeapps.list";            \
+			update-desktop-database "$$appdir" 2>/dev/null;                     \
 		fi;                                                                  \
 	else                                                                    \
 		echo "SKIP - Update desktop databases";                              \
@@ -231,9 +231,9 @@ uninstall-desktop-database:
 					fi;                                                         \
 				fi;                                                            \
 			fi;                                                               \
-			appdir=$$xdgdir/applications;                                     \
-			./update-mimeapps.list.tcl remove $$appdir/mimeapps.list;         \
-			update-desktop-database $$appdir 2>/dev/null;                     \
+			appdir="$$xdgdir/applications";                                     \
+			./update-mimeapps.list.tcl remove "$$appdir/mimeapps.list";         \
+			update-desktop-database "$$appdir" 2>/dev/null;                     \
 		fi;                                                                  \
 	fi
 
@@ -246,16 +246,16 @@ uninstall-desktop-menu: uninstall-app-icons uninstall-desktop-menu-entry uninsta
 
 distribute:
 	@echo "Distribute freedesktop.org stuff"
-	@install -m 755 -d $(SHAREDIR)/freedesktop.org
-	@install -m 755 update-mimeapps.list.tcl $(SHAREDIR)/freedesktop.org
-	@chmod 0555 $(SHAREDIR)/freedesktop.org/update-mimeapps.list.tcl
-	@install -m 644 *.* Makefile $(SHAREDIR)/freedesktop.org
+	@install -m 755 -d "$(SHAREDIR)/freedesktop.org"
+	@install -m 755 update-mimeapps.list.tcl "$(SHAREDIR)/freedesktop.org"
+	@chmod 0555 "$(SHAREDIR)/freedesktop.org/update-mimeapps.list.tcl"
+	@install -m 644 *.* Makefile "$(SHAREDIR)/freedesktop.org"
 
 remove:
 	@echo "Remove freedesktop.org stuff"
-	@if [ -d $(SHAREDIR)/freedesktop.org ]; then \
-		rm -f $(SHAREDIR)/freedesktop.org/*;      \
-		rmdir $(SHAREDIR)/freedesktop.org;        \
+	@if [ -d "$(SHAREDIR)/freedesktop.org" ]; then \
+		rm -f "$(SHAREDIR)/freedesktop.org"/*;      \
+		rmdir "$(SHAREDIR)/freedesktop.org";        \
 	fi
 
 # vi:set ts=3 sw=3:

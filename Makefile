@@ -21,7 +21,7 @@ MAKEFLAGS += --no-print-directory
 	uninstall-subdirs uninstall-man uninstall-src uninstall-engines uninstall-tcl
 all: Makefile.in check-mtime subdirs-man subdirs-src subdirs-engines subdirs-tcl
 	@echo ""
-	@case $(BINDIR) in         \
+	@case "$(BINDIR)" in         \
 		/home/* ) make="make";; \
 		* ) make="sudo make";;  \
 	esac;                      \
@@ -107,9 +107,9 @@ dist-clean: clean-subdirs
 install: check-mtime install-subdirs install-xdg # update-magic
 
 cleanup:
-	@if [ -d $(SHAREDIR) ]; then                                        \
-		if [ "`find $(SHAREDIR) -type d -empty`" = "$(SHAREDIR)" ]; then \
-			rmdir $(SHAREDIR);                                            \
+	@if [ -d "$(SHAREDIR)" ]; then                                        \
+		if [ "$$(find "$(SHAREDIR)" -type d -empty)" = "$(SHAREDIR)" ]; then \
+			rmdir "$(SHAREDIR)";                                            \
 		fi;                                                              \
 	fi
 

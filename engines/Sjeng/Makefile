@@ -27,30 +27,30 @@ clean:
 
 install:
 ifneq ($(wildcard $(EXE)),)
-	@install -m 755 -d $(ENGINESDIR)
-	@install -m 755 -p $(EXE) $(ENGINESDIR)
-	@rm -f $(ENGINESDIR)/$(subst -chesswiz,-scidb,$(EXE))
-	@install -m 755 -d $(SHAREDIR)/engines
-	@install -m 755 -d $(SHAREDIR)/engines/$(EXE)
-	@install -m 644 -p books/* $(SHAREDIR)/engines/$(EXE)
+	@install -m 755 -d "$(ENGINESDIR)"
+	@install -m 755 -p $(EXE) "$(ENGINESDIR)"
+	@rm -f "$(ENGINESDIR)/$(subst -chesswiz,-scidb,$(EXE))"
+	@install -m 755 -d "$(SHAREDIR)/engines"
+	@install -m 755 -d "$(SHAREDIR)/engines/$(EXE)"
+	@install -m 644 -p books/* "$(SHAREDIR)/engines/$(EXE)"
 else
 	@echo "Skipping optional engine $(EXE): not built"
 endif
 
 uninstall:
-	@rm -f $(ENGINESDIR)/$(EXE)
-	@if [ -d $(SHAREDIR)/engines ]; then                                    \
-		dir=$(SHAREDIR)/engines/$(EXE);                                      \
-		if [ -d $$dir ]; then                                                \
-			for file in `ls books/*`; do rm -f $$dir/`basename $$file`; done; \
-			if [ "`find $$dir -type d -empty`" = "`ls -d $$dir`" ]; then      \
-				rmdir $$dir;                                                   \
+	@rm -f "$(ENGINESDIR)/$(EXE)"
+	@if [ -d "$(SHAREDIR)/engines" ]; then                                    \
+		dir="$(SHAREDIR)/engines/$(EXE)";                                      \
+		if [ -d "$$dir" ]; then                                                \
+			for file in $$(ls books/*); do rm -f "$$dir/$$(basename $$file)"; done; \
+			if [ "$$(find "$$dir" -type d -empty)" = "$$(ls -d "$$dir")" ]; then      \
+				rmdir "$$dir";                                                   \
 			fi;                                                               \
 		fi;                                                                  \
-		dir=$(SHAREDIR)/engines;                                             \
-		if [ -d $$dir ]; then                                                \
-			if [ "`find $$dir -type d -empty`" = "`ls -d $$dir`" ]; then      \
-				rmdir $$dir;                                                   \
+		dir="$(SHAREDIR)/engines";                                             \
+		if [ -d "$$dir" ]; then                                                \
+			if [ "$$(find "$$dir" -type d -empty)" = "$$(ls -d "$$dir")" ]; then      \
+				rmdir "$$dir";                                                   \
 			fi;                                                               \
 		fi;                                                                  \
 	fi

@@ -183,81 +183,81 @@ check-mtime:
 
 install-executables: cbh2si4 cdb2sci $(TK_PROGRAM) $(TCL_PROGRAM)
 	@echo "Install executables"
-	@install -m 755 -d $(BINDIR)
-	@install -m 755 -p $(TK_PROGRAM) $(BINDIR)
-	@install -m 755 -p $(TCL_PROGRAM) $(BINDIR)
-	@install -m 755 -p cbh2si4 $(BINDIR)
-	@install -m 755 -p cdb2sci $(BINDIR)
+	@install -m 755 -d "$(BINDIR)"
+	@install -m 755 -p $(TK_PROGRAM) "$(BINDIR)"
+	@install -m 755 -p $(TCL_PROGRAM) "$(BINDIR)"
+	@install -m 755 -p cbh2si4 "$(BINDIR)"
+	@install -m 755 -p cdb2sci "$(BINDIR)"
 
 uninstall-executables:
 	@echo "Uninstall executables"
-	@rm -f $(BINDIR)/$(TK_PROGRAM)
-	@rm -f $(BINDIR)/$(TCL_PROGRAM)
-	@rm -f $(BINDIR)/cbh2si4
-	@rm -f $(BINDIR)/cdb2sci
+	@rm -f "$(BINDIR)/$(TK_PROGRAM)"
+	@rm -f "$(BINDIR)/$(TCL_PROGRAM)"
+	@rm -f "$(BINDIR)/cbh2si4"
+	@rm -f "$(BINDIR)/cdb2sci"
 
 install-scripts:
 	@echo "Install TeXt scripts"
-	@install -m 755 -d $(SHAREDIR)/scripts
-	@install -m 644 -p util/libTeXt/plain.eXt $(SHAREDIR)/scripts
+	@install -m 755 -d "$(SHAREDIR)/scripts"
+	@install -m 644 -p util/libTeXt/plain.eXt "$(SHAREDIR)/scripts"
 
 uninstall-scripts:
 	@echo "Uninstall TeXt scripts"
-	@if [ -d $(SHAREDIR)/scripts ]; then                                                        \
-		rm -f $(SHAREDIR)/scripts/plain.eXt;                                                     \
-		if [ "`find $(SHAREDIR)/scripts -type d -empty`" = "`ls -d $(SHAREDIR)/scripts`" ]; then \
-			rmdir $(SHAREDIR)/scripts;                                                            \
+	@if [ -d "$(SHAREDIR)/scripts" ]; then                                                        \
+		rm -f "$(SHAREDIR)/scripts/plain.eXt";                                                     \
+		if [ "$$(find "$(SHAREDIR)/scripts" -type d -empty)" = "$$(ls -d "$(SHAREDIR)/scripts")" ]; then \
+			rmdir "$(SHAREDIR)/scripts";                                                            \
 		fi;                                                                                      \
 	fi
 
 install-data:
 	@echo "Install data"
-	@install -m 755 -d $(SHAREDIR)/data
-	@install -m 644 -p data/eco.bin $(SHAREDIR)/data
-	@install -m 644 -p data/*.* $(SHAREDIR)/data
+	@install -m 755 -d "$(SHAREDIR)/data"
+	@install -m 644 -p data/eco.bin "$(SHAREDIR)/data"
+	@install -m 644 -p data/*.* "$(SHAREDIR)/data"
 
 uninstall-data:
 	@echo "Uninstall data files"
-	@if [ -d $(SHAREDIR)/data ]; then                                                     \
-		rm -f $(SHAREDIR)/data/eco.bin;                                                    \
-		for f in `ls data/*.*`; do rm -f $(SHAREDIR)/$$f; done;                            \
-		if [ "`find $(SHAREDIR)/data -type d -empty`" = "`ls -d $(SHAREDIR)/data`" ]; then \
-			rmdir $(SHAREDIR)/data;                                                         \
+	@if [ -d "$(SHAREDIR)/data" ]; then                                                     \
+		rm -f "$(SHAREDIR)/data/eco.bin";                                                    \
+		for f in $$(ls data/*.*); do rm -f "$(SHAREDIR)/$$f"; done;                            \
+		if [ "$$(find "$(SHAREDIR)/data" -type d -empty)" = "$$(ls -d "$(SHAREDIR)/data")" ]; then \
+			rmdir "$(SHAREDIR)/data";                                                         \
 		fi;                                                                                \
 	fi
 
 install-hyphen:
 	@echo "Install hyphenation files"
-	@install -m 755 -d $(SHAREDIR)/hyphen/pattern
-	@install -m 755 -d $(SHAREDIR)/hyphen/dict
-	@install -m 644 -p util/libhyphenate/pattern/*.dat $(SHAREDIR)/hyphen/pattern
-	@install -m 644 -p util/libhyphenate/dict/*.dat $(SHAREDIR)/hyphen/dict
+	@install -m 755 -d "$(SHAREDIR)/hyphen/pattern"
+	@install -m 755 -d "$(SHAREDIR)/hyphen/dict"
+	@install -m 644 -p util/libhyphenate/pattern/*.dat "$(SHAREDIR)/hyphen/pattern"
+	@install -m 644 -p util/libhyphenate/dict/*.dat "$(SHAREDIR)/hyphen/dict"
 
 uninstall-hyphen:
 	@echo "Uninstall hyphenation files"
-	@if [ -d $(SHAREDIR)/hyphen ]; then                                                       \
+	@if [ -d "$(SHAREDIR)/hyphen" ]; then                                                       \
 		for dir in pattern dict; do                                                            \
-			dst=$(SHAREDIR)/hyphen/$$dir;                                                       \
-			if [ -d $$dst ]; then                                                               \
-				for f in `ls util/libhyphenate/$$dir/*.dat`; do                                  \
-					rm -f $$dst/`basename $$f`;                                                   \
+			dst="$(SHAREDIR)/hyphen/$$dir";                                                       \
+			if [ -d "$$dst" ]; then                                                             \
+				for f in $$(ls util/libhyphenate/$$dir/*.dat); do                                  \
+					rm -f "$$dst/$$(basename $$f)";                                               \
 				done;                                                                            \
-				if [ "`find $$dst -type d -empty`" = "`ls -d $$dst`" ]; then                     \
-					rmdir $$dst;                                                                  \
+				if [ "$$(find "$$dst" -type d -empty)" = "$$(ls -d "$$dst")" ]; then             \
+					rmdir "$$dst";                                                                \
 				fi;                                                                              \
 			fi;                                                                                 \
 		done;                                                                                  \
-		if [ "`find $(SHAREDIR)/hyphen -type d -empty`" = "`ls -d $(SHAREDIR)/hyphen`" ]; then \
-			rmdir $(SHAREDIR)/hyphen;                                                           \
+		if [ "$$(find "$(SHAREDIR)/hyphen" -type d -empty)" = "$$(ls -d "$(SHAREDIR)/hyphen")" ]; then \
+			rmdir "$(SHAREDIR)/hyphen";                                                           \
 		fi;                                                                                    \
 	fi
 
 install: install-executables install-scripts install-data install-hyphen
 
 uninstall: uninstall-executables uninstall-scripts uninstall-data uninstall-hyphen
-	@if [ -d $(SHAREDIR) ]; then                                                \
-		if [ "`find $(SHAREDIR) -type d -empty`" = "`ls -d $(SHAREDIR)`" ]; then \
-			rmdir $(SHAREDIR);                                                    \
+	@if [ -d "$(SHAREDIR)" ]; then                                                \
+		if [ "$$(find "$(SHAREDIR)" -type d -empty)" = "$$(ls -d "$(SHAREDIR)")" ]; then \
+			rmdir "$(SHAREDIR)";                                                    \
 		fi;                                                                      \
 	fi
 
@@ -519,7 +519,7 @@ win/chesswiz.res: win/chesswiz.rc win/chesswiz.manifest ../icons/chesswiz.ico
 
 .cpp.o:
 	@echo "Compiling `awk 'BEGIN { printf "%-30s", "$<" }'`  [$(ALL_CXXFLAGS:  = )]"
-	@$(CXX) -c $(ALL_CXXFLAGS) $(EXTRA_CXXFLAGS) $(EXTRA_DEBUG_FLAGS) $(ALL_INCLUDE) -DSHAREDIR=\"$(DATADIR)\" $< -o $@
+	@$(CXX) -c $(ALL_CXXFLAGS) $(EXTRA_CXXFLAGS) $(EXTRA_DEBUG_FLAGS) $(ALL_INCLUDE) '-DSHAREDIR="$(DATADIR)"' $< -o $@
 
 # vi:set ts=3 sw=3:
 # DO NOT DELETE THIS LINE -- make depend depends on it.
