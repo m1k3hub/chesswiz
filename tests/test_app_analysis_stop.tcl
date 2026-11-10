@@ -493,4 +493,35 @@ tcltest::test analysis-output-flood {the event loop keeps running while an engin
 	::scidb::test::pane::restore
 } -result 1
 
+# review finding B14: with an engine running (and so the engine SIGCHLD
+# handler installed), exec keeps the exit status of its own children
+tcltest::test analysis-exec-status-kept {exec beside a running engine keeps exit statuses} \
+		-constraints unix -setup {
+	::scidb::test::pane::isolate
+	set program [file join [file dirname [info script]] fixtures fake-uci-timeinfo.tcl]
+	set name [::scidb::test::pane::addEngine $program]
+	lassign [::scidb::test::pane::start $name 1] number tree
+} -body {
+	set wrong {}
+	for {set i 0} {$i < 50} {incr i} {
+		set rc [catch { ::util::execSafe sh -c {exit 3} } msg opts]
+		set ec [expr {$rc ? [dict get $opts -errorcode] : {}}]
+		if {[lindex $ec 0] ne "CHILDSTATUS" || [lindex $ec 2] != 3} { lappend wrong [list $rc $ec] }
+		if {[catch { ::util::execSafe sh -c {echo ok} } out] || $out ne "ok"} { lappend wrong [list ok $out] }
+	}
+	# a pipe whose child is done before it is closed
+	for {set i 0} {$i < 5} {incr i} {
+		set chan [open "|sh -c {exit 3}" r]
+		::scidb::test::pane::wait 200
+		set rc [catch { close $chan } msg opts]
+		set ec [expr {$rc ? [dict get $opts -errorcode] : {}}]
+		if {[lindex $ec 0] ne "CHILDSTATUS" || [lindex $ec 2] != 3} { lappend wrong [list pipe $rc $ec] }
+	}
+	lrange $wrong 0 2
+} -cleanup {
+	namespace upvar ::application::analysis ${tree}::Vars Vars
+	catch { $Vars(widget:button:close) invoke }
+	::scidb::test::pane::restore
+} -result {}
+
 tcltest::cleanupTests

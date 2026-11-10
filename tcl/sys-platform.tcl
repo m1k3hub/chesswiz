@@ -8,14 +8,13 @@
 namespace eval ::util {
 
 # Robust foreground exec wrapper.
-# When background pipeline children (such as an engine, media stream, or AI
-# process) terminate during a foreground exec, Tcl's waitpid wait can be
-# reaped by the SIGCHLD handler or event loop, causing Tcl's exec to raise
-# a spurious "child process lost" error with errorCode POSIX ECHILD {no children}.
+# The engine SIGCHLD handler once reaped every child with waitpid(-1), so an
+# exec running while an engine changed state could fail with "child process
+# lost" (POSIX ECHILD); the handler now waits for its own processes only.
 #
 # ::util::execSafe runs foreground commands redirecting output to a temporary file
-# (> $tmp). This avoids pipe buffering races in Tcl, and if ECHILD occurs
-# while the command completed, returns the captured output rather than raising.
+# (> $tmp), which avoids pipe buffering races in Tcl. If the exit status is
+# lost (ECHILD) it raises an error: the command may have failed.
 # Real non-zero exit statuses (CHILDSTATUS), signals (CHILDKILLED), and missing
 # commands (POSIX ENOENT) are preserved and raised normally.
 proc execSafe {args} {
@@ -114,10 +113,12 @@ proc execSafe {args} {
 			set ec [dict get $opts -errorcode]
 		}
 
-		# ECHILD: child process wait was reaped by SIGCHLD trap or event loop.
-		# The process executed to completion and its output was captured in $tmp.
+		# ECHILD: something else took the child's exit status, so whether it
+		# succeeded is unknown; that is an error, not a success. (The engine
+		# reaper used to do this with waitpid(-1); it now waits by pid.)
 		if {[lindex $ec 0] eq "POSIX" && [lindex $ec 1] eq "ECHILD"} {
-			return $captured
+			return -code error -errorcode {CHESSWIZ EXEC STATUS_LOST} \
+				"the exit status of \"[lindex $cmdArgs 0]\" was lost"
 		}
 
 		# Real failure: preserve CHILDSTATUS, CHILDKILLED, POSIX ENOENT, etc.

@@ -60,57 +60,68 @@ static ProcessMap m_processMap;
 static bool m_childHandlerHooked = false;
 
 
+static void handleChildStatus(Process* process, pid_t pid, int status);
+
+
+// Only our own processes are waited for, by pid: waitpid(-1) also took the
+// exit status of children that Tcl's exec waits for, which then failed with
+// ECHILD and could not tell success from failure.
 static void
 trapChildEvent(int signum)
 {
-	int	status;
-	pid_t pid		= waitpid(-1, &status, WNOHANG | WUNTRACED | WCONTINUED);
+	int savedErrno = errno;
 
-	if (pid >= 0)
+	for (ProcessMap::const_iterator i = m_processMap.begin(); i != m_processMap.end(); ++i)
 	{
-		ProcessMap::const_iterator i = m_processMap.find(pid);
-		Process* process = i == m_processMap.end() ? 0 : i->second;
+		int status;
 
-		if (process)
+		if (i->second && waitpid(i->first, &status, WNOHANG | WUNTRACED | WCONTINUED) > 0)
+			handleChildStatus(i->second, i->first, status);
+	}
+
+	errno = savedErrno;
+}
+
+
+static void
+handleChildStatus(Process* process, pid_t pid, int status)
+{
+	if (WIFEXITED(status))
+	{
+		process->signalExited(WEXITSTATUS(status));
+	}
+	else if (WIFSTOPPED(status))
+	{
+		process->signalStopped();
+	}
+	else if (WIFCONTINUED(status))
+	{
+		process->signalResumed();
+	}
+	else if (WIFSIGNALED(status))
+	{
+		if (WCOREDUMP(status) || WTERMSIG(status) == SIGABRT)
 		{
-			if (WIFEXITED(status))
-			{
-				process->signalExited(WEXITSTATUS(status));
-			}
-			else if (WIFSTOPPED(status))
-			{
-				process->signalStopped();
-			}
-			else if (WIFCONTINUED(status))
-			{
-				process->signalResumed();
-			}
-			else if (WIFSIGNALED(status))
-			{
-				if (WCOREDUMP(status) || WTERMSIG(status) == SIGABRT)
-				{
-					process->signalCrashed();
-				}
-				else
-				{
-					char const* signal = 0;
-					char buf[100];
+			process->signalCrashed();
+		}
+		else
+		{
+			char const* signal = 0;
+			char buf[100];
 
-					switch (WTERMSIG(status))
-					{
-						case SIGQUIT: signal = "QUIT"; break;
-						case SIGKILL: signal = "KILL"; break;
-						case SIGTERM: signal = "TERM"; break;
+			switch (WTERMSIG(status))
+			{
+				case SIGQUIT: signal = "QUIT"; break;
+				case SIGKILL: signal = "KILL"; break;
+				case SIGTERM: signal = "TERM"; break;
 
-						default:
-							snprintf(buf, sizeof(buf), "%d", int(pid));
-							signal = buf;
-							break;
-					}
-
-					process->signalKilled(signal);
-				}
+				default:
+					snprintf(buf, sizeof(buf), "%d", int(pid));
+					signal = buf;
+					break;
 			}
+
+			process->signalKilled(signal);
 		}
 	}
 }
