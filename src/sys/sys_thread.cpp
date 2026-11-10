@@ -29,6 +29,9 @@
 #include <tcl.h>
 
 #include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+#include <stdint.h>
 
 #ifndef __WIN32__
 # include <time.h>
@@ -480,7 +483,12 @@ struct Thread::Synchonize
 			M_RAISE("cannot create sockets");
 #endif
 
-		m_chan = Tcl_MakeFileChannel(reinterpret_cast<ClientData>(m_fd[0]), TCL_READABLE);
+#ifdef __WIN32__
+		// a Winsock socket is not a file handle: Windows Tcl needs a socket channel
+		m_chan = Tcl_MakeTcpClientChannel(reinterpret_cast<ClientData>(m_fd[0]));
+#else
+		m_chan = Tcl_MakeFileChannel(reinterpret_cast<ClientData>(intptr_t(m_fd[0])), TCL_READABLE);
+#endif
 
 		Tcl_CreateChannelHandler(m_chan, TCL_READABLE, sendSignal, this);
 		Tcl_RegisterChannel(tcl::interp(), m_chan);
@@ -522,8 +530,29 @@ struct Thread::Synchonize
 
 		Guard guard(m_lock);
 
-		(void)::write(m_fd[1], ::Serialize(threadId).str, sizeof(::Serialize));
-		(void)::write(m_fd[1], reinterpret_cast<char*>(&signal), sizeof(int));
+		// one message, written whole: a partial or interrupted write would
+		// shift every later message out of frame
+		char msg[sizeof(::Serialize) + sizeof(int)];
+		::memcpy(msg, ::Serialize(threadId).str, sizeof(::Serialize));
+		::memcpy(msg + sizeof(::Serialize), &signal, sizeof(int));
+
+		for (size_t done = 0; done < sizeof(msg); )
+		{
+#ifdef __WIN32__
+			int n = ::send(m_fd[1], msg + done, int(sizeof(msg) - done), 0);
+			if (n == SOCKET_ERROR)
+				return; // the main thread's end is gone
+#else
+			ssize_t n = ::write(m_fd[1], msg + done, sizeof(msg) - done);
+			if (n < 0)
+			{
+				if (errno == EINTR)
+					continue;
+				return; // the main thread's end is gone
+			}
+#endif
+			done += size_t(n);
+		}
 	}
 
 	static void

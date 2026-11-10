@@ -262,15 +262,31 @@ proc openURL {x} {
 # programs detached (no console); powershell.exe then exits at once without
 # running anything. wscript.exe is a GUI program and cscript.exe works
 # without a console, so the Windows helpers are VBScript. Each script is
-# written once per session into the temporary directory.
+# written once per session into a directory of this process alone, so two
+# instances (or two versions) never rewrite a script the other is running.
 proc WinScript {name body} {
 	variable WinScripts
+	variable WinScriptDir
 	if {[info exists WinScripts($name)] && [file isfile $WinScripts($name)]} {
 		return $WinScripts($name)
 	}
-	set dir [expr {[info exists ::env(TEMP)] ? $::env(TEMP) : [pwd]}]
-	set path [file join $dir chesswiz-$name.vbs]
-	set chan [open $path w]
+	if {![info exists WinScriptDir] || ![file isdirectory $WinScriptDir]} {
+		set base ""
+		foreach var {TEMP TMP} {
+			if {[info exists ::env($var)] && [file isdirectory $::env($var)]} {
+				set base $::env($var)
+				break
+			}
+		}
+		# never the working directory: these are scripts that get run
+		if {$base eq ""} { error "no temporary directory for the helper scripts" }
+		set n 0
+		while {[file exists [set dir [file join $base chesswiz-[pid]-[incr n]]]]} {}
+		file mkdir $dir
+		set WinScriptDir $dir
+	}
+	set path [file join $WinScriptDir $name.vbs]
+	set chan [open $path {WRONLY CREAT EXCL}]
 	try { puts -nonewline $chan $body } finally { close $chan }
 	return [set WinScripts($name) $path]
 }
