@@ -117,17 +117,44 @@ proc writeHeader {chan file} {
 
 
 proc startTransaction {} {
-	variable fd_
-	array unset fd_
+	# a transaction that failed half way is cleaned up, not forgotten
+	abortTransaction
 }
 
 
-proc endTransaction {} {
+# Closes every channel of the transaction and removes its temporary files;
+# the option files stay as they were.
+proc abortTransaction {} {
 	variable TempSuffix
 	variable fd_
 
 	foreach filename [array names fd_] {
-		close $fd_($filename)
+		catch { close $fd_($filename) }
+		catch { file delete -- $filename.$TempSuffix }
+	}
+	array unset fd_
+}
+
+
+# Replaces the option files only when every one was written completely
+# (a full disk shows at close); otherwise none is replaced.
+proc endTransaction {} {
+	variable TempSuffix
+	variable fd_
+
+	set files [array names fd_]
+	set failed {}
+	foreach filename $files {
+		if {[catch { close $fd_($filename) } err] && ![llength $failed]} {
+			set failed [list $filename $err]
+		}
+	}
+	array unset fd_
+	if {[llength $failed]} {
+		foreach filename $files { catch { file delete -- $filename.$TempSuffix } }
+		error "cannot write [lindex $failed 0]: [lindex $failed 1]"
+	}
+	foreach filename $files {
 		file rename -force $filename.$TempSuffix $filename
 	}
 }
@@ -143,7 +170,11 @@ proc saveOptionsFile {} {
 		set fd_($filename) [set chan [open $filename.$TempSuffix w]]
 		fconfigure $chan -encoding utf-8
 		writeHeader $chan $file
-		foreach callback $WriteCallbacks($file) { {*}$callback $chan }
+		# a failing writer leaves no open channel and no temporary file
+		if {[catch { foreach callback $WriteCallbacks($file) { {*}$callback $chan } } err opts]} {
+			abortTransaction
+			return -options $opts $err
+		}
 	}
 }
 
@@ -158,8 +189,13 @@ proc saveTableOptionsFile {variant} {
 		file mkdir [file dirname $filename]
 		set fd_($filename) [set chan [open $filename.$TempSuffix w]]
 		fconfigure $chan -encoding utf-8
-		foreach callback $TableCallbacks($file) { {*}$callback $chan $variant }
-		SaveToolbarOptions $chan $variant [::toolbar::toolbarIds]
+		if {[catch {
+			foreach callback $TableCallbacks($file) { {*}$callback $chan $variant }
+			SaveToolbarOptions $chan $variant [::toolbar::toolbarIds]
+		} err opts]} {
+			abortTransaction
+			return -options $opts $err
+		}
 	}
 }
 

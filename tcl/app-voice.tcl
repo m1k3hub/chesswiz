@@ -808,15 +808,21 @@ proc ::application::voice::OnReadable {chan script} {
 		unset -nocomplain Priv(out,$chan)
 		set out [string trim $out]
 		set failed [catch { close $chan } err]
-		if {$failed} {
-			set detail $err
-			if {[info exists Priv(err,$chan)] && [file readable $Priv(err,$chan)]} {
-				set fh [open $Priv(err,$chan) r]
-				set said [string trim [read $fh]]
+		set errFile [expr {[info exists Priv(err,$chan)] ? $Priv(err,$chan) : ""}]
+		unset -nocomplain Priv(err,$chan)
+		set detail $err
+		if {$failed && $errFile ne "" && [file readable $errFile]} {
+			catch {
+				set fh [open $errFile r]
+				# bounded: a noisy script must not fill the message
+				set said [string trim [read $fh 4096]]
 				close $fh
 				if {[string length $said]} { set detail $said }
 			}
-			unset -nocomplain Priv(err,$chan)
+		}
+		# the stderr file is ours: remove it on success and failure alike
+		if {$errFile ne ""} { catch { file delete $errFile } }
+		if {$failed} {
 			after 0 [list {*}$script [list ok 0 error [string trim $detail]]]
 		} else {
 			after 0 [list {*}$script [list ok 1 text $out]]
@@ -1002,7 +1008,8 @@ proc ::application::voice::Speak {text} {
 	switch -- $engine {
 		piper {
 			if {[catch {
-				set chan [open "|piper --model $Settings(ttsVoice) --output_file $wav" w]
+				# a list: a model path with spaces stays one argument
+				set chan [open |[list piper --model $Settings(ttsVoice) --output_file $wav] w]
 				fconfigure $chan -encoding utf-8
 				puts $chan $text
 				close $chan

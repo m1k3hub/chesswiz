@@ -350,4 +350,21 @@ tcltest::test download-run-reports-failure {run() reports a failed download to i
 	::scidb::test::download::cleanup
 } -result {0 1}
 
+# review finding UI-08: a headless request with nothing to fetch is told so
+tcltest::test download-run-invalid {run() with no URL, IDs or player completes with an error} -body {
+	::scidb::test::download::isolated {
+		set ::application::download::Priv(dialog) {}
+		set out {}
+		foreach spec {{-source url -url {}} {-source lichess -lichess {no ids here}} {-source player -player {}}} {
+			set ::result {}
+			::application::download::run test-base $spec {apply {{r} {set ::result $r}}}
+			::scidb::test::download::tick
+			lappend out [expr {[llength $::result] ? [dict get $::result ok] : "none"}]
+		}
+		set out
+	}
+} -cleanup {
+	::scidb::test::download::cleanup
+} -result {0 0 0}
+
 tcltest::cleanupTests

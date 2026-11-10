@@ -273,19 +273,22 @@ proc SendResult {canv file} {
 }
 
 
-proc LoadTextures {canv which files} {
+proc LoadTextures {canv which files {next 0}} {
 	variable ${canv}::Browser
 	variable Cache
 
 	set border $Browser(border)
 	set size $Browser(size)
 	set loop true
+	# cached textures are cheap but not free: yield after this many too
+	set budget 32
 
 	while {1} {
-		if {[llength $files] == 0} { return }
+		if {$next >= [llength $files]} { return }
 
-		set file [lindex $files 0]
-		set files [lreplace $files 0 0]
+		# an index, not removing the head: that copies the list each time
+		set file [lindex $files $next]
+		incr next
 
 		if {![file exists $file]} {
 			set index [lsearch -exact $Browser(files) "$file"]
@@ -370,9 +373,9 @@ proc LoadTextures {canv which files} {
 		}
 		incr Browser(col)
 
-		if {!$loop} {
+		if {!$loop || [incr budget -1] <= 0} {
 			set Browser(afterId,texture) \
-				[after $Browser(delay) [namespace code [list LoadTextures $canv $which $files]]]
+				[after $Browser(delay) [namespace code [list LoadTextures $canv $which $files $next]]]
 			return
 		}
 	}

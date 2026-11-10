@@ -483,7 +483,7 @@ proc ::application::download::Start {} {
             }
             set ids [lichessGameIds $text]
 			if {![llength $ids]} {
-				Status $mc::NoGames
+				Refuse $mc::NoGames
 				return
 			}
 			set Priv(title) $mc::LichessImport
@@ -495,7 +495,7 @@ proc ::application::download::Start {} {
 		study {
 			set specs [::application::lichess::study::specs [StudyText]]
 			if {![llength $specs]} {
-				Status $mc::NoStudies
+				Refuse $mc::NoStudies
 				return
 			}
 			set Priv(title) $mc::StudyImport
@@ -512,7 +512,7 @@ proc ::application::download::Start {} {
 			if {$spec eq ""} {
 				set Priv(bcUrls) {}
 				set Priv(bcUrl) 0
-				Status $mc::NoBroadcast
+				Refuse $mc::NoBroadcast
 				return
 			}
 			set Priv(title) $mc::BroadcastImport
@@ -538,7 +538,7 @@ proc ::application::download::Start {} {
 		player {
 			set name [playerName $Priv(player)]
 			if {$name eq ""} {
-				Status $mc::NoPlayer
+				Refuse $mc::NoPlayer
 				return
 			}
 			set months [Months]
@@ -559,7 +559,7 @@ proc ::application::download::Start {} {
 		url {
 			set url [string trim $Priv(url)]
 			if {$url eq ""} {
-				Status $mc::NoUrl
+				Refuse $mc::NoUrl
 				return
 			}
 			set Priv(title) $mc::UrlImport
@@ -742,6 +742,14 @@ proc ::application::download::Finish {text} {
 
 # The headless completion callback, if the run was started by
 # ::application::download::run (the assistant), not by the dialog.
+# Bad input: shown in the dialog, and a headless caller is told, so its
+# completion fires exactly once.
+proc ::application::download::Refuse {text} {
+	Status $text
+	Done [list ok 0 error $text]
+}
+
+
 proc ::application::download::Done {result} {
 	variable Priv
 
