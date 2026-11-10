@@ -106,39 +106,43 @@ getList(mstl::string& result, char const*& s)
 	if (*s != '{')
 		return false;
 
-	unsigned level = 1;
+	result.clear();
 
-	while (level > 0)
+	// one character at a time: every brace is counted, the outer pair is
+	// dropped, and the end of the text is never read past
+	for (unsigned level = 1; *++s; result.append(*s))
 	{
-		if (*++s == '\0')
-			return false;
-
-		result.append(*s++);
-
-		if (*s == '}')
-			--level;
-		else if (*s == '{')
+		if (*s == '{')
+		{
 			++level;
+		}
+		else if (*s == '}' && --level == 0)
+		{
+			++s;
+			return true;
+		}
 	}
 
-	++s;
-	return true;
+	return false;
 }
 
 
 static bool
 getToken(mstl::string& result, char const*& s)
 {
-	while (::isspace(*s))
+	while (::isspace(static_cast<unsigned char>(*s)))
 		++s;
 
 	if (*s == '{')
 		return getList(result, s);
 
-	while (!::isspace(*s) && *s != '{' && *s != '}')
+	result.clear();
+
+	while (!::isspace(static_cast<unsigned char>(*s)) && *s != '{' && *s != '}')
 	{
+		// the last token of a list ends at the end of the text
 		if (*s == '\0')
-			return false;
+			return !result.empty();
 
 		result.append(*s++);
 	}
