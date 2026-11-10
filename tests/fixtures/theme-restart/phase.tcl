@@ -41,7 +41,21 @@ proc themeCascade {menu label} {
 	return ""
 }
 
-after 2500 {
+# Act once startup is over: on a fresh home the first-start engine probe
+# shows a modal wait window with a grab, and ::application::shutdown
+# refuses to quit (and save) while a grab is held. A fixed delay raced it.
+proc themeReady {waited} {
+	if {([grab current] ne "" || [winfo exists .application.wait]) && $waited < 30000} {
+		after 200 [list themeReady [expr {$waited + 200}]]
+		return
+	}
+	themeOut ready $waited [grab current]
+	themePhase
+}
+
+after 2500 { themeReady 0 }
+
+proc themePhase {} {
 	switch -- $::env(TH_PHASE) {
 		set {
 			set mb .application.nb.menu_main
