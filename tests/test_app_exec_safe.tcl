@@ -89,4 +89,30 @@ tcltest::test execsafe-keeps-caller-redirects {a caller's own "> file 2>@1" keep
     list $rc [string match "*std_out*" $text] [string match "*std_err*" $text]
 } -result {0 1 1}
 
+# Review finding B13: stderr is kept out of a successful command's output
+# but stays in the message of a failing one.
+
+tcltest::test exec-safe-stderr-apart {stderr of a successful command is not output} -body {
+	::util::execSafe sh -c {echo warning >&2; echo 42}
+} -result 42
+
+tcltest::test exec-safe-merge-requested {2>@1 still merges the streams} -body {
+	lsort [split [::util::execSafe sh -c {echo warning >&2; echo 42} 2>@1] \n]
+} -result {42 warning}
+
+tcltest::test exec-safe-failure-stderr {a failing command reports its stdout, stderr and status} -body {
+	set rc [catch { ::util::execSafe sh -c {echo partial; echo broken >&2; exit 3} } msg opts]
+	list $rc $msg [lrange [dict get $opts -errorcode] 0 0] [lindex [dict get $opts -errorcode] 2]
+} -result {1 {partial
+broken} CHILDSTATUS 3}
+
+tcltest::test exec-safe-no-leftovers {no capture files are left behind} -body {
+	set dir [file dirname [file tempfile probe]]
+	file delete $probe
+	set before [llength [glob -nocomplain -directory $dir *.err]]
+	::util::execSafe sh -c {echo warning >&2; echo 42}
+	catch { ::util::execSafe sh -c {echo broken >&2; exit 1} }
+	expr {[llength [glob -nocomplain -directory $dir *.err]] - $before}
+} -result 0
+
 tcltest::cleanupTests

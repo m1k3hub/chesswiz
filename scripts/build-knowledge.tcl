@@ -3,6 +3,7 @@
 # action registry and the hand-written topic pages (VAL-KNOW-002).
 #
 #   xvfb-run -a src/tkchesswiz scripts/build-knowledge.tcl --out share/knowledge
+#       ?--bundle tcl/chesswiz?
 #
 # Deterministic: two runs over the same registry write byte-identical
 # files. `--check` compares the pack with the registry instead, and exits
@@ -18,13 +19,22 @@ proc knowledgeBuildExit {status} {
     ::exit $status
 }
 
+# --bundle names the Tcl bundle to load (the Makefile passes the one it
+# built, which carries the program suffix); relative to the source root
+set bundle [file join $root tcl chesswiz]
+if {[set i [lsearch -exact $argv --bundle]] >= 0} {
+	set bundle [file join $root [lindex $argv $i+1]]
+	set argv [lreplace $argv $i $i+1]
+	set argc [llength $argv]
+}
+
 set argvCopy $argv
 set argcCopy $argc
 set argv {--single-process}
 set argc 1
 set ::env(SCIDB_AI_TRIAGE) 0
 set ::env(SCIDB_ERROR_LOG) [file join $root tests tmp-app knowledge-errors.log]
-source -encoding utf-8 [file join $root tcl chesswiz]
+source -encoding utf-8 $bundle
 set ::scidb::dir::setup 0
 set argv $argvCopy
 set argc $argcCopy

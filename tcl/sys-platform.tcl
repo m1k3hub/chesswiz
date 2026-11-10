@@ -14,7 +14,7 @@ namespace eval ::util {
 # a spurious "child process lost" error with errorCode POSIX ECHILD {no children}.
 #
 # ::util::execSafe runs foreground commands redirecting output to a temporary file
-# (> $tmp 2>@1). This avoids pipe buffering races in Tcl, and if ECHILD occurs
+# (> $tmp). This avoids pipe buffering races in Tcl, and if ECHILD occurs
 # while the command completed, returns the captured output rather than raising.
 # Real non-zero exit statuses (CHILDSTATUS), signals (CHILDKILLED), and missing
 # commands (POSIX ENOENT) are preserved and raised normally.
@@ -68,13 +68,20 @@ proc execSafe {args} {
 	}
 
 	set tmp {}
+	set errTmp {}
 	if {!$hasStdoutRedir} {
 		if {[catch { close [file tempfile tmp] }]} {
 			set tmp [file join [expr {[info exists ::env(TEMP)] ? $::env(TEMP) : "/tmp"}] "exec_[pid]_[clock microseconds]"]
 		}
 		lappend cmdArgs ">" $tmp
-		if {$had2at1 || (!$hasStderrRedir && !("-ignorestderr" in $switches))} {
+		# stderr stays out of the output unless the caller merged it; a
+		# warning there does not fail a command that exits 0, but goes into
+		# the error message of one that fails
+		if {$had2at1} {
 			lappend cmdArgs "2>@1"
+		} elseif {!$hasStderrRedir && !("-ignorestderr" in $switches)} {
+			set errTmp $tmp.err
+			lappend cmdArgs "2>" $errTmp
 		}
 	} elseif {$had2at1} {
 		# the caller redirects stdout itself: keep its stderr redirection
@@ -114,14 +121,24 @@ proc execSafe {args} {
 		}
 
 		# Real failure: preserve CHILDSTATUS, CHILDKILLED, POSIX ENOENT, etc.
-		if {$tmp ne "" && $captured ne ""} {
-			dict set opts -errorinfo $captured
-			return -options $opts $captured
+		set stderr ""
+		if {$errTmp ne "" && [file exists $errTmp]} {
+			set fh [open $errTmp r]
+			set stderr [read -nonewline $fh]
+			close $fh
+		}
+		if {$tmp ne "" && ($captured ne "" || $stderr ne "")} {
+			set msg [join [lsearch -all -inline -not -exact [list $captured $stderr] ""] \n]
+			dict set opts -errorinfo $msg
+			return -options $opts $msg
 		}
 		return -options $opts $out
 	} finally {
 		if {$tmp ne ""} {
 			catch {file delete -force $tmp}
+		}
+		if {$errTmp ne ""} {
+			catch {file delete -force $errTmp}
 		}
 	}
 }

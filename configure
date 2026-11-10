@@ -297,6 +297,8 @@ foreach name [array names environment] {
         set environment($name) $env($name)
     }
 }
+# the media backend follows the target OS unless the caller chose one
+set mediaBackendChosen [info exists env(MEDIA_BACKEND)]
 
 
 proc MakeOption {prefix path} {
@@ -2384,6 +2386,7 @@ foreach arg $argv {
             set force([string range $arg0 16 end]) $arg1
         } elseif {[info exists environment($arg0)]} {
             set environment($arg0) $arg1
+            if {$arg0 eq "MEDIA_BACKEND"} { set mediaBackendChosen 1 }
         } elseif {[string match --* $arg0]} {
             set configure([string range $arg0 2 end]) $arg1
         } else {
@@ -2440,6 +2443,9 @@ if {$configure(toolchain) eq "zig"} {
             set tcl_platform(machine) x86_64
             set tcl_platform(wordSize) 8
         }
+    }
+    if {!$mediaBackendChosen} {
+        set environment(MEDIA_BACKEND) [expr {$tcl_platform(os) eq "Darwin" ? "avf" : "mpv"}]
     }
 } elseif {[string length $configure(toolchain)]} {
     puts "Invalid toolchain: '$configure(toolchain)'. Supported toolchains: zig"

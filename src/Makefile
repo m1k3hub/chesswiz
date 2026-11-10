@@ -181,7 +181,7 @@ check-mtime:
 		fi                                                      \
 	fi
 
-install-executables: cbh2si4 cdb2sci $(TK_PROGRAM)
+install-executables: cbh2si4 cdb2sci $(TK_PROGRAM) $(TCL_PROGRAM)
 	@echo "Install executables"
 	@install -m 755 -d $(BINDIR)
 	@install -m 755 -p $(TK_PROGRAM) $(BINDIR)

@@ -19,6 +19,11 @@ USERDIRNAME ?= .$(notdir $(DATADIR))
 TKPROGRAM ?= tk$(PROGRAM)$(SUFFIX)
 
 SCRIPT = $(PROGRAM)$(SUFFIX)
+
+# A configured path as literal sed replacement text inside single quotes:
+# escape \ & and the # delimiter, and close/reopen the quotes around a '.
+hash := \#
+sedrepl = $(subst ','\'',$(subst $(hash),\$(hash),$(subst &,\&,$(subst \,\\,$(1)))))
 # All platform scripts go into every bundle and pick themselves at run
 # time, so a bundle built without the target set still works everywhere.
 # The macOS adapters reuse the generic Unix routines, so Unix comes first.
@@ -739,28 +744,21 @@ uninstall-photos:
 	fi
 
 # The knowledge pack is generated from the registry, never edited by hand
-# (VAL-KNOW-002). Generation needs a display; xvfb-run keeps it headless.
-knowledge:
-	@echo "Generate knowledge pack"
-	@if [ -n "$$DISPLAY" ]; then                                             \
-		cd .. && ./src/$(TKPROGRAM) scripts/build-knowledge.tcl --out share/knowledge; \
-	elif command -v xvfb-run >/dev/null 2>&1; then                           \
-		cd .. && xvfb-run -a ./src/$(TKPROGRAM) scripts/build-knowledge.tcl --out share/knowledge; \
-	else                                                                     \
-		echo "Knowledge generation requires an X display or xvfb-run." >&2;  \
-		exit 1;                                                              \
-	fi
+# (VAL-KNOW-002). Generation needs a window system: an X display, native
+# macOS Tk, or xvfb-run to stay headless.
+KNOWLEDGE_RUN = \
+	if [ -n "$$DISPLAY" ] || [ "`uname`" = Darwin ]; then run=; \
+	elif command -v xvfb-run >/dev/null 2>&1; then run="xvfb-run -a"; \
+	else echo "Knowledge $$what requires a window system or xvfb-run." >&2; exit 1; fi; \
+	cd .. && $$run ./src/$(TKPROGRAM) scripts/build-knowledge.tcl --bundle tcl/$(SCRIPT)
 
-knowledge-check:
+knowledge: $(SCRIPT) ../src/$(TKPROGRAM)
+	@echo "Generate knowledge pack"
+	@what=generation; $(KNOWLEDGE_RUN) --out share/knowledge
+
+knowledge-check: $(SCRIPT) ../src/$(TKPROGRAM)
 	@echo "Check knowledge pack against the registry"
-	@if [ -n "$$DISPLAY" ]; then                                             \
-		cd .. && ./src/$(TKPROGRAM) scripts/build-knowledge.tcl --check --out share/knowledge; \
-	elif command -v xvfb-run >/dev/null 2>&1; then                           \
-		cd .. && xvfb-run -a ./src/$(TKPROGRAM) scripts/build-knowledge.tcl --check --out share/knowledge; \
-	else                                                                     \
-		echo "Knowledge check requires an X display or xvfb-run." >&2;       \
-		exit 1;                                                              \
-	fi
+	@what=check; $(KNOWLEDGE_RUN) --check --out share/knowledge
 
 install-knowledge: knowledge
 	@echo "Install knowledge pack"
@@ -799,24 +797,26 @@ $(SCRIPT): $(SOURCES) Makefile ../Makefile.in
 	done; if [ -n "$$err" ]; then exit 1; fi
 	@echo "Building $(SCRIPT)"
 	@tmp="$(SCRIPT).tmp.$$$$"; \
-	trap 'rm -f "$$tmp"' EXIT INT TERM HUP; \
-	for f in $(SOURCES); do cat "$$f"; echo; done | LC_ALL=C sed                  \
+	trap 'rm -f "$$tmp" "$$tmp.in"' EXIT INT TERM HUP; \
+	( for f in $(SOURCES); do cat "$$f" && echo || exit 1; done ) > "$$tmp.in" \
+		|| { echo "ERROR: cannot read the sources of $(SCRIPT)"; exit 1; }; \
+	LC_ALL=C sed                                          \
 		-e 's/# vi:set ts=3 sw=3:/update idletasks/'        \
-		-e 's#%SHAREDIR%#$(DATADIR)#g'                      \
-		-e 's#%ENGINESDIR%#$(ENGINESDIR)#g'                 \
-		-e 's#%USERDIRNAME%#$(USERDIRNAME)#g'               \
-		-e 's#%TKPROGRAM%#$(TKPROGRAM)#g'                   \
+		-e 's#%SHAREDIR%#$(call sedrepl,$(DATADIR))#g'      \
+		-e 's#%ENGINESDIR%#$(call sedrepl,$(ENGINESDIR))#g' \
+		-e 's#%USERDIRNAME%#$(call sedrepl,$(USERDIRNAME))#g' \
+		-e 's#%TKPROGRAM%#$(call sedrepl,$(TKPROGRAM))#g'   \
 		-e '/^##/d'                                         \
 		-e '/^#$$/d'                                        \
 		-e '/^[ 	]*#[ 	]\+/d'                               \
-		> "$$tmp"; \
+		"$$tmp.in" > "$$tmp" \
+		|| { echo "ERROR: cannot write $(SCRIPT)"; exit 1; }; \
 	if [ -x /usr/bin/tclsh ]; then TCLSH=/usr/bin/tclsh; else TCLSH=tclsh; fi; \
 	printf '%s' "set fp [open \"$$tmp\" r]; set b [read \$$fp]; close \$$fp; \
 		if {![info complete \$$b]} { puts stderr \"ERROR: merged script is syntactically incomplete\"; exit 1 }" \
 		| $$TCLSH \
 		|| { echo "ERROR: $(SCRIPT) failed the syntax check"; exit 1; }; \
-	chmod 0555 "$$tmp"; \
-	mv -f "$$tmp" $(SCRIPT)
+	chmod 0555 "$$tmp" && mv -f "$$tmp" $(SCRIPT)
 
 $(ARCH): utils/archive.tcl
 	@echo "Building $(ARCH)"
