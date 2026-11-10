@@ -227,6 +227,17 @@ check "cache: served from cache" [expr {[dict get $second results k1 source] eq 
 ::scidb::test::b::stop
 catch { file delete $cache }
 
+# --- review finding AI-08: only this run's entries are loaded ---------
+set f [open $cache w]
+for {set i 0} {$i < 5000} {incr i} { puts $f "old|model|q|state$i\t{choice x}" }
+puts $f "[::ai::batch::Escape "e|m|q|line\nbreak"]\t[::ai::batch::Escape "{choice y}"]"
+close $f
+set run [dict create cacheFile $cache]
+::ai::batch::LoadCache run [list "e|m|q|line\nbreak" "e|m|q|absent"]
+check "cache: only wanted entries are kept" [expr {[dict size [dict get $run cache]] == 1}]
+check "cache: a wanted entry is unescaped" [expr {[dict get $run cache "e|m|q|line\nbreak"] eq "{choice y}"}]
+catch { file delete $cache }
+
 # --- classifier off: every item falls back -----------------------------
 ::scidb::test::b::start
 ::ai::systemone::configure -backend off

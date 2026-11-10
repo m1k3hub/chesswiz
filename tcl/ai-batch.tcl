@@ -79,30 +79,35 @@ proc ::ai::batch::CacheKey {run state} {
 }
 
 
-proc ::ai::batch::LoadCache {runVar} {
+# Only the entries of <keys> are kept: the sidecar is append-only and may
+# hold the answers of many earlier questions and models, which this run
+# must not hold in memory. Lines are read one at a time and only a key
+# this run wants is unescaped.
+proc ::ai::batch::LoadCache {runVar keys} {
 	upvar $runVar run
 	set path [dict get $run cacheFile]
 	if {$path eq "" || ![file exists $path]} { return }
+
+	set wanted {}
+	foreach key $keys { dict set wanted [Escape $key] $key }
 
 	set cache {}
 	if {[catch { open $path r } chan]} { return }
 	# the channel is closed also when reading fails
 	try {
 		fconfigure $chan -encoding utf-8 -translation binary
-		set text [read $chan]
+		while {[gets $chan line] >= 0} {
+			if {$line eq "" || [string index $line 0] eq "#"} { continue }
+			set tab [string first "\t" $line]
+			if {$tab < 0} { continue }
+			set escaped [string range $line 0 [expr {$tab - 1}]]
+			if {![dict exists $wanted $escaped]} { continue }
+			dict set cache [dict get $wanted $escaped] [Unescape [string range $line [expr {$tab + 1}] end]]
+		}
 	} on error {} {
 		return
 	} finally {
 		catch { close $chan }
-	}
-
-	foreach line [split $text "\n"] {
-		if {$line eq "" || [string index $line 0] eq "#"} { continue }
-		set tab [string first "\t" $line]
-		if {$tab < 0} { continue }
-		set key [Unescape [string range $line 0 [expr {$tab - 1}]]]
-		set value [Unescape [string range $line [expr {$tab + 1}] end]]
-		dict set cache $key $value
 	}
 	dict set run cache $cache
 	return
@@ -173,7 +178,9 @@ proc ::ai::batch::run {items question script args} {
 	}
 	dict set run byState $byState
 
-	LoadCache run
+	set keys {}
+	foreach state $seen { lappend keys [CacheKey $run $state] }
+	LoadCache run $keys
 	set cache [dict get $run cache]
 	foreach state $seen {
 		set key [CacheKey $run $state]
