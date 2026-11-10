@@ -424,6 +424,10 @@ proc ::ics::Disconnect {{why ""}} {
 	}
 	set Priv(socket) {}
 	set Priv(buffer) {}
+	if {[info exists Priv(drain)] && $Priv(drain) ne ""} {
+		after cancel $Priv(drain)
+		set Priv(drain) {}
+	}
 	set Priv(loggedIn) 0
 	set Priv(state) offline
 	set Priv(handle) {}
@@ -467,31 +471,76 @@ proc ::ics::Send {line} {
 }
 
 
+# Input is read in bounded batches and at most MaxLines lines are handled
+# per event (the rest goes on from the event loop, so clocks and redraws
+# keep up with a burst); a line longer than MaxLine is dropped.
+namespace eval ::ics {
+	variable MaxRead 65536
+	variable MaxLines 200
+	variable MaxLine 65536
+}
+
 proc ::ics::OnReadable {} {
 	variable Priv
+	variable MaxRead
 
 	set sock $Priv(socket)
 	if {$sock eq ""} { return }
 	if {[catch {
-		append Priv(buffer) [read $sock]
-		while {[set end [string first "\n" $Priv(buffer)]] >= 0} {
-			set line [string range $Priv(buffer) 0 [expr {$end - 1}]]
-			set Priv(buffer) [string range $Priv(buffer) [expr {$end + 1}] end]
-			ProcessLine [cleanLine $line]
-			if {$Priv(socket) ne $sock} { return }
-		}
-		ProcessPrompt
-		if {$Priv(socket) ne $sock} { return }
-		if {[eof $sock]} {
-			if {$Priv(buffer) ne ""} {
-				ProcessLine [cleanLine $Priv(buffer)]
-				set Priv(buffer) {}
-			}
-			Disconnect $::ics::mc::Disconnected
-		}
+		append Priv(buffer) [read $sock $MaxRead]
+		Drain $sock
 	} err]} {
 		catch { ::debuglog::log ics "socket processing failed: $err" }
 		Disconnect $err
+	}
+}
+
+
+proc ::ics::Resume {sock} {
+	variable Priv
+
+	set Priv(drain) {}
+	if {$Priv(socket) ne $sock} { return }
+	if {[catch { Drain $sock } err]} {
+		catch { ::debuglog::log ics "socket processing failed: $err" }
+		Disconnect $err
+	}
+}
+
+
+proc ::ics::Drain {sock} {
+	variable Priv
+	variable MaxLines
+	variable MaxLine
+
+	set start 0
+	set n 0
+	while {[set end [string first "\n" $Priv(buffer) $start]] >= 0} {
+		if {[incr n] > $MaxLines} {
+			set Priv(buffer) [string range $Priv(buffer) $start end]
+			if {![info exists Priv(drain)] || $Priv(drain) eq ""} {
+				set Priv(drain) [after 0 [namespace code [list Resume $sock]]]
+			}
+			return
+		}
+		set line [string range $Priv(buffer) $start [expr {$end - 1}]]
+		set start [expr {$end + 1}]
+		ProcessLine [cleanLine $line]
+		if {$Priv(socket) ne $sock} { return }
+	}
+	set Priv(buffer) [string range $Priv(buffer) $start end]
+	if {[string length $Priv(buffer)] > $MaxLine} {
+		catch { ::debuglog::log ics "dropped a line longer than $MaxLine bytes" }
+		set Priv(buffer) {}
+	}
+	ProcessPrompt
+	if {$Priv(socket) ne $sock} { return }
+	if {[eof $sock]} {
+		if {$Priv(buffer) ne ""} {
+			ProcessLine [cleanLine $Priv(buffer)]
+			set Priv(buffer) {}
+		}
+		Disconnect $::ics::mc::Disconnected
 	}
 }
 

@@ -470,4 +470,73 @@ tcltest::test ics-text-limit {only the last 200 server text lines are retained} 
 	set ::ics::Priv(textLines) $saved
 } -result {200 {line 5} {line 204}}
 
+# review finding NET-09: input is handled in bounded batches, and an
+# unterminated line cannot grow the buffer without end
+proc ::scidb::test::ics::Pair {} {
+	set ::scidb::test::ics::peer {}
+	set srv [socket -server {apply {{c a p} { set ::scidb::test::ics::peer $c }}} -myaddr 127.0.0.1 0]
+	set cli [socket 127.0.0.1 [lindex [fconfigure $srv -sockname] 2]]
+	vwait ::scidb::test::ics::peer
+	close $srv
+	fconfigure $cli -blocking 0 -translation binary
+	fconfigure $::scidb::test::ics::peer -translation binary -buffering full
+	set ::scidb::test::ics::saved [list $::ics::Priv(socket) $::ics::Priv(state) $::ics::Priv(buffer)]
+	set ::ics::Priv(socket) $cli
+	set ::ics::Priv(state) playing
+	set ::ics::Priv(buffer) {}
+	rename ::ics::ProcessLine ::scidb::test::ics::realProcessLine
+	proc ::ics::ProcessLine {line} { incr ::scidb::test::ics::lines }
+	set ::scidb::test::ics::lines 0
+	return $cli
+}
+
+proc ::scidb::test::ics::Unpair {cli} {
+	catch { close $cli }
+	catch { close $::scidb::test::ics::peer }
+	lassign $::scidb::test::ics::saved ::ics::Priv(socket) ::ics::Priv(state) ::ics::Priv(buffer)
+	rename ::ics::ProcessLine {}
+	rename ::scidb::test::ics::realProcessLine ::ics::ProcessLine
+}
+
+proc ::scidb::test::ics::Settle {} {
+	after 300 {set ::scidb::test::ics::settled 1}
+	vwait ::scidb::test::ics::settled
+}
+
+tcltest::test ics-input-batches {a burst of lines is handled a batch per event} -setup {
+	set cli [::scidb::test::ics::Pair]
+} -body {
+	# one readable event: OnReadable is called directly
+	puts -nonewline $::scidb::test::ics::peer [string repeat "line\n" 1000]
+	flush $::scidb::test::ics::peer
+	after 200
+	::ics::OnReadable
+	set first $::scidb::test::ics::lines
+	::scidb::test::ics::Settle
+	list [expr {$first <= 200}] $::scidb::test::ics::lines
+} -cleanup {
+	::scidb::test::ics::Unpair $cli
+} -result {1 1000}
+
+tcltest::test ics-input-long-line {an unterminated line longer than the limit is dropped} -setup {
+	set cli [::scidb::test::ics::Pair]
+	fileevent $cli readable {}
+} -body {
+	puts -nonewline $::scidb::test::ics::peer [string repeat x 300000]
+	flush $::scidb::test::ics::peer
+	after 200
+	set most 0
+	for {set i 0} {$i < 10} {incr i} {
+		::ics::OnReadable
+		set most [expr {max($most, [string length $::ics::Priv(buffer)])}]
+	}
+	puts -nonewline $::scidb::test::ics::peer "ok\n"
+	flush $::scidb::test::ics::peer
+	after 100
+	::ics::OnReadable
+	list [expr {$most <= 131072}] $::scidb::test::ics::lines
+} -cleanup {
+	::scidb::test::ics::Unpair $cli
+} -result {1 1}
+
 tcltest::cleanupTests
