@@ -22,7 +22,7 @@
 #include "u_byte_stream.h"
 #include "u_lzo.h"
 
-namespace mstl { class iostream; }
+namespace mstl { class fstream; }
 
 namespace util {
 
@@ -32,7 +32,7 @@ public:
 
 	enum { Chunk_Size = 32768 };
 
-	LzoByteStream(mstl::iostream& strm);
+	LzoByteStream(mstl::fstream& strm);
 	~LzoByteStream() throw();
 
 	void flush() override;
@@ -44,11 +44,17 @@ protected:
 
 private:
 
+	enum { Raw = 0, Compressed = 1 };
+
+	void readFrame();
+
+private:
+
 	enum { Additional_Size	= 8192 };
 	enum { Overhead_Size		= U_LZO_OVERHEAD_COMPRESS(Chunk_Size) };
 	enum { Buf_Size			= Chunk_Size + Overhead_Size + Additional_Size };
 
-	mstl::iostream&	m_strm;
+	mstl::fstream&		m_strm;
 	unsigned char		m_in[Chunk_Size];
 	unsigned char		m_out[Buf_Size];
 };

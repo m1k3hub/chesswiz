@@ -260,14 +260,15 @@ ByteStream::get(Byte* buf, unsigned size)
 ByteStream::Byte*
 ByteStream::searchEos()
 {
-	Byte* p = m_getp;
+	unsigned offset = 0;
 
 	while (true)
 	{
-		for ( ; p < m_endp ; ++p)
+		// underflow() may move the unread bytes, so keep an offset, not a pointer
+		for ( ; m_getp + offset < m_endp ; ++offset)
 		{
-			if (*p == 0)
-				return p;
+			if (m_getp[offset] == 0)
+				return m_getp + offset;
 		}
 
 		underflow(1);

@@ -52,10 +52,6 @@
 //#define USE_LZO
 
 #ifdef USE_LZO
-// LzoByteStream cannot read its own frames (review finding CORE-11): a
-// raw frame and a compressed one look the same, and a short frame reads
-// into the next. It needs a frame format that marks the kind first.
-# error "LzoByteStream frames are not readable; see the comment above"
 # include "u_lzo_byte_stream.h"
 #endif
 

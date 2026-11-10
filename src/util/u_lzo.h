@@ -29,6 +29,9 @@ struct Lzo
 {
 	static bool compress(ByteStream const& src, ByteStream& dst);
 	static void decompress(ByteStream const& src, ByteStream& dst);
+	// decodes one compressed block into at most 'capacity' bytes; returns the decoded length
+	static unsigned decompress(unsigned char const* src, unsigned size,
+										unsigned char* dst, unsigned capacity);
 
 	static unsigned maxSizeAfterCompression(unsigned sizeBeforeCompression);
 };

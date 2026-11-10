@@ -20,7 +20,7 @@
 #include "u_lzo_byte_stream.h"
 #include "u_exception.h"
 
-#include "m_iostream.h"
+#include "m_fstream.h"
 #include "m_assert.h"
 
 #include <string.h>
@@ -31,10 +31,17 @@ using namespace util;
 LzoByteStream::~LzoByteStream() throw() {}
 
 
-LzoByteStream::LzoByteStream(mstl::iostream& strm)
+// A frame is a kind byte (Raw or Compressed), the stored length as two
+// big-endian bytes, and the stored bytes. A raw frame holds 1..Chunk_Size
+// bytes; a compressed one holds fewer than Chunk_Size bytes and decodes
+// to at most Chunk_Size bytes.
+
+LzoByteStream::LzoByteStream(mstl::fstream& strm)
 	:ByteStream(m_in, Chunk_Size)
 	,m_strm(strm)
 {
+	// nothing to read yet; writing fills m_in
+	m_getp = m_endp;
 }
 
 
@@ -46,7 +53,7 @@ LzoByteStream::flush()
 
 
 void
-LzoByteStream::underflow(unsigned)
+LzoByteStream::readFrame()
 {
 	unsigned remaining = this->remaining();
 
@@ -55,38 +62,50 @@ LzoByteStream::underflow(unsigned)
 
 	::memmove(m_out, m_getp, remaining);
 
-	char buf[2];
+	unsigned char head[3];
 
-	if (!m_strm.read(buf, 2))
+	if (!m_strm.read(reinterpret_cast<char*>(head), 3))
 		U_RAISE("LZO stream: unexpected end of stream");
 
-	unsigned sizeAfterCompression = unsigned(static_cast<unsigned char>(buf[0])) << 8
-										| static_cast<unsigned char>(buf[1]);
+	unsigned stored = (unsigned(head[1]) << 8) | head[2];
+	unsigned char* dst = m_out + remaining;
+	unsigned decoded;
 
-	if (sizeAfterCompression > Chunk_Size)
-		U_RAISE("LZO stream: corrupt data");
-
-	m_base = m_out;
-	m_putp = m_out + remaining;
-	m_endp = m_putp + sizeAfterCompression;
-
-	if (sizeAfterCompression < Chunk_Size)
+	switch (head[0])
 	{
-		if (m_strm.readsome(m_in, Chunk_Size) < sizeAfterCompression)
-			U_RAISE("LZO stream: unexpected end of stream");
+		case Raw:
+			if (stored == 0 || stored > Chunk_Size)
+				U_RAISE("LZO stream: corrupt data");
+			if (!m_strm.read(reinterpret_cast<char*>(dst), stored))
+				U_RAISE("LZO stream: unexpected end of stream");
+			decoded = stored;
+			break;
 
-		ByteStream src(m_in, sizeAfterCompression);
-		Lzo::decompress(src, *this);
+		case Compressed:
+			if (stored == 0 || stored >= Chunk_Size)
+				U_RAISE("LZO stream: corrupt data");
+			if (!m_strm.read(reinterpret_cast<char*>(m_in), stored))
+				U_RAISE("LZO stream: unexpected end of stream");
+			decoded = Lzo::decompress(m_in, stored, dst, Chunk_Size);
+			if (decoded == 0)
+				U_RAISE("LZO stream: corrupt data");
+			break;
 
-		if (size() != sizeAfterCompression)
+		default:
 			U_RAISE("LZO stream: corrupt data");
 	}
-	else if (m_strm.readsome(m_putp, Chunk_Size) < Chunk_Size)
-	{
-		U_RAISE("LZO stream: unexpected end of stream");
-	}
 
-	m_getp = m_putp - remaining;
+	m_base = m_getp = m_out;
+	m_putp = m_endp = dst + decoded;
+}
+
+
+void
+LzoByteStream::underflow(unsigned size)
+{
+	do
+		readFrame();
+	while (remaining() < size);
 }
 
 
@@ -95,23 +114,29 @@ LzoByteStream::overflow(unsigned)
 {
 	M_ASSERT(!m_owner);
 
-	if (isEmpty())
+	unsigned size = m_putp - m_in;
+
+	if (size == 0)
 		return;
 
+	ByteStream src(m_in, size);
 	ByteStream dst(m_out, m_out + Buf_Size);
+	unsigned char kind = Compressed;
 
-	if (!Lzo::compress(*this, dst))
+	if (!Lzo::compress(src, dst))
 	{
-		ByteStream tmp(m_in, size());
-		tmp.swap(dst);
+		dst.swap(src);
+		kind = Raw;
 	}
 
-	char buf[2] = { char(dst.size() >> 8), char(dst.size() & 0xff) };
+	char head[3] = { char(kind), char(dst.size() >> 8), char(dst.size() & 0xff) };
 
-	if (!m_strm.write(buf, 2) || !m_strm.write(dst.data(), dst.size()))
+	if (!m_strm.write(head, 3) || !m_strm.write(reinterpret_cast<char const*>(dst.data()), dst.size()))
 		U_RAISE("LZO stream: write failed");
 
 	m_base = m_putp = m_in;
+	m_endp = m_in + Chunk_Size;
+	m_getp = m_endp;
 }
 
 // vi:set ts=3 sw=3:

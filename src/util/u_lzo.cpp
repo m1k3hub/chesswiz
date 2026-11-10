@@ -94,4 +94,16 @@ Lzo::decompress(ByteStream const& src, ByteStream& dst)
 	}
 }
 
+
+unsigned
+Lzo::decompress(unsigned char const* src, unsigned size, unsigned char* dst, unsigned capacity)
+{
+	lzo_uint outLen = capacity;
+
+	if (lzo1x_decompress_safe(src, size, dst, &outLen, 0) != LZO_E_OK)
+		U_RAISE("LZO decompression: corrupt data");
+
+	return outLen;
+}
+
 // vi:set ts=3 sw=3:
