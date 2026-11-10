@@ -60,7 +60,8 @@ LzoByteStream::underflow(unsigned)
 	if (!m_strm.read(buf, 2))
 		U_RAISE("LZO stream: unexpected end of stream");
 
-	unsigned sizeAfterCompression = unsigned(buf[0]) << 8 | buf[1];
+	unsigned sizeAfterCompression = unsigned(static_cast<unsigned char>(buf[0])) << 8
+										| static_cast<unsigned char>(buf[1]);
 
 	if (sizeAfterCompression > Chunk_Size)
 		U_RAISE("LZO stream: corrupt data");
@@ -105,7 +106,7 @@ LzoByteStream::overflow(unsigned)
 		tmp.swap(dst);
 	}
 
-	char buf[2] = { char(dst.size() >> 8), char(dst.size() & 0x0f) };
+	char buf[2] = { char(dst.size() >> 8), char(dst.size() & 0xff) };
 
 	if (!m_strm.write(buf, 2) || !m_strm.write(dst.data(), dst.size()))
 		U_RAISE("LZO stream: write failed");

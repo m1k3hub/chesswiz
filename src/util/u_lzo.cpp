@@ -39,7 +39,8 @@ initialize()
 }
 
 
-static lzo_align_t workingMem[(LZO1X_1_MEM_COMPRESS + sizeof(lzo_align_t) - 1)/sizeof(lzo_align_t)];
+// one workspace per thread: lzo1x_1_compress writes its dictionary here
+static thread_local lzo_align_t workingMem[(LZO1X_1_MEM_COMPRESS + sizeof(lzo_align_t) - 1)/sizeof(lzo_align_t)];
 
 
 unsigned
