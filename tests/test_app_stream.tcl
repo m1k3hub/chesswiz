@@ -239,6 +239,69 @@ tcltest::test stream-chat-event {pages receive chat as its own event, escaped} -
 	set json
 } -result {{"chat":[{"name":"Fan","colour":"#00FF00","text":"<b>\"hi\"</b>","platform":"twitch"}]}}
 
+# review findings NET-07/NET-08: a connection that has sent only part of
+# its request is closed by stop, and its half request is forgotten
+tcltest::test stream-stop-half-request {stop closes a connection still sending its request} -setup {
+	::stream::stop
+	::stream::start $::scidb::test::stream::Port
+	set chan [socket 127.0.0.1 $::scidb::test::stream::Port]
+	fconfigure $chan -blocking 0 -translation binary
+	puts -nonewline $chan "GET /[::scidb::test::stream::Token]/scene/board HTTP/1.1\r\n"
+	flush $chan
+	::scidb::test::wait::until {[llength [info vars ::stream::Req*]]} 3000
+} -body {
+	set had [llength [info vars ::stream::Req*]]
+	::stream::stop
+	::scidb::test::wait::until {[catch { read $chan }] || [eof $chan]} 3000
+	list $had [eof $chan] [llength [info vars ::stream::Req*]] [dict size $::stream::Priv(conns)]
+} -cleanup {
+	catch { close $chan }
+} -result {1 1 0 0}
+
+# review finding NET-06: a viewer that stops reading is dropped once its
+# unsent backlog passes the limit
+tcltest::test stream-sse-backlog {a stalled event-stream viewer is let go} -setup {
+	::stream::stop
+	::stream::start $::scidb::test::stream::Port
+	set saved $::stream::Priv(maxBacklog)
+	set ::stream::Priv(maxBacklog) 1000
+	set chan [socket 127.0.0.1 $::scidb::test::stream::Port]
+	fconfigure $chan -blocking 0 -translation binary
+	puts -nonewline $chan "GET /[::scidb::test::stream::Token]/events HTTP/1.1\r\n\r\n"
+	flush $chan
+	::scidb::test::wait::until {[llength $::stream::Priv(clients)]} 3000
+} -body {
+	set before [llength $::stream::Priv(clients)]
+	# the test never reads: big messages fill the socket, then the backlog
+	for {set i 0} {$i < 20 && [llength $::stream::Priv(clients)]} {incr i} {
+		::stream::Broadcast "\"[string repeat x 1000000]\""
+	}
+	list $before [llength $::stream::Priv(clients)]
+} -cleanup {
+	catch { close $chan }
+	set ::stream::Priv(maxBacklog) $saved
+	::stream::stop
+} -result {1 0}
+
+# review finding NET-11: a server that accepts but never answers the join
+# is given up on at the deadline, and retried
+tcltest::test stream-chat-join-timeout {a silent chat server leads to a retry, not a stuck "connecting"} -setup {
+	set server [socket -server {apply {{c a p} { fconfigure $c -blocking 0 }}} -myaddr 127.0.0.1 0]
+	set saved [list $::stream::chat::Host $::stream::chat::Port $::stream::chat::JoinTimeout]
+	set ::stream::chat::Host 127.0.0.1
+	set ::stream::chat::Port [lindex [fconfigure $server -sockname] 2]
+	set ::stream::chat::JoinTimeout 500
+} -body {
+	::stream::chat::connect wiz
+	set first [::stream::chat::state]
+	::scidb::test::wait::until {[::stream::chat::state] eq "retrying"} 5000
+	list $first [::stream::chat::state]
+} -cleanup {
+	::stream::chat::disconnect
+	lassign $saved ::stream::chat::Host ::stream::chat::Port ::stream::chat::JoinTimeout
+	close $server
+} -result {connecting retrying}
+
 tcltest::test stream-stop {stop closes the port} -body {
 	::stream::stop
 	list [::stream::running?] [catch { socket 127.0.0.1 $::scidb::test::stream::Port }]

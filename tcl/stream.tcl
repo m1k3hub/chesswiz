@@ -68,8 +68,8 @@ array set Options { port 8765 delay 60 chat:channel {} }
 
 variable Priv
 array set Priv {
-	server {} token {} clients {} after {} last {} serial 0 window {}
-	queue {} release 0 shown {}
+	server {} token {} clients {} conns {} after {} last {} serial 0 window {}
+	queue {} release 0 shown {} maxBacklog 1048576
 	eval:score {} eval:mate 0 eval:depth 0 eval:pv {} eval:fen {}
 }
 
@@ -90,8 +90,10 @@ proc stop {} {
 	variable Priv
 	after cancel $Priv(after)
 	set Priv(after) {}
-	foreach chan $Priv(clients) { catch { close $chan } }
+	# every connection, also one still sending its request
+	foreach chan [concat $Priv(clients) [dict keys $Priv(conns)]] { Drop $chan }
 	set Priv(clients) {}
+	set Priv(conns) {}
 	if {$Priv(server) ne ""} { catch { close $Priv(server) } }
 	set Priv(server) {}
 	set Priv(last) {}
@@ -339,8 +341,10 @@ proc Broadcast {json {event {}}} {
 	set msg [expr {$event ne "" ? "event: $event\n" : ""}]
 	append msg "data: $json\n\n"
 	foreach chan $Priv(clients) {
-		if {[catch { puts -nonewline $chan $msg; flush $chan }]} {
-			catch { close $chan }
+		# a viewer that stopped reading is let go before its backlog grows
+		if {[catch { puts -nonewline $chan $msg; flush $chan }]
+			|| [chan pending output $chan] > $Priv(maxBacklog)} {
+			Drop $chan
 		} else {
 			lappend keep $chan
 		}
@@ -352,25 +356,34 @@ proc Broadcast {json {event {}}} {
 # --- HTTP -------------------------------------------------------------
 
 proc Accept {chan addr port} {
+	variable Priv
 	if {$addr ne "127.0.0.1"} { close $chan; return }
 	fconfigure $chan -blocking 0 -buffering line -translation crlf -encoding utf-8
 	fileevent $chan readable [namespace code [list ReadRequest $chan]]
-	after 10000 [list catch [list [namespace current]::DropIdle $chan]]
+	# tracked from the start, so stop and the idle timer reach it
+	dict set Priv(conns) $chan [after 10000 [namespace code [list Drop $chan]]]
 }
 
 
-proc DropIdle {chan} {
+# Closes a connection and forgets everything kept for it: its idle timer,
+# a half-read request (a later socket may get the same name) and its place
+# among the event-stream viewers.
+proc Drop {chan} {
 	variable Priv
-	if {$chan ni $Priv(clients) && $chan in [chan names]} {
-		set f [fileevent $chan readable]
-		if {$f ne ""} { close $chan }
+	if {[dict exists $Priv(conns) $chan]} {
+		after cancel [dict get $Priv(conns) $chan]
+		dict unset Priv(conns) $chan
 	}
+	unset -nocomplain [namespace current]::Req$chan
+	set i [lsearch -exact $Priv(clients) $chan]
+	if {$i >= 0} { set Priv(clients) [lreplace $Priv(clients) $i $i] }
+	catch { close $chan }
 }
 
 
 proc ReadRequest {chan} {
 	variable Priv
-	if {[catch { gets $chan line } n] || [eof $chan]} { catch { close $chan }; return }
+	if {[catch { gets $chan line } n] || [eof $chan]} { Drop $chan; return }
 	if {$n < 0} { return }
 	upvar #0 [namespace current]::Req$chan req
 	if {![info exists req]} {
@@ -395,6 +408,9 @@ proc ReadRequest {chan} {
 		if {$Priv(shown) ne ""} { puts -nonewline $chan "data: $Priv(shown)\n\n" }
 		puts -nonewline $chan "event: chat\ndata: [ChatJson]\n\n"
 		flush $chan
+		# a viewer now: no idle timeout
+		after cancel [dict get $Priv(conns) $chan]
+		dict unset Priv(conns) $chan
 		lappend Priv(clients) $chan
 		fileevent $chan readable [namespace code [list ClientGone $chan]]
 		return
@@ -407,20 +423,25 @@ proc ReadRequest {chan} {
 
 proc ClientGone {chan} {
 	variable Priv
-	if {[catch { read $chan }] || [eof $chan]} {
-		catch { close $chan }
-		set i [lsearch -exact $Priv(clients) $chan]
-		if {$i >= 0} { set Priv(clients) [lreplace $Priv(clients) $i $i] }
-	}
+	if {[catch { read $chan }] || [eof $chan]} { Drop $chan }
 }
 
 
 proc Reply {chan code type body} {
+	variable Priv
 	set text [dict get {200 OK 400 {Bad Request} 404 {Not Found}} $code]
 	set data [encoding convertto utf-8 $body]
-	fconfigure $chan -translation binary -blocking 1
-	puts -nonewline $chan "HTTP/1.1 $code $text\r\nContent-Type: $type\r\nContent-Length: [string length $data]\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n"
-	puts -nonewline $chan $data
+	# nonblocking: a client that does not read cannot stall the GUI; Tcl
+	# sends the rest in the background and then closes the socket
+	fconfigure $chan -translation binary -blocking 0 -buffering full
+	if {[dict exists $Priv(conns) $chan]} {
+		after cancel [dict get $Priv(conns) $chan]
+		dict unset Priv(conns) $chan
+	}
+	catch {
+		puts -nonewline $chan "HTTP/1.1 $code $text\r\nContent-Type: $type\r\nContent-Length: [string length $data]\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n"
+		puts -nonewline $chan $data
+	}
 	catch { close $chan }
 }
 

@@ -106,6 +106,7 @@ proc downloadURL {parent url args} {
 		-failedcmd 	{}
 		-retrycmd  	{}
 		-timeouts  	{1000 3000}
+		-retrydelay	1000
 		-filetypes 	{}
 	}
 	array set opts $args
@@ -128,10 +129,6 @@ proc downloadURL {parent url args} {
 
    ::http::config -urlencoding utf-8
    set ::http::defaultCharset utf-8
-
-	if {[llength $opts(-successcmd)] == 0} {
-		set opts(-successcmd) [namespace current]::SaveData
-	}
 
 	set RetryCounter 0
    return [GetURL $parent $url {*}[array get opts]]
@@ -197,9 +194,9 @@ proc DownLoadResponse {parent url args token} {
 			SaveData $parent $url $data {*}$args
 		}
    } elseif {[llength $opts(-timeouts)]} {
-		set timeout [lindex $opts(-timeouts) 0]
-		set opts(-timeouts) [lrange $opts(-timeouts) 1 end]
-      after $timeout [list [namespace current]::GetURL $parent $url {*}[array get opts]]
+		# GetURL takes the next request timeout; this is only the pause
+		set delay [expr {[info exists opts(-retrydelay)] ? $opts(-retrydelay) : 1000}]
+      after $delay [list [namespace current]::GetURL $parent $url {*}[array get opts]]
    } elseif {[llength $opts(-retrycmd)]} {
 		{*}$opts(-retrycmd) $parent $url $retry [incr RetryCounter]
    } elseif {[llength $opts(-failedcmd)]} {

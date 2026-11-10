@@ -25,7 +25,11 @@ variable Keep 50
 variable Priv
 array set Priv {
 	chan {} channel {} state off lines {} subscribers {} retry 0 after {} buffer {}
+	deadline {}
 }
+
+# connecting and joining must be done within this time (ms), else retry
+variable JoinTimeout 30000
 
 
 proc connect {channel} {
@@ -45,6 +49,15 @@ proc connect {channel} {
 	set Priv(chan) $chan
 	fconfigure $chan -blocking 0 -buffering line -translation crlf -encoding utf-8
 	fileevent $chan writable [namespace code [list Opened $chan]]
+	variable JoinTimeout
+	set Priv(deadline) [after $JoinTimeout [namespace code [list JoinTimedOut $chan]]]
+}
+
+
+proc JoinTimedOut {chan} {
+	variable Priv
+	set Priv(deadline) {}
+	if {$chan eq $Priv(chan) && $Priv(state) ne "joined"} { Lost }
 }
 
 
@@ -52,6 +65,8 @@ proc disconnect {} {
 	variable Priv
 	after cancel $Priv(after)
 	set Priv(after) {}
+	after cancel $Priv(deadline)
+	set Priv(deadline) {}
 	if {$Priv(chan) ne ""} { catch { close $Priv(chan) } }
 	set Priv(chan) {}
 	set Priv(state) off
@@ -92,16 +107,24 @@ proc Notify {} {
 
 proc Opened {chan} {
 	variable Priv
+	if {$chan ne $Priv(chan)} { return }
 	fileevent $chan writable {}
 	if {[fconfigure $chan -error] ne ""} { Lost; return }
-	puts $chan "CAP REQ :twitch.tv/tags twitch.tv/commands"
-	puts $chan "NICK justinfan[expr {10000 + int(rand() * 89999)}]"
-	puts $chan "JOIN #$Priv(channel)"
+	if {[catch {
+		puts $chan "CAP REQ :twitch.tv/tags twitch.tv/commands"
+		puts $chan "NICK justinfan[expr {10000 + int(rand() * 89999)}]"
+		puts $chan "JOIN #$Priv(channel)"
+	}]} {
+		Lost
+		return
+	}
 	fileevent $chan readable [namespace code [list Readable $chan]]
 }
 
 
 proc Readable {chan} {
+	variable Priv
+	if {$chan ne $Priv(chan)} { catch { close $chan }; return }
 	if {[catch { gets $chan line } n] || [eof $chan]} { Lost; return }
 	if {$n >= 0} { handle $line }
 }
@@ -109,6 +132,8 @@ proc Readable {chan} {
 
 proc Lost {} {
 	variable Priv
+	after cancel $Priv(deadline)
+	set Priv(deadline) {}
 	if {$Priv(chan) ne ""} { catch { close $Priv(chan) } }
 	set Priv(chan) {}
 	if {$Priv(channel) eq "" || $Priv(state) eq "off"} { return }
@@ -141,6 +166,8 @@ proc handle {line} {
 			if {$Priv(state) ne "joined"} {
 				set Priv(state) joined
 				set Priv(retry) 0
+				after cancel $Priv(deadline)
+				set Priv(deadline) {}
 				Notify
 			}
 		}
