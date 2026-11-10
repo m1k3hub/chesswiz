@@ -778,8 +778,9 @@ string::resize(size_type n)
 {
 	reserve(n);
 
-	if ((m_size = n))
-		m_data[m_size] = '\0';
+	// reserve() leaves owned storage, so even resize(0) clears the C string
+	m_size = n;
+	m_data[m_size] = '\0';
 }
 
 
@@ -990,13 +991,18 @@ string::find_ignore_case(const_pointer s, size_type pos) const
 	if (len > m_size)
 		return npos;
 
-	value_type		first	= ::toupper(*s);
+	if (len > m_size - pos)
+		return npos;
+	if (len == 0)
+		return pos;
+
+	int				first	= ::toupper(static_cast<unsigned char>(*s));
 	const_pointer	p		= m_data + pos;
 	const_pointer	e		= m_data + m_size - len;
 
-	for ( ; p < e; ++p)
+	for ( ; p <= e; ++p)
 	{
-		if (::toupper(*p) == first)
+		if (::toupper(static_cast<unsigned char>(*p)) == first)
 		{
 			if (::strncasecmp(p, s, len) == 0)
 				return p - m_data;
@@ -1015,13 +1021,18 @@ string::find_ignore_case(string const& s, size_type pos) const
 	if (s.m_size > m_size)
 		return npos;
 
-	value_type		first	= ::toupper(*s.m_data);
+	if (s.m_size > m_size - pos)
+		return npos;
+	if (s.m_size == 0)
+		return pos;
+
+	int				first	= ::toupper(static_cast<unsigned char>(*s.m_data));
 	const_pointer	p		= m_data + pos;
 	const_pointer	e		= m_data + m_size - s.m_size;
 
-	for ( ; p < e; ++p)
+	for ( ; p <= e; ++p)
 	{
-		if (::toupper(*p) == first)
+		if (::toupper(static_cast<unsigned char>(*p)) == first)
 		{
 			if (::strncasecmp(p, s.m_data, s.m_size) == 0)
 				return p - m_data;
@@ -1492,35 +1503,44 @@ string::levenshtein_distance(mstl::string const& s, unsigned ins, unsigned del, 
 	if (m_data == s.m_data)
 		return 0;
 	if (m_size == 0)
-		return m_size*ins;
-	if (s.m_size == 0)
 		return s.m_size*ins;
+	if (s.m_size == 0)
+		return m_size*del;
 
-	// algorithm from http://en.wikipedia.org/wiki/Levenshtein_distance
+	// algorithm from http://en.wikipedia.org/wiki/Levenshtein_distance,
+	// keeping two rows of the matrix (on the heap) instead of all of it
 
-	unsigned d[m_size + 1][s.m_size + 1];
+	struct Rows
+	{
+		Rows(size_type n) :prev(new unsigned[2*n]), curr(prev + n) {}
+		~Rows() { delete [] (prev < curr ? prev : curr); }
+		unsigned* prev;
+		unsigned* curr;
+	};
 
-	::memset(d, 0, sizeof(d[0][0])*(m_size+ 1)*(s.m_size + 1));
+	Rows rows(m_size + 1);
 
 	for (size_type i = 0; i <= m_size; ++i)
-		d[i][0] = i;
-	for (size_type j = 0; j <= s.m_size; ++j)
-		d[0][j] = j;
+		rows.prev[i] = i*del;
 
 	for (unsigned j = 0; j < s.m_size; ++j)
 	{
 		value_type c = s.m_data[j];
 
+		rows.curr[0] = (j + 1)*ins;
+
 		for (unsigned i = 0; i < m_size; ++i)
 		{
 			if (c == m_data[i])
-				d[i + 1][j + 1] = d[i][j];
+				rows.curr[i + 1] = rows.prev[i];
 			else
-				d[i + 1][j + 1] = mstl::min(d[i][j + 1] + del, d[i + 1][j] + ins, d[i][j] + sub);
+				rows.curr[i + 1] = mstl::min(rows.curr[i] + del, rows.prev[i + 1] + ins, rows.prev[i] + sub);
 		}
+
+		mstl::swap(rows.prev, rows.curr);
 	}
 
-	return d[m_size][s.m_size];
+	return rows.prev[m_size];
 }
 
 

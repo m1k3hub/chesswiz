@@ -132,6 +132,9 @@ ByteStream::operator=(ByRef ref)
 {
 	if (this != ref.ref)
 	{
+		if (m_owner)
+			delete [] m_base;
+
 		m_base = ref.ref->m_base;
 		m_getp = ref.ref->m_getp;
 		m_putp = ref.ref->m_putp;

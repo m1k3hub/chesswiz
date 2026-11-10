@@ -329,7 +329,7 @@ vector<T>::equal(vector_type const& v, size_type n) const
 	M_REQUIRE(n <= v.size());
 	M_REQUIRE(n <= size());
 
-	return mstl::equal(begin(), end(), v.begin());
+	return mstl::equal(begin(), begin() + n, v.begin());
 }
 
 

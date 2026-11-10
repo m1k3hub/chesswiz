@@ -326,13 +326,14 @@ cpp-src:
 
 # mstl containers under AddressSanitizer: m_string.cpp is compiled in so the
 # string code is instrumented too (it wins over the archive's copy).
-$(TEST_DIR)test_mstl_core: $(TEST_DIR)test_mstl_core.cpp $(SRC_DIR)/mstl/m_string.cpp $(SRC_DIR)/mstl/m_vector.ipp
+$(TEST_DIR)test_mstl_core: $(TEST_DIR)test_mstl_core.cpp $(SRC_DIR)/mstl/m_string.cpp $(SRC_DIR)/mstl/m_vector.ipp \
+		$(SRC_DIR)/sys/libsys.a
 	@echo "Compiling mstl container tests..."
 	@$(CXX) -std=c++17 -g -O1 -fsanitize=address -fno-omit-frame-pointer -DBROKEN_LINKER_HACK=1 -Wno-terminate \
 		-Wno-format-security -Wno-cpp \
-		-I$(SRC_DIR) -I$(SRC_DIR)/mstl -I$(SRC_DIR)/sys -I$(SRC_DIR)/util \
+		-I$(SRC_DIR) -I$(SRC_DIR)/mstl -I$(SRC_DIR)/sys -I$(SRC_DIR)/util $(TEST_TCL_INCLUDE) \
 		-o $@ $< $(SRC_DIR)/mstl/m_string.cpp \
-		$(SRC_DIR)/mstl/libmstl.a $(SRC_DIR)/sys/libsys.a $(SRC_DIR)/mstl/libmstl.a -lpthread
+		$(SRC_DIR)/mstl/libmstl.a $(SRC_DIR)/sys/libsys.a $(SRC_DIR)/mstl/libmstl.a -lpthread -ltcl$(TCL_VERSION)
 
 $(TEST_DIR)test_corr_duration: $(TEST_DIR)test_corr_duration.cpp
 	@echo "Compiling correspondence-duration tests..."

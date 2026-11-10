@@ -232,7 +232,21 @@ Mapping::Mapping(char const* filename, Mode mode)
 		return;
 	}
 
-	m_capacity = m_size = GetFileSize(m_file, 0);
+	LARGE_INTEGER length;
+
+	// sizes are unsigned: refuse a file whose length does not fit
+	if (!GetFileSizeEx(m_file, &length) || length.QuadPart < 0 || uint64_t(length.QuadPart) > uint64_t(~0u))
+	{
+		UnmapViewOfFile(m_address);
+		CloseHandle(m_mapping);
+		CloseHandle(m_file);
+		m_address = 0;
+		m_mapping = 0;
+		m_file = INVALID_HANDLE_VALUE;
+		return;
+	}
+
+	m_capacity = m_size = unsigned(length.QuadPart);
 }
 
 
@@ -275,10 +289,23 @@ Mapping::resize(unsigned newSize)
 	}
 	else if (newSize > m_capacity)
 	{
-		UnmapViewOfFile(m_address);
-		CloseHandle(m_mapping);
-		m_mapping = CreateFileMappingA(m_file, 0, PAGE_READWRITE, 0, newSize, 0);
-		m_address = MapViewOfFile(m_mapping, FILE_MAP_WRITE, 0, 0, 0);
+		HANDLE mapping = CreateFileMappingA(m_file, 0, PAGE_READWRITE, 0, newSize, 0);
+		void* address = mapping ? MapViewOfFile(mapping, FILE_MAP_WRITE, 0, 0, 0) : 0;
+
+		// on failure (disk full) the old mapping stays valid
+		if (address == 0)
+		{
+			if (mapping)
+				CloseHandle(mapping);
+			return;
+		}
+
+		if (m_address)
+			UnmapViewOfFile(m_address);
+		if (m_mapping)
+			CloseHandle(m_mapping);
+		m_mapping = mapping;
+		m_address = address;
 		m_capacity = m_size = newSize;
 	}
 }
@@ -337,14 +364,10 @@ Mapping::Mapping(char const* filename, Mode mode)
 
 	int flags = 0;
 
-	// open exactly as wide as the caller asked for; a read-only file
-	// must not fail with EACCES under a Readable-only request
-	if ((mode & (Readable | Writeable)) == (Readable | Writeable))
-		flags = O_RDWR;
-	else if (mode & Writeable)
-		flags = O_WRONLY;
-	else
-		flags = O_RDONLY;
+	// a read-only file must not fail with EACCES under a Readable-only
+	// request; a writable one needs O_RDWR, because a shared writable
+	// mapping cannot be made of a write-only descriptor
+	flags = (mode & Writeable) ? O_RDWR : O_RDONLY;
 
 	m_fd = ::open(internalName(filename), flags);
 
@@ -359,7 +382,15 @@ Mapping::Mapping(char const* filename, Mode mode)
 		return;
 	}
 
-	int length = st.st_size;
+	// sizes are unsigned: refuse a file whose length does not fit
+	if (st.st_size < 0 || uint64_t(st.st_size) > uint64_t(~0u))
+	{
+		::close(m_fd);
+		m_fd = -1;
+		return;
+	}
+
+	size_t length = st.st_size;
 
 	if (length == 0)
 	{
@@ -390,8 +421,9 @@ Mapping::~Mapping()
 {
 	flush();
 
+	// the mapped length is the capacity; a shrink only lowers the size
 	if (m_address)
-		::munmap(m_address, m_size);
+		::munmap(m_address, m_capacity);
 
 	if (m_fd != -1)
 	{
@@ -420,18 +452,21 @@ Mapping::resize(unsigned newSize)
 	M_REQUIRE(isOpen());
 	M_REQUIRE(isWriteable());
 
-	if (newSize < m_size)
+	if (newSize <= m_capacity)
 	{
+		// the mapping (and the file) keep their length; the destructor
+		// truncates the file to the final size
 		m_size = newSize;
 	}
-	else if (m_size < newSize)
+	else
 	{
 		// grow the file first: if that fails (disk full), the old mapping stays
 		// valid and size() is unchanged; mapping past the file end would SIGBUS
 		if (::ftruncate(m_fd, newSize) != 0)
 			return;
 
-		::munmap(m_address, m_size);
+		if (m_address)
+			::munmap(m_address, m_capacity);
 		m_address = static_cast<char*>(::mmap(0, newSize, PROT_READ | PROT_WRITE, MAP_SHARED, m_fd, 0));
 
 		if (m_address == MAP_FAILED)

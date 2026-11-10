@@ -89,6 +89,8 @@ auto Name::insert(Name const& name) -> unsigned
 
 	if (r.second)
 		m_lookup.push_back(nameRef);
+	else
+		delete nameRef; // the set already holds this name
 
 	return r.first->ref();
 }
