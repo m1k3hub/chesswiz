@@ -17,6 +17,22 @@ namespace eval ::scidb::test::knowledgeLazy {
 }
 
 # A combined suite may already have requested knowledge in an earlier file.
+# the number of actions in the generated pack (README.txt says it), so a
+# new action does not need a test edit: the pack is checked against the
+# registry by `make knowledge-check`
+# The tests use the pack of this tree, not one installed on the machine
+# (which may be older), and the count is taken from that same pack.
+set ::scidb::test::knowledgeLazy::packDir [file join [file dirname [file dirname [file normalize [info script]]]] share knowledge]
+set ::knowledge::PackDir $::scidb::test::knowledgeLazy::packDir
+
+proc ::scidb::test::knowledgeLazy::packCount {} {
+    set f [open [file join $::scidb::test::knowledgeLazy::packDir README.txt]]
+    regexp {Actions: (\d+)} [read $f] -> n
+    close $f
+    return $n
+}
+set ::scidb::test::knowledgeLazy::count [::scidb::test::knowledgeLazy::packCount]
+
 tcltest::testConstraint knowledgeFreshStartup [expr {!$::knowledge::Built && !$::knowledge::PackLoaded}]
 
 tcltest::test knowledge-lazy-startup {all operators exist before knowledge synthesis} -constraints knowledgeFreshStartup -body {
@@ -30,7 +46,7 @@ tcltest::test knowledge-lazy-startup {all operators exist before knowledge synth
         if {$id ni $::knowledge::Exempt && ![dict get $rec operator]} {lappend missing $id}
     }
     set state [::knowledge::RunAction app_state {}]
-    list $::knowledge::Built $::knowledge::PackLoaded [expr {$exposed == 699}] $missing [string match error:* $state]
+    list $::knowledge::Built $::knowledge::PackLoaded [expr {$exposed == $::scidb::test::knowledgeLazy::count}] $missing [string match error:* $state]
 } -result {0 0 1 {} 0}
 
 tcltest::test knowledge-lazy-first-help {first public help request synthesizes complete knowledge} -body {
@@ -47,13 +63,13 @@ tcltest::test knowledge-lazy-first-help {first public help request synthesizes c
 tcltest::test knowledge-lazy-first-search {first search loads the real pack and returns capabilities} -body {
     ::scidb::test::knowledgeLazy::ready
     set caps [::knowledge::Search {open a database} 4]
-    list $::knowledge::PackLoaded [llength $::knowledge::PackActions] [expr {[llength $caps] > 0}]
-} -result {1 699 1}
+    list $::knowledge::PackLoaded [expr {[llength $::knowledge::PackActions] == $::scidb::test::knowledgeLazy::count}] [expr {[llength $caps] > 0}]
+} -result {1 1 1}
 
 tcltest::test knowledge-lazy-first-pack {pack enumeration also initializes knowledge when used first} -body {
     ::scidb::test::knowledgeLazy::ready
     set ids [::knowledge::PackIds]
-    list $::knowledge::Built [llength $ids]
-} -result {1 699}
+    list $::knowledge::Built [expr {[llength $ids] == $::scidb::test::knowledgeLazy::count}]
+} -result {1 1}
 
 tcltest::cleanupTests
