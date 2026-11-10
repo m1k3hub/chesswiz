@@ -1023,13 +1023,37 @@ proc ::application::speech::StopRecording {} {
 
 	if {$Priv(state) ne "recording"} { return }
 	foreach pid $Priv(recordPids) { catch { exec kill -TERM $pid } }
-	set Priv(recordPids) {}
 	set file $Priv(recordFile)
 	set Priv(recordFile) ""
 	SetState transcribing
 	SetMicText $::application::speech::mc::Working
-	# give the recorder a moment to flush its header
-	Schedule 200 [list StartTranscribe $file]
+	# give the recorder a moment to flush its header; it keeps its pid (so
+	# Cancel still reaches it) until it has exited and written the whole file
+	if {[llength $Priv(recordPids)]} {
+		Schedule 200 [list WaitRecorder $file [expr {[clock milliseconds] + 2000}]]
+	} else {
+		Schedule 200 [list StartTranscribe $file]
+	}
+}
+
+# Transcribe <file> once the recorder is gone; one that ignores TERM past
+# <deadline> is killed.
+proc ::application::speech::WaitRecorder {file deadline} {
+	variable Priv
+
+	if {$Priv(state) ne "transcribing"} { return }
+	set alive {}
+	foreach pid $Priv(recordPids) {
+		if {[::platform::sys::alive $pid]} { lappend alive $pid }
+	}
+	set Priv(recordPids) $alive
+	if {[llength $alive] && [clock milliseconds] < $deadline} {
+		Schedule 50 [list WaitRecorder $file $deadline]
+		return
+	}
+	foreach pid $alive { catch { exec kill -KILL $pid } }
+	set Priv(recordPids) {}
+	StartTranscribe $file
 }
 
 # Cancel (button while transcribing, Esc, or the API): insert nothing.
@@ -1040,7 +1064,12 @@ proc ::application::speech::Cancel {} {
 		catch { if {[::chesswiz::win::dictateEdit active]} { ::chesswiz::win::dictateEdit cancel } }
 	}
 
-	foreach pid [concat $Priv(recordPids) $Priv(transcribePids)] {
+	# the recording is thrown away: a recorder that ignores TERM (it may
+	# already have been asked to stop) is killed
+	foreach pid $Priv(recordPids) {
+		catch { exec kill -KILL $pid }
+	}
+	foreach pid $Priv(transcribePids) {
 		catch { exec kill -TERM $pid }
 	}
 	set Priv(recordPids) {}

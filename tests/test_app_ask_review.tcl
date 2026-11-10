@@ -58,6 +58,8 @@ tcltest::test review-poll-missing-output {missing output with a live child keeps
     proc ::application::speech::Alive? {pids} {return 1}
     set ::application::speech::Priv(state) transcribing
     set ::application::speech::Priv(transcribeOut) {}
+    # a fresh transcription: the deadline (checked first) is far away
+    set ::application::speech::Priv(transcribeStart) [clock milliseconds]
     set rc [catch {::application::speech::PollTranscribe} err]
     set polling [expr {[info exists ::application::speech::Priv(timers)] && [llength $::application::speech::Priv(timers)] > 0}]
     rename ::application::speech::Alive? {}
@@ -380,5 +382,54 @@ tcltest::test review-action-statuses {validation and decline stay visible and di
     ::application::ask::HideList
     set ::application::ask::Query {}
 } -result {{test.plan.required test.plan.decline {}} effect 1 2}
+
+# review finding AI-09: a recorder that ignores TERM keeps its pid until
+# it is gone, so Cancel still reaches it and transcription waits for it
+proc ::reviewStubbornRecorder {} {
+    set pid [exec sh -c {trap "" TERM; exec sleep 30} &]
+    after 100
+    set ::application::speech::Priv(state) recording
+    set ::application::speech::Priv(recordFile) [file join $::env(HOME) review-rec.wav]
+    set ::application::speech::Priv(recordPids) $pid
+    return $pid
+}
+
+tcltest::test review-recorder-cancel-reaches {Cancel during the stop still kills the recorder} -setup {
+    rename ::application::speech::StartTranscribe ::reviewRealStartTranscribe
+    proc ::application::speech::StartTranscribe {file} { lappend ::reviewStarted $file }
+    set ::reviewStarted {}
+} -body {
+    set pid [::reviewStubbornRecorder]
+    ::application::speech::StopRecording
+    ::reviewWait 400
+    set kept [expr {$pid in $::application::speech::Priv(recordPids)}]
+    ::application::speech::Cancel
+    ::reviewWait 200
+    list $kept [::platform::sys::alive $pid] $::reviewStarted
+} -cleanup {
+    catch { exec kill -KILL $pid }
+    rename ::application::speech::StartTranscribe {}
+    rename ::reviewRealStartTranscribe ::application::speech::StartTranscribe
+} -result {1 0 {}}
+
+tcltest::test review-recorder-deadline {a recorder still running at the deadline is killed, then transcribed} -setup {
+    rename ::application::speech::StartTranscribe ::reviewRealStartTranscribe
+    proc ::application::speech::StartTranscribe {file} {
+        lappend ::reviewStarted [llength $::application::speech::Priv(recordPids)]
+    }
+    set ::reviewStarted {}
+} -body {
+    set pid [::reviewStubbornRecorder]
+    ::application::speech::StopRecording
+    ::reviewWait 1000
+    set early $::reviewStarted
+    ::reviewWait 2000
+    list $early $::reviewStarted [::platform::sys::alive $pid]
+} -cleanup {
+    catch { exec kill -KILL $pid }
+    ::application::speech::Cancel
+    rename ::application::speech::StartTranscribe {}
+    rename ::reviewRealStartTranscribe ::application::speech::StartTranscribe
+} -result {{} 0 0}
 
 tcltest::cleanupTests
