@@ -535,26 +535,54 @@ proc tlsRegister {} {
 	package require tls
 	tlsInit
 	::http::register https 443 ::platform::sys::tlsSocket
-	if {$::tcl_platform(platform) eq "windows"} { BlockingHttpWrite }
+	if {$::tcl_platform(platform) eq "windows"} { PolledHttpWrite }
 }
 
 # On Windows, tcltls 1.7 stops raising writable events once a non-blocking
-# write fills its 64 KB buffer, so http 2.9 hangs on request bodies above
-# 64 KB (multi-round assistant turns) until the timeout. Write each body
-# block in blocking mode; the reply is still read asynchronously.
-proc BlockingHttpWrite {} {
-	if {[llength [info commands ::http::Write_nonblocking]]} { return }
-	rename ::http::Write ::http::Write_nonblocking
+# write fills its 64 KB buffer, so http hangs on request bodies above 64 KB
+# (multi-round assistant turns) until the timeout. Writing in blocking mode
+# would freeze the event loop, request timeouts included, while a peer
+# does not read (review finding NET-10). Instead a timer stands in for the
+# missing events: it flushes what is buffered and, once that is gone,
+# runs the writable handler for the next block. Nothing ever blocks.
+proc PolledHttpWrite {} {
+	if {[llength [info commands ::http::Write_unpolled]]} { return }
+	rename ::http::Write ::http::Write_unpolled
 	proc ::http::Write {token} {
-		upvar 0 $token state
-		set sock $state(sock)
-		set blocking [fconfigure $sock -blocking]
-		fconfigure $sock -blocking 1
-		try {
-			::http::Write_nonblocking $token
-		} finally {
-			if {$sock in [chan names]} { fconfigure $sock -blocking $blocking }
-		}
+		::http::Write_unpolled $token
+		::platform::sys::HttpWritePoll $token
+	}
+}
+
+variable HttpWriteTimer
+array set HttpWriteTimer {}
+
+proc HttpWritePoll {token} {
+	variable HttpWriteTimer
+	if {[info exists HttpWriteTimer($token)]} {
+		after cancel $HttpWriteTimer($token)
+		unset HttpWriteTimer($token)
+	}
+	upvar 0 $token state
+	if {![info exists state(sock)]} { return }
+	set sock $state(sock)
+	if {$sock ni [chan names] || [catch { chan event $sock writable } script] || $script eq ""} {
+		return ;# the body is sent or the request is over
+	}
+	set HttpWriteTimer($token) [after 20 [list ::platform::sys::HttpWriteTick $token $sock]]
+}
+
+proc HttpWriteTick {token sock} {
+	variable HttpWriteTimer
+	unset -nocomplain HttpWriteTimer($token)
+	upvar 0 $token state
+	if {![info exists state(sock)] || $state(sock) ne $sock || $sock ni [chan names]} { return }
+	if {[catch { chan event $sock writable } script] || $script eq ""} { return }
+	catch { flush $sock } ;# non-blocking: writes what the channel takes now
+	if {[chan pending output $sock] > 0} {
+		HttpWritePoll $token
+	} else {
+		uplevel #0 $script ;# the next block; http::Write schedules the next tick
 	}
 }
 
