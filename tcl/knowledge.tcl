@@ -594,7 +594,6 @@ foreach {id purpose keywords} {
 	menu.training.play_engine "Play a game against a chess engine (the computer)." {play against computer engine stockfish game opponent bot}
 	menu.training.play_online "Play people online on the Free Internet Chess Server (FICS)." {play online internet server fics people human opponent seek}
 	menu.training.play_lichess "Play people or the Lichess computer online on lichess.org." {play online internet lichess people human opponent seek computer}
-	menu.training.play_icc "Play people online on the Internet Chess Club (ICC)." {play online internet icc chessclub people human opponent seek}
 	menu.training.lichess_social "Look up Lichess players, view rating history, challenge players, message and join teams." {lichess players teams profile rating history challenge message social}
 	menu.training.lichess_tv "Watch live Lichess TV channels, games and tournament broadcasts." {lichess tv watch live broadcast channels games}
 	menu.training.lichess_events "Browse, join and withdraw from Lichess Arena and Swiss tournaments and simuls." {lichess tournaments arena swiss simul events join}
@@ -2308,7 +2307,6 @@ dict set ::knowledge::Explicit menu.training.guess when {When practicing predict
 dict set ::knowledge::Explicit menu.training.play_engine when {When you want the computer to play the opposing side.}
 dict set ::knowledge::Explicit menu.training.play_online when {When you want to play a person over the internet.}
 dict set ::knowledge::Explicit menu.training.play_lichess when {When you want to play on Lichess.}
-dict set ::knowledge::Explicit menu.training.play_icc when {When you want to play on the Internet Chess Club.}
 dict set ::knowledge::Explicit menu.training.lichess_social when {When you want to look up, challenge or message Lichess players or manage teams.}
 dict set ::knowledge::Explicit menu.training.lichess_tv when {When you want to watch Lichess TV or live tournament broadcasts.}
 dict set ::knowledge::Explicit menu.training.lichess_events when {When you want to join Lichess Arena or Swiss tournaments or simuls.}

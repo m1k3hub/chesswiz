@@ -186,7 +186,6 @@ SOURCES = \
 	online-view.tcl \
 	online-window.tcl \
 	ics.tcl \
-	icc.tcl \
 	lichess-api.tcl \
 	lichess.tcl \
 	lichess-social.tcl \

@@ -212,7 +212,6 @@ namespace eval menu::mc {
 	set PlayAgainstEngine			"Play Against Engine…"
 	set PlayOnline					"Play Online (FICS)…"
 	set PlayLichess				"Play Online (Lichess)…"
-	set PlayICC					"Play Online (ICC)…"
 	set LichessSocial				"Lichess Players…"
 	set LichessTv					"Lichess TV…"
 	set LichessEvents				"Lichess Tournaments…"
@@ -512,7 +511,6 @@ proc ::menu::DefineTree {} {
 			[list cmd menu.training.play_engine PlayAgainstEngine "" {::menu::ModulePresent playengine}] \
 			[list cmd menu.training.play_online PlayOnline "" {::menu::ModulePresent ics}] \
 			[list cmd menu.training.play_lichess PlayLichess "" {::menu::ModulePresent lichess}] \
-			[list cmd menu.training.play_icc PlayICC "" {::menu::ModulePresent icc}] \
 			[list cmd menu.training.lichess_social LichessSocial "" {::menu::ModulePresent lichess_social}] \
 			[list cmd menu.training.lichess_tv LichessTv "" {::menu::ModulePresent lichess_tv}] \
 			[list cmd menu.training.lichess_events LichessEvents "" {::menu::ModulePresent lichess_events}] \
@@ -2647,7 +2645,6 @@ proc ::menu::Do {id} {
 		menu.training.play_engine { return [::playengine::open .application] }
 		menu.training.play_online { return [::ics::open .application] }
 		menu.training.play_lichess { return [::lichess::open .application] }
-		menu.training.play_icc { return [::icc::open .application] }
 		menu.training.lichess_social { return [::lichess::social::open .application] }
 		menu.training.lichess_tv { return [::lichess::tv::open .application] }
 		menu.training.lichess_events { return [::lichess::events::open .application] }

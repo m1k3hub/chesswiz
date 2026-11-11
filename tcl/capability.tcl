@@ -42,7 +42,6 @@ proc ::capability::DefineAll {} {
 	Define playengine  {expr {[llength [info commands ::playengine::open]] > 0}}
 	Define ics         {expr {[llength [info commands ::ics::open]] > 0}}
 	Define lichess     {expr {[llength [info commands ::lichess::open]] > 0}}
-	Define icc         {expr {[llength [info commands ::icc::open]] > 0}}
 	Define lichess_social  {expr {[llength [info commands ::lichess::social::open]] > 0}}
 	Define lichess_tv      {expr {[llength [info commands ::lichess::tv::open]] > 0}}
 	Define lichess_events  {expr {[llength [info commands ::lichess::events::open]] > 0}}
