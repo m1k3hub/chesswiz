@@ -212,6 +212,7 @@ namespace eval menu::mc {
 	set PlayAgainstEngine			"Play Against Engine…"
 	set PlayOnline					"Play Online (FICS)…"
 	set PlayLichess				"Play Online (Lichess)…"
+	set PlayICC					"Play Online (ICC)…"
 set StreamOverlay			"Stream to Twitch / YouTube…"
 	set EngineMatch					"Engine Match…"
 	set StudyPlan						"Study Plan…"
@@ -507,6 +508,7 @@ proc ::menu::DefineTree {} {
 			[list cmd menu.training.play_engine PlayAgainstEngine "" {::menu::ModulePresent playengine}] \
 			[list cmd menu.training.play_online PlayOnline "" {::menu::ModulePresent ics}] \
 			[list cmd menu.training.play_lichess PlayLichess "" {::menu::ModulePresent lichess}] \
+			[list cmd menu.training.play_icc PlayICC "" {::menu::ModulePresent icc}] \
 			[list cmd menu.training.stream StreamOverlay "" {::menu::ModulePresent stream}] \
 			[list cmd menu.training.engine_match EngineMatch "" {::menu::ModulePresent enginematch}] \
 			[list sep] \
@@ -2637,6 +2639,7 @@ proc ::menu::Do {id} {
 		menu.training.play_engine { return [::playengine::open .application] }
 		menu.training.play_online { return [::ics::open .application] }
 		menu.training.play_lichess { return [::lichess::open .application] }
+		menu.training.play_icc { return [::icc::open .application] }
 		menu.training.stream { return [::stream::open .application] }
 		menu.training.engine_match { return [::enginematch::open .application] }
 		menu.training.studyplan { return [::ai::studyplan::run .application] }
