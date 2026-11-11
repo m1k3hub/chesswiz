@@ -98,6 +98,7 @@ src/probe_cbm_linkage
 src/test_html_core
 tests/test_corr_duration
 tests/test_lzo_stream
+tests/test_zstream_tell
 src/cbh1trace
 
 # large ChessBase media fixtures (re-downloadable; media-console e2e

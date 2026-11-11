@@ -263,14 +263,38 @@ struct cookie_io_functions_t
     int (*seek)(void*, off_t*, int);
     int (*close)(void*);
 };
+// Darwin's ftell on a funopen stream seeks back over what stdio has
+// buffered and drops the buffer. A zip member cannot seek backward without
+// inflating again from its start, so a reader that calls tellg per line
+// (the PGN reader) became quadratic. Read-only streams therefore get a
+// read-ahead here, and seeks that land inside it never reach the cookie.
 struct mstl_darwin_cookie
 {
+    enum { ReadAhead = 1 << 16 };
     void* cookie;
     cookie_io_functions_t io;
+    char* rbuf;         // read-ahead, read-only streams only
+    off_t rstart;       // stream offset of rbuf[0]
+    int rlen;
+    int rpos;
     static int read(void* data, char* buf, int size)
     {
         mstl_darwin_cookie* c = static_cast<mstl_darwin_cookie*>(data);
-        return int(c->io.read(c->cookie, buf, size_t(size)));
+        if (!c->rbuf)
+            return int(c->io.read(c->cookie, buf, size_t(size)));
+        if (c->rpos == c->rlen)
+        {
+            ssize_t n = c->io.read(c->cookie, c->rbuf, ReadAhead);
+            if (n <= 0)
+                return int(n);
+            c->rstart += c->rlen;
+            c->rlen = int(n);
+            c->rpos = 0;
+        }
+        int k = c->rlen - c->rpos < size ? c->rlen - c->rpos : size;
+        ::memcpy(buf, c->rbuf + c->rpos, size_t(k));
+        c->rpos += k;
+        return k;
     }
     static int write(void* data, const char* buf, int size)
     {
@@ -281,12 +305,32 @@ struct mstl_darwin_cookie
     {
         mstl_darwin_cookie* c = static_cast<mstl_darwin_cookie*>(data);
         off_t pos = offset;
+        if (c->rbuf)
+        {
+            if (whence != SEEK_END)
+            {
+                off_t target = whence == SEEK_SET ? off_t(offset) : c->rstart + c->rpos + off_t(offset);
+                if (target >= c->rstart && target <= c->rstart + c->rlen)
+                {
+                    c->rpos = int(target - c->rstart);
+                    return fpos_t(target);
+                }
+                pos = target;
+                whence = SEEK_SET;
+            }
+            if (c->io.seek(c->cookie, &pos, whence) != 0)
+                return fpos_t(-1);
+            c->rstart = pos;
+            c->rlen = c->rpos = 0;
+            return fpos_t(pos);
+        }
         return c->io.seek(c->cookie, &pos, whence) == 0 ? fpos_t(pos) : fpos_t(-1);
     }
     static int close(void* data)
     {
         mstl_darwin_cookie* c = static_cast<mstl_darwin_cookie*>(data);
         int rc = c->io.close ? c->io.close(c->cookie) : 0;
+        ::free(c->rbuf);
         ::free(c);
         return rc;
     }
@@ -299,6 +343,14 @@ inline FILE* fopencookie(void* cookie, const char* mode, cookie_io_functions_t i
     c->io = io;
     bool reading = mode[0] == 'r' || ::strchr(mode, '+');
     bool writing = mode[0] == 'w' || mode[0] == 'a' || ::strchr(mode, '+');
+    c->rbuf = 0;
+    c->rstart = 0;
+    c->rlen = c->rpos = 0;
+    if (reading && !writing && io.read)
+    {
+        c->rbuf = static_cast<char*>(::malloc(mstl_darwin_cookie::ReadAhead));
+        if (!c->rbuf) { ::free(c); errno = ENOMEM; return 0; }
+    }
     FILE* fp = ::funopen(c, reading && io.read ? mstl_darwin_cookie::read : 0,
         writing && io.write ? mstl_darwin_cookie::write : 0,
         io.seek ? mstl_darwin_cookie::seek : 0, mstl_darwin_cookie::close);

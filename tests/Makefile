@@ -254,7 +254,7 @@ ai-annotations:
 		| tee /tmp/scidb-ai-annotations.log | grep -E "PASS|FAIL|SKIP|AI-ANNOTATIONS-FAILURES"
 	@grep -q "AI-ANNOTATIONS-FAILURES: 0" /tmp/scidb-ai-annotations.log
 
-cpp: $(TEST_DIR)test_cpp_backend $(TEST_DIR)test_corr_duration $(TEST_DIR)test_mstl_core $(TEST_DIR)test_lzo_stream tk-rangelist cpp-src 2cbh-elo
+cpp: $(TEST_DIR)test_cpp_backend $(TEST_DIR)test_corr_duration $(TEST_DIR)test_mstl_core $(TEST_DIR)test_lzo_stream $(TEST_DIR)test_zstream_tell tk-rangelist cpp-src 2cbh-elo
 	@chmod +x "$(TEST_DIR)test_cpp_backend"
 	@echo "Running C++ backend tests..."
 	@"$(TEST_DIR)test_cpp_backend"
@@ -264,6 +264,7 @@ cpp: $(TEST_DIR)test_cpp_backend $(TEST_DIR)test_corr_duration $(TEST_DIR)test_m
 	@echo "Running mstl container tests (AddressSanitizer)..."
 	@"$(TEST_DIR)test_mstl_core"
 	@"$(TEST_DIR)test_lzo_stream"
+	@"$(TEST_DIR)test_zstream_tell"
 
 # 2CBH (ChessBase 17+) index-record Elo decode, checked against ground truth
 # taken from the fixture's own source PGN.  Header-only: it exercises
@@ -335,6 +336,14 @@ $(TEST_DIR)test_mstl_core: $(TEST_DIR)test_mstl_core.cpp $(SRC_DIR)/mstl/m_strin
 		-I$(SRC_DIR) -I$(SRC_DIR)/mstl -I$(SRC_DIR)/sys -I$(SRC_DIR)/util $(TEST_TCL_INCLUDE) \
 		-o $@ $< $(SRC_DIR)/mstl/m_string.cpp \
 		$(SRC_DIR)/mstl/libmstl.a $(SRC_DIR)/sys/libsys.a $(SRC_DIR)/mstl/libmstl.a -lpthread -ltcl$(TCL_VERSION)
+
+# ZStream zip reading with tellg per line (macOS funopen read-ahead).
+$(TEST_DIR)test_zstream_tell: $(TEST_DIR)test_zstream_tell.cpp $(SRC_DIR)/util/libutil.a
+	@echo "Compiling zip stream tests..."
+	@$(CXX) -std=c++17 -O1 -g -DBROKEN_LINKER_HACK=1 -Wno-cpp \
+		-I$(SRC_DIR) -I$(SRC_DIR)/mstl -I$(SRC_DIR)/util $(TEST_TCL_INCLUDE) -o $@ $< \
+		$(SRC_DIR)/util/libutil.a $(SRC_DIR)/util/minizip/libminizip.a \
+		$(SRC_DIR)/sys/libsys.a $(SRC_DIR)/mstl/libmstl.a -lpthread -ltcl$(TCL_VERSION) $(or $(ZZIPLIB_LIB),-lzzip) -lz
 
 # LzoByteStream is not in libutil (nothing uses it yet), so its sources
 # and minilzo are compiled in; u_byte_stream.cpp wins over the archive's.
