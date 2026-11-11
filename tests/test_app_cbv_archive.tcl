@@ -100,4 +100,25 @@ tcltest::test cbv-real-archives {the TWIC .cbv fixtures open and hold games} -bo
 	set out
 } -result {0 1 0 1}
 
+# Discover lists .cbv archives and opens them through openBase, as the
+# Open dialog does: that path has to load them too.
+tcltest::test cbv-open-from-ui {openBase opens a .cbv archive read-only} -body {
+	set path [file join [file dirname [file dirname [file normalize [info script]]]] \
+		opening-report tests fixtures twic1654.cbv]
+	rename ::dialog::error ::scidb::test::cbv::realError
+	proc ::dialog::error {args} { lappend ::scidb::test::cbv::errors $args }
+	set ::scidb::test::cbv::errors {}
+	try {
+		set rc [::application::database::openBase .application $path no -switchToBase 0]
+		set open [::scidb::db::get open? $path]
+		set games [expr {$open && [::scidb::db::count games $path Normal] > 0}]
+		set readonly [expr {$open && [::scidb::db::get readonly? $path]}]
+	} finally {
+		rename ::dialog::error {}
+		rename ::scidb::test::cbv::realError ::dialog::error
+		catch { ::application::database::closeBase .application $path }
+	}
+	list $rc $games $readonly [llength $::scidb::test::cbv::errors]
+} -result {1 1 1 0}
+
 tcltest::cleanupTests
