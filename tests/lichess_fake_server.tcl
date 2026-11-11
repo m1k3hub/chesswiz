@@ -287,7 +287,13 @@ proc ::lichess::fake::Handle {chan} {
 		set query {}
 	}
 	set form {}
-	if {$method eq "POST"} { set form [ParseQuery [dict get $connection body]] }
+	set contentType [DictGet [dict get $connection headers] content-type {}]
+	set jsonBody {}
+	if {$method eq "POST"} {
+		if {[string match application/json* $contentType]} {
+			catch {set jsonBody [::json::json2dict [encoding convertfrom utf-8 [dict get $connection body]]]}
+		} else { set form [ParseQuery [dict get $connection body]] }
+	}
 	set authorization {}
 	if {[dict exists $connection headers authorization]} {
 		set authorization [dict get $connection headers authorization]
@@ -301,7 +307,8 @@ proc ::lichess::fake::Handle {chan} {
 		}
 	}
 	lappend Requests [dict create \
-		method $method path $path query $journalQuery form $journalForm authorized $authorized]
+		method $method path $path query $journalQuery form $journalForm authorized $authorized \
+		json $jsonBody contentType $contentType accept [DictGet [dict get $connection headers] accept {}]]
 
 	set forcedIndex -1
 	set forcedStatus 0
@@ -336,12 +343,15 @@ proc ::lichess::fake::Handle {chan} {
 		return
 	}
 
+	if {[Phase2 $chan $method $path $form]} { return }
+	# Bot games share the board fixture state and events.
+	set path [string map {/api/bot/game/ /api/board/game/} $path]
 	if {$path eq "/api/account" && $method eq "GET"} {
 		RespondJson $chan 200 [dict create id bob username Bob perfs [dict create rapid [dict create games 0 rating 1500]]]
 	} elseif {$path eq "/api/stream/event" && $method eq "GET"} {
 		StartEventStream $chan
 	} elseif {$path eq "/api/board/seek" && $method eq "POST"} {
-		StartSeek $chan $form
+		if {[dict exists $form days]} { Respond $chan 200 {{"ok":true}} application/json } else { StartSeek $chan $form }
 	} elseif {$path eq "/api/challenge/ai" && $method eq "POST"} {
 		set color [DictGet $form color random]
 		if {$color eq "random"} { set color white }
@@ -413,11 +423,13 @@ proc ::lichess::fake::JsonString {value} {
 proc ::lichess::fake::Json {value} {
 	set pairs {}
 	foreach {key val} $value {
-		if {$key in {game opponent perfs rapid clock white black state}} {
+		if {$key in {game opponent perfs rapid clock white black state challenge challenger destUser d user}} {
 			set encoded [Json $val]
+		} elseif {$key eq "players"} {
+			set encoded "\[[join [lmap player $val {Json $player}] ,]\]"
 		} elseif {$key in {rated isMyTurn wdraw bdraw gone}} {
 			set encoded [expr {$val ? "true" : "false"}]
-		} elseif {$key in {ai aiLevel rating games secondsLeft initial increment wtime btime winc binc claimWinInSeconds expires_in}} {
+		} elseif {$key in {ai aiLevel rating games secondsLeft initial increment wtime btime winc binc claimWinInSeconds expires_in wc bc}} {
 			if {$val ne "null" && ![string is integer -strict $val]} { error "invalid numeric fixture field" }
 			set encoded $val
 		} else { set encoded [JsonString $val] }
@@ -848,3 +860,124 @@ proc ::lichess::fake::Finish {gameId status winner} {
 }
 
 # vi:set ts=3 sw=3:
+
+
+# Phase-two fixtures use literal JSON to preserve arrays and booleans.
+proc ::lichess::fake::Phase2 {chan method path form} {
+	if {$method eq "GET"} {
+		set body {}
+		set type application/json
+		switch -regexp -- $path {
+			{^/api/user/[^/]+/rating-history$} { set body {[{"name":"Rapid","points":[[2026,0,1,1500]]}]} }
+			{^/api/user/[^/]+$} { set body {{"id":"alice","username":"Alice","perfs":{"rapid":{"rating":1600}}}} }
+			{^/api/team/of/[^/]+$} { set body {[{"id":"team1","name":"Chess friends"}]} }
+			{^/api/board/game/[^/]+/chat$} { set body {[{"user":"Alice","text":"Good luck!"}]} }
+			{^/api/tv/channels$} { set body {{"Best":{"user":{"name":"Alice"},"rating":1600,"gameId":"tv1","color":"white"}}} }
+			{^/api/tv(/[^/]+)?/feed$} {
+				StartExtraStream $chan tv {}
+				WriteRaw $chan "{\"t\":\"featured\",\"d\":{\"id\":\"tv1\",\"orientation\":\"white\",\"players\":\[\],\"fen\":\"startpos\"}}\n"
+				return 1
+			}
+			{^/api/stream/game/[^/]+$} {
+				StartExtraStream $chan watch {}
+				WriteRaw $chan "{\"id\":\"tv1\",\"fen\":\"startpos\",\"moves\":\"\"}\n"
+				return 1
+			}
+			{^/api/stream/broadcast/round/([^/]+)\.pgn$} {
+				regexp {round/([^/]+)\.pgn$} $path -> round
+				StartExtraStream $chan broadcast [UrlDecode $round]
+				return 1
+			}
+			{^/api/broadcast/top$} { set body {{"active":[{"round":{"id":"round1","name":"Round 1"}}],"upcoming":[],"past":[]}} }
+			{^/api/tournament$} { set body {{"created":[{"id":"arena1","fullName":"Friendly arena"}],"started":[],"finished":[]}} }
+			{^/api/tournament/[^/]+$} { set body {{"id":"arena1","fullName":"Friendly arena","nbPlayers":2}} }
+			{^/api/team/[^/]+/swiss$} {
+				set body "{\"id\":\"swiss1\",\"name\":\"Friendly Swiss\"}\n{\"id\":\"swiss2\"}"
+				set type application/x-ndjson
+			}
+			{^/api/simul$} { set body {{"pending":[],"created":[{"id":"simul1","name":"Friendly simul"}],"started":[],"finished":[]}} }
+			{^/api/puzzle/dashboard/[^/]+$} { set body {{"global":{"nb":10,"performance":1500},"themes":{}}} }
+			{^/api/puzzle/activity$} {
+				set body "{\"id\":\"puzzle1\",\"win\":true}\n{\"id\":\"puzzle2\",\"win\":false}\n"
+				set type application/x-ndjson
+			}
+			{^/api/puzzle/(daily|next|[^/]+)$} {
+				set body {{"game":{"id":"puzzlegame","pgn":"1. e4 e5 *","players":[]},"puzzle":{"id":"puzzle1","rating":1500,"plays":100,"solution":["e2e4","e7e5"],"themes":["opening"],"initialPly":0}}}
+			}
+			{^/api/cloud-eval$} { set body {{"fen":"startpos","knodes":100,"depth":20,"pvs":[{"moves":"e2e4 e7e5","cp":25}]}} }
+			{^/game/export/[^/]+$} {
+				set body "[format {[Event "Fixture"]}]\n\n1. e4 e5 *\n"
+				set type application/x-chess-pgn
+			}
+			{^/api/study/by/[^/]+$} {
+				set body "{\"id\":\"study1\",\"name\":\"Study one\"}\n{\"id\":\"study2\",\"name\":\"Study two\"}\n"
+				set type application/x-ndjson
+			}
+		}
+		if {$body ne {}} { Respond $chan 200 [encoding convertto utf-8 $body] $type; return 1 }
+	} elseif {$method eq "POST"} {
+		if {[regexp {^/api/challenge/([^/]+)$} $path -> user] && $user ne "ai"} {
+			Respond $chan 200 {{"id":"challenge1","url":"https://example.invalid/challenge1"}} application/json
+			return 1
+		}
+		switch -regexp -- $path {
+			{^/api/(team/[^/]+/(join|quit)|inbox/[^/]+|challenge/[^/]+/(accept|decline|cancel)|bot/account/upgrade|tournament/[^/]+/(join|withdraw)|swiss/[^/]+/(join|withdraw)|puzzle/batch/[^/]+|study/[^/]+/import-pgn)$} {
+				Respond $chan 200 {{"ok":true}} application/json
+				return 1
+			}
+			{^/api/racer$} {
+				Respond $chan 200 {{"id":"race1","url":"https://example.invalid/race1"}} application/json
+				return 1
+			}
+			{^/api/import$} {
+				Respond $chan 200 {{"id":"import1","url":"https://example.invalid/import1"}} application/json
+				return 1
+			}
+			{^/api/study$} {
+				Respond $chan 200 {{"id":"study1","name":"New study"}} application/json
+				return 1
+			}
+			{^/api/(board|bot)/game/([^/]+)/chat$} {
+				regexp {game/([^/]+)/chat$} $path -> id
+				EmitChat $id Bob [DictGet $form text {}]
+				Respond $chan 200 {{"ok":true}} application/json
+				return 1
+			}
+			{^/api/(board|bot)/game/[^/]+/takeback/(yes|no)$} {
+				Respond $chan 200 {{"ok":true}} application/json
+				return 1
+			}
+		}
+	}
+	return 0
+}
+
+proc ::lichess::fake::StartExtraStream {chan kind key} {
+	variable Connections
+	dict set Connections $chan kind $kind
+	dict set Connections $chan key $key
+	if {$kind eq "broadcast"} {
+		WriteRaw $chan "HTTP/1.1 200 OK\r\nContent-Type: application/x-chess-pgn\r\nConnection: close\r\n\r\n"
+	} else { StartStream $chan }
+}
+
+proc ::lichess::fake::EmitTv {event} {
+	variable Connections
+	foreach {chan connection} $Connections {
+		if {[dict get $connection kind] in {tv watch}} { SendJson $chan $event }
+	}
+}
+proc ::lichess::fake::EmitBroadcastPgn {roundId pgn} {
+	variable Connections
+	foreach {chan connection} $Connections {
+		if {[dict get $connection kind] eq "broadcast" && [dict get $connection key] eq $roundId} {
+			WriteRaw $chan "[encoding convertto utf-8 $pgn]\n\n\n"
+		}
+	}
+}
+proc ::lichess::fake::EmitChallenge {challenge} {
+	EmitEvent [dict create type challenge challenge $challenge]
+}
+proc ::lichess::fake::EmitChat {gameId user text} {
+	EmitGame $gameId [dict create type chatLine username $user text $text room player]
+}

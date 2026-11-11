@@ -14,12 +14,14 @@ namespace eval ::lichess::api {
 	variable BackoffUntil 0
 	variable Auth {}
 	variable Epoch 0
+	variable Mode board
 	namespace eval mc {
 		set Network "Could not complete the Lichess request."
 		set Unauthorized "Lichess rejected the credential. Sign in again."
 		set Limited "Lichess rate limit reached. Please wait one minute."
 		set Invalid "Lichess returned an invalid response."
 		set Rejected "Lichess rejected the request."
+		set NoCloud "No cloud evaluation for this position."
 		set Cancelled "Lichess request cancelled."
 		set Closed "Lichess stream closed."
 		set SignIn "Lichess sign in failed. You can use a personal token instead."
@@ -94,13 +96,13 @@ proc ::lichess::api::signOut {} {
 
 # A handle exists before the asynchronous connection starts, so closing a
 # queued request is safe, including while the global 429 cooldown is active.
-proc ::lichess::api::Request {method path form cmd {stream 0} {bearer {}}} {
+proc ::lichess::api::Request {method path form cmd {stream 0} {bearer {}} {contentType application/x-www-form-urlencoded} {response json}} {
 	variable Serial
 	variable Requests
 	variable Base
 	set id request[incr Serial]
 	dict set Requests $id [dict create method $method url "[string trimright $Base /]$path" \
-		form $form cmd $cmd stream $stream bearer $bearer http {} timer {} buffer {} wire {} chunk -1]
+		form $form cmd $cmd stream $stream bearer $bearer contentType $contentType response $response http {} timer {} buffer {} wire {} chunk -1]
 	dict set Requests $id timer [after 0 [list ::lichess::api::Start $id]]
 	return $id
 }
@@ -121,9 +123,12 @@ proc ::lichess::api::Start {id} {
 		-command [list ::lichess::api::Done $id] -timeout 30000]
 	set bearer [dict get $r bearer]
 	if {$bearer eq {}} { set bearer [token] }
-	lappend opts -headers [list Authorization "Bearer $bearer" Accept application/json]
+	set accept application/json
+	if {[dict get $r response] in {text pgn}} { set accept application/x-chess-pgn }
+	if {[dict get $r response] eq "ndjson" || [dict get $r stream] && [dict get $r response] ne "pgn"} { set accept application/x-ndjson }
+	lappend opts -headers [list Authorization "Bearer $bearer" Accept $accept]
 	if {[dict get $r method] eq "POST"} {
-		lappend opts -type application/x-www-form-urlencoded -query [dict get $r form]
+		lappend opts -type [dict get $r contentType] -query [encoding convertto utf-8 [dict get $r form]]
 	}
 	if {[dict get $r stream]} {
 		lappend opts -handler [list ::lichess::api::Read $id] -timeout 0
@@ -196,14 +201,17 @@ proc ::lichess::api::Dechunk {id count} {
 
 proc ::lichess::api::Lines {id bytes} {
 	variable Requests
+	if {[dict exists $Requests $id response] && [dict get $Requests $id response] eq "pgn"} {
+		PgnLines $id $bytes
+		return
+	}
 	set buffer [dict get $Requests $id buffer]
 	append buffer $bytes
 	while {[set end [string first \n $buffer]] >= 0} {
 		set line [string trim [string range $buffer 0 [expr {$end - 1}]]]
 		set buffer [string range $buffer [expr {$end + 1}] end]
 		if {$line eq {}} { continue }
-		if {[catch {::json::json2dict [encoding convertfrom utf-8 $line]} event]
-		 || [catch {dict size $event}]} { error "Invalid stream response" }
+		if {[catch {ParseJson [encoding convertfrom utf-8 $line] object} event]} { error "Invalid stream response" }
 		Reply [dict get $Requests $id cmd] $event
 	}
 	if {[string length $buffer] > 1048576} { error "Stream line too long" }
@@ -232,21 +240,41 @@ proc ::lichess::api::Done {id h} {
 			}
 			set tail [dict get $Requests $id buffer]
 			if {[string trim $tail] ne {}} {
-				if {[catch {Lines $id \n}]} {
+				if {[catch {
+					if {[dict exists $Requests $id response] && [dict get $Requests $id response] eq "pgn"} { PgnLines $id {} 1 } else { Lines $id \n }
+				}]} {
 					::http::cleanup $h
 					Finish $id [dict create ok 0 status $code error $mc::Invalid]
 					return
 				}
 			}
 			set reply [dict create ok 1 status $code error $mc::Closed]
-		} elseif {[catch {::json::json2dict [encoding convertfrom utf-8 [::http::data $h]]} data]
-		 || [catch {dict size $data}]} {
+		} elseif {[catch {
+			set response json
+			if {[dict exists $Requests $id response]} { set response [dict get $Requests $id response] }
+			set body [encoding convertfrom utf-8 [::http::data $h]]
+			switch $response {
+				text { set data $body }
+				ndjson {
+					set data {}
+					foreach line [split $body \n] {
+						if {[string trim $line] eq {}} { continue }
+						lappend data [ParseJson $line object]
+					}
+				}
+				array { set data [ParseJson $body array] }
+				default { set data [ParseJson $body object] }
+			}
+		} dataError]} {
 			dict set reply error $mc::Invalid
 		} else {
 			set reply [dict create ok 1 data $data status $code]
 		}
 	} elseif {$code >= 400} {
 		dict set reply error $mc::Rejected
+		if {$code == 404 && [dict exists $Requests $id url] && [string match */api/cloud-eval?* [dict get $Requests $id url]]} {
+			dict set reply error $mc::NoCloud
+		}
 	}
 	::http::cleanup $h
 	Finish $id $reply
@@ -319,9 +347,15 @@ proc ::lichess::api::Validated {tok cmd epoch reply} {
 	Reply $cmd $reply
 }
 proc ::lichess::api::streamEvents {cmd} { Request GET /api/stream/event {} $cmd 1 }
-proc ::lichess::api::streamGame {id cmd} { Request GET /api/board/game/stream/[Segment $id] {} $cmd 1 }
-proc ::lichess::api::seek {minutes increment rated color cmd} {
-	Request POST /api/board/seek [::http::formatQuery time $minutes increment $increment rated [expr {$rated ? "true" : "false"}] color $color] $cmd 1
+proc ::lichess::api::streamGame {id cmd} {
+	variable Mode
+	Request GET /api/$Mode/game/stream/[Segment $id] {} $cmd 1
+}
+proc ::lichess::api::seek {minutes increment rated color cmd {variant standard} {days ""}} {
+	set form [list rated [expr {$rated ? "true" : "false"}] color $color]
+	if {$days eq {}} { set form [concat [list time $minutes increment $increment] $form] } else { lappend form days $days }
+	if {$variant ne "standard"} { lappend form variant $variant }
+	Request POST /api/board/seek [::http::formatQuery {*}$form] $cmd [expr {$days eq {}}]
 }
 proc ::lichess::api::challengeAi {level minutes increment color cmd} {
 	Request POST /api/challenge/ai [::http::formatQuery level $level clock.limit [expr {int($minutes * 60)}] \
@@ -339,7 +373,8 @@ proc ::lichess::api::ActionReply {cmd ai reply} {
 	Reply $cmd $reply
 }
 proc ::lichess::api::Action {id action cmd} {
-	Request POST /api/board/game/[Segment $id]/$action {} [list ::lichess::api::ActionReply $cmd 0]
+	variable Mode
+	Request POST /api/$Mode/game/[Segment $id]/$action {} [list ::lichess::api::ActionReply $cmd 0]
 }
 proc ::lichess::api::move {id uci cmd} { Action $id move/[Segment $uci] $cmd }
 proc ::lichess::api::resign {id cmd} { Action $id resign $cmd }
@@ -348,9 +383,194 @@ proc ::lichess::api::draw {id answer cmd} { Action $id draw/[Segment $answer] $c
 proc ::lichess::api::claimVictory {id cmd} { Action $id claim-victory $cmd }
 proc ::lichess::api::takeback {id answer cmd} { Action $id takeback/[Segment $answer] $cmd }
 proc ::lichess::api::chat {id text cmd} {
-	Request POST /api/board/game/[Segment $id]/chat [::http::formatQuery room player text $text] \
+	variable Mode
+	Request POST /api/$Mode/game/[Segment $id]/chat [::http::formatQuery room player text $text] \
 		[list ::lichess::api::ActionReply $cmd 0]
 }
+
+# Response shapes are explicit: JSON arrays and objects can have identical
+# Tcl representations, so validate the wire container before decoding.
+proc ::lichess::api::ParseJson {body shape} {
+	set first [string index [string trimleft $body] 0]
+	if {($shape eq "object" && $first ne "\{") || ($shape eq "array" && $first ne "\[")} { error "Invalid JSON container" }
+	return [::json::json2dict $body]
+}
+
+proc ::lichess::api::PgnLines {id bytes {final 0}} {
+	variable Requests
+	set buffer [dict get $Requests $id buffer]
+	append buffer $bytes
+	while {1} {
+		set end [string first "\n\n\n" $buffer]
+		set skip 3
+		if {[regexp -indices {\n\[Event } $buffer match]} {
+			set next [lindex $match 0]
+			if {$end < 0 || $next < $end} { set end $next; set skip 1 }
+		}
+		if {$end < 0} { break }
+		set text [string trim [string range $buffer 0 [expr {$end-1}]]]
+		set buffer [string range $buffer [expr {$end+$skip}] end]
+		if {$text ne {}} { Reply [dict get $Requests $id cmd] [dict create type pgn text [encoding convertfrom utf-8 $text]] }
+	}
+	if {$final && [string trim $buffer] ne {}} {
+		Reply [dict get $Requests $id cmd] [dict create type pgn text [encoding convertfrom utf-8 [string trim $buffer]]]
+		set buffer {}
+	}
+	if {[string length $buffer] > 2097152} { error "PGN too long" }
+	dict set Requests $id buffer $buffer
+}
+
+proc ::lichess::api::mode {value} {
+	variable Mode
+	if {$value ni {board bot}} { error "mode must be board or bot" }
+	set Mode $value
+}
+proc ::lichess::api::user {name cmd} {
+	Request GET /api/user/[Segment $name] {} $cmd 0 {} application/x-www-form-urlencoded json
+}
+proc ::lichess::api::ratingHistory {name cmd} {
+	Request GET /api/user/[Segment $name]/rating-history {} $cmd 0 {} application/x-www-form-urlencoded array
+}
+proc ::lichess::api::teamsOf {name cmd} {
+	Request GET /api/team/of/[Segment $name] {} $cmd 0 {} application/x-www-form-urlencoded array
+}
+proc ::lichess::api::chatHistory {gameId cmd} {
+	Request GET /api/board/game/[Segment $gameId]/chat {} $cmd 0 {} application/x-www-form-urlencoded array
+}
+proc ::lichess::api::tvChannels {cmd} {
+	Request GET /api/tv/channels {} $cmd 0 {} application/x-www-form-urlencoded json
+}
+proc ::lichess::api::broadcastsTop {cmd} {
+	Request GET /api/broadcast/top {} $cmd 0 {} application/x-www-form-urlencoded json
+}
+proc ::lichess::api::arenas {cmd} {
+	Request GET /api/tournament {} $cmd 0 {} application/x-www-form-urlencoded json
+}
+proc ::lichess::api::arena {id cmd} {
+	Request GET /api/tournament/[Segment $id] {} $cmd 0 {} application/x-www-form-urlencoded json
+}
+proc ::lichess::api::swissOfTeam {teamId cmd} {
+	Request GET /api/team/[Segment $teamId]/swiss {} $cmd 0 {} application/x-www-form-urlencoded ndjson
+}
+proc ::lichess::api::simuls {cmd} {
+	Request GET /api/simul {} $cmd 0 {} application/x-www-form-urlencoded json
+}
+proc ::lichess::api::puzzleDaily {cmd} {
+	Request GET /api/puzzle/daily {} $cmd 0 {} application/x-www-form-urlencoded json
+}
+proc ::lichess::api::puzzleNext {angle difficulty cmd} {
+	Request GET /api/puzzle/next?[::http::formatQuery angle $angle difficulty $difficulty] {} $cmd 0 {} application/x-www-form-urlencoded json
+}
+proc ::lichess::api::puzzle {id cmd} {
+	Request GET /api/puzzle/[Segment $id] {} $cmd 0 {} application/x-www-form-urlencoded json
+}
+proc ::lichess::api::puzzleDashboard {days cmd} {
+	Request GET /api/puzzle/dashboard/[Segment $days] {} $cmd 0 {} application/x-www-form-urlencoded json
+}
+proc ::lichess::api::puzzleActivity {max cmd} {
+	Request GET /api/puzzle/activity?[::http::formatQuery max $max] {} $cmd 0 {} application/x-www-form-urlencoded ndjson
+}
+proc ::lichess::api::cloudEval {fen multiPv cmd} {
+	Request GET /api/cloud-eval?[::http::formatQuery fen $fen multiPv $multiPv] {} $cmd 0 {} application/x-www-form-urlencoded json
+}
+proc ::lichess::api::gameExport {id cmd} {
+	Request GET /game/export/[Segment $id]?evals=true&clocks=true&literate=true {} $cmd 0 {} application/x-www-form-urlencoded text
+}
+proc ::lichess::api::studiesOf {user cmd} {
+	Request GET /api/study/by/[Segment $user] {} $cmd 0 {} application/x-www-form-urlencoded ndjson
+}
+proc ::lichess::api::joinTeam {teamId message cmd} {
+	Request POST /api/team/[Segment $teamId]/join [::http::formatQuery message $message] $cmd
+}
+proc ::lichess::api::leaveTeam {teamId cmd} {
+	Request POST /api/team/[Segment $teamId]/quit {} $cmd
+}
+proc ::lichess::api::sendMessage {user text cmd} {
+	Request POST /api/inbox/[Segment $user] [::http::formatQuery text $text] $cmd
+}
+proc ::lichess::api::acceptChallenge {id cmd} {
+	Request POST /api/challenge/[Segment $id]/accept {} $cmd
+}
+proc ::lichess::api::declineChallenge {id reason cmd} {
+	Request POST /api/challenge/[Segment $id]/decline [::http::formatQuery reason $reason] $cmd
+}
+proc ::lichess::api::cancelChallenge {id cmd} {
+	Request POST /api/challenge/[Segment $id]/cancel {} $cmd
+}
+proc ::lichess::api::botUpgrade {cmd} {
+	Request POST /api/bot/account/upgrade {} $cmd
+}
+proc ::lichess::api::joinArena {id cmd} {
+	Request POST /api/tournament/[Segment $id]/join {} $cmd
+}
+proc ::lichess::api::withdrawArena {id cmd} {
+	Request POST /api/tournament/[Segment $id]/withdraw {} $cmd
+}
+proc ::lichess::api::joinSwiss {id cmd} {
+	Request POST /api/swiss/[Segment $id]/join {} $cmd
+}
+proc ::lichess::api::withdrawSwiss {id cmd} {
+	Request POST /api/swiss/[Segment $id]/withdraw {} $cmd
+}
+proc ::lichess::api::puzzleRace {cmd} {
+	Request POST /api/racer {} $cmd
+}
+proc ::lichess::api::importGame {pgn cmd} {
+	Request POST /api/import [::http::formatQuery pgn $pgn] $cmd
+}
+proc ::lichess::api::studyImportPgn {studyId name pgn orientation variant cmd} {
+	Request POST /api/study/[Segment $studyId]/import-pgn [::http::formatQuery name $name pgn $pgn orientation $orientation variant $variant] $cmd
+}
+proc ::lichess::api::studyCreate {name visibility cmd} {
+	Request POST /api/study [::http::formatQuery name $name visibility $visibility] $cmd
+}
+proc ::lichess::api::challengeUser {user minutes increment rated color variant days cmd} {
+	set form [list rated [expr {$rated ? "true" : "false"}] color $color variant $variant]
+	if {$days eq {}} { lappend form clock.limit [expr {int($minutes*60)}] clock.increment $increment } else { lappend form days $days }
+	Request POST /api/challenge/[Segment $user] [::http::formatQuery {*}$form] $cmd
+}
+proc ::lichess::api::tvFeed {channel cmd} {
+	set path /api/tv/feed
+	if {$channel ne {}} { set path /api/tv/[Segment $channel]/feed }
+	Request GET $path {} $cmd 1
+}
+proc ::lichess::api::streamGameMoves {gameId cmd} {
+	Request GET /api/stream/game/[Segment $gameId] {} $cmd 1
+}
+proc ::lichess::api::broadcastRoundStream {roundId cmd} {
+	Request GET /api/stream/broadcast/round/[Segment $roundId].pgn {} $cmd 1 {} application/x-www-form-urlencoded pgn
+}
+proc ::lichess::api::JsonString {value} {
+	set result {"}
+	foreach char [split $value {}] {
+		scan $char %c code
+		if {$char eq {"}} { append result {\"}
+		} elseif {$code == 92} { append result {\\}
+		} elseif {$code < 32} { append result [format {\u%04x} $code]
+		} else { append result $char }
+	}
+	append result {"}
+	return $result
+}
+# solutions is a Tcl list of dicts with id, win and rated fields.
+proc ::lichess::api::puzzleBatchSolved {angle solutions cmd} {
+	set items {}
+	foreach solution $solutions {
+		lappend items [format {{"id":%s,"win":%s,"rated":%s}} [JsonString [dict get $solution id]] \
+			[expr {[dict get $solution win] ? "true" : "false"}] [expr {[dict get $solution rated] ? "true" : "false"}]]
+	}
+	Request POST /api/puzzle/batch/[Segment $angle] [format {{"solutions":[%s]}} [join $items ,]] $cmd 0 {} application/json
+}
+proc ::lichess::api::botStreamGame {id cmd} { Request GET /api/bot/game/stream/[Segment $id] {} $cmd 1 }
+proc ::lichess::api::BotAction {id action cmd {form {}}} {
+	Request POST /api/bot/game/[Segment $id]/$action $form [list ::lichess::api::ActionReply $cmd 0]
+}
+proc ::lichess::api::botMove {id uci cmd} { BotAction $id move/[Segment $uci] $cmd }
+proc ::lichess::api::botResign {id cmd} { BotAction $id resign $cmd }
+proc ::lichess::api::botAbort {id cmd} { BotAction $id abort $cmd }
+proc ::lichess::api::botDraw {id answer cmd} { BotAction $id draw/[Segment $answer] $cmd }
+proc ::lichess::api::botTakeback {id answer cmd} { BotAction $id takeback/[Segment $answer] $cmd }
+proc ::lichess::api::botChat {id text cmd} { BotAction $id chat $cmd [::http::formatQuery room player text $text] }
 
 # PKCE uses OS entropy, never Tcl's non-cryptographic rand(). A platform
 # without an entropy source fails closed and offers personal-token sign in.
@@ -414,7 +634,7 @@ proc ::lichess::api::signIn {cmd} {
 		timer [after 180000 [list ::lichess::api::AuthFinish [dict create ok 0 error $mc::SignIn]]]]
 	variable Base
 	set url "[string trimright $Base /]/oauth?[::http::formatQuery response_type code client_id chesswiz \
-		redirect_uri $redirect code_challenge_method S256 code_challenge $challenge scope board:play state $state]"
+		redirect_uri $redirect code_challenge_method S256 code_challenge $challenge scope {board:play challenge:read challenge:write puzzle:read study:read study:write team:read team:write msg:write tournament:write bot:play preference:read} state $state]"
 	if {[catch {OpenBrowser $url}]} { AuthFinish [dict create ok 0 error $mc::SignIn] }
 }
 proc ::lichess::api::AuthAccept {sock address port} {

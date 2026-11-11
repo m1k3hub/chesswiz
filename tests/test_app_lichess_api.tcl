@@ -1,12 +1,23 @@
 # Loopback-only API tests, independent of job C's fixture.
 package require tcltest 2.5
-package require json
+if {[catch {package require json}]} {
+	# Conda Tcl omits the system Tcllib directory from auto_path.
+	foreach dir [glob -nocomplain /usr/share/tcltk/tcllib*] { lappend auto_path $dir }
+	package require json
+}
 if {[info exists ::application::Vars(ready)]} {
 	source [file join [file dirname [info script]] app_wait.tcl]
 	::scidb::test::wait::ready
 }
 if {![llength [info commands ::lichess::api::signIn]]} {
 	source [file join [file dirname [info script]] .. tcl lichess-api.tcl]
+}
+if {![llength [info commands ::scidb::sys::randomBytes]]} {
+	namespace eval ::scidb::sys {}
+	proc ::scidb::sys::randomBytes {n} {
+		set ch [open /dev/urandom rb]
+		try { return [read $ch $n] } finally { close $ch }
+	}
 }
 namespace eval ::lichess::apitest {
 	variable Stored {}
@@ -147,7 +158,7 @@ proc ::lichess::api::OpenBrowser {url} {
 	set q [::lichess::apitest::Query [string range $url [expr {[string first ? $url]+1}] end]]
 	set ::lichess::apitest::Challenge [dict get $q code_challenge]
 	set ::lichess::apitest::Redirect [dict get $q redirect_uri]
-	set ::lichess::apitest::OAuthValid [expr {[dict get $q scope] eq "board:play" &&
+	set ::lichess::apitest::OAuthValid [expr {[dict get $q scope] eq "board:play challenge:read challenge:write puzzle:read study:read study:write team:read team:write msg:write tournament:write bot:play preference:read" &&
 		[dict get $q response_type] eq "code" && [dict get $q code_challenge_method] eq "S256"}]
 	set redirect [dict get $q redirect_uri]
 	set state [dict get $q state]
