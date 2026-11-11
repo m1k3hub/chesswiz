@@ -127,19 +127,20 @@ tcltest::test icc-game-controls {draw/takeback offers, accept/decline, adjourn a
     list $ok [expr {[string first {[Result "*"]} $::icc::Priv(finalPgn)] >= 0}]
 } -cleanup { ::scidb::test::icc::Release } -result {1 1}
 
-tcltest::test icc-menu {ICC action follows FICS in the Training menu} -body {
-    ::menu::AddICC
-    ::menu::AddICC
+tcltest::test icc-menu {ICC is in the Training menu next to the other servers and opens its lobby} -body {
+    if {![info exists ::menu::DropdownTree] || ![llength $::menu::DropdownTree]} { ::menu::DefineTree }
     set ids {}
     foreach top $::menu::DropdownTree {
         if {[lindex $top 1] eq "Training"} {
             foreach row [lindex $top 3] { lappend ids [lindex $row 1] }
         }
     }
-    list [expr {[lsearch -exact $ids menu.training.play_icc] == [lsearch -exact $ids menu.training.play_online]+1}] \
-        [llength [lsearch -all -exact $ids menu.training.play_icc]] \
-        [dict get [::action::get menu.training.play_icc] handler]
-} -result {1 1 ::menu::OpenICC}
+    set tab [::action::invoke menu.training.play_icc]
+    set ok [string match .online* $tab]
+    ::icc::Close
+    list [expr {[lsearch -exact $ids menu.training.play_icc] == [lsearch -exact $ids menu.training.play_lichess]+1}] \
+        [llength [lsearch -all -exact $ids menu.training.play_icc]] $ok
+} -result {1 1 1}
 
 foreach {command result} {Resign 0-1 Abort *} {
     tcltest::test icc-end-$command {game termination commands and stored result} -body [format {

@@ -315,6 +315,7 @@ proc ::lichess::tv::OnTvEvent {event} {
 			}
 			set Priv(whiteCard) $white
 			set Priv(blackCard) $black
+			if {[dict exists $d id]} { set Priv(gameId) [dict get $d id] }
 			set fen [NormalizeFen [expr {[dict exists $d fen] ? [dict get $d fen] : "startpos"}]]
 			set Priv(currentFen) $fen
 			if {$Priv(view) ne "" && [::online::view::exists $Priv(view)]} {
