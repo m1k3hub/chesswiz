@@ -1343,11 +1343,13 @@ proc ::lichess::AnalyseOnLichess {{pgn ""}} {
 			set pgn [::online::view::pgn $Priv(view) [dict create Event "Lichess game"] *]
 		} elseif {![catch { ::scidb::game::toPGN original } g] && [string trim $g] ne ""} {
 			set pgn $g
-		} else {
-			# nothing to analyse: never post a made-up game to the account
-			Status $mc::AnalyseNoGame
-			return 0
 		}
+	}
+	# nothing to analyse: never post an empty or made-up game to the account
+	regsub -all -line {^\s*\[.*$} $pgn {} movetext
+	if {![regexp {\d+\.\s*[A-Za-z]} $movetext]} {
+		Status $mc::AnalyseNoGame
+		return 0
 	}
 	::lichess::api::importGame $pgn [namespace code OnGameImported]
 	return 1
