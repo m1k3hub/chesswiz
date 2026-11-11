@@ -594,6 +594,10 @@ foreach {id purpose keywords} {
 	menu.training.play_engine "Play a game against a chess engine (the computer)." {play against computer engine stockfish game opponent bot}
 	menu.training.play_online "Play people online on the Free Internet Chess Server (FICS)." {play online internet server fics people human opponent seek}
 	menu.training.play_lichess "Play people or the Lichess computer online on lichess.org." {play online internet lichess people human opponent seek computer}
+	menu.training.lichess_social "Look up Lichess players, view rating history, challenge players, message and join teams." {lichess players teams profile rating history challenge message social}
+	menu.training.lichess_tv "Watch live Lichess TV channels, games and tournament broadcasts." {lichess tv watch live broadcast channels games}
+	menu.training.lichess_events "Browse, join and withdraw from Lichess Arena and Swiss tournaments and simuls." {lichess tournaments arena swiss simul events join}
+	menu.training.lichess_puzzles "Solve Lichess daily and themed puzzles, run Puzzle Storm and open Puzzle Racer." {lichess puzzles daily tactical storm racer solve}
 	menu.training.stream "Show your board, eval and clocks on Twitch or YouTube through OBS." {stream streaming livestream twitch youtube obs overlay broadcast live}
 	menu.training.tactics "Open the tactics trainer with puzzles." {tactics puzzles puzzle trainer exercises combinations}
 	menu.training.endgame "Open the endgame trainer." {endgame endgames trainer practise practice}
@@ -2303,6 +2307,10 @@ dict set ::knowledge::Explicit menu.training.guess when {When practicing predict
 dict set ::knowledge::Explicit menu.training.play_engine when {When you want the computer to play the opposing side.}
 dict set ::knowledge::Explicit menu.training.play_online when {When you want to play a person over the internet.}
 dict set ::knowledge::Explicit menu.training.play_lichess when {When you want to play on Lichess.}
+dict set ::knowledge::Explicit menu.training.lichess_social when {When you want to look up, challenge or message Lichess players or manage teams.}
+dict set ::knowledge::Explicit menu.training.lichess_tv when {When you want to watch Lichess TV or live tournament broadcasts.}
+dict set ::knowledge::Explicit menu.training.lichess_events when {When you want to join Lichess Arena or Swiss tournaments or simuls.}
+dict set ::knowledge::Explicit menu.training.lichess_puzzles when {When you want to solve Lichess puzzles or run Puzzle Storm.}
 dict set ::knowledge::Explicit menu.training.stream when {When you stream or broadcast your chess live.}
 dict set ::knowledge::Explicit menu.training.repertoire when {When rehearsing the moves of your prepared openings.}
 dict set ::knowledge::Explicit menu.training.studyplan when {When deciding what to practice based on your own games.}

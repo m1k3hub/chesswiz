@@ -75,8 +75,24 @@ set ClaimVictory			"Claim victory"
 set OpponentGone			"Your opponent has left. You can claim victory."
 set BackToLobby				"Back to lobby"
 set NoClockTime				"\u2014"
+set Variant					"Variant:"
+set CorrespondenceDays		"Correspondence days:"
+set BotGroup				"Bot API & analysis tools"
+set BotMode					"Use Bot API mode"
+set BotUpgrade				"Upgrade to Bot account…"
+set BotUpgradeWarning		"Upgrading this Lichess account to a Bot account is permanent and irreversible. Only accounts that have played 0 games can be upgraded. Continue?"
+set BotUpgraded				"Account upgraded to a Lichess Bot account."
+set CloudEval				"Cloud eval"
+set CloudEvalNone			"No cloud evaluation for this position."
+set AnalyseOnLichess		"Analyse on Lichess"
+set AnalyseOpened			"Opened Lichess analysis: %s"
 
 } ;# namespace mc
+
+variable Variants {
+	standard chess960 crazyhouse antichess atomic
+	horde kingOfTheHill racingKings threeCheck fromPosition
+}
 
 # There is deliberately no token entry here. Only ordinary game defaults
 # survive through the options writer; credentials belong to the API.
@@ -85,6 +101,9 @@ array set Options {
 	increment		0
 	rated			0
 	color			random
+	variant			standard
+	days			{}
+	botMode			0
 	aiLevel			3
 	aiMinutes		5
 	aiIncrement		3
@@ -114,7 +133,11 @@ array set Priv {
 	serverMoves		{}
 	pendingMove		{}
 	drawOffer		0
+	takebackOffer	0
 	opponentGone	0
+	botMode			0
+	cloudEvalText	{}
+	exportedPgn		{}
 	clock:w			0
 	clock:b			0
 	clockAt			0
@@ -135,6 +158,7 @@ array set Priv {
 proc ::lichess::open {parent} {
 	variable Priv
 	variable Options
+	variable Variants
 	variable mc
 
 	foreach number [::application::analysis::Running] {
@@ -194,12 +218,22 @@ proc ::lichess::open {parent} {
 		-values [list $mc::Random $mc::White $mc::Black] \
 		-textvariable [namespace current]::Priv(dlg:color)] -row 3 -column 1 -sticky w \
 		-padx [list $::theme::padx 0]
+	grid [ttk::label $sf.variantLabel -text $mc::Variant] -row 4 -column 0 -sticky w
+	grid [ttk::combobox $sf.variant -state readonly -width 14 \
+		-values $Variants \
+		-textvariable [namespace current]::Priv(dlg:variant)] -row 4 -column 1 -sticky w \
+		-padx [list $::theme::padx 0]
+	grid [ttk::label $sf.daysLabel -text $mc::CorrespondenceDays] -row 5 -column 0 -sticky w
+	grid [ttk::combobox $sf.days -width 6 \
+		-values {{} 1 2 3 5 7 10 14} \
+		-textvariable [namespace current]::Priv(dlg:days)] -row 5 -column 1 -sticky w \
+		-padx [list $::theme::padx 0]
 	grid [ttk::label $sf.rule -text $mc::SeekRule -wraplength 340 -justify left] \
-		-row 4 -column 0 -columnspan 2 -sticky w -pady [list $::theme::pady 0]
+		-row 6 -column 0 -columnspan 2 -sticky w -pady [list $::theme::pady 0]
 	grid [ttk::button $sf.seek -text $mc::Seek -command [namespace code Seek]] \
-		-row 5 -column 0 -sticky w
+		-row 7 -column 0 -sticky w
 	grid [ttk::button $sf.cancel -text $mc::CancelSeek -command [namespace code CancelSeek]] \
-		-row 5 -column 1 -sticky w -padx [list $::theme::padx 0]
+		-row 7 -column 1 -sticky w -padx [list $::theme::padx 0]
 	grid columnconfigure $sf 1 -weight 1
 	pack $sf -fill x -pady [list $::theme::pady 0]
 
@@ -227,6 +261,39 @@ proc ::lichess::open {parent} {
 		-row 5 -column 0 -columnspan 2 -sticky w
 	grid columnconfigure $af 1 -weight 1
 	pack $af -fill x -pady [list $::theme::pady 0]
+
+	set bf [ttk::labelframe $l.bot -text $mc::BotGroup]
+	grid [ttk::checkbutton $bf.mode -text $mc::BotMode \
+		-variable [namespace current]::Priv(botMode) \
+		-command [namespace code ToggleBotMode]] -row 0 -column 0 -sticky w
+	grid [ttk::button $bf.upgrade -text $mc::BotUpgrade \
+		-command [namespace code UpgradeToBot]] -row 0 -column 1 -sticky w \
+		-padx [list $::theme::padx 0]
+	grid [ttk::button $bf.cloudEval -text $mc::CloudEval \
+		-command [namespace code RequestCloudEval]] -row 1 -column 0 -sticky w \
+		-pady [list $::theme::pady 0]
+	grid [ttk::button $bf.analyseLichess -text $mc::AnalyseOnLichess \
+		-command [namespace code AnalyseOnLichess]] -row 1 -column 1 -sticky w \
+		-padx [list $::theme::padx 0] -pady [list $::theme::pady 0]
+	grid [ttk::label $bf.evalText -anchor w -justify left -wraplength 360 \
+		-textvariable [namespace current]::Priv(cloudEvalText)] \
+		-row 2 -column 0 -columnspan 2 -sticky ew -pady [list $::theme::pady 0]
+	grid columnconfigure $bf 1 -weight 1
+	pack $bf -fill x -pady [list $::theme::pady 0]
+
+	set tabsBar [ttk::frame $l.tabsBar]
+	ttk::button $tabsBar.social -text "Lichess players" \
+		-command {::lichess::social::open .application}
+	ttk::button $tabsBar.tv -text "Lichess TV" \
+		-command {::lichess::tv::open .application}
+	ttk::button $tabsBar.events -text "Lichess tournaments" \
+		-command {::lichess::events::open .application}
+	ttk::button $tabsBar.puzzles -text "Lichess puzzles" \
+		-command {::lichess::puzzles::open .application}
+	pack $tabsBar.social $tabsBar.tv $tabsBar.events $tabsBar.puzzles \
+		-side left -padx [list 0 $::theme::padx]
+	pack $tabsBar -fill x -pady [list $::theme::pady 0]
+
 	ttk::button $l.signout -text $mc::SignOut -command [namespace code SignOut]
 	pack $l.signout -anchor w
 
@@ -245,10 +312,12 @@ proc ::lichess::open {parent} {
 	set Priv(widget:back) $ok
 
 	set Priv(dlg:token) {}
-	foreach {key option} {minutes minutes increment increment rated rated aiLevel aiLevel \
+	foreach {key option} {minutes minutes increment increment rated rated \
+		variant variant days days aiLevel aiLevel \
 		aiMinutes aiMinutes aiIncrement aiIncrement} {
 		set Priv(dlg:$key) $Options($option)
 	}
+	set Priv(botMode) $Options(botMode)
 	set Priv(dlg:color) [ColourLabel $Options(color)]
 	set Priv(dlg:aiColor) [ColourLabel $Options(aiColor)]
 
@@ -428,6 +497,11 @@ proc ::lichess::OnEvent {event} {
 		gameStart {
 			if {[dict exists $event game]} { OpenGame [dict get $event game] }
 		}
+		challenge - challengeCanceled - challengeDeclined {
+			if {[llength [info commands ::lichess::social::OnEvent]]} {
+				::lichess::social::OnEvent $event
+			}
+		}
 		closed {
 			set Priv(eventHandle) {}
 			if {[SessionExpired $event]} { return }
@@ -524,15 +598,19 @@ proc ::lichess::Seek {} {
 		set increment $Priv(dlg:increment)
 		set rated $Priv(dlg:rated)
 		set colour [ColourValue $Priv(dlg:color)]
+		set variant [expr {[info exists Priv(dlg:variant)] && $Priv(dlg:variant) ne "" ? $Priv(dlg:variant) : "standard"}]
+		set days [expr {[info exists Priv(dlg:days)] ? [string trim $Priv(dlg:days)] : ""}]
 	} else {
 		set minutes $Options(minutes)
 		set increment $Options(increment)
 		set rated $Options(rated)
 		set colour $Options(color)
+		set variant [expr {[info exists Options(variant)] && $Options(variant) ne "" ? $Options(variant) : "standard"}]
+		set days [expr {[info exists Options(days)] ? [string trim $Options(days)] : ""}]
 	}
 	set minutes [Integer $minutes 10 0 180]
 	set increment [Integer $increment 0 0 60]
-	if {$minutes * 60 + 40 * $increment < 480} {
+	if {$days eq "" && $minutes * 60 + 40 * $increment < 480} {
 		Status $mc::SeekTooFast
 		return 0
 	}
@@ -541,9 +619,16 @@ proc ::lichess::Seek {} {
 	set Options(increment) $increment
 	set Options(rated) $rated
 	set Options(color) $colour
+	set Options(variant) $variant
+	set Options(days) $days
 	Status $mc::Seeking
-	set Priv(seekHandle) [::lichess::api::seek $minutes $increment $rated $colour \
-		[namespace code SeekClosed]]
+	if {$variant eq "standard" && $days eq ""} {
+		set Priv(seekHandle) [::lichess::api::seek $minutes $increment $rated $colour \
+			[namespace code SeekClosed]]
+	} else {
+		set Priv(seekHandle) [::lichess::api::seek $minutes $increment $rated $colour \
+			[namespace code SeekClosed] $variant $days]
+	}
 	return $Priv(seekHandle)
 }
 
@@ -690,12 +775,33 @@ proc ::lichess::StartBoard {full} {
 	set Priv(opponentGone) 0
 	set Priv(finalPgn) {}
 	ShowView game
+	if {[llength [info commands ::lichess::api::chatHistory]] && $Priv(gameId) ne ""} {
+		::lichess::api::chatHistory $Priv(gameId) \
+			[namespace code [list OnChatHistory $Priv(gameId)]]
+	}
 	if {[dict exists $full state]} {
 		SyncState [dict get $full state]
 	} else {
 		StatusForTurn
 	}
 	return 1
+}
+
+
+proc ::lichess::OnChatHistory {gameId reply} {
+	variable Priv
+	if {!$Priv(active) || $gameId ne $Priv(gameId) || ![ViewExists]} { return }
+	if {![dict exists $reply ok] || ![dict get $reply ok]} { return }
+	set lines [expr {[dict exists $reply data] ? [dict get $reply data] : {}}]
+	foreach item $lines {
+		if {[catch {dict size $item}]} { continue }
+		set who [expr {[dict exists $item user] ? [dict get $item user] : \
+			[dict exists $item username] ? [dict get $item username] : "?"}]
+		set text [expr {[dict exists $item text] ? [dict get $item text] : ""}]
+		if {$text ne ""} {
+			::online::view::chat $Priv(view) $who $text
+		}
+	}
 }
 
 
@@ -1102,6 +1208,178 @@ proc ::lichess::Takeback {answer} {
 	if {$Priv(active) && $Priv(state) eq "playing"} {
 		::lichess::api::takeback $Priv(gameId) $answer [namespace code ActionResult]
 	}
+}
+
+
+proc ::lichess::OfferTakeback {} {
+	Takeback yes
+}
+
+
+proc ::lichess::AcceptTakeback {} {
+	Takeback yes
+}
+
+
+proc ::lichess::DeclineTakeback {} {
+	Takeback no
+}
+
+
+proc ::lichess::SendChat {text} {
+	variable Priv
+	set text [string trim $text]
+	if {$text eq "" || $Priv(gameId) eq ""} { return 0 }
+	::lichess::api::chat $Priv(gameId) $text [namespace code ActionResult]
+	if {[ViewExists]} {
+		::online::view::chat $Priv(view) $Priv(username) $text
+	}
+	return 1
+}
+
+
+# ======================================================================
+# Bot mode, Cloud eval, Analyse on Lichess, and Game export
+# ======================================================================
+
+proc ::lichess::ToggleBotMode {{on ""}} {
+	variable Priv
+	variable Options
+	if {$on ne ""} { set Priv(botMode) [expr {$on ? 1 : 0}] }
+	set Options(botMode) [expr {$Priv(botMode) ? 1 : 0}]
+	set mode [expr {$Options(botMode) ? "bot" : "board"}]
+	if {[llength [info commands ::lichess::api::mode]]} {
+		::lichess::api::mode $mode
+	}
+	return $mode
+}
+
+
+proc ::lichess::UpgradeToBot {{confirm 0}} {
+	variable Priv
+	variable mc
+	if {!$confirm} {
+		set parent [expr {[DialogExists] ? $Priv(dialog) : ".application"}]
+		if {[::dialog::question -parent $parent -message $mc::BotUpgradeWarning] ne "yes"} {
+			return 0
+		}
+	}
+	::lichess::api::botUpgrade [namespace code OnBotUpgraded]
+	return 1
+}
+
+
+proc ::lichess::OnBotUpgraded {reply} {
+	variable Priv
+	variable mc
+	if {[dict exists $reply ok] && [dict get $reply ok]} {
+		ToggleBotMode 1
+		Status $mc::BotUpgraded
+	} else {
+		Status [expr {[dict exists $reply error] ? [dict get $reply error] : "Could not upgrade to Bot account."}]
+	}
+}
+
+
+proc ::lichess::CurrentFen {} {
+	variable Priv
+	if {[ViewExists]} { return [::online::view::fen $Priv(view)] }
+	if {![catch { ::scidb::pos::fen } fen] && $fen ne ""} { return $fen }
+	return "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+}
+
+
+proc ::lichess::RequestCloudEval {{fen ""} {multiPv 3}} {
+	variable Priv
+	if {$fen eq ""} { set fen [CurrentFen] }
+	::lichess::api::cloudEval $fen $multiPv [namespace code OnCloudEval]
+	return 1
+}
+
+
+proc ::lichess::OnCloudEval {reply} {
+	variable Priv
+	variable mc
+	if {![dict exists $reply ok] || ![dict get $reply ok]} {
+		set msg [expr {[dict exists $reply error] && [dict get $reply error] ne "" ? \
+			[dict get $reply error] : $mc::CloudEvalNone}]
+		set Priv(cloudEvalText) $msg
+		Status $msg
+		return
+	}
+	set d [expr {[dict exists $reply data] ? [dict get $reply data] : $reply}]
+	set depth [expr {[dict exists $d depth] ? [dict get $d depth] : "?"}]
+	set knodes [expr {[dict exists $d knodes] ? [dict get $d knodes] : 0}]
+	set lines {}
+	if {[dict exists $d pvs]} {
+		foreach pv [dict get $d pvs] {
+			if {[catch {dict size $pv}]} { continue }
+			if {[dict exists $pv mate]} {
+				set score "#[dict get $pv mate]"
+			} elseif {[dict exists $pv cp]} {
+				set score [format "%+.2f" [expr {[dict get $pv cp] / 100.0}]]
+			} else {
+				set score "0.00"
+			}
+			set moves [expr {[dict exists $pv moves] ? [dict get $pv moves] : ""}]
+			lappend lines "$score: $moves"
+		}
+	}
+	set text "Depth $depth (${knodes}k nodes): [join $lines { | }]"
+	set Priv(cloudEvalText) $text
+	Status $text
+}
+
+
+proc ::lichess::AnalyseOnLichess {{pgn ""}} {
+	variable Priv
+	if {$pgn eq ""} {
+		if {[info exists Priv(finalPgn)] && $Priv(finalPgn) ne ""} {
+			set pgn $Priv(finalPgn)
+		} elseif {[ViewExists]} {
+			set pgn [::online::view::pgn $Priv(view) [dict create Event "Lichess game"] *]
+		} elseif {![catch { ::scidb::game::toPGN original } g] && [string trim $g] ne ""} {
+			set pgn $g
+		} else {
+			set pgn "1. e4 e5 *"
+		}
+	}
+	::lichess::api::importGame $pgn [namespace code OnGameImported]
+	return 1
+}
+
+
+proc ::lichess::OnGameImported {reply} {
+	variable Priv
+	variable mc
+	if {![dict exists $reply ok] || ![dict get $reply ok]} {
+		Status [expr {[dict exists $reply error] ? [dict get $reply error] : "Could not import game to Lichess."}]
+		return
+	}
+	set d [expr {[dict exists $reply data] ? [dict get $reply data] : $reply}]
+	set id [expr {[dict exists $d id] ? [dict get $d id] : ""}]
+	set base [expr {[info exists ::lichess::api::Base] ? [string trimright $::lichess::api::Base /] : "https://lichess.org"}]
+	set url [expr {[dict exists $d url] && [dict get $d url] ne "" ? [dict get $d url] : "$base/$id"}]
+	catch { ::lichess::api::OpenBrowser $url }
+	Status [format $mc::AnalyseOpened $url]
+}
+
+
+proc ::lichess::ExportGamePgn {id} {
+	::lichess::api::gameExport $id [namespace code [list OnGameExported $id]]
+	return 1
+}
+
+
+proc ::lichess::OnGameExported {id reply} {
+	variable Priv
+	if {![dict exists $reply ok] || ![dict get $reply ok]} {
+		Status [expr {[dict exists $reply error] ? [dict get $reply error] : "Could not export game."}]
+		return
+	}
+	set pgn [expr {[dict exists $reply data] ? [dict get $reply data] : ""}]
+	set Priv(exportedPgn) $pgn
+	Status "Exported game $id."
 }
 
 

@@ -188,6 +188,10 @@ SOURCES = \
 	ics.tcl \
 	lichess-api.tcl \
 	lichess.tcl \
+	lichess-social.tcl \
+	lichess-tv.tcl \
+	lichess-events.tcl \
+	lichess-puzzles.tcl \
 	stream-chat.tcl \
 	stream.tcl \
 	engine-match.tcl \

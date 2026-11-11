@@ -66,6 +66,16 @@ set Rejected				"Lichess rejected the PGN: %s"
 set Failed					"Upload failed (%s)"
 set GameSource				"Current game"
 set DatabaseSource			"Database '%s'"
+set UserStudies				"My Lichess studies"
+set UserLabel				"Lichess username:"
+set LoadStudies				"Load studies"
+set NewStudyGroup			"Create new study"
+set NewStudyName			"Study name:"
+set VisibilityLabel			"Visibility:"
+set CreateStudy				"Create study"
+set StudyCreated			"Created study %s (%s)."
+set OrientationLabel		"Orientation:"
+set VariantLabel			"Variant:"
 
 } ;# namespace mc
 
@@ -76,13 +86,22 @@ array set Options {
 variable Timeout 120000
 
 array set Priv {
-	dialog	{}
-	parent	{}
-	base		""
-	variant	"Normal"
-	view		0
-	kind		"database"
-	running	0
+	dialog			{}
+	parent			{}
+	base			""
+	variant			"Normal"
+	view			0
+	kind			"database"
+	running			0
+	user			""
+	studies			{}
+	study			""
+	name			""
+	orientation		"white"
+	studyVariant	"standard"
+	newStudyName	""
+	visibility		"unlisted"
+	statusText		""
 }
 
 } ;# namespace study
@@ -283,19 +302,80 @@ proc ::application::lichess::study::open {parent args} {
 	pack $source -fill x
 
 	set target [ttk::labelframe $top.target -text " $mc::Study " -padding $::theme::padx]
+
+	# User studies browser (studiesOf)
+	set uframe [ttk::frame $target.uframe]
+	ttk::label $uframe.ulbl -text $mc::UserLabel
+	ttk::entry $uframe.uentry -width 18 -textvariable [namespace current]::Priv(user)
+	ttk::button $uframe.load -text $mc::LoadStudies -command [namespace code LoadStudies]
+	pack $uframe.ulbl -side left
+	pack $uframe.uentry -side left -padx 4
+	pack $uframe.load -side left
+	pack $uframe -fill x -pady [list 0 $::theme::pady]
+
+	set stree [ttk::treeview $target.studies -height 4 -selectmode browse \
+		-columns {id name} -show headings]
+	$stree heading id -text "ID"
+	$stree heading name -text "Study"
+	$stree column id -width 95 -anchor w
+	$stree column name -width 260 -stretch 1 -anchor w
+	bind $stree <<TreeviewSelect>> [namespace code OnSelectStudy]
+	pack $stree -fill both -expand yes -pady [list 0 $::theme::pady]
+	set Priv(widget:studies) $stree
+
+	# Create new study section (studyCreate)
+	set cframe [ttk::labelframe $target.create -text " $mc::NewStudyGroup " -padding 4]
+	ttk::label $cframe.nlbl -text $mc::NewStudyName
+	ttk::entry $cframe.nentry -width 20 -textvariable [namespace current]::Priv(newStudyName)
+	ttk::label $cframe.vlbl -text $mc::VisibilityLabel
+	ttk::combobox $cframe.vcombo -state readonly -width 10 \
+		-values {public unlisted private} \
+		-textvariable [namespace current]::Priv(visibility)
+	ttk::button $cframe.btn -text $mc::CreateStudy -command [namespace code CreateStudy]
+	grid $cframe.nlbl -row 0 -column 0 -sticky w
+	grid $cframe.nentry -row 0 -column 1 -sticky ew -padx 4
+	grid $cframe.vlbl -row 0 -column 2 -sticky w -padx {4 0}
+	grid $cframe.vcombo -row 0 -column 3 -sticky w -padx 4
+	grid $cframe.btn -row 0 -column 4 -sticky e
+	grid columnconfigure $cframe 1 -weight 1
+	pack $cframe -fill x -pady [list 0 $::theme::pady]
+
 	ttk::label $target.detail -text $mc::StudyDetail -wraplength 420 -justify left
 	ttk::entry $target.entry -textvariable [namespace current]::Priv(study)
 	ttk::label $target.lname -text $mc::OptionalName
 	ttk::entry $target.name -textvariable [namespace current]::Priv(name)
+
+	set opts [ttk::frame $target.opts]
+	ttk::label $opts.olbl -text $mc::OrientationLabel
+	ttk::combobox $opts.ocombo -state readonly -width 8 \
+		-values {white black} \
+		-textvariable [namespace current]::Priv(orientation)
+	ttk::label $opts.vlbl -text $mc::VariantLabel
+	ttk::combobox $opts.vcombo -state readonly -width 14 \
+		-values {standard chess960 crazyhouse antichess atomic horde kingOfTheHill racingKings threeCheck fromPosition} \
+		-textvariable [namespace current]::Priv(studyVariant)
+	pack $opts.olbl -side left
+	pack $opts.ocombo -side left -padx 4
+	pack $opts.vlbl -side left -padx {8 0}
+	pack $opts.vcombo -side left -padx 4
+
 	ttk::label $target.ltoken -text $mc::Token
 	ttk::entry $target.token -show * -width 40 -textvariable [TokenVar]
 	pack $target.detail -anchor w -pady [list 0 $::theme::pady]
 	pack $target.entry -fill x
 	pack $target.lname -anchor w -pady [list $::theme::pady 0]
 	pack $target.name -fill x
+	pack $opts -fill x -pady [list $::theme::pady 0]
 	pack $target.ltoken -anchor w -pady [list $::theme::pady 0]
 	pack $target.token -fill x
 	pack $target -fill x -pady [list $::theme::pady 0]
+
+	if {$Priv(user) eq "" && [info exists ::lichess::Priv(username)] && $::lichess::Priv(username) ne ""} {
+		set Priv(user) $::lichess::Priv(username)
+	}
+	if {$Priv(user) ne "" && [llength [info commands ::lichess::api::studiesOf]]} {
+		LoadStudies
+	}
 
 	ttk::label $top.status -wraplength 440 -justify left
 	pack $top.status -fill x
@@ -331,10 +411,143 @@ proc ::application::lichess::study::DialogExists {} {
 
 proc ::application::lichess::study::Status {text} {
 	variable Priv
+	set Priv(statusText) $text
 	if {[DialogExists]} {
 		$Priv(status) configure -text $text
 	}
 	return
+}
+
+
+# ----------------------------------------------------------------------
+# Study list (studiesOf), creation (studyCreate), and import (studyImportPgn)
+# ----------------------------------------------------------------------
+
+proc ::application::lichess::study::LoadStudies {{user ""}} {
+	variable Priv
+	if {$user ne ""} { set Priv(user) $user }
+	set u [string trim $Priv(user)]
+	if {$u eq "" || ![llength [info commands ::lichess::api::studiesOf]]} { return 0 }
+	::lichess::api::studiesOf $u [namespace code OnStudiesLoaded]
+	return 1
+}
+
+
+proc ::application::lichess::study::OnStudiesLoaded {reply} {
+	variable Priv
+	if {![dict exists $reply ok] || ![dict get $reply ok]} {
+		Status [expr {[dict exists $reply error] ? [dict get $reply error] : "Could not load studies."}]
+		return
+	}
+	set items [expr {[dict exists $reply data] ? [dict get $reply data] : {}}]
+	set Priv(studies) $items
+	if {[info exists Priv(widget:studies)] && [winfo exists $Priv(widget:studies)]} {
+		set tree $Priv(widget:studies)
+		$tree delete [$tree children {}]
+		foreach item $items {
+			if {[catch {dict size $item}]} { continue }
+			set id [expr {[dict exists $item id] ? [dict get $item id] : ""}]
+			if {$id eq ""} { continue }
+			set name [expr {[dict exists $item name] ? [dict get $item name] : $id}]
+			if {![$tree exists $id]} {
+				$tree insert {} end -id $id -values [list $id $name]
+			}
+			if {$Priv(study) eq ""} { set Priv(study) $id }
+		}
+	}
+}
+
+
+proc ::application::lichess::study::OnSelectStudy {} {
+	variable Priv
+	if {![info exists Priv(widget:studies)] || ![winfo exists $Priv(widget:studies)]} { return }
+	set sel [$Priv(widget:studies) selection]
+	if {[llength $sel]} {
+		set Priv(study) [lindex $sel 0]
+	}
+}
+
+
+proc ::application::lichess::study::CreateStudy {{name ""} {visibility ""}} {
+	variable Priv
+	if {$name ne ""} { set Priv(newStudyName) $name }
+	if {$visibility ne ""} { set Priv(visibility) $visibility }
+	set sname [string trim $Priv(newStudyName)]
+	set vis [expr {$Priv(visibility) in {public unlisted private} ? $Priv(visibility) : "unlisted"}]
+	if {$sname eq "" || ![llength [info commands ::lichess::api::studyCreate]]} { return 0 }
+	::lichess::api::studyCreate $sname $vis [namespace code [list OnStudyCreated $sname]]
+	return 1
+}
+
+
+proc ::application::lichess::study::OnStudyCreated {fallbackName reply} {
+	variable Priv
+	variable mc
+	if {![dict exists $reply ok] || ![dict get $reply ok]} {
+		Status [expr {[dict exists $reply error] ? [dict get $reply error] : "Could not create study."}]
+		return
+	}
+	set d [expr {[dict exists $reply data] ? [dict get $reply data] : $reply}]
+	set id [expr {[dict exists $d id] ? [dict get $d id] : ""}]
+	set name [expr {[dict exists $d name] && [dict get $d name] ne "" ? [dict get $d name] : $fallbackName}]
+	if {$id ne ""} {
+		set Priv(study) $id
+		lappend Priv(studies) [dict create id $id name $name]
+		if {[info exists Priv(widget:studies)] && [winfo exists $Priv(widget:studies)]} {
+			set tree $Priv(widget:studies)
+			if {![$tree exists $id]} {
+				$tree insert {} end -id $id -values [list $id $name]
+			}
+		}
+	}
+	Status [format $mc::StudyCreated $name $id]
+}
+
+
+proc ::application::lichess::study::SendPgnToStudy {studyId name pgn {orientation white} {variant standard}} {
+	variable Priv
+	variable mc
+	set Priv(running) 1
+	Status $mc::Uploading
+	::lichess::api::studyImportPgn $studyId $name $pgn $orientation $variant \
+		[namespace code [list OnApiUploaded $studyId]]
+	return 1
+}
+
+
+proc ::application::lichess::study::OnApiUploaded {id reply} {
+	variable Priv
+	variable mc
+	set Priv(running) 0
+	if {![dict exists $reply ok] || ![dict get $reply ok]} {
+		set msg [expr {[dict exists $reply error] && [dict get $reply error] ne "" ? \
+			[dict get $reply error] : [errorText [expr {[dict exists $reply status] ? [dict get $reply status] : 0}] ""]}]
+		Status $msg
+		if {[DialogExists]} {
+			$Priv(dialog).ok configure -state normal
+			$Priv(dialog).cancel configure -state normal
+		}
+		return
+	}
+	set d [expr {[dict exists $reply data] ? [dict get $reply data] : $reply}]
+	set chapter ""
+	if {![catch {dict size $d}]} {
+		if {[dict exists $d chapters] && [llength [dict get $d chapters]]} {
+			set first [lindex [dict get $d chapters] 0]
+			if {![catch {dict exists $first id}] && [dict exists $first id]} {
+				set chapter [dict get $first id]
+			}
+		} elseif {[dict exists $d id]} {
+			set chapter [dict get $d id]
+		}
+	}
+	set url "https://lichess.org/study/$id"
+	if {$chapter ne ""} { append url "/$chapter" }
+	Status [format $mc::Uploaded $url]
+	if {[DialogExists]} {
+		$Priv(dialog).ok configure -text $mc::Close -command [namespace code Close] -state normal
+		$Priv(dialog).cancel configure -state disabled
+	}
 }
 
 
@@ -368,8 +581,9 @@ proc ::application::lichess::study::Upload {} {
 	}
 	lassign $entry id chapter
 
+	set useApi [llength [info commands ::lichess::api::studyImportPgn]]
 	set token [Token]
-	if {$token eq ""} {
+	if {!$useApi && $token eq ""} {
 		Status $mc::NeedToken
 		return
 	}
@@ -388,6 +602,13 @@ proc ::application::lichess::study::Upload {} {
 	if {[DialogExists]} {
 		$Priv(dialog).ok configure -state disabled
 		$Priv(dialog).cancel configure -state disabled
+	}
+
+	if {$useApi} {
+		set orient [expr {$Priv(orientation) in {white black} ? $Priv(orientation) : "white"}]
+		set svar [expr {$Priv(studyVariant) ne "" ? $Priv(studyVariant) : "standard"}]
+		SendPgnToStudy $id [string trim $Priv(name)] $pgn $orient $svar
+		return
 	}
 
 	set request [importRequest $id $pgn $token [string trim $Priv(name)]]

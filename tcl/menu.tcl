@@ -108,6 +108,10 @@ set EndgameTrainer			"Endgame &Trainer..."
 set PlayAgainstEngine			"Play Against &Engine..."
 set PlayOnline					"Play &Online (FICS)..."
 set PlayLichess				"Play Online (&Lichess)..."
+set LichessSocial				"Lichess &Players..."
+set LichessTv					"Lichess &TV..."
+set LichessEvents				"Lichess T&ournaments..."
+set LichessPuzzles			"Lichess Pu&zzles..."
 set EngineMatch					"Engine Mat&ch..."
 
 # Tools
