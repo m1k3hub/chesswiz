@@ -38,7 +38,7 @@ proc ::scidb::test::lint::Setup {} {
 proc ::scidb::test::lint::Cleanup {} {
 	variable SavedBase
 	foreach ns {social tv events puzzles} {
-		catch { ::online::window::closeTab lichess:$ns }
+		catch { ::online::window::closeTab lichess-$ns }
 		catch { ::lichess::tv::StopStream }
 	}
 	::lichess::fake::Stop
@@ -131,5 +131,52 @@ tcltest::test lichess-int-puzzle {the daily puzzle loads onto a board and solvin
 	set solution $::lichess::puzzles::Priv(solution)
 	list [llength $solution] [expr {$::lichess::puzzles::Priv(startFen) ne ""}]
 } -cleanup { ::scidb::test::lint::Cleanup } -result {2 1}
+
+tcltest::test lichess-int-stream-switch {switching streams keeps the new one: the old stream's late close is ignored} -setup {
+	::scidb::test::lint::Setup
+} -body {
+	::lichess::tv::open .application
+	::lichess::tv::WatchSelectedChannel Best
+	::scidb::test::wait::until {$::lichess::tv::Priv(gameId) eq "tv1"}
+	::lichess::tv::FollowBroadcastRound round1
+	::scidb::test::wait::until {[::scidb::test::lint::Saw /api/stream/broadcast/round/round1.pgn]}
+	# let the first stream's close be delivered
+	after 300 {set ::scidb::test::lint::paused 1}; vwait ::scidb::test::lint::paused
+	set kept [expr {$::lichess::tv::Priv(streamHandle) ne "" && $::lichess::tv::Priv(streamKind) eq "broadcastRound"}]
+	::lichess::fake::EmitBroadcastPgn round1 "\[Event \"Live\"\]\n\[White \"Ann\"\]\n\[Black \"Bob\"\]\n\n1. d4 d5 *\n"
+	::lichess::fake::EmitBroadcastPgn round1 "\[Event \"Live\"\]\n\[White \"Cy\"\]\n\[Black \"Di\"\]\n\n1. e4 *\n"
+	::scidb::test::wait::until {[llength $::lichess::tv::Priv(roundGames)] == 2}
+	# the board stays on the first game while another game moves
+	set follow $::lichess::tv::Priv(followKey)
+	::lichess::tv::StopStream
+	list $kept $follow $::lichess::tv::Priv(streamHandle) [::scidb::test::lint::Saw /api/tv/best/feed]
+} -cleanup { ::scidb::test::lint::Cleanup } -result {1 Ann|Bob {} 1}
+
+tcltest::test lichess-int-tab-close {closing the TV tab ends its stream} -setup {
+	::scidb::test::lint::Setup
+} -body {
+	::lichess::tv::open .application
+	::lichess::tv::WatchSelectedChannel Best
+	::scidb::test::wait::until {$::lichess::tv::Priv(gameId) eq "tv1"}
+	::online::window::closeTab lichess-tv
+	update
+	set ::lichess::tv::Priv(streamHandle)
+} -cleanup { ::scidb::test::lint::Cleanup } -result {}
+
+tcltest::test lichess-int-puzzle-mate {any mating move solves a puzzle, not only the listed one} -setup {
+	::scidb::test::lint::Setup
+} -body {
+	::lichess::puzzles::open .application
+	array set ::lichess::puzzles::Priv {
+		puzzleId mateTwoWays state solving failedOnce 0 reported 1 stormActive 0
+		currentFen {6k1/5ppp/8/8/8/8/8/R3R1K1 w - - 0 1}
+	}
+	set ::lichess::puzzles::Priv(remaining) {a1a8}
+	set solved [::lichess::puzzles::CheckUserMove e1e8 0]
+	set ::lichess::puzzles::Priv(state) solving
+	set ::lichess::puzzles::Priv(remaining) {a1a8}
+	set ::lichess::puzzles::Priv(currentFen) {6k1/5ppp/8/8/8/8/8/R3R1K1 w - - 0 1}
+	list $solved [::lichess::puzzles::CheckUserMove a1a7 0] $::lichess::puzzles::Priv(state)
+} -cleanup { ::scidb::test::lint::Cleanup } -result {1 0 wrong}
 
 tcltest::cleanupTests

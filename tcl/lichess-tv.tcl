@@ -52,6 +52,8 @@ array set Priv {
 	roundId			{}
 	streamHandle	{}
 	streamKind		{}
+	streamSerial	0
+	followKey		{}
 	broadcasts		{}
 	roundGames		{}
 	currentFen		{}
@@ -179,6 +181,10 @@ proc ::lichess::tv::open {{parent .application}} {
 		-textvariable [namespace current]::Priv(statusText)
 	pack $tab.status -side bottom -fill x -pady {6 0}
 
+	# no stream may outlive the tab, or run behind a closed window
+	bind $top <Destroy> [namespace code { if {"%W" eq $Priv(widget:top)} { StopStream } }]
+	bind [winfo toplevel $tab] <<OnlineWindowHidden>> +[namespace code StopStream]
+
 	RefreshChannels
 	RefreshBroadcasts
 	return $tab
@@ -205,11 +211,15 @@ proc ::lichess::tv::ViewAction {action args} {
 
 proc ::lichess::tv::StopStream {} {
 	variable Priv
+	variable mc
 	if {$Priv(streamHandle) ne ""} {
 		set h $Priv(streamHandle)
 		set Priv(streamHandle) {}
 		set Priv(streamKind) {}
+		# the close is reported later; by then another stream may be running
+		incr Priv(streamSerial)
 		catch { ::lichess::api::close $h }
+		Status $mc::StreamClosed
 	}
 }
 
@@ -281,14 +291,16 @@ proc ::lichess::tv::WatchSelectedChannel {{channel ""}} {
 	StopStream
 	set Priv(streamKind) tvFeed
 	Status [format $mc::WatchingChannel $ch]
-	set Priv(streamHandle) [::lichess::api::tvFeed $ch [namespace code OnTvEvent]]
+	set Priv(streamHandle) [::lichess::api::tvFeed $ch \
+		[namespace code [list OnTvEvent [incr Priv(streamSerial)]]]]
 	return $Priv(streamHandle)
 }
 
 
-proc ::lichess::tv::OnTvEvent {event} {
+proc ::lichess::tv::OnTvEvent {serial event} {
 	variable Priv
 	variable mc
+	if {$serial != $Priv(streamSerial)} { return }
 	if {[dict exists $event type] && [dict get $event type] eq "closed"} {
 		set Priv(streamHandle) {}
 		set Priv(streamKind) {}
@@ -342,14 +354,16 @@ proc ::lichess::tv::WatchGame {{gameId ""}} {
 	StopStream
 	set Priv(streamKind) gameMoves
 	Status [format $mc::WatchingGame $id]
-	set Priv(streamHandle) [::lichess::api::streamGameMoves $id [namespace code OnGameMoveEvent]]
+	set Priv(streamHandle) [::lichess::api::streamGameMoves $id \
+		[namespace code [list OnGameMoveEvent [incr Priv(streamSerial)]]]]
 	return $Priv(streamHandle)
 }
 
 
-proc ::lichess::tv::OnGameMoveEvent {event} {
+proc ::lichess::tv::OnGameMoveEvent {serial event} {
 	variable Priv
 	variable mc
+	if {$serial != $Priv(streamSerial)} { return }
 	if {[dict exists $event type] && [dict get $event type] eq "closed"} {
 		set Priv(streamHandle) {}
 		set Priv(streamKind) {}
@@ -504,15 +518,17 @@ proc ::lichess::tv::FollowBroadcastRound {{roundId ""}} {
 	}
 	set Priv(streamKind) broadcastRound
 	Status [format $mc::FollowingRound $rid 0]
+	set Priv(followKey) {}
 	set Priv(streamHandle) [::lichess::api::broadcastRoundStream $rid \
-		[namespace code [list OnBroadcastPgn $rid]]]
+		[namespace code [list OnBroadcastPgn [incr Priv(streamSerial)] $rid]]]
 	return $Priv(streamHandle)
 }
 
 
-proc ::lichess::tv::OnBroadcastPgn {rid event} {
+proc ::lichess::tv::OnBroadcastPgn {serial rid event} {
 	variable Priv
 	variable mc
+	if {$serial != $Priv(streamSerial)} { return }
 	if {[dict exists $event type] && [dict get $event type] eq "closed"} {
 		set Priv(streamHandle) {}
 		set Priv(streamKind) {}
@@ -546,10 +562,15 @@ proc ::lichess::tv::OnBroadcastPgn {rid event} {
 			$tree insert {} end -id $idx -values [list \
 				[dict get $g white] [dict get $g black] \
 				[dict get $g result] [join [dict get $g sans] " "]]
+			if {"[dict get $g white]|[dict get $g black]" eq $Priv(followKey)} {
+				set Priv(reselecting) 1
+				$tree selection set $idx
+			}
 			incr idx
 		}
 	}
-	ShowRoundGame $parsed
+	if {$Priv(followKey) eq ""} { set Priv(followKey) $key }
+	if {$key eq $Priv(followKey)} { ShowRoundGame $parsed }
 	Status [format $mc::FollowingRound $rid [llength $Priv(roundGames)]]
 }
 
@@ -602,7 +623,13 @@ proc ::lichess::tv::OnSelectRoundGame {} {
 	if {![llength $sel]} { return }
 	set idx [lindex $sel 0]
 	if {[string is integer -strict $idx] && $idx >= 0 && $idx < [llength $Priv(roundGames)]} {
-		ShowRoundGame [lindex $Priv(roundGames) $idx]
+		set g [lindex $Priv(roundGames) $idx]
+		set key "[dict get $g white]|[dict get $g black]"
+		# the list re-selects the followed game after each update
+		if {$key eq $Priv(followKey) && [info exists Priv(reselecting)]} { unset Priv(reselecting); return }
+		unset -nocomplain Priv(reselecting)
+		set Priv(followKey) $key
+		ShowRoundGame $g
 	}
 }
 

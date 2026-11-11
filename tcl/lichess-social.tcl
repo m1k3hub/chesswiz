@@ -294,6 +294,8 @@ proc ::lichess::social::Lookup {{username ""}} {
 proc ::lichess::social::OnUser {name reply} {
 	variable Priv
 	variable mc
+	# an answer for an earlier lookup must not replace the current one
+	if {$name ne [string trim $Priv(lookupUser)]} { return }
 	if {![dict exists $reply ok] || ![dict get $reply ok]} {
 		set why [expr {[dict exists $reply error] ? [dict get $reply error] : [format $mc::UserNotFound $name]}]
 		set Priv(profileText) $why
@@ -326,6 +328,7 @@ proc ::lichess::social::OnUser {name reply} {
 
 proc ::lichess::social::OnRatingHistory {name reply} {
 	variable Priv
+	if {$name ne [string trim $Priv(lookupUser)]} { return }
 	if {![dict exists $reply ok] || ![dict get $reply ok]} { return }
 	set Priv(ratingHistory) [expr {[dict exists $reply data] ? [dict get $reply data] : {}}]
 	DrawRatingChart
@@ -411,6 +414,7 @@ proc ::lichess::social::DrawRatingChart {} {
 
 proc ::lichess::social::OnTeams {name reply} {
 	variable Priv
+	if {$name ne [string trim $Priv(lookupUser)]} { return }
 	if {![dict exists $reply ok] || ![dict get $reply ok]} { return }
 	set Priv(teams) [expr {[dict exists $reply data] ? [dict get $reply data] : {}}]
 	if {![info exists Priv(widget:teams)] || ![winfo exists $Priv(widget:teams)]} { return }
@@ -701,16 +705,19 @@ proc ::lichess::social::SendMessage {{user ""} {text ""}} {
 		return 0
 	}
 	set Priv(messageText) {}
-	::lichess::api::sendMessage $target $msg [namespace code [list OnMessageSent $target]]
+	::lichess::api::sendMessage $target $msg [namespace code [list OnMessageSent $target $msg]]
 	return 1
 }
 
 
-proc ::lichess::social::OnMessageSent {target reply} {
+proc ::lichess::social::OnMessageSent {target msg reply} {
+	variable Priv
 	variable mc
 	if {[dict exists $reply ok] && [dict get $reply ok]} {
 		Status [format $mc::MessageSent $target]
 	} else {
+		# give the unsent text back
+		if {$Priv(messageText) eq ""} { set Priv(messageText) $msg }
 		Status [expr {[dict exists $reply error] ? [dict get $reply error] : "Could not send message."}]
 	}
 }

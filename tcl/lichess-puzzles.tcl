@@ -219,6 +219,8 @@ proc ::lichess::puzzles::open {{parent .application}} {
 	ttk::label $tab.status -anchor w -justify left -wraplength 700 \
 		-textvariable [namespace current]::Priv(statusText)
 	pack $tab.status -side bottom -fill x -pady {6 0}
+	# a storm run ends with its tab
+	bind $viewPath <Destroy> +[namespace code { if {"%W" eq $Priv(view) && $Priv(stormActive)} { StopStorm } }]
 
 	return $tab
 }
@@ -422,6 +424,14 @@ proc ::lichess::puzzles::CheckUserMove {uci fromBoard} {
 	variable mc
 	if {$Priv(state) ne "solving" || ![llength $Priv(remaining)]} { return 0 }
 	set expected [lindex $Priv(remaining) 0]
+	# as on Lichess, any move that mates solves the puzzle
+	if {$uci ne $expected} {
+		set facts [::online::view::Facts $uci $Priv(currentFen)]
+		if {$facts ne "" && [dict get $facts mate]} {
+			set Priv(remaining) [list $uci]
+			set expected $uci
+		}
+	}
 	if {$uci ne $expected} {
 		set Priv(failedOnce) 1
 		set Priv(state) wrong
@@ -430,6 +440,8 @@ proc ::lichess::puzzles::CheckUserMove {uci fromBoard} {
 		}
 		Status [format $mc::WrongMove $uci]
 		ReportSolved 0
+		# a storm run moves on; it must not wait on a failed puzzle
+		if {$Priv(stormActive)} { FetchNext }
 		return 0
 	}
 
@@ -662,7 +674,9 @@ proc ::lichess::puzzles::OnRacerCreated {reply} {
 	set d [expr {[dict exists $reply data] ? [dict get $reply data] : $reply}]
 	set id [expr {[dict exists $d id] ? [dict get $d id] : ""}]
 	set base [expr {[info exists ::lichess::api::Base] ? [string trimright $::lichess::api::Base /] : "https://lichess.org"}]
-	set url [expr {[dict exists $d url] && [dict get $d url] ne "" ? [dict get $d url] : "$base/racer/$id"}]
+	# only a Lichess address is handed to the browser
+	set url "$base/racer/[::lichess::api::Segment $id]"
+	if {[dict exists $d url] && [string match "$base/*" [dict get $d url]]} { set url [dict get $d url] }
 	set Priv(racerUrl) $url
 	catch { ::lichess::api::OpenBrowser $url }
 	Status [format $mc::RacerOpened $id]

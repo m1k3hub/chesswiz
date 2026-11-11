@@ -504,13 +504,13 @@ proc ::application::lichess::study::OnStudyCreated {fallbackName reply} {
 }
 
 
-proc ::application::lichess::study::SendPgnToStudy {studyId name pgn {orientation white} {variant standard}} {
+proc ::application::lichess::study::SendPgnToStudy {studyId name pgn {orientation white} {variant standard} {token {}}} {
 	variable Priv
 	variable mc
 	set Priv(running) 1
 	Status $mc::Uploading
 	::lichess::api::studyImportPgn $studyId $name $pgn $orientation $variant \
-		[namespace code [list OnApiUploaded $studyId]]
+		[namespace code [list OnApiUploaded $studyId]] $token
 	return 1
 }
 
@@ -583,7 +583,8 @@ proc ::application::lichess::study::Upload {} {
 
 	set useApi [llength [info commands ::lichess::api::studyImportPgn]]
 	set token [Token]
-	if {!$useApi && $token eq ""} {
+	# the dialog's own token, else the Lichess sign-in; one of them is needed
+	if {$token eq "" && !($useApi && [::lichess::api::signedIn?])} {
 		Status $mc::NeedToken
 		return
 	}
@@ -607,7 +608,7 @@ proc ::application::lichess::study::Upload {} {
 	if {$useApi} {
 		set orient [expr {$Priv(orientation) in {white black} ? $Priv(orientation) : "white"}]
 		set svar [expr {$Priv(studyVariant) ne "" ? $Priv(studyVariant) : "standard"}]
-		SendPgnToStudy $id [string trim $Priv(name)] $pgn $orient $svar
+		SendPgnToStudy $id [string trim $Priv(name)] $pgn $orient $svar $token
 		return
 	}
 

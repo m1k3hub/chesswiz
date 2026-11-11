@@ -194,7 +194,7 @@ namespace eval ::lichess::phase2 {
 			set path [dict get [Last] path]
 			switch $name {
 				tvFeed {
-					Check $path [expr {$arg eq {} ? "/api/tv/feed" : "/api/tv/$arg/feed"}]
+					Check $path [expr {$arg eq {} ? "/api/tv/feed" : "/api/tv/[::lichess::api::TvChannelKey $arg]/feed"}]
 					Wait {[llength $Events] == 1}
 					Check [dict get [lindex $Events 0] t] featured
 					::lichess::fake::EmitTv [dict create t fen d [dict create fen position lm e2e4 wc 10 bc 20]]
@@ -297,7 +297,7 @@ namespace eval ::lichess::phase2 {
 		}
 	}
 
-	foreach row {{tvFeed Best /api/tv/Best/feed} {streamGameMoves tv1 /api/stream/game/tv1} {broadcastRoundStream round1 /api/stream/broadcast/round/round1.pgn} {botStreamGame missing /api/bot/game/stream/missing}} {
+	foreach row {{tvFeed Best /api/tv/best/feed} {streamGameMoves tv1 /api/stream/game/tv1} {broadcastRoundStream round1 /api/stream/broadcast/round/round1.pgn} {botStreamGame missing /api/bot/game/stream/missing}} {
 		lassign $row name arg expectedPath
 		foreach status {401 404 429 500} {
 			tcltest::test phase2-stream-error-$name-$status {stream HTTP failures close exactly once} -setup { Start } -body {
@@ -340,6 +340,24 @@ namespace eval ::lichess::phase2 {
 		update
 		list [llength $Events] [dict get [lindex $Events 0] text] [dict get [lindex $Events 3] type]
 	} -cleanup { catch {dict unset ::lichess::api::Requests pure} } -result [list 4 "\[Event \"Bób\"\]\n\n1. e4 *" closed]
+
+	tcltest::test phase2-pgn-single {a lone game is delivered without waiting for the next one} -body {
+		set Events {}
+		dict set ::lichess::api::Requests pure [dict create cmd ::lichess::phase2::Event stream 1 response pgn buffer {} timer {}]
+		foreach byte [split "\[Event \"One\"\]\r\n\[White \"A\"\]\r\n\r\n1. e4 e5 *\r\n\r\n" {}] { ::lichess::api::Lines pure $byte }
+		update
+		list [llength $Events] [dict get [lindex $Events 0] text]
+	} -cleanup { catch {dict unset ::lichess::api::Requests pure} } -result [list 1 "\[Event \"One\"\]\n\[White \"A\"\]\n\n1. e4 e5 *"]
+
+	tcltest::test phase2-tv-channel-key {channel names become the camel-case keys of the feed address} -body {
+		lmap name {Best best {Top Rated} {King of the Hill} UltraBullet Three-check {Racing Kings} Chess960 kingOfTheHill} {
+			::lichess::api::TvChannelKey $name
+		}
+	} -result {best best best kingOfTheHill ultraBullet threeCheck racingKings chess960 kingOfTheHill}
+
+	tcltest::test phase2-path-segment {a space in a path segment is %20, never +} -body {
+		::lichess::api::Segment {a b+c/d}
+	} -result {a%20b%2Bc%2Fd}
 
 	tcltest::test phase2-shapes {JSON container checks distinguish arrays from objects} -body {
 		list [::lichess::api::ParseJson {[]} array] [::lichess::api::ParseJson {{}} object] \

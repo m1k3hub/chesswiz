@@ -520,7 +520,7 @@ proc ::lichess::events::OpenSimulInBrowser {{id ""}} {
 		return 0
 	}
 	set base [expr {[info exists ::lichess::api::Base] ? [string trimright $::lichess::api::Base /] : "https://lichess.org"}]
-	set url "$base/simul/$sid"
+	set url "$base/simul/[::lichess::api::Segment $sid]"
 	catch { ::lichess::api::OpenBrowser $url }
 	Status [format $mc::OpenedSimul $sid]
 	return $url

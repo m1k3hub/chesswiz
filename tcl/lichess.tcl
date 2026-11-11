@@ -86,6 +86,7 @@ set CloudEval				"Cloud eval"
 set CloudEvalNone			"No cloud evaluation for this position."
 set AnalyseOnLichess		"Analyse on Lichess"
 set AnalyseOpened			"Opened Lichess analysis: %s"
+set AnalyseNoGame			"There is no game to analyse."
 
 } ;# namespace mc
 
@@ -318,6 +319,8 @@ proc ::lichess::open {parent} {
 		set Priv(dlg:$key) $Options($option)
 	}
 	set Priv(botMode) $Options(botMode)
+	# the saved choice must reach the API, not only the checkbox
+	ToggleBotMode
 	set Priv(dlg:color) [ColourLabel $Options(color)]
 	set Priv(dlg:aiColor) [ColourLabel $Options(aiColor)]
 
@@ -1341,7 +1344,9 @@ proc ::lichess::AnalyseOnLichess {{pgn ""}} {
 		} elseif {![catch { ::scidb::game::toPGN original } g] && [string trim $g] ne ""} {
 			set pgn $g
 		} else {
-			set pgn "1. e4 e5 *"
+			# nothing to analyse: never post a made-up game to the account
+			Status $mc::AnalyseNoGame
+			return 0
 		}
 	}
 	::lichess::api::importGame $pgn [namespace code OnGameImported]
@@ -1359,7 +1364,9 @@ proc ::lichess::OnGameImported {reply} {
 	set d [expr {[dict exists $reply data] ? [dict get $reply data] : $reply}]
 	set id [expr {[dict exists $d id] ? [dict get $d id] : ""}]
 	set base [expr {[info exists ::lichess::api::Base] ? [string trimright $::lichess::api::Base /] : "https://lichess.org"}]
-	set url [expr {[dict exists $d url] && [dict get $d url] ne "" ? [dict get $d url] : "$base/$id"}]
+	# only a Lichess address is handed to the browser
+	set url "$base/[::lichess::api::Segment $id]"
+	if {[dict exists $d url] && [string match "$base/*" [dict get $d url]]} { set url [dict get $d url] }
 	catch { ::lichess::api::OpenBrowser $url }
 	Status [format $mc::AnalyseOpened $url]
 }

@@ -331,7 +331,7 @@ proc ::scidb::test::lichess2::Stub {} {
 		lappend ::scidb::test::lichess2::calls [list studyCreate $name $visibility]
 		set ::scidb::test::lichess2::studyCreateCmd $cmd
 	}
-	proc ::lichess::api::studyImportPgn {studyId name pgn orientation variant cmd} {
+	proc ::lichess::api::studyImportPgn {studyId name pgn orientation variant cmd {bearer {}}} {
 		lappend ::scidb::test::lichess2::calls [list studyImportPgn $studyId $name $pgn $orientation $variant]
 		set ::scidb::test::lichess2::studyImportPgnCmd $cmd
 	}

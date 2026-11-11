@@ -49,8 +49,16 @@ proc open {} {
 	ttk::label $Path.status -anchor w -padding {8 2}
 	pack $Path.status -side bottom -fill x
 	pack $Path.tabs -fill both -expand yes -padx 4 -pady 4
-	wm protocol $Path WM_DELETE_WINDOW [list wm withdraw $Path]
+	# tabs stop their live streams when the window is closed
+	wm protocol $Path WM_DELETE_WINDOW [list [namespace current]::Hide]
 	return $Path
+}
+
+
+proc Hide {} {
+	variable Path
+	event generate $Path <<OnlineWindowHidden>>
+	wm withdraw $Path
 }
 
 
