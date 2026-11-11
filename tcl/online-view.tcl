@@ -181,11 +181,17 @@ proc create {w backend side} {
 
 
 # A board for solving (puzzles): no clocks, chat or game actions but Flip.
-proc trainer {w} {
+proc spectator {w} {
 	variable ${w}::V
 	foreach key {resign draw takeback abort claim} { grid remove $V(button:$key) }
-	foreach where {top bottom} { grid remove $V(card:$where).clock }
 	grid remove [winfo parent $V(chatText)]
+}
+
+
+proc trainer {w} {
+	variable ${w}::V
+	spectator $w
+	foreach where {top bottom} { grid remove $V(card:$where).clock }
 }
 
 

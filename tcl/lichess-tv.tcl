@@ -171,6 +171,7 @@ proc ::lichess::tv::open {{parent .application}} {
 	# Right column: embedded read-only ::online::view
 	set viewPath $right.view
 	::online::view::create $viewPath [namespace code ViewAction] {}
+	::online::view::spectator $viewPath
 	pack $viewPath -fill both -expand yes
 	set Priv(view) $viewPath
 
