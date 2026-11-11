@@ -105,6 +105,7 @@ proc DoCmd {cmd parent {value 0}} {
 		}
 
 		start {
+			unset -nocomplain Priv(painted)
 			set Priv(value) 0
 			::dialog::progressbar::setMaximum .progress $value
 			array set opts $Priv(options)
@@ -122,8 +123,14 @@ proc DoCmd {cmd parent {value 0}} {
 		}
 
 		update - finish {
+			# Repaint at most every 50 ms: an update on Aqua waits for a
+			# screen frame, and a load reports progress a thousand times.
 			set Priv(value) $value
-			update
+			set now [clock milliseconds]
+			if {$cmd eq "finish" || ![info exists Priv(painted)] || $now - $Priv(painted) >= 50} {
+				set Priv(painted) $now
+				update
+			}
 		}
 
 		ticks {
