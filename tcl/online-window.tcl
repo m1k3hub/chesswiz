@@ -44,6 +44,8 @@ proc open {} {
 	set height [expr {min(900, $sh - 120)}]
 	wm geometry $Path ${width}x${height}+[expr {($sw - $width) / 2}]+[expr {($sh - $height) / 3}]
 	ttk::notebook $Path.tabs
+	# each tab reports its own status; a stale one would describe another tab
+	bind $Path.tabs <<NotebookTabChanged>> [list [namespace current]::status {}]
 	ttk::label $Path.status -anchor w -padding {8 2}
 	pack $Path.status -side bottom -fill x
 	pack $Path.tabs -fill both -expand yes -padx 4 -pady 4

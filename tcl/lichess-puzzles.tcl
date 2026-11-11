@@ -212,6 +212,7 @@ proc ::lichess::puzzles::open {{parent .application}} {
 	# Right column: interactive board view
 	set viewPath $right.view
 	::online::view::create $viewPath [namespace code ViewAction] w
+	::online::view::trainer $viewPath
 	pack $viewPath -fill both -expand yes
 	set Priv(view) $viewPath
 
