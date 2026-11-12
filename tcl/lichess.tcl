@@ -68,6 +68,7 @@ set WhiteClock				"White"
 set BlackClock				"Black"
 set YourMove				"Your move."
 set WaitingMove				"Waiting for %s's move."
+set MoveFailed "%s; the move was taken back."
 set MoveRejected			"Lichess rejected %s; the move was taken back."
 set InvalidMove				"That move could not be sent to Lichess; it was taken back."
 set NotYourTurn				"Wait for the opponent's move."
@@ -195,7 +196,6 @@ proc ::lichess::open {parent} {
 	set Priv(dialog) $dlg
 
 	set top [ttk::frame $dlg.top]
-	pack $top -fill both -expand yes
 
 	### sign in ############################################################
 	set s [ttk::frame $top.signin]
@@ -332,6 +332,8 @@ proc ::lichess::open {parent} {
 	pack $buttons -side bottom -anchor w -pady [list $::theme::pady 0]
 	ttk::label $dlg.status -wraplength 600 -justify left
 	pack $dlg.status -side bottom -fill x -pady [list $::theme::pady 0]
+	# Reserve the status and action rows before the expanding lobby.
+	pack $top -fill both -expand yes
 	set Priv(widget:status) $dlg.status
 	set ok $buttons.ok
 	set cancel $buttons.cancel
@@ -466,6 +468,12 @@ proc ::lichess::SignedIn {reply} {
 	set Priv(signingIn) 0
 	if {[info exists Priv(dlg:token)]} { set Priv(dlg:token) {} }
 	if {![dict exists $reply ok] || ![dict get $reply ok]} {
+		if {[SessionExpired $reply]} { return }
+		if {[::lichess::api::signedIn?]} {
+			set Priv(state) lobby
+			AccountResult $reply
+			return
+		}
 		set Priv(state) offline
 		ShowView signin
 		Status [expr {[dict exists $reply error] ? [dict get $reply error] : "Sign in failed."}]
@@ -562,9 +570,21 @@ proc ::lichess::AccountResult {reply} {
 		Status [format $mc::SignedInAs $Priv(username)]
 	} else {
 		set why [expr {[dict exists $reply error] ? [dict get $reply error] : "Account lookup failed."}]
-		SignOut
+		if {[SessionExpired $reply]} { return }
+		ShowView lobby
+		$Priv(widget:ok) configure -text $::lichess::api::mc::Retry -command [namespace code RetryAccount]
 		Status $why
 	}
+}
+
+
+proc ::lichess::RetryAccount {} {
+	variable Priv
+	variable mc
+	if {$Priv(state) ne "lobby" || $Priv(suspended) || ![DialogExists]} { return }
+	$Priv(widget:ok) state disabled
+	Status $mc::LoadingAccount
+	::lichess::api::account [namespace code AccountResult]
 }
 
 
@@ -1116,7 +1136,14 @@ proc ::lichess::MoveResult {gameId uci ply reply} {
 	# A later stream echo has already accepted this move; an old failure
 	# callback must not take back a position which has moved on.
 	if {[BoardPly] != $ply} { return }
-	RejectMove [format $mc::MoveRejected $uci]
+	if {[dict exists $reply status] && [dict get $reply status] >= 400
+		&& [dict get $reply status] < 500 && [dict get $reply status] != 429} {
+		RejectMove [format $mc::MoveRejected $uci]
+	} elseif {[dict exists $reply error]} {
+		RejectMove [format $mc::MoveFailed [string trimright [dict get $reply error] .]]
+	} else {
+		RejectMove $mc::InvalidMove
+	}
 }
 
 proc ::lichess::RejectMove {why} {

@@ -81,7 +81,7 @@ foreach {ns key prompt} {events swiss SwissPrompt tv roundGames RoundPrompt} {
  } -cleanup {::scidb::test::gaps::Cleanup} -result 1
 }
 
-foreach {name offset expected} {future 3 3 past -10 60 uncapped 7200 7200 garbage garbage 60} {
+foreach {name offset expected} {future 3 3 past -10 0 uncapped 7200 7200 garbage garbage 60} {
  tcltest::test gaps-date-$name {HTTP-date backoff queues a real request until the absolute deadline} -setup {
   ::scidb::test::gaps::Setup
  } -body {

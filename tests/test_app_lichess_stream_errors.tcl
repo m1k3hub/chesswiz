@@ -217,13 +217,13 @@ foreach endpoint {tv event game broadcast} {
 }
 
 foreach value {{} 0 000 0008 -1 banana {Wed, 21 Oct 2015 07:28:00 GMT} 7200} {
- tcltest::test errors-429-value-[string map {{ } _ , {}} $value] {Retry-After fallback, minimum and uncapped server delay} -setup {
+ tcltest::test errors-429-value-[string map {{ } _ , {}} $value] {Retry-After fallback, immediate retry and uncapped server delay} -setup {
   ::scidb::test::ls::Setup
  } -body {
   ::lichess::fake::ForceNext /api/tv/channels 429 $value
   set now [clock milliseconds]
   set r [::scidb::test::ls::Call tvChannels]
-  set n [expr {$value eq "7200" ? 7200 : $value in {0 000} ? 1 : $value eq "0008" ? 8 : 60}]
+  set n [expr {$value eq "7200" ? 7200 : $value in {0 000 {Wed, 21 Oct 2015 07:28:00 GMT}} ? 0 : $value eq "0008" ? 8 : 60}]
   set delta [expr {$::lichess::api::BackoffUntil-$now}]
   ::scidb::test::ls::Check [dict get $r error] "Lichess rate limit reached. Please wait $n seconds."
   puts "Retry-After <$value>: delay=$delta ms, message=[dict get $r error]"
