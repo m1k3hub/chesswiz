@@ -20,7 +20,7 @@ proc ::scidb::test::ls::Setup {} {
  ::lichess::api::signOut
  set ::lichess::api::Base [::lichess::fake::Start]
  set ::lichess::api::BackoffUntil 0
- set ::lichess::fake::Token fixture-stream-credential
+ set ::lichess::fake::Token [::lichess::testToken]
  ::lichess::api::TokenStore $::lichess::fake::Token
  set ::lichess::Priv(state) offline
  set ::lichess::tv::Priv(gameId) {}

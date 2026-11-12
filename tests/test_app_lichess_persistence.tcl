@@ -29,8 +29,8 @@ set ::lichess::api::BackoffUntil 0
 ::lichess::fake::Set stormPuzzle 1
 # A fake-only in-memory credential; never read or write the user's token store.
 rename ::lichess::api::TokenLoad ::scidb::test::persist::OriginalTokenLoad
-proc ::lichess::api::TokenLoad {} {return fixture_persistence}
-set ::lichess::fake::Token fixture_persistence
+proc ::lichess::api::TokenLoad {} {return [::lichess::testToken]}
+set ::lichess::fake::Token [::lichess::testToken]
 set phase [expr {[info exists ::env(CW_PERSIST_PHASE)] ? $::env(CW_PERSIST_PHASE) : "seed"}]
 if {$phase eq "seed"} {
     tcltest::test persist-seed {select/watch/follow via real API and save completed best} -body {

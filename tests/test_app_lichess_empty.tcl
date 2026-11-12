@@ -16,7 +16,7 @@ proc ::scidb::test::empty::Setup {} {
  proc ::lichess::api::TokenLoad {} {return $::scidb::test::empty::Credential}
  proc ::lichess::api::TokenDelete {} {set ::scidb::test::empty::Credential {}}
  set ::lichess::api::Base [::lichess::fake::Start]
- set ::scidb::test::empty::Credential fixture-empty
+ set ::scidb::test::empty::Credential [::lichess::testToken]
  set ::lichess::fake::Token $::scidb::test::empty::Credential
  set ::lichess::api::BackoffUntil 0
  set ::lichess::api::Mode board

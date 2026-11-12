@@ -1,3 +1,4 @@
+source [file join [file dirname [info script]] lichess_test_token.tcl]
 # Loopback-only API tests, independent of job C's fixture.
 package require tcltest 2.5
 if {[catch {package require json}]} {
@@ -97,7 +98,7 @@ proc ::lichess::apitest::Read {ch} {
 	if {[string length $body] < $length} { return }
 	fileevent $ch readable {}
 	regexp {^(\S+) (\S+)} $head -> method path
-	set authorized [expr {[string first {Authorization: Bearer test-secret} $head] >= 0}]
+	set authorized [expr {[string first "Authorization: Bearer [::lichess::testToken]" $head] >= 0}]
 	# Never retain authorization or token-exchange data in the journal.
 	if {$path eq "/api/token"} { set recorded <redacted> } else { set recorded $body }
 	lappend Seen [list $method $path $recorded $authorized]
@@ -108,10 +109,10 @@ proc ::lichess::apitest::Read {ch} {
 			[dict get $form grant_type] eq "authorization_code" &&
 			[::lichess::api::Challenge [dict get $form code_verifier]] eq $::lichess::apitest::Challenge &&
 			[dict get $form redirect_uri] eq $::lichess::apitest::Redirect}]
-		Respond $ch 200 {{"token_type":"Bearer","access_token":"test-secret"}}
+		Respond $ch 200 "{\"token_type\":\"Bearer\",\"access_token\":\"[::lichess::testToken]\"}"
 	} elseif {$Status != 200} {
 		set code $Status; set Status 200
-		Respond $ch $code {{"error":"test-secret echoed by server"}}
+		Respond $ch $code "{\"error\":\"[::lichess::testToken] echoed by server\"}"
 	} elseif {!$authorized} {
 		Respond $ch 401 {{"error":"invalid credential"}}
 	} elseif {[string match */stream/* $path]} {
@@ -203,11 +204,11 @@ namespace eval ::lichess::apitest {
 		foreach code {200 400 401 429} {
 			set Events {}
 			dict set ::lichess::api::Requests pure [dict create cmd ::lichess::apitest::Event stream 0 timer {} watchdog {} deadline {} authenticated 0 validation 0 epoch 0]
-			array set ::http::lichessTest [list http "HTTP/1.1 $code Reply" status ok meta {} body {not json: test-secret}]
+			array set ::http::lichessTest [list http "HTTP/1.1 $code Reply" status ok meta {} body "not json: [::lichess::testToken]"]
 			::lichess::api::Done pure ::http::lichessTest
 			update
 			set r [lindex $Events 0]
-			lappend outcomes [dict get $r ok] [dict get $r status] [expr {[string first test-secret [dict get $r error]] < 0}]
+			lappend outcomes [dict get $r ok] [dict get $r status] [expr {[string first [::lichess::testToken] [dict get $r error]] < 0}]
 		}
 		set outcomes
 	} -cleanup {
@@ -220,7 +221,7 @@ namespace eval ::lichess::apitest {
 		set account [Call account]
 		set bad [Call useToken invalid]
 		list [dict get $auth ok] [dict get $auth username] $ExchangeValid $OAuthValid \
-			[dict get $account id] [dict get $bad status] [expr {$Stored eq "test-secret"}] \
+			[dict get $account id] [dict get $bad status] [expr {$Stored eq [::lichess::testToken]}] \
 			[::lichess::api::signedIn?]
 	} -cleanup { Stop } -result {1 Bob 1 1 bob 401 1 1}
 
@@ -239,7 +240,7 @@ namespace eval ::lichess::apitest {
 		list [dict get $Result ok] [llength $Seen] [::lichess::api::signedIn?]
 	} -cleanup { Stop } -result {0 0 0}
 
-	tcltest::test lichess-api-stream {NDJSON, split HTTP chunks and UTF-8, keep-alives, EOF} -setup { Start; set Stored test-secret } -body {
+	tcltest::test lichess-api-stream {NDJSON, split HTTP chunks and UTF-8, keep-alives, EOF} -setup { Start; set Stored [::lichess::testToken] } -body {
 		set h [::lichess::api::streamEvents ::lichess::apitest::Event]
 		Wait {[llength $Events] == 3}
 		list [dict get [lindex $Events 0] type] [dict get [lindex $Events 0] name] \
@@ -247,7 +248,7 @@ namespace eval ::lichess::apitest {
 			[dict exists $::lichess::api::Requests $h]
 	} -cleanup { Stop } -result {test Bób second closed 0}
 
-	tcltest::test lichess-api-close {closing game/seek handles is idempotent and signals closure} -setup { Start; set Stored test-secret; set Mode hold } -body {
+	tcltest::test lichess-api-close {closing game/seek handles is idempotent and signals closure} -setup { Start; set Stored [::lichess::testToken]; set Mode hold } -body {
 		set h [::lichess::api::streamGame game1234 ::lichess::apitest::Event]
 		Wait {[llength $Events] == 2}
 		::lichess::api::close $h
@@ -261,7 +262,7 @@ namespace eval ::lichess::apitest {
 			[lindex $Seen 0 1] [lindex $Seen 1 2]
 	} -cleanup { Stop } -result {closed closed /api/board/game/stream/game1234 time=10&increment=2&rated=false&color=black}
 
-	tcltest::test lichess-api-actions {AI form and every board POST path, no response token in errors} -setup { Start; set Stored test-secret } -body {
+	tcltest::test lichess-api-actions {AI form and every board POST path, no response token in errors} -setup { Start; set Stored [::lichess::testToken] } -body {
 		set ai [Call challengeAi 3 5 2 white]
 		set oks {}
 		foreach args {{move game1234 e2e4} {resign game1234} {abort game1234} {draw game1234 yes} {draw game1234 no} {claimVictory game1234}} {
@@ -274,12 +275,12 @@ namespace eval ::lichess::apitest {
 			[expr {[string first $Stored [dict get $bad error]] < 0}]
 	} -cleanup { Stop } -result {game1234 level=3&clock.limit=300&clock.increment=2&color=white {1 1 1 1 1 1} {/api/board/game/game1234/move/e2e4 /api/board/game/game1234/resign /api/board/game/game1234/abort /api/board/game/game1234/draw/yes /api/board/game/game1234/draw/no /api/board/game/game1234/claim-victory} 400 1}
 
-	tcltest::test lichess-api-chat {chat posts form data, not a Tcl list} -setup { Start; set Stored test-secret } -body {
+	tcltest::test lichess-api-chat {chat posts form data, not a Tcl list} -setup { Start; set Stored [::lichess::testToken] } -body {
 		set ok [dict get [Call chat game1234 {good game & thanks}] ok]
 		list $ok [lindex $Seen 0 1] [lindex $Seen 0 2]
 	} -cleanup { Stop } -result {1 /api/board/game/game1234/chat room=player&text=good%20game%20%26%20thanks}
 
-	tcltest::test lichess-api-429 {global one-minute cooldown delays new requests and allows cancellation} -setup { Start; set Stored test-secret } -body {
+	tcltest::test lichess-api-429 {global one-minute cooldown delays new requests and allows cancellation} -setup { Start; set Stored [::lichess::testToken] } -body {
 		set Status 429
 		set limited [Call account]
 		set remaining [expr {$::lichess::api::BackoffUntil-[clock milliseconds]}]

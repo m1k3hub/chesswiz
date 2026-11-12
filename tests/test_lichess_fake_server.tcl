@@ -27,7 +27,7 @@ namespace eval ::lichess::faketest {
 	proc SignIn {} {
 		# Keep the server's accepted token separate from the client's store:
 		# an authenticated 401 must clear only the client credential.
-		set ::lichess::fake::Token loopback-only-fixture
+		set ::lichess::fake::Token [::lichess::testToken]
 		::lichess::api::TokenStore $::lichess::fake::Token
 		Check [::lichess::api::signedIn?] 1
 	}

@@ -19,7 +19,7 @@ proc ::scidb::test::lint::Setup {} {
 	variable Credential
 	variable Opened
 	variable SavedBase $::lichess::api::Base
-	set Credential lio_integration
+	set Credential [::lichess::testToken]
 	set Opened {}
 	foreach name {TokenStore TokenLoad TokenDelete OpenBrowser} {
 		rename ::lichess::api::$name ::scidb::test::lint::Original$name

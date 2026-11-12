@@ -31,7 +31,7 @@ proc ::lichess::phase2::Start {} {
 	set Events {}
 	set Replies {}
 	set ::lichess::api::Base [::lichess::fake::Start]
-	set ::lichess::fake::Token fixture-credential
+	set ::lichess::fake::Token [::lichess::testToken]
 	set ::lichess::api::BackoffUntil 0
 	::lichess::api::mode board
 }
@@ -292,7 +292,7 @@ namespace eval ::lichess::phase2 {
 				Check [dict get $r status] $status
 				if {$status == 404 && $name eq "cloudEval"} { Check [dict get $r error] {No cloud evaluation for this position.} }
 				if {$status == 429} { Check [expr {$::lichess::api::BackoffUntil > [clock milliseconds]+59000}] 1 }
-				Check [string match *fixture-credential* [dict get $r error]] 0
+				Check [expr {[string first [::lichess::testToken] [dict get $r error]] < 0}] 1
 				set result ok
 			} -cleanup { Stop } -result ok
 		}

@@ -8,11 +8,11 @@ source [file join [file dirname [info script]] lichess_live_guard.tcl]
 
 proc ::scidb::test::live::FakeSetup {} {
     rename ::lichess::api::TokenLoad ::lichess::api::LiveOriginalTokenLoad
-    proc ::lichess::api::TokenLoad {} { return fixture-live-guard }
+    proc ::lichess::api::TokenLoad {} { return [::lichess::testToken] }
     rename ::lichess::api::TokenDelete ::lichess::api::LiveOriginalTokenDelete
     proc ::lichess::api::TokenDelete {} {}
     set origin [::lichess::fake::Start]
-    set ::lichess::fake::Token fixture-live-guard
+    set ::lichess::fake::Token [::lichess::testToken]
     Install $origin
 }
 proc ::scidb::test::live::FakeCleanup {} {

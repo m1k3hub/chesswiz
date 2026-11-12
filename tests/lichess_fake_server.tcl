@@ -1,3 +1,4 @@
+source [file join [file dirname [info script]] lichess_test_token.tcl]
 # ======================================================================
 # Loopback Lichess Board API server for app tests.
 #
@@ -601,7 +602,7 @@ proc ::lichess::fake::TokenRequest {chan form} {
 		return
 	}
 	incr Serial
-	set Token "lio_fake_[pid]_$Serial"
+	set Token [::lichess::testToken]
 	dict unset AuthCodes $code
 	RespondJson $chan 200 [dict create token_type Bearer access_token $Token expires_in 3600]
 }

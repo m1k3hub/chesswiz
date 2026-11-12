@@ -1,3 +1,4 @@
+source [file join [file dirname [info script]] lichess_test_token.tcl]
 # ======================================================================
 # Scidb App Test — Lichess client (tcl/lichess.tcl)
 # All tests below use local stubs for ::lichess::api commands. The real
@@ -271,7 +272,7 @@ tcltest::test lichess-signin-and-privacy {OAuth sign-in, token sign-in, account 
 	set afterSignOut [list $::lichess::Priv(state) $::lichess::Priv(username) $::lichess::Priv(eventHandle)]
 
 	# 3. Paste a personal token (never saved in Options or Priv)
-	set secret "lio_secret_token_do_not_save"
+	set secret [::lichess::testToken]
 	set ::lichess::Priv(dlg:token) $secret
 	::lichess::UseToken
 	set clearedEntry $::lichess::Priv(dlg:token)
