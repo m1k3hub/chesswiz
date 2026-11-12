@@ -962,6 +962,9 @@ proc ::lichess::api::Exchanged {cmd epoch reply} {
 	if {$epoch != $Epoch} { Reply $cmd [dict create ok 0 error $::lichess::api::mc::Cancelled]; return }
 	if {[dict get $reply ok] && [dict exists $reply data access_token] && [dict get $reply data access_token] ne {}} {
 		useToken [dict get $reply data access_token] $cmd
+	} elseif {![dict get $reply ok] && (![dict exists $reply status] || [dict get $reply status] ni {400 401})} {
+		# Transport, rate-limit and server failures already have useful messages.
+		Reply $cmd $reply
 	} else { Reply $cmd [dict create ok 0 error $::lichess::api::mc::SignIn] }
 }
 

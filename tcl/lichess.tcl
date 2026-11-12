@@ -611,7 +611,9 @@ proc ::lichess::OnEvent {event} {
 		closed {
 			set Priv(eventHandle) {}
 			if {[SessionExpired $event]} { return }
-			if {$Priv(state) ne "offline"} { Status $mc::EventStreamClosed }
+			if {$Priv(state) ne "offline"} {
+				Status [expr {[dict exists $event ok] && [dict get $event ok] ? $mc::EventStreamClosed : [ReplyError $event $mc::EventStreamClosed]}]
+			}
 		}
 	}
 }
@@ -840,7 +842,7 @@ proc ::lichess::OnGame {gen event} {
 			set Priv(gameHandle) {}
 			if {[SessionExpired $event]} { return }
 			if {$Priv(active) && $Priv(state) eq "playing"} {
-				Status $mc::GameStreamClosed
+				Status [expr {[dict exists $event ok] && [dict get $event ok] ? $mc::GameStreamClosed : [ReplyError $event $mc::GameStreamClosed]}]
 			}
 		}
 	}
@@ -1680,8 +1682,9 @@ proc ::lichess::ListMessage {tree text {clear 0}} {
 proc ::lichess::ListResult {tree emptyText} {
  ListMessage $tree [expr {[llength [$tree children {}]] ? "" : $emptyText}]
 }
-proc ::lichess::ReplyError {reply} {
+proc ::lichess::ReplyError {reply {fallback {}}} {
  if {[dict exists $reply error]} { return [dict get $reply error] }
+ if {$fallback ne {}} { return $fallback }
  return $::lichess::mc::LoadFailed
 }
 proc ::lichess::RefreshPlaying {} {
