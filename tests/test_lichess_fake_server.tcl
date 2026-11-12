@@ -24,23 +24,31 @@ namespace eval ::lichess::faketest {
 	}
 	proc Reply {r} { lappend ::lichess::faketest::Replies $r }
 	proc Event {e} { lappend ::lichess::faketest::Events $e }
+	proc SignIn {} {
+		# Keep the server's accepted token separate from the client's store:
+		# an authenticated 401 must clear only the client credential.
+		set ::lichess::fake::Token loopback-only-fixture
+		::lichess::api::TokenStore $::lichess::fake::Token
+		Check [::lichess::api::signedIn?] 1
+	}
 	proc Start {} {
 		variable Replies {}; variable Events {}
+		variable Credential {}
 		variable SavedBase $::lichess::api::Base
 		variable SavedMode $::lichess::api::Mode
 		foreach name {TokenLoad TokenStore TokenDelete} {
 			rename ::lichess::api::$name [namespace current]::Original$name
 		}
-		proc ::lichess::api::TokenLoad {} { return $::lichess::fake::Token }
-		proc ::lichess::api::TokenStore {token} { set ::lichess::fake::Token $token }
-		proc ::lichess::api::TokenDelete {} { set ::lichess::fake::Token {} }
+		proc ::lichess::api::TokenLoad {} { return $::lichess::faketest::Credential }
+		proc ::lichess::api::TokenStore {token} { set ::lichess::faketest::Credential $token }
+		proc ::lichess::api::TokenDelete {} { set ::lichess::faketest::Credential {} }
 		set ::lichess::api::Base [::lichess::fake::Start]
-		set ::lichess::fake::Token loopback-only-fixture
+		SignIn
 		set ::lichess::api::BackoffUntil 0
 		::lichess::api::mode board
 	}
 	proc Stop {} {
-		foreach h [dict keys $::lichess::api::Requests] { ::lichess::api::close $h }
+		::lichess::api::signOut
 		update
 		::lichess::fake::Stop
 		foreach name {TokenLoad TokenStore TokenDelete} {
@@ -197,6 +205,10 @@ namespace eval ::lichess::faketest {
 				Check [dict get $r status] $status
 				Check [dict get $r ok] 0
 				set ::lichess::api::BackoffUntil 0
+				if {$status == 401} {
+					Check [::lichess::api::signedIn?] 0
+					SignIn
+				}
 			}
 			::lichess::fake::ForceNext /api/bot/game/* 500
 			Check [dict get [Call GET /api/bot/game/missing/chat] status] 500
