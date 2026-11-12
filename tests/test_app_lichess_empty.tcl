@@ -10,6 +10,7 @@ namespace eval ::scidb::test::empty {
  close [open $::env(SCIDB_ERROR_LOG) w]
 }
 proc ::scidb::test::empty::Setup {} {
+ ::lichess::Close
  variable Base $::lichess::api::Base
  foreach name {TokenStore TokenLoad TokenDelete} { rename ::lichess::api::$name ::scidb::test::empty::Saved$name }
  proc ::lichess::api::TokenStore {value} {set ::scidb::test::empty::Credential $value}
@@ -88,6 +89,8 @@ foreach {name ns path refresh field empty} {
   if {$ns eq ""} {
    ::lichess::open .application
    ::lichess::ShowView lobby
+   # Account lookup now precedes opening the account event stream.
+   ::scidb::test::wait::until {[llength $::lichess::fake::EventStreams] == 1}
    # This test does not need the account event stream.
    ::lichess::api::closeStreams
   } else { ::lichess::${ns}::open }
@@ -138,6 +141,7 @@ tcltest::test empty-player-404 {unknown player removes previous profile, teams a
 } -cleanup {::scidb::test::empty::Cleanup} -result {1 {Player not found: missing.} {} {} {} {}}
 tcltest::test empty-tabs-mc {tab buttons use mc English defaults in source and render unchanged} -setup {::scidb::test::empty::Setup} -body {
  ::lichess::open .application
+ ::scidb::test::wait::until {[llength $::lichess::fake::EventStreams] == 1}
  ::lichess::api::closeStreams
  ::lichess::ShowView lobby
  set bar $::lichess::Priv(widget:lobby).tabsBar

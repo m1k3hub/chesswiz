@@ -72,7 +72,7 @@ namespace eval ::scidb::test::lichess2 {
 
 proc ::scidb::test::lichess2::AllApiNames {} {
 	return {
-		token signedIn? signIn useToken signOut account
+		token signedIn? signIn useToken signOut account Request
 		streamEvents streamGame close seek challengeAi
 		move resign abort draw claimVictory takeback chat chatHistory
 		mode botUpgrade botStreamGame botMove botResign botAbort botDraw botTakeback botChat
@@ -126,6 +126,12 @@ proc ::scidb::test::lichess2::Stub {} {
 	proc ::lichess::api::signOut {} {
 		lappend ::scidb::test::lichess2::calls [list signOut]
 		set ::scidb::test::lichess2::signedIn 0
+	}
+	# Automatic lobby refresh must stay inside this suite's offline API fixture.
+	proc ::lichess::api::Request {method path form cmd args} {
+		if {$method ne "GET" || $path ne "/api/account/playing"} {error "unexpected stub request: $method $path"}
+		uplevel #0 [list {*}$cmd {ok 1 data {nowPlaying {}}}]
+		return playing-stub
 	}
 	proc ::lichess::api::account {cmd} {
 		lappend ::scidb::test::lichess2::calls [list account]

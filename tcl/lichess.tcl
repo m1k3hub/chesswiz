@@ -181,7 +181,14 @@ proc ::lichess::open {parent} {
 	# The lobby is a tab of the Chesswiz Online window.
 	set dlg [::online::window::tab lichess Lichess]
 	::online::window::select lichess
+	set Priv(suspended) 0
 	if {[info exists Priv(widget:signin)] && [winfo exists $Priv(widget:signin)]} {
+		if {$Priv(eventHandle) eq "" && [::lichess::api::signedIn?]} {
+			set Priv(state) lobby
+			ShowView lobby
+			Status $mc::LoadingAccount
+			::lichess::api::account [namespace code AccountResult]
+		}
 		return $dlg
 	}
 	bind [winfo toplevel $dlg] <<OnlineWindowHidden>> +[namespace code WindowHidden]
@@ -348,7 +355,7 @@ proc ::lichess::open {parent} {
 		set Priv(state) lobby
 		ShowView lobby
 		Status $mc::LoadingAccount
-		StartEvents
+		# Resolve the account title before any queued gameStart can open a game.
 		::lichess::api::account [namespace code AccountResult]
 	} else {
 		set Priv(state) offline
@@ -474,6 +481,7 @@ proc ::lichess::SignedIn {reply} {
 	catch {destroy .online.sessionExpired}
 	set Priv(state) lobby
 	StartEvents
+	RefreshPlaying
 	ShowView lobby
 	Status [format $mc::SignedInAs $Priv(username)]
 }
@@ -509,6 +517,8 @@ proc ::lichess::SessionExpired {reply} {
 }
 
 proc ::lichess::WindowHidden {} {
+	variable Priv
+	set Priv(suspended) 1
 	ReleaseStreams
 	::lichess::api::closeStreams
 	FinishBoard
@@ -534,11 +544,13 @@ proc ::lichess::StreamStatus {id text retry} {
 proc ::lichess::AccountResult {reply} {
 	variable Priv
 	variable mc
-	if {$Priv(state) ne "lobby"} { return }
+	if {$Priv(state) ne "lobby" || $Priv(suspended) || ![DialogExists]} { return }
 	if {[dict exists $reply ok] && [dict get $reply ok]} {
 		ToggleBotMode [expr {[dict exists $reply title] && [dict get $reply title] eq "BOT"}]
 		set Priv(username) [dict get $reply username]
 		set Priv(userId) [dict get $reply id]
+		StartEvents
+		RefreshPlaying
 		ShowView lobby
 		Status [format $mc::SignedInAs $Priv(username)]
 	} else {

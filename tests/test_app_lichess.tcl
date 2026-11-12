@@ -44,9 +44,9 @@ proc ::scidb::test::lichess::Stub {} {
 
 	namespace eval ::lichess::api {}
 	foreach name {
-		token signedIn? signIn useToken signOut account
+		token signedIn? signIn useToken signOut account Request
 		streamEvents streamGame close seek challengeAi
-		move resign abort draw claimVictory
+		move resign abort draw claimVictory chatHistory
 	} {
 		set fq "::lichess::api::$name"
 		set backup "::scidb::test::lichess::orig_$name"
@@ -75,6 +75,12 @@ proc ::scidb::test::lichess::Stub {} {
 		lappend ::scidb::test::lichess::calls [list signOut]
 		set ::scidb::test::lichess::signedIn 0
 		set ::scidb::test::lichess::tokenValue {}
+	}
+	# Automatic lobby refresh must stay inside this suite's offline API fixture.
+	proc ::lichess::api::Request {method path form cmd args} {
+		if {$method ne "GET" || $path ne "/api/account/playing"} {error "unexpected stub request: $method $path"}
+		uplevel #0 [list {*}$cmd {ok 1 data {nowPlaying {}}}]
+		return playing-stub
 	}
 	proc ::lichess::api::account {cmd} {
 		lappend ::scidb::test::lichess::calls [list account]
@@ -105,6 +111,9 @@ proc ::scidb::test::lichess::Stub {} {
 		lappend ::scidb::test::lichess::calls [list challengeAi $level $minutes $increment $color]
 		set ::scidb::test::lichess::challengeCmd $cmd
 	}
+	proc ::lichess::api::chatHistory {gameId cmd} {
+		uplevel #0 [list {*}$cmd {ok 1 data {}}]
+	}
 	proc ::lichess::api::move {gameId uci cmd} {
 		lappend ::scidb::test::lichess::calls [list move $gameId $uci]
 		lappend ::scidb::test::lichess::moveCmds $cmd
@@ -131,9 +140,9 @@ proc ::scidb::test::lichess::Unstub {} {
 	variable savedProcs
 	catch { ::lichess::Close }
 	foreach name {
-		token signedIn? signIn useToken signOut account
+		token signedIn? signIn useToken signOut account Request
 		streamEvents streamGame close seek challengeAi
-		move resign abort draw claimVictory
+		move resign abort draw claimVictory chatHistory
 	} {
 		set fq "::lichess::api::$name"
 		set backup "::scidb::test::lichess::orig_$name"
