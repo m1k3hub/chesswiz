@@ -95,18 +95,31 @@ tcltest::test all-actions-approved-names {the baseline and documented additions 
 	set tools [::json::json2dict [read $f]]
 	close $f
 	set expected [lmap tool $tools {dict get $tool name}]
-	# These six redesign tools already existed at 08ba7f1bb (the 93-tool
-	# suite's original expectation), after the original 87-tool B0 dump.
-	lappend expected database_properties find_capability goto_move open_play_engine print run_action
 	set f [open [file join $dir assistant-tools-additions.txt]]
+	set metadataNames {}
+	set metadataMismatches {}
 	foreach line [split [read $f] \n] {
+		# Category-(f) records freeze the six redesign tools at 08ba7f1bb.
+		# Keep their exact schemas and flags checked as well as membership.
+		if {[regexp {^# metadata \{} $line]} {
+			set record [::json::json2dict [string range $line 11 end]]
+			set name [dict get $record name]
+			lappend metadataNames $name
+			lassign [dict get $::application::assistant::Actions $name] confirm debug what description schema
+			if {$confirm != [dict get $record confirm]
+				|| $debug != [dict get $record debug]
+				|| $schema ne [dict get $record params_schema]} {
+				lappend metadataMismatches $name
+			}
+		}
 		if {[string trim $line] eq "" || [string match {#*} [string trim $line]]} { continue }
 		lappend expected [lindex $line 0]
 	}
 	close $f
 	set actual [lsort [dict keys $::application::assistant::Actions]]
-	puts "ASSISTANT_TOOLS baseline=[llength $tools] expected=[llength $expected] actual=[llength $actual]"
-	expr {$actual eq [lsort $expected]}
+	puts "ASSISTANT_TOOLS baseline=[llength $tools] expected=[llength $expected] actual=[llength $actual] metadata=[llength $metadataNames] mismatches=$metadataMismatches"
+	expr {$actual eq [lsort $expected] && [llength [lsort -unique $metadataNames]] == 6
+		&& [llength $metadataMismatches] == 0}
 } -result 1
 
 tcltest::test all-actions-have-handlers {every action has a handler defined} -body {
