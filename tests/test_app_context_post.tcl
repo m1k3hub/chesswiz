@@ -114,4 +114,18 @@ tcltest::test context-media-float {media can float and dock through its action w
     ::menu::TogglePaneId media
     update
 } -result {1 1 1 1}
+tcltest::test context-floating-zoom-unavailable {floating panes do not advertise a dock-only zoom action} -setup {
+    set twm [::application::twm board]
+    ::application::assistant::DoPane undock editor
+    update
+    focus -force [$twm leaf editor]
+    update
+} -body {
+    set object [::context::CurrentObject C9]
+    set ids [lmap row [::action::labels asklist {}] {lindex $row 0}]
+    set state [::menu::state c9.maximise $object]
+    puts [list FLOATING_ZOOM object $object visible [dict get $state visible] enabled [dict get $state enabled]]
+    list [dict get $object paneUid] [expr {"c9.maximise" ni $ids}] \
+        [dict get $state enabled] [string match error:* [::action::run c9.maximise [dict create object $object]]]
+} -cleanup {::application::assistant::DoPane dock editor;update} -result {editor 1 0 1}
 ::tcltest::cleanupTests

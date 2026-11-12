@@ -1704,6 +1704,15 @@ proc ::context::ObjectRule {id object} {
 		}
 		return [list 1 $canFloat]
 	}
+	if {$id eq "c9.maximise"} {
+		set canZoom 0
+		if {[dict exists $object twm] && [dict exists $object frame]} {
+			set twm [dict get $object twm]
+			set frame [dict get $object frame]
+			catch {set canZoom [expr {[$twm get $frame zoomable 0] && ![$twm isfloat [$twm toplevel $frame]]}]}
+		}
+		return [list 1 $canZoom]
+	}
 	if {$id in {c9.stay_on_top c9.hide_leaving}} {
 		set floating 0
 		if {[dict exists $object twm] && [dict exists $object paneUid]} {
