@@ -1,9 +1,9 @@
 # ======================================================================
-# Scidb App Test — All 93 assistant actions (VAL-AI-001a)
+# Scidb App Test — All 95 assistant actions (VAL-AI-001a)
 # The later unsupported report-print alias was removed with its dead leaf;
 # the frozen baseline tools remain unchanged.
 # ======================================================================
-# Generated per-action test: for all 93 ai-exposed actions, a stubbed
+# Generated per-action test: for all 95 ai-exposed actions, a stubbed
 # model tool call with valid arguments reaches the stubbed handler after
 # predicates are checked; unavailable -> error: text saying why.
 # ======================================================================
@@ -79,11 +79,34 @@ proc ::scidb::test::actions_all::reach {name} {
 }
 
 # ----------------------------------------------------------------------
-# Test: All 93 actions are registered and callable
+# Test: All 95 actions are registered and callable. The two additions since
+# 08ba7f1bb are opening_line and engine_play (e7d35e98a); the frozen
+# additions list records them. Keep exact membership as well as the count.
 # ----------------------------------------------------------------------
-tcltest::test all-actions-count {exactly 93 assistant actions are registered} -body {
+tcltest::test all-actions-count {exactly 95 assistant actions are registered} -body {
 	set count [llength [dict keys $::application::assistant::Actions]]
-	expr {$count == 93}
+	expr {$count == 95}
+} -result 1
+
+tcltest::test all-actions-approved-names {the baseline and documented additions name exactly the shipped tools} -body {
+	package require json
+	set dir [file join [file dirname [info script]] fixtures]
+	set f [open [file join $dir assistant-tools-baseline.json]]
+	set tools [::json::json2dict [read $f]]
+	close $f
+	set expected [lmap tool $tools {dict get $tool name}]
+	# These six redesign tools already existed at 08ba7f1bb (the 93-tool
+	# suite's original expectation), after the original 87-tool B0 dump.
+	lappend expected database_properties find_capability goto_move open_play_engine print run_action
+	set f [open [file join $dir assistant-tools-additions.txt]]
+	foreach line [split [read $f] \n] {
+		if {[string trim $line] eq "" || [string match {#*} [string trim $line]]} { continue }
+		lappend expected [lindex $line 0]
+	}
+	close $f
+	set actual [lsort [dict keys $::application::assistant::Actions]]
+	puts "ASSISTANT_TOOLS baseline=[llength $tools] expected=[llength $expected] actual=[llength $actual]"
+	expr {$actual eq [lsort $expected]}
 } -result 1
 
 tcltest::test all-actions-have-handlers {every action has a handler defined} -body {
@@ -124,7 +147,7 @@ tcltest::test all-actions-runnable-through-assistant {every action reaches its h
 } -cleanup {
     set ::engine::Engines $savedEngines
     file delete -force $::scidb::test::actions::Dir
-} -result 93
+} -result 95
 
 # Individually selectable legs for timeout 30 process isolation.
 foreach name [dict keys $::application::assistant::Actions] {

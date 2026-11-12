@@ -709,6 +709,7 @@ tcltest::test route-chess-judgment-requested-position {chess judgment with moves
 tcltest::test route-clarify-negated-unresolved {negated or uncertain clarification replies do not select the named candidate} -body {
 	::scidb::test::route::isolated {
 		set ::application::assistant::RouteMode active
+		set results {}
 
 		foreach reply {"not board" "neither" "maybe board" "don't switch to board" "board?"} {
 			set ::scidb::test::route::Switched {}
