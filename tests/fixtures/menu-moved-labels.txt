@@ -1,6 +1,14 @@
 # Labels moved into the redesigned drop-down/context menus that
 # keep a translation in every language file (VAL-BAR-007).
 # generated 2026-10-20 from the menu redesign block; do not edit
+menu menu::mc::Online
+menu menu::mc::PlayOnline
+menu menu::mc::PlayLichess
+menu menu::mc::LichessSocial
+menu menu::mc::LichessTv
+menu menu::mc::LichessEvents
+menu menu::mc::LichessPuzzles
+menu menu::mc::StreamOverlay
 menu menu::mc::AnnotateGameWithAI
 menu menu::mc::AppAnnotation
 menu menu::mc::AppBorder

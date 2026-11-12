@@ -1,3 +1,5 @@
 # Assistant tools additions (post-baseline)
 # This file is intentionally empty at baseline. New tools added after the
 # baseline was frozen are listed here, one per line: tool_name reason.
+opening_line e7d35e98a: look up named opening moves in the opening table.
+engine_play e7d35e98a: let the chess engine play best moves on the board.
