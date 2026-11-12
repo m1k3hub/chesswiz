@@ -41,6 +41,7 @@ proc ::lichess::phase2::Stop {} {
 	::lichess::fake::Stop
 	::lichess::api::mode board
 	set ::lichess::api::BackoffUntil 0
+	set ::lichess::api::ReconnectDelays {1000 3000 9000}
 }
 proc ::lichess::phase2::Reply {value} { lappend ::lichess::phase2::Replies $value }
 proc ::lichess::phase2::Event {value} { lappend ::lichess::phase2::Events $value }
@@ -300,13 +301,25 @@ namespace eval ::lichess::phase2 {
 	foreach row {{tvFeed Best /api/tv/best/feed} {streamGameMoves tv1 /api/stream/game/tv1} {broadcastRoundStream round1 /api/stream/broadcast/round/round1.pgn} {botStreamGame missing /api/bot/game/stream/missing}} {
 		lassign $row name arg expectedPath
 		foreach status {401 404 429 500} {
-			tcltest::test phase2-stream-error-$name-$status {stream HTTP failures close exactly once} -setup { Start } -body {
-				::lichess::fake::ForceNext $expectedPath $status
+			tcltest::test phase2-stream-error-$name-$status {stream HTTP failures close once; server failures use bounded reconnect} -setup { Start } -body {
+				if {$status == 500} {
+					::lichess::fake::Control $expectedPath 500
+					set ::lichess::api::ReconnectDelays {10 30 90}
+				} else {
+					::lichess::fake::ForceNext $expectedPath $status
+				}
 				set h [::lichess::api::$name $arg ::lichess::phase2::Event]
-				Wait {[llength $Events] == 1}
-				Check [dict get [lindex $Events 0] type] closed
-				Check [dict get [lindex $Events 0] status] $status
-				Check [dict get [lindex $Events 0] ok] 0
+				if {$status == 500} {
+					Wait {[dict get $::lichess::api::Requests $h lost]}
+					Check [llength [::lichess::fake::Requests]] 4
+					Check [dict get $::lichess::api::Requests $h attempts] 3
+					Check [llength $Events] 0
+				} else {
+					Wait {[llength $Events] == 1}
+					Check [dict get [lindex $Events 0] type] closed
+					Check [dict get [lindex $Events 0] status] $status
+					Check [dict get [lindex $Events 0] ok] 0
+				}
 				::lichess::api::close $h
 				update
 				Check [llength $Events] 1
@@ -332,22 +345,24 @@ namespace eval ::lichess::phase2 {
 	# Parser tests run even where the execution sandbox forbids sockets.
 	tcltest::test phase2-pgn-bytes {UTF-8, adjacent Event headers and final unterminated PGN} -body {
 		set Events {}
-		dict set ::lichess::api::Requests pure [dict create cmd ::lichess::phase2::Event stream 1 response pgn buffer {} timer {}]
+		dict set ::lichess::api::Requests pure [dict create cmd ::lichess::phase2::Event stream 1 response pgn buffer {} timer {} watchdog {} deadline {} generation 0]
+		dict set ::lichess::api::Deliveries pure 0
 		set bytes [encoding convertto utf-8 "\[Event \"Bób\"\]\n\n1. e4 *\n\[Event \"Two\"\]\n\n1. d4 *\n\n\n\[Event \"Tail\"\]\n*"]
 		foreach byte [split $bytes {}] { ::lichess::api::Lines pure $byte }
 		::lichess::api::PgnLines pure {} 1
 		::lichess::api::Finish pure [dict create ok 1]
 		update
 		list [llength $Events] [dict get [lindex $Events 0] text] [dict get [lindex $Events 3] type]
-	} -cleanup { catch {dict unset ::lichess::api::Requests pure} } -result [list 4 "\[Event \"Bób\"\]\n\n1. e4 *" closed]
+	} -cleanup { catch {dict unset ::lichess::api::Requests pure}; ::lichess::api::ForgetDelivery pure } -result [list 4 "\[Event \"Bób\"\]\n\n1. e4 *" closed]
 
 	tcltest::test phase2-pgn-single {a lone game is delivered without waiting for the next one} -body {
 		set Events {}
-		dict set ::lichess::api::Requests pure [dict create cmd ::lichess::phase2::Event stream 1 response pgn buffer {} timer {}]
+		dict set ::lichess::api::Requests pure [dict create cmd ::lichess::phase2::Event stream 1 response pgn buffer {} timer {} watchdog {} deadline {} generation 0]
+		dict set ::lichess::api::Deliveries pure 0
 		foreach byte [split "\[Event \"One\"\]\r\n\[White \"A\"\]\r\n\r\n1. e4 e5 *\r\n\r\n" {}] { ::lichess::api::Lines pure $byte }
 		update
 		list [llength $Events] [dict get [lindex $Events 0] text]
-	} -cleanup { catch {dict unset ::lichess::api::Requests pure} } -result [list 1 "\[Event \"One\"\]\n\[White \"A\"\]\n\n1. e4 e5 *"]
+	} -cleanup { catch {dict unset ::lichess::api::Requests pure}; ::lichess::api::ForgetDelivery pure } -result [list 1 "\[Event \"One\"\]\n\[White \"A\"\]\n\n1. e4 e5 *"]
 
 	tcltest::test phase2-tv-channel-key {channel names become the camel-case keys of the feed address} -body {
 		lmap name {Best best {Top Rated} {King of the Hill} UltraBullet Three-check {Racing Kings} Chess960 kingOfTheHill} {

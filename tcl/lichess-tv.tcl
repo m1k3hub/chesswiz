@@ -186,6 +186,7 @@ proc ::lichess::tv::open {{parent .application}} {
 	# no stream may outlive the tab, or run behind a closed window
 	bind $top <Destroy> [namespace code { if {"%W" eq $Priv(widget:top)} { StopStream } }]
 	bind [winfo toplevel $tab] <<OnlineWindowHidden>> +[namespace code StopStream]
+	bind [winfo toplevel $tab] <<OnlineWindowHidden>> +[list ::lichess::WindowHidden]
 
 	RefreshChannels
 	RefreshBroadcasts
@@ -306,7 +307,7 @@ proc ::lichess::tv::OnTvEvent {serial event} {
 	if {[dict exists $event type] && [dict get $event type] eq "closed"} {
 		set Priv(streamHandle) {}
 		set Priv(streamKind) {}
-		Status $mc::StreamClosed
+		Status [expr {[dict exists $event error] ? [dict get $event error] : $mc::StreamClosed}]
 		return
 	}
 	set t [expr {[dict exists $event t] ? [dict get $event t] : \
@@ -369,7 +370,7 @@ proc ::lichess::tv::OnGameMoveEvent {serial event} {
 	if {[dict exists $event type] && [dict get $event type] eq "closed"} {
 		set Priv(streamHandle) {}
 		set Priv(streamKind) {}
-		Status $mc::StreamClosed
+		Status [expr {[dict exists $event error] ? [dict get $event error] : $mc::StreamClosed}]
 		return
 	}
 	if {[dict exists $event players] || [dict exists $event id]} {
@@ -535,7 +536,7 @@ proc ::lichess::tv::OnBroadcastPgn {serial rid event} {
 	if {[dict exists $event type] && [dict get $event type] eq "closed"} {
 		set Priv(streamHandle) {}
 		set Priv(streamKind) {}
-		Status $mc::StreamClosed
+		Status [expr {[dict exists $event error] ? [dict get $event error] : $mc::StreamClosed}]
 		return
 	}
 	if {![dict exists $event type] || [dict get $event type] ne "pgn"} { return }

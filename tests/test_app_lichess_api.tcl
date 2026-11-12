@@ -178,7 +178,8 @@ namespace eval ::lichess::apitest {
 
 	tcltest::test lichess-api-pure-stream {framing and line parser accept every possible byte boundary} -body {
 		set Events {}
-		dict set ::lichess::api::Requests pure [dict create cmd ::lichess::apitest::Event stream 1 timer {} buffer {} wire {} chunk -1]
+		dict set ::lichess::api::Requests pure [dict create cmd ::lichess::apitest::Event stream 1 timer {} watchdog {} deadline {} generation 0 buffer {} wire {} chunk -1]
+		dict set ::lichess::api::Deliveries pure 0
 		set bytes [encoding convertto utf-8 "\n\r\n{\"type\":\"test\",\"name\":\"Bób\"}\n{\"type\":\"second\"}\n"]
 		set raw "[format %x [string length $bytes]];x=y\r\n$bytes\r\n0\r\n\r\n"
 		foreach byte [split $raw {}] {
@@ -201,8 +202,8 @@ namespace eval ::lichess::apitest {
 		set outcomes {}
 		foreach code {200 400 401 429} {
 			set Events {}
-			dict set ::lichess::api::Requests pure [dict create cmd ::lichess::apitest::Event stream 0 timer {}]
-			array set ::http::lichessTest [list http "HTTP/1.1 $code Reply" status ok body {not json: test-secret}]
+			dict set ::lichess::api::Requests pure [dict create cmd ::lichess::apitest::Event stream 0 timer {} watchdog {} deadline {} authenticated 0 validation 0 epoch 0]
+			array set ::http::lichessTest [list http "HTTP/1.1 $code Reply" status ok meta {} body {not json: test-secret}]
 			::lichess::api::Done pure ::http::lichessTest
 			update
 			set r [lindex $Events 0]

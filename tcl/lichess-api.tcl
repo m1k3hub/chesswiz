@@ -15,10 +15,20 @@ namespace eval ::lichess::api {
 	variable Auth {}
 	variable Epoch 0
 	variable Mode board
+	variable StallTimeout 20000
+	variable ReconnectDelays {1000 3000 9000}
+	variable RecoveryTimeout 30000
+	variable Deliveries {}
 	namespace eval mc {
 		set Network "Could not complete the Lichess request."
 		set Unauthorized "Lichess rejected the credential. Sign in again."
-		set Limited "Lichess rate limit reached. Please wait one minute."
+		set Limited "Lichess rate limit reached. Please wait %d seconds."
+		set Server "Lichess server error (%d)"
+		set Unexpected "Lichess unexpected response (%d)"
+		set InvalidToken "Invalid Lichess token. Please check it and try again."
+		set Reconnecting "Reconnecting to Lichess…"
+		set Lost "Lichess connection lost."
+		set Retry "Retry"
 		set Invalid "Lichess returned an invalid response."
 		set Rejected "Lichess rejected the request."
 	set Forbidden "Lichess refused: the sign-in lacks permission for this. Sign out and sign in again."
@@ -102,8 +112,11 @@ proc ::lichess::api::Request {method path form cmd {stream 0} {bearer {}} {conte
 	variable Requests
 	variable Base
 	set id request[incr Serial]
+	variable Deliveries
+	dict set Deliveries $id 0
 	dict set Requests $id [dict create method $method url "[string trimright $Base /]$path" \
-		form $form cmd $cmd stream $stream bearer $bearer contentType $contentType response $response http {} timer {} buffer {} wire {} chunk -1]
+		form $form cmd $cmd stream $stream bearer $bearer contentType $contentType response $response http {} timer {} watchdog {} deadline {} lastActivity 0 lost 0 attempts 0 generation 0 authenticated 0 epoch 0 \
+		validation [expr {[lindex $cmd 0] eq "::lichess::api::Validated"}] buffer {} wire {} chunk -1]
 	dict set Requests $id timer [after 0 [list ::lichess::api::Start $id]]
 	return $id
 }
@@ -118,6 +131,7 @@ proc ::lichess::api::Start {id} {
 		dict set Requests $id timer [after $delay [list ::lichess::api::Start $id]]
 		return
 	}
+	dict set Requests $id timer {}
 	set r [dict get $Requests $id]
 	set url [dict get $r url]
 	set opts [list -method [dict get $r method] -binary 1 -keepalive 0 \
@@ -130,6 +144,8 @@ proc ::lichess::api::Start {id} {
 	set headers [list Accept $accept]
 	# signed out: public endpoints answer, an empty bearer would be refused
 	if {$bearer ne {}} { lappend headers Authorization "Bearer $bearer" }
+	dict set Requests $id authenticated [expr {$bearer ne {}}]
+	dict set Requests $id epoch $::lichess::api::Epoch
 	lappend opts -headers $headers
 	if {[dict get $r method] eq "POST"} {
 		lappend opts -type [dict get $r contentType] -query [encoding convertto utf-8 [dict get $r form]]
@@ -141,10 +157,16 @@ proc ::lichess::api::Start {id} {
 		if {[string match -nocase https://* $url]} { ::platform::sys::tlsRegister }
 		set h [::http::geturl $url {*}$opts]
 	}]} {
-		Finish $id [dict create ok 0 error $mc::Network status 0]
+		if {[dict get $r stream]} { Reconnect $id } else { Finish $id [dict create ok 0 error $mc::Network status 0] }
 		return
 	}
-	if {[dict exists $Requests $id]} { dict set Requests $id http $h }
+	if {[dict exists $Requests $id]} {
+		dict set Requests $id http $h
+		if {[dict get $r stream]} {
+			if {[dict get $r attempts] == 0} { dict set Requests $id lastActivity [clock milliseconds] }
+			ArmWatchdog $id
+		}
+	}
 }
 
 # http's -handler provides raw body bytes, even for chunked replies.
@@ -156,6 +178,7 @@ proc ::lichess::api::Read {id sock h} {
 	set count [string length $bytes]
 	if {![dict exists $Requests $id]} { return $count }
 	if {[::http::ncode $h] != 200} { return $count }
+	if {$count > 0} { ArmWatchdog $id 1 }
 	set chunked 0
 	foreach {key value} [::http::meta $h] {
 		if {[string equal -nocase $key Transfer-Encoding] && [string equal -nocase $value chunked]} {
@@ -216,7 +239,7 @@ proc ::lichess::api::Lines {id bytes} {
 		set buffer [string range $buffer [expr {$end + 1}] end]
 		if {$line eq {}} { continue }
 		if {[catch {ParseJson [encoding convertfrom utf-8 $line] object} event]} { error "Invalid stream response" }
-		Reply [dict get $Requests $id cmd] $event
+		StreamReply $id $event
 	}
 	if {[string length $buffer] > 1048576} { error "Stream line too long" }
 	dict set Requests $id buffer $buffer
@@ -231,10 +254,18 @@ proc ::lichess::api::Done {id h} {
 	if {![string is integer -strict $code]} { set code 0 }
 	set reply [dict create ok 0 error $mc::Network status $code]
 	if {$code == 429} {
-		set BackoffUntil [expr {[clock milliseconds] + 60000}]
-		dict set reply error $mc::Limited
+		set seconds 60
+		foreach {key value} [::http::meta $h] {
+			if {[string equal -nocase $key Retry-After] && [regexp {^[0-9]+$} $value] && $value > 0} {
+				set decimal [string trimleft $value 0]
+				set seconds [expr {min(3600, $decimal)}]
+			}
+		}
+		set BackoffUntil [expr {max($BackoffUntil, [clock milliseconds] + $seconds * 1000)}]
+		dict set reply error [format $mc::Limited $seconds]
+		Notice [dict get $reply error]
 	} elseif {$code == 401} {
-		dict set reply error $mc::Unauthorized
+		dict set reply error [expr {[dict get $Requests $id validation] ? $mc::InvalidToken : $mc::Unauthorized}]
 	} elseif {$code >= 200 && $code < 300 && [::http::status $h] eq "ok"} {
 		if {[dict get $Requests $id stream]} {
 			if {[dict exists $Requests $id framed] && [dict get $Requests $id chunk] != -2} {
@@ -274,41 +305,154 @@ proc ::lichess::api::Done {id h} {
 		} else {
 			set reply [dict create ok 1 data $data status $code]
 		}
+	} elseif {$code >= 500 && $code <= 599} {
+		dict set reply error [format $mc::Server $code]
+	} elseif {$code >= 300 && $code <= 399} {
+		dict set reply error [format $mc::Unexpected $code]
 	} elseif {$code >= 400} {
 		dict set reply error [expr {$code == 403 ? $mc::Forbidden : $mc::Rejected}]
 		if {$code == 404 && [dict exists $Requests $id url] && [string match */api/cloud-eval?* [dict get $Requests $id url]]} {
 			dict set reply error $mc::NoCloud
 		}
 	}
+	set r [dict get $Requests $id]
 	::http::cleanup $h
+	dict set Requests $id http {}
+	if {[dict get $r stream] && ($code == 0 || $code >= 500 && $code <= 599)} {
+		Reconnect $id
+		return
+	}
+	set expired [expr {$code == 401 && [dict get $r authenticated] && ![dict get $r validation]
+		&& [dict get $r epoch] == $::lichess::api::Epoch}]
+	if {$code == 401} { dict set reply authenticated [dict get $r authenticated] }
 	Finish $id $reply
+	if {$expired} {
+		signOut
+		if {[llength [info commands ::lichess::SessionExpired]]} {
+			::lichess::SessionExpired [dict create status 401 sessionExpired 1]
+		}
+	}
 }
 
 proc ::lichess::api::Finish {id reply} {
 	variable Requests
 	if {![dict exists $Requests $id]} { return }
 	set r [dict get $Requests $id]
-	after cancel [dict get $r timer]
+	foreach key {timer watchdog deadline} { after cancel [dict get $r $key] }
+	RecoveryNotice $id {}
 	dict unset Requests $id
 	if {[dict get $r stream]} {
 		dict set reply type closed
 	}
 	Reply [dict get $r cmd] $reply
+	after 0 [list ::lichess::api::ForgetDelivery $id]
 }
 
-proc ::lichess::api::close {id} {
+# Handles stay stable across reconnects. Only this routine owns HTTP teardown.
+proc ::lichess::api::DropTransport {id} {
 	variable Requests
-	variable mc
 	if {![dict exists $Requests $id]} { return }
+	foreach key {timer watchdog} { after cancel [dict get $Requests $id $key]; dict set Requests $id $key {} }
 	set h [dict get $Requests $id http]
+	dict set Requests $id http {}
 	if {$h ne {}} {
-		# Detach before reset: reset invokes the completion synchronously.
 		upvar #0 $h state
 		unset -nocomplain state(-command)
 		catch {::http::reset $h}
 		catch {::http::cleanup $h}
 	}
-	Finish $id [dict create ok 0 error $mc::Cancelled status 0]
+}
+proc ::lichess::api::close {id} {
+	ForgetDelivery $id
+	DropTransport $id
+	Finish $id [dict create ok 0 error $::lichess::api::mc::Cancelled status 0]
+}
+proc ::lichess::api::closeStreams {} {
+	variable Requests
+	dict for {id r} $Requests { if {[dict get $r stream]} { close $id } }
+}
+proc ::lichess::api::ArmWatchdog {id {activity 0}} {
+	variable Requests
+	variable StallTimeout
+	if {![dict exists $Requests $id]} { return }
+	if {$activity} {
+		dict set Requests $id lastActivity [clock milliseconds]
+		after cancel [dict get $Requests $id deadline]
+		dict set Requests $id deadline {}
+		dict set Requests $id attempts 0
+		RecoveryNotice $id {}
+	}
+	after cancel [dict get $Requests $id watchdog]
+	dict set Requests $id watchdog [after $StallTimeout [list ::lichess::api::Reconnect $id]]
+}
+proc ::lichess::api::ForgetDelivery {id} {
+	variable Deliveries
+	dict unset Deliveries $id
+}
+proc ::lichess::api::StreamReply {id event} {
+	variable Requests
+	after 0 [list ::lichess::api::StreamDeliver $id [dict get $Requests $id generation] [dict get $Requests $id cmd] $event]
+}
+proc ::lichess::api::StreamDeliver {id generation cmd event} {
+	variable Deliveries
+	if {![dict exists $Deliveries $id] || [dict get $Deliveries $id] != $generation} { return }
+	Deliver $cmd $event
+}
+proc ::lichess::api::Reconnect {id} {
+	variable Requests
+	variable ReconnectDelays
+	variable RecoveryTimeout
+	if {![dict exists $Requests $id]} { return }
+	DropTransport $id
+	set r [dict get $Requests $id]
+	set attempt [dict get $r attempts]
+	if {$attempt >= [llength $ReconnectDelays]} { GiveUp $id; return }
+	if {[dict get $r deadline] eq {}} {
+		# Include the original silence in the 30-second recovery bound.
+		set remaining [expr {max(0, $RecoveryTimeout - ([clock milliseconds] - [dict get $r lastActivity]))}]
+		dict set Requests $id deadline [after $remaining [list ::lichess::api::GiveUp $id]]
+	}
+	dict set Requests $id generation [expr {[dict get $r generation] + 1}]
+	variable Deliveries
+	dict set Deliveries $id [dict get $Requests $id generation]
+	foreach key {buffer wire} { dict set Requests $id $key {} }
+	dict set Requests $id chunk -1
+	dict unset Requests $id framed
+	dict set Requests $id attempts [expr {$attempt + 1}]
+	dict set Requests $id timer [after [lindex $ReconnectDelays $attempt] [list ::lichess::api::Start $id]]
+	RecoveryNotice $id $::lichess::api::mc::Reconnecting
+}
+proc ::lichess::api::GiveUp {id} {
+	variable Requests
+	if {![dict exists $Requests $id]} { return }
+	DropTransport $id
+	after cancel [dict get $Requests $id deadline]
+	dict set Requests $id deadline {}
+	dict set Requests $id lost 1
+	RecoveryNotice $id $::lichess::api::mc::Lost 1
+}
+proc ::lichess::api::retry {id} {
+	variable Requests
+	if {![dict exists $Requests $id]} { return }
+	DropTransport $id
+	after cancel [dict get $Requests $id deadline]
+	dict set Requests $id deadline {}
+	dict set Requests $id lost 0
+	dict set Requests $id attempts 0
+	dict set Requests $id buffer {}
+	dict set Requests $id wire {}
+	dict set Requests $id chunk -1
+	dict unset Requests $id framed
+	RecoveryNotice $id {}
+	dict set Requests $id timer [after 0 [list ::lichess::api::Start $id]]
+}
+# GUI hooks are optional: the API is also usable by standalone Tcl clients.
+proc ::lichess::api::Notice {text} {
+	if {[llength [info commands ::lichess::Status]]} { ::lichess::Status $text }
+	if {[llength [info commands ::online::window::status]]} { ::online::window::status $text }
+}
+proc ::lichess::api::RecoveryNotice {id text {retry 0}} {
+	if {[llength [info commands ::lichess::StreamStatus]]} { ::lichess::StreamStatus $id $text $retry }
 }
 
 proc ::lichess::api::AccountReply {cmd reply} {
@@ -328,7 +472,7 @@ proc ::lichess::api::account {cmd} {
 }
 proc ::lichess::api::useToken {tok cmd} {
 	if {$tok eq {} || [regexp {[\r\n]} $tok]} {
-		Reply $cmd [dict create ok 0 error $::lichess::api::mc::Unauthorized status 401]
+		Reply $cmd [dict create ok 0 error $::lichess::api::mc::InvalidToken status 401]
 		return
 	}
 	variable Epoch
@@ -424,10 +568,10 @@ proc ::lichess::api::PgnLines {id bytes {final 0}} {
 		if {$end < 0} { break }
 		set text [string trim [string range $buffer 0 [expr {$end-1}]]]
 		set buffer [string range $buffer [expr {$end+$skip}] end]
-		if {$text ne {}} { Reply [dict get $Requests $id cmd] [dict create type pgn text [encoding convertfrom utf-8 $text]] }
+		if {$text ne {}} { StreamReply $id [dict create type pgn text [encoding convertfrom utf-8 $text]] }
 	}
 	if {$final && [string trim $buffer] ne {}} {
-		Reply [dict get $Requests $id cmd] [dict create type pgn text [encoding convertfrom utf-8 [string trim $buffer]]]
+		StreamReply $id [dict create type pgn text [encoding convertfrom utf-8 [string trim $buffer]]]
 		set buffer {}
 	}
 	if {[string length $buffer] > 2097152} { error "PGN too long" }

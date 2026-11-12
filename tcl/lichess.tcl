@@ -175,6 +175,7 @@ proc ::lichess::open {parent} {
 	if {[info exists Priv(widget:signin)] && [winfo exists $Priv(widget:signin)]} {
 		return $dlg
 	}
+	bind [winfo toplevel $dlg] <<OnlineWindowHidden>> +[namespace code WindowHidden]
 	set Priv(dialog) $dlg
 
 	set top [ttk::frame $dlg.top]
@@ -453,6 +454,7 @@ proc ::lichess::SignedIn {reply} {
 	} else {
 		set Priv(userId) [string tolower $Priv(username)]
 	}
+	catch {destroy .online.sessionExpired}
 	set Priv(state) lobby
 	StartEvents
 	ShowView lobby
@@ -463,11 +465,52 @@ proc ::lichess::SignedIn {reply} {
 # A 401 anywhere means the token was revoked or expired: back to sign-in.
 # Whether it was one.
 proc ::lichess::SessionExpired {reply} {
+	variable Priv
 	variable mc
 	if {![dict exists $reply status] || [dict get $reply status] != 401} { return 0 }
-	SignOut
+	if {[dict exists $reply authenticated] && ![dict get $reply authenticated]} { return 0 }
+	if {[info exists Priv(expiredEpoch)] && $Priv(expiredEpoch) == $::lichess::api::Epoch} { return 1 }
+	if {![dict exists $reply sessionExpired]} { ::lichess::api::signOut }
+	ReleaseStreams
+	FinishBoard
+	set Priv(state) offline
+	set Priv(username) {}
+	set Priv(userId) {}
+	set Priv(signingIn) 0
+	set Priv(expiredEpoch) $::lichess::api::Epoch
+	ShowView signin
 	Status $mc::SessionExpired
+	# One nonmodal message; the sign-in action remains available in the lobby.
+	if {[winfo exists .online] && ![winfo exists .online.sessionExpired]} {
+		ttk::frame .online.sessionExpired -padding 8
+		ttk::label .online.sessionExpired.message -text $mc::SessionExpired
+		ttk::button .online.sessionExpired.signin -text $mc::SignIn -command [namespace code SignIn]
+		pack .online.sessionExpired.message .online.sessionExpired.signin -side left -padx 4
+		pack .online.sessionExpired -side bottom -fill x
+	}
 	return 1
+}
+
+proc ::lichess::WindowHidden {} {
+	ReleaseStreams
+	::lichess::api::closeStreams
+	FinishBoard
+}
+
+proc ::lichess::StreamStatus {id text retry} {
+	if {![winfo exists .online]} { return }
+	set row .online.$id
+	if {$text eq {}} { catch {destroy $row}; return }
+	if {![winfo exists $row]} {
+		ttk::frame $row -padding 4
+		ttk::label $row.message
+		ttk::button $row.retry -text $::lichess::api::mc::Retry -command [list ::lichess::api::retry $id]
+		pack $row.message -side left
+		pack $row -side bottom -fill x
+	}
+	$row.message configure -text $text
+	if {$retry} { pack $row.retry -side left -padx 6 } else { pack forget $row.retry }
+	::online::window::status $text
 }
 
 
