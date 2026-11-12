@@ -25,6 +25,9 @@ namespace eval ::lichess::fake {
 	variable NextReplies {}
 	variable SeekCancellations 0
 	variable Options
+	variable Controls {}
+	variable Closes {}
+	variable ConnectionSerial 0
 }
 
 proc ::lichess::fake::Start {} {
@@ -57,6 +60,12 @@ proc ::lichess::fake::ClearState {} {
 	variable NextReplies
 	variable SeekCancellations
 	variable Options
+	variable Controls
+	variable Closes
+	variable ConnectionSerial
+	set Controls {}
+	set Closes {}
+	set ConnectionSerial 0
 	set Serial 0
 	set Token {}
 	set Connections {}
@@ -77,6 +86,10 @@ proc ::lichess::fake::ClearState {} {
 		keepAlive 200
 		oauthDeny 0
 		autoAcceptDraw 1
+		botAccount 0
+		stormPuzzle 0
+		dropTvChannel {}
+		dropBroadcastRound {}
 	}
 }
 
@@ -86,17 +99,18 @@ proc ::lichess::fake::Stop {} {
 	variable Connections
 	variable Timers
 	foreach timer [dict keys $Timers] { catch {after cancel $timer} }
-	foreach {chan connection} $Connections {
-		if {[dict exists $connection timer]} {
-			catch {after cancel [dict get $connection timer]}
-		}
-		catch {fileevent $chan readable {}}
-		catch {close $chan}
-	}
+	foreach chan [dict keys $Connections] { Disconnect $chan stop }
 	if {$Listener ne {}} { catch {close $Listener} }
 	set Listener {}
 	set Port 0
+	# Reset credentials, fixtures and controls, retaining only the journals.
+	variable Requests
+	variable Closes
+	set requests $Requests
+	set closes $Closes
 	ClearState
+	set Requests $requests
+	set Closes $closes
 }
 
 proc ::lichess::fake::Set {name value} {
@@ -111,9 +125,32 @@ proc ::lichess::fake::DenyNextOAuth {} {
 }
 
 # Force one response.  pattern is a glob matched against the URL path.
-proc ::lichess::fake::ForceNext {pattern status} {
+proc ::lichess::fake::ForceNext {pattern status {retryAfter 60}} {
 	variable Forced
-	lappend Forced [dict create pattern $pattern status $status]
+	lappend Forced [dict create pattern $pattern status $status retryAfter $retryAfter]
+}
+
+# Persistent per-path controls, matched against the original path (no query).
+# mode: HTTP status, stall (no bytes), keepalive (blank NDJSON lines), empty.
+# ClearControl restores normal routing. ForceNext takes precedence once.
+proc ::lichess::fake::Control {pattern mode {retryAfter 60}} {
+	variable Controls
+	if {$mode ni {stall keepalive empty} && ![regexp {^[345][0-9][0-9]$} $mode]} {
+		error "unknown fake-server control: $mode"
+	}
+	dict set Controls $pattern [dict create status $mode retryAfter $retryAfter]
+}
+proc ::lichess::fake::ClearControl {pattern} {
+	variable Controls
+	if {[dict exists $Controls $pattern]} { dict unset Controls $pattern }
+}
+proc ::lichess::fake::Closes {} {
+	variable Closes
+	return $Closes
+}
+proc ::lichess::fake::ClearCloses {} {
+	variable Closes
+	set Closes {}
 }
 
 # Replies are UCI moves made by the opponent of the next created game.
@@ -165,22 +202,23 @@ proc ::lichess::fake::Game {gameId} {
 
 proc ::lichess::fake::Accept {chan address port} {
 	variable Connections
+	variable ConnectionSerial
 	fconfigure $chan -blocking 0 -buffering none -translation binary -encoding binary
-	dict set Connections $chan [dict create buffer {} address $address kind request]
+	dict set Connections $chan [dict create id [incr ConnectionSerial] buffer {} address $address kind request]
 	fileevent $chan readable [list ::lichess::fake::Read $chan]
 }
 
 proc ::lichess::fake::Read {chan} {
 	variable Connections
 	if {![dict exists $Connections $chan]} { return }
-	set incoming [read $chan]
+	if {[catch {read $chan} incoming]} { Disconnect $chan read-error; return }
 	if {[string length $incoming]} {
 		set buffer [dict get $Connections $chan buffer]
 		append buffer $incoming
 		dict set Connections $chan buffer $buffer
 	}
 	if {[eof $chan]} {
-		Disconnect $chan
+		Disconnect $chan eof
 		return
 	}
 	set connection [dict get $Connections $chan]
@@ -237,13 +275,17 @@ proc ::lichess::fake::Read {chan} {
 	}
 }
 
-proc ::lichess::fake::Disconnect {chan} {
+proc ::lichess::fake::Disconnect {chan {reason close}} {
 	variable Connections
 	variable EventStreams
 	variable GameStreams
 	variable SeekCancellations
 	if {![dict exists $Connections $chan]} { return }
 	set connection [dict get $Connections $chan]
+	variable Closes
+	set path [lindex [split [DictGet $connection target {}] ?] 0]
+	lappend Closes [dict create id [dict get $connection id] path $path \
+		kind [dict get $connection kind] reason $reason]
 	if {[dict exists $connection timer]} { catch {after cancel [dict get $connection timer]} }
 	if {[dict exists $connection pairTimer]} { catch {after cancel [dict get $connection pairTimer]} }
 	if {[dict get $connection kind] eq "seek"
@@ -307,9 +349,10 @@ proc ::lichess::fake::Handle {chan} {
 		}
 	}
 	lappend Requests [dict create \
-		method $method path $path query $journalQuery form $journalForm authorized $authorized \
+		id [dict get $connection id] method $method path $path query $journalQuery form $journalForm authorized $authorized \
 		json $jsonBody contentType $contentType accept [DictGet [dict get $connection headers] accept {}]]
 
+	variable Controls
 	set forcedIndex -1
 	set forcedStatus 0
 	for {set i 0} {$i < [llength $Forced]} {incr i} {
@@ -317,15 +360,35 @@ proc ::lichess::fake::Handle {chan} {
 		if {[string match [dict get $rule pattern] $path]} {
 			set forcedIndex $i
 			set forcedStatus [dict get $rule status]
+			set retryAfter [dict get $rule retryAfter]
 			break
 		}
 	}
 	if {$forcedIndex >= 0} {
 		set Forced [lreplace $Forced $forcedIndex $forcedIndex]
-		if {$forcedStatus == 429} {
-			Respond $chan 429 {{"error":"Too many requests"}} application/json {Retry-After 60}
-		} else {
-			Respond $chan $forcedStatus {{"error":"Request failed"}} application/json
+	} else {
+		dict for {pattern rule} $Controls {
+			if {[string match $pattern $path]} {
+				set forcedStatus [dict get $rule status]
+				set retryAfter [dict get $rule retryAfter]
+				break
+			}
+		}
+	}
+	if {$forcedStatus ne "0"} {
+		switch -- $forcedStatus {
+			stall { dict set Connections $chan kind stall }
+			keepalive {
+				dict set Connections $chan kind keepalive
+				StartStream $chan
+			}
+			empty { EmptyResponse $chan $path }
+			429 { Respond $chan 429 {{"error":"Too many requests"}} application/json [list Retry-After $retryAfter] }
+			default {
+				set headers {}
+				if {$forcedStatus >= 300 && $forcedStatus < 400} { set headers {Location /api/account} }
+				Respond $chan $forcedStatus {{"error":"Request failed"}} application/json $headers
+			}
 		}
 		return
 	}
@@ -347,7 +410,9 @@ proc ::lichess::fake::Handle {chan} {
 	# Bot games share the board fixture state and events.
 	set path [string map {/api/bot/game/ /api/board/game/} $path]
 	if {$path eq "/api/account" && $method eq "GET"} {
-		RespondJson $chan 200 [dict create id bob username Bob perfs [dict create rapid [dict create games 0 rating 1500]]]
+		set account [dict create id bob username Bob perfs [dict create rapid [dict create games 0 rating 1500]]]
+		if {$Options(botAccount)} { dict set account title BOT }
+		RespondJson $chan 200 $account
 	} elseif {$path eq "/api/stream/event" && $method eq "GET"} {
 		StartEventStream $chan
 	} elseif {$path eq "/api/board/seek" && $method eq "POST"} {
@@ -423,11 +488,11 @@ proc ::lichess::fake::JsonString {value} {
 proc ::lichess::fake::Json {value} {
 	set pairs {}
 	foreach {key val} $value {
-		if {$key in {game opponent perfs rapid clock white black state challenge challenger destUser d user}} {
+		if {$key in {game opponent perfs rapid clock white black state challenge challenger destUser d user variant}} {
 			set encoded [Json $val]
 		} elseif {$key eq "players"} {
 			set encoded "\[[join [lmap player $val {Json $player}] ,]\]"
-		} elseif {$key in {rated isMyTurn wdraw bdraw gone}} {
+		} elseif {$key in {rated isMyTurn hasMoved wdraw bdraw wtakeback btakeback gone}} {
 			set encoded [expr {$val ? "true" : "false"}]
 		} elseif {$key in {ai aiLevel rating games secondsLeft initial increment wtime btime winc binc claimWinInSeconds expires_in wc bc}} {
 			if {$val ne "null" && ![string is integer -strict $val]} { error "invalid numeric fixture field" }
@@ -596,6 +661,7 @@ proc ::lichess::fake::StartSeek {chan form} {
 }
 
 proc ::lichess::fake::StartStream {chan} {
+	variable Connections
 	variable Options
 	set head "HTTP/1.1 200 OK\r\nContent-Type: application/x-ndjson\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n"
 	WriteRaw $chan $head
@@ -709,6 +775,9 @@ proc ::lichess::fake::GameState {gameId} {
 	if {[dict get $game winner] ne {}} { dict set state winner [dict get $game winner] }
 	if {[dict get $game wdraw]} { dict set state wdraw true }
 	if {[dict get $game bdraw]} { dict set state bdraw true }
+	foreach field {wtakeback btakeback} {
+		if {[dict exists $game $field]} { dict set state $field [dict get $game $field] }
+	}
 	return $state
 }
 
@@ -864,6 +933,7 @@ proc ::lichess::fake::Finish {gameId status winner} {
 
 # Phase-two fixtures use literal JSON to preserve arrays and booleans.
 proc ::lichess::fake::Phase2 {chan method path form} {
+	variable Options
 	if {$method eq "GET"} {
 		set body {}
 		set type application/json
@@ -871,8 +941,10 @@ proc ::lichess::fake::Phase2 {chan method path form} {
 			{^/api/user/[^/]+/rating-history$} { set body {[{"name":"Rapid","points":[[2026,0,1,1500]]}]} }
 			{^/api/user/[^/]+$} { set body {{"id":"alice","username":"Alice","perfs":{"rapid":{"rating":1600}}}} }
 			{^/api/team/of/[^/]+$} { set body {[{"id":"team1","name":"Chess friends"}]} }
-			{^/api/board/game/[^/]+/chat$} { set body {[{"user":"Alice","text":"Good luck!"}]} }
-			{^/api/tv/channels$} { set body {{"Best":{"user":{"name":"Alice"},"rating":1600,"gameId":"tv1","color":"white"}}} }
+			{^/api/(board|bot)/game/[^/]+/chat$} { set body {[{"user":"Alice","text":"Good luck!"}]} }
+			{^/api/tv/channels$} {
+				if {[string equal -nocase $Options(dropTvChannel) best]} { Respond $chan 200 {{}} application/json; return 1 }
+				set body {{"Best":{"user":{"name":"Alice"},"rating":1600,"gameId":"tv1","color":"white"}}} }
 			{^/api/tv(/[^/]+)?/feed$} {
 				StartExtraStream $chan tv {}
 				WriteRaw $chan "{\"t\":\"featured\",\"d\":{\"id\":\"tv1\",\"orientation\":\"white\",\"players\":\[\],\"fen\":\"startpos\"}}\n"
@@ -888,7 +960,9 @@ proc ::lichess::fake::Phase2 {chan method path form} {
 				StartExtraStream $chan broadcast [UrlDecode $round]
 				return 1
 			}
-			{^/api/broadcast/top$} { set body {{"active":[{"round":{"id":"round1","name":"Round 1"}}],"upcoming":[],"past":[]}} }
+			{^/api/broadcast/top$} {
+				if {$Options(dropBroadcastRound) eq "round1"} { Respond $chan 200 {{"active":[],"upcoming":[],"past":[]}} application/json; return 1 }
+				set body {{"active":[{"round":{"id":"round1","name":"Round 1"}}],"upcoming":[],"past":[]}} }
 			{^/api/tournament$} { set body {{"created":[{"id":"arena1","fullName":"Friendly arena"}],"started":[],"finished":[]}} }
 			{^/api/tournament/[^/]+$} { set body {{"id":"arena1","fullName":"Friendly arena","nbPlayers":2}} }
 			{^/api/team/[^/]+/swiss$} {
@@ -901,7 +975,34 @@ proc ::lichess::fake::Phase2 {chan method path form} {
 				set body "{\"id\":\"puzzle1\",\"win\":true}\n{\"id\":\"puzzle2\",\"win\":false}\n"
 				set type application/x-ndjson
 			}
+			{^/api/challenge$} { set body {{"in":[{"id":"incoming1","status":"created","challenger":{"id":"ada","name":"Ada"}}],"out":[{"id":"challenge1","status":"created","destUser":{"id":"alice","name":"Alice"}}]}} }
+			{^/api/account/playing$} {
+				variable Games
+				set playing {}
+				set nbMyTurn 0
+				dict for {id game} $Games {
+					if {[dict get $game status] ne "started"} { continue }
+					set myTurn [expr {([llength [dict get $game moves]] % 2 == 0) == ([dict get $game color] eq "white")}]
+					incr nbMyTurn $myTurn
+					set opponent [dict get $game opponent]
+					if {[dict get $opponent ai] eq "null"} { dict unset opponent ai }
+					lappend playing [Json [dict create gameId $id fullId [dict get $game fullId] \
+						color [dict get $game color] fen {rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1} rated [dict get $game rated] \
+						speed [dict get $game speed] opponent $opponent \
+						isMyTurn $myTurn hasMoved [expr {[llength [dict get $game moves]] > 0}] \
+						lastMove [lindex [dict get $game moves] end] rating 1500 \
+						source [dict get $game source] perf [dict get $game speed] \
+						variant [dict create key standard name Standard short Std] \
+						secondsLeft [dict get $game secondsLeft]]]
+				}
+				set body "\{\"nowPlaying\":\[[join $playing ,]\],\"nbMyTurn\":$nbMyTurn\}"
+			}
 			{^/api/puzzle/(daily|next|[^/]+)$} {
+				# Storm is local in Chesswiz and consumes /api/puzzle/next.
+				if {$path eq "/api/puzzle/next" && $Options(stormPuzzle)} {
+					Respond $chan 200 {{"game":{"id":"stormgame","pgn":"1. e4 e5 *","players":[]},"puzzle":{"id":"storm1","rating":800,"plays":100,"solution":["e2e4","e7e5"],"themes":["opening"],"initialPly":0}}} application/json
+					return 1
+				}
 				set body {{"game":{"id":"puzzlegame","pgn":"1. e4 e5 *","players":[]},"puzzle":{"id":"puzzle1","rating":1500,"plays":100,"solution":["e2e4","e7e5"],"themes":["opening"],"initialPly":0}}}
 			}
 			{^/api/cloud-eval$} { set body {{"fen":"startpos","knodes":100,"depth":20,"pvs":[{"moves":"e2e4 e7e5","cp":25}]}} }
@@ -944,6 +1045,14 @@ proc ::lichess::fake::Phase2 {chan method path form} {
 				return 1
 			}
 			{^/api/(board|bot)/game/[^/]+/takeback/(yes|no)$} {
+				regexp {game/([^/]+)/takeback/(yes|no)$} $path -> id answer
+				variable Games
+				if {[dict exists $Games $id]} {
+					set game [Game $id]
+					set side [expr {[dict get $game color] eq "white" ? "w" : "b"}]
+					dict set Games $id ${side}takeback [expr {$answer eq "yes"}]
+					EmitGame $id [GameState $id]
+				}
 				Respond $chan 200 {{"ok":true}} application/json
 				return 1
 			}
@@ -980,4 +1089,30 @@ proc ::lichess::fake::EmitChallenge {challenge} {
 }
 proc ::lichess::fake::EmitChat {gameId user text} {
 	EmitGame $gameId [dict create type chatLine username $user text $text room player]
+}
+
+# Emit opponent offers as gameState updates, for either player's colour.
+proc ::lichess::fake::OpponentOffer {gameId kind {offered 1}} {
+	variable Games
+	if {$kind ni {draw takeback}} { error "unknown offer: $kind" }
+	set game [Game $gameId]
+	set side [expr {[dict get $game color] eq "white" ? "b" : "w"}]
+	dict set Games $gameId $side$kind [expr {!!$offered}]
+	EmitGame $gameId [GameState $gameId]
+}
+
+# Endpoint-specific empty containers, preserving JSON/NDJSON wire shapes.
+proc ::lichess::fake::EmptyResponse {chan path} {
+	set type application/json
+	switch -regexp -- $path {
+		{^/api/account/playing$} { set body {{"nowPlaying":[],"nbMyTurn":0}} }
+		{^/api/challenge$} { set body {{"in":[],"out":[]}} }
+		{^/api/broadcast/top$} { set body {{"active":[],"upcoming":[],"past":[]}} }
+		{^/api/tournament$} { set body {{"created":[],"started":[],"finished":[]}} }
+		{^/api/simul$} { set body {{"pending":[],"created":[],"started":[],"finished":[]}} }
+		{^/api/(team/[^/]+/swiss|puzzle/activity|study/by/[^/]+)$} { set body {}; set type application/x-ndjson }
+		{^/api/(team/of/[^/]+|user/[^/]+/rating-history|(board|bot)/game/[^/]+/chat)$} { set body {[]} }
+		default { set body {{}} }
+	}
+	Respond $chan 200 $body $type
 }
