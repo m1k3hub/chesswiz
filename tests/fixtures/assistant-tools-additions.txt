@@ -3,3 +3,17 @@
 # baseline was frozen are listed here, one per line: tool_name reason.
 opening_line e7d35e98a: look up named opening moves in the opening table.
 engine_play e7d35e98a: let the chess engine play best moves on the board.
+# Redesign tools already accepted at 08ba7f1bb (fixture rule category (f)).
+# metadata records freeze the exact params_schema string and confirm/debug flags.
+database_properties b6c8f362e: show the active database properties.
+# metadata {"name":"database_properties","confirm":0,"debug":0,"params_schema":"{\"type\":\"object\",\"properties\":{}}"}
+find_capability 2bbabc414: find capabilities for a request.
+# metadata {"name":"find_capability","confirm":0,"debug":0,"params_schema":"{\"type\":\"object\",\"properties\":{\"request\":{\"type\":\"string\",\"description\":\"the user's request in their own words\"},\"limit\":{\"type\":\"integer\",\"description\":\"how many capabilities, 3 to 5, default 4\"}},\"required\":[\"request\"]}"}
+goto_move 46df6aa60: navigate to a move.
+# metadata {"name":"goto_move","confirm":0,"debug":0,"params_schema":"{\"type\":\"object\",\"properties\":{\"move\":{\"type\":\"integer\"},\"after\":{\"type\":\"string\",\"enum\":[\"white\",\"black\"]}},\"required\":[\"move\"]}"}
+open_play_engine 97a59ef6e: open Play Against Engine setup.
+# metadata {"name":"open_play_engine","confirm":0,"debug":0,"params_schema":"{\"type\":\"object\",\"properties\":{\"color\":{\"type\":\"string\",\"enum\":[\"white\",\"black\",\"random\"],\"description\":\"the user's colour, not the engine's; omitted keeps the dialog default\"}}}"}
+print b6f80f3c2: print the current game.
+# metadata {"name":"print","confirm":0,"debug":0,"params_schema":"{\"type\":\"object\",\"properties\":{}}"}
+run_action 2bbabc414: run a registered action by id.
+# metadata {"name":"run_action","confirm":0,"debug":0,"params_schema":"{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\",\"description\":\"the action id, e.g. menu.file.open or open_database\"},\"arguments\":{\"type\":\"object\",\"description\":\"named arguments for the action\",\"additionalProperties\":true}},\"required\":[\"id\"]}"}
