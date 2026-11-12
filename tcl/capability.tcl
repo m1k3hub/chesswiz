@@ -46,7 +46,7 @@ proc ::capability::DefineAll {} {
 	Define lichess_tv      {expr {[llength [info commands ::lichess::tv::open]] > 0}}
 	Define lichess_events  {expr {[llength [info commands ::lichess::events::open]] > 0}}
 	Define lichess_puzzles {expr {[llength [info commands ::lichess::puzzles::open]] > 0}}
-	Define stream      {expr {[llength [info commands ::stream::open]] > 0}}
+	Define stream_overlay {expr {[llength [info commands ::stream::open]] > 0}}
 	Define enginematch {expr {[llength [info commands ::enginematch::open]] > 0}}
 	Define guessmove   {expr {[llength [info commands ::guessmove::start]] > 0}}
 	Define endtrainer  {expr {[llength [info commands ::endtrainer::open]] > 0}}

@@ -311,13 +311,13 @@ proc ::lichess::open {parent} {
 
 	set tabsBar [ttk::frame $l.tabsBar]
 	ttk::button $tabsBar.social -text $mc::PlayersTab \
-		-command {::lichess::social::open .application}
+		-command {::action::run menu.training.lichess_social}
 	ttk::button $tabsBar.tv -text $mc::TVTab \
-		-command {::lichess::tv::open .application}
+		-command {::action::run menu.training.lichess_tv}
 	ttk::button $tabsBar.events -text $mc::EventsTab \
-		-command {::lichess::events::open .application}
+		-command {::action::run menu.training.lichess_events}
 	ttk::button $tabsBar.puzzles -text $mc::PuzzlesTab \
-		-command {::lichess::puzzles::open .application}
+		-command {::action::run menu.training.lichess_puzzles}
 	pack $tabsBar.social $tabsBar.tv $tabsBar.events $tabsBar.puzzles \
 		-side left -padx [list 0 $::theme::padx]
 	pack $tabsBar -fill x -pady [list $::theme::pady 0]

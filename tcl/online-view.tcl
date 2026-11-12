@@ -109,14 +109,14 @@ proc create {w backend side} {
 	pack $m.text -side left -fill both -expand yes
 	grid $m -row 1 -column 0 -sticky nsew -pady 4
 	set V(moves) $m.text
-	ttk::button $side.live -text [set mc::Live] -command [list [namespace current]::Show $w -1]
+	ttk::button $side.live -text [set mc::Live] -command {::action::run toolbar.online.live}
 	set V(live) $side.live
 
 	set a [ttk::frame $side.actions]
 	set i 0
 	foreach {key label} {resign Resign draw OfferDraw takeback Takeback abort Abort \
 		claim ClaimVictory flip Flip} {
-		ttk::button $a.$key -text [set mc::$label] -command [list [namespace current]::Action $w $key]
+		ttk::button $a.$key -text [set mc::$label] -command [list ::action::run toolbar.online.$key]
 		grid $a.$key -row [expr {$i / 3}] -column [expr {$i % 3}] -sticky ew -padx 1 -pady 1
 		set V(button:$key) $a.$key
 		incr i
@@ -127,8 +127,8 @@ proc create {w backend side} {
 	# An offer from the opponent shows its own bar with accept/decline.
 	set o [ttk::frame $side.offer]
 	ttk::label $o.text -anchor w -wraplength 300 -font OnlineName
-	ttk::button $o.accept -text [set mc::AcceptDraw] -command [list [namespace current]::Action $w accept]
-	ttk::button $o.decline -text [set mc::DeclineDraw] -command [list [namespace current]::Action $w decline]
+	ttk::button $o.accept -text [set mc::AcceptDraw] -command {::action::run toolbar.online.accept}
+	ttk::button $o.decline -text [set mc::DeclineDraw] -command {::action::run toolbar.online.decline}
 	grid $o.text -row 0 -column 0 -columnspan 2 -sticky ew
 	grid $o.accept $o.decline -row 1 -sticky ew -padx 1
 	grid columnconfigure $o {0 1} -weight 1 -uniform a
@@ -136,8 +136,8 @@ proc create {w backend side} {
 
 	set r [ttk::frame $side.result]
 	ttk::label $r.text -font OnlineBanner -anchor center -justify center -wraplength 300
-	ttk::button $r.analyse -text [set mc::Analyse] -command [list [namespace current]::Action $w analyse]
-	ttk::button $r.close -text [set mc::CloseTab] -command [list [namespace current]::Action $w close]
+	ttk::button $r.analyse -text [set mc::Analyse] -command {::action::run toolbar.online.analyse}
+	ttk::button $r.close -text [set mc::CloseTab] -command {::action::run toolbar.online.close}
 	grid $r.text -row 0 -column 0 -columnspan 2 -sticky ew -pady 4
 	grid $r.analyse $r.close -row 1 -sticky ew -padx 1
 	grid columnconfigure $r {0 1} -weight 1 -uniform a
@@ -148,8 +148,8 @@ proc create {w backend side} {
 		-padx 4 -pady 2
 	$c.text tag configure who -font OnlineName
 	ttk::entry $c.entry -textvariable [namespace current]::${w}::V(chat)
-	ttk::button $c.send -text [set mc::Send] -command [list [namespace current]::SendChat $w]
-	bind $c.entry <Return> [list [namespace current]::SendChat $w]
+	ttk::button $c.send -text [set mc::Send] -command {::action::run toolbar.online.chat}
+	bind $c.entry <Return> {::action::run toolbar.online.chat}
 	grid $c.text -row 0 -column 0 -columnspan 2 -sticky nsew
 	grid $c.entry -row 1 -column 0 -sticky ew -pady {2 0}
 	grid $c.send -row 1 -column 1 -padx {2 0} -pady {2 0}
@@ -159,7 +159,8 @@ proc create {w backend side} {
 	set V(chatText) $c.text
 
 	ttk::checkbutton $side.autoqueen -text [set mc::AutoQueen] \
-		-variable [namespace current]::Options(autoQueen)
+		-variable [namespace current]::AutoQueenMark -command {::action::run toolbar.online.autoqueen}
+	set ::online::view::AutoQueenMark $::online::view::Options(autoQueen)
 	grid $side.autoqueen -row 8 -column 0 -sticky w
 	ttk::label $side.status -anchor w -justify left -wraplength 300
 	grid $side.status -row 9 -column 0 -sticky ew -pady {4 0}
@@ -726,6 +727,81 @@ proc AskPromotion {w} {
 # ======================================================================
 # Actions, status, chat, result
 # ======================================================================
+
+# Stable commands target the selected game tab. Lobby and game-tab names
+# are session data; no action id contains a server game id or widget path.
+proc Current {} {
+	if {![winfo exists .online.tabs] || [wm state .online] eq "withdrawn"} { return "" }
+	set w [.online.tabs select]
+	if {$w eq "" || ![exists $w]} { return "" }
+	return $w
+}
+
+proc Control {key} {
+	set w [Current]
+	if {$w eq ""} { return "" }
+	switch -- $key {
+		live { return $w.side.live }
+		accept - decline { return $w.side.offer.$key }
+		analyse - close { return $w.side.result.$key }
+		chat { return $w.side.chat.send }
+		autoqueen { return $w.side.autoqueen }
+		default { return $w.side.actions.$key }
+	}
+}
+
+proc Available {key} {
+	set control [Control $key]
+	if {$control eq "" || ![winfo exists $control]} { return 0 }
+	# A withdrawn control group (spectating, training, no draw offer, ...)
+	# must be unavailable to every caller, including the generic AI tool.
+	for {set w $control} {$w ne [Current]} {set w [winfo parent $w]} {
+		if {[winfo manager $w] eq ""} { return 0 }
+	}
+	return [expr {![$control instate disabled]}]
+}
+
+proc RunControl {key argsDict} {
+	set w [Current]
+	if {$w eq "" || ![Available $key]} { error "Select an available online game control first." }
+	switch -- $key {
+		live { Show $w -1 }
+		chat { SendChat $w }
+		autoqueen {
+			variable Options
+			set Options(autoQueen) [expr {!$Options(autoQueen)}]
+			set ::online::view::AutoQueenMark $Options(autoQueen)
+			return $Options(autoQueen)
+		}
+		default { Action $w $key }
+	}
+}
+
+proc RegisterActions {} {
+	foreach {key label purpose when} {
+		resign Resign {Resign the selected online game.} {When you want to concede the game.}
+		draw OfferDraw {Offer your opponent a draw.} {When you want to propose ending the game evenly.}
+		takeback Takeback {Ask to take back the last move.} {When you want your opponent to allow a move to be undone.}
+		abort Abort {Abort the selected online game.} {When the server allows ending a game without a result.}
+		claim ClaimVictory {Claim victory in the selected online game.} {When the server allows you to claim the win.}
+		flip Flip {Turn the online board around.} {When you want to see the game from the other side.}
+		live Live {Return the online board to the latest position.} {When you have been replaying earlier moves and want to follow live play.}
+		accept AcceptDraw {Accept your opponent's draw offer.} {When you agree to end the game as a draw.}
+		decline DeclineDraw {Decline your opponent's draw offer.} {When you want to keep playing after an offer.}
+		analyse Analyse {Open the completed online game for analysis in Chesswiz.} {When you want to review the moves after playing.}
+		close CloseTab {Close the selected online game tab.} {When you have finished looking at the completed game.}
+		chat Send {Send the message entered beside the online board.} {When you have written a message to your opponent.}
+		autoqueen AutoQueen {Toggle automatic promotion to a queen in online games.} {When you want promotions to happen immediately or to choose a piece yourself.}
+	} {
+		set id toolbar.online.$key
+		if {[dict exists $::action::Registry $id]} { continue }
+		::action::register $id [dict create label [set ::online::view::mc::$label] \
+			object {} what $purpose doc $purpose ai 0 operator 1 \
+			handler [list ::online::view::RunControl $key] \
+			visible [list ::online::view::Available $key] enabled [list ::online::view::Available $key] \
+			purpose $purpose when $when examples [list $purpose "Please [string tolower $purpose]"]]
+	}
+}
 
 proc Action {w key} {
 	variable ${w}::V

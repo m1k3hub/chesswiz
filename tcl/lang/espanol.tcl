@@ -3692,3 +3692,13 @@
 ::application::assistant::panel::mc::NoModelHint	"Todav\u00eda no hay un modelo conectado. Abra Herramientas > Elegir modelo\u2026 para conectar uno; las sugerencias de arriba funcionan sin \u00e9l."
 
 # vi:set ts=3 sw=3:
+
+# Training > Online (2026-11-12)
+::menu::mc::Online "En l\xednea"
+::menu::mc::PlayOnline "Jugar en FICS\u2026"
+::menu::mc::PlayLichess "Jugar en Lichess\u2026"
+::menu::mc::LichessSocial "Jugadores de Lichess\u2026"
+::menu::mc::LichessTv "Televisi\xf3n de Lichess\u2026"
+::menu::mc::LichessEvents "Torneos de Lichess\u2026"
+::menu::mc::LichessPuzzles "Problemas de Lichess\u2026"
+::menu::mc::StreamOverlay "Transmitir en Twitch / YouTube\u2026"

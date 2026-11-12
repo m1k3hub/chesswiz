@@ -164,6 +164,13 @@ namespace eval menu::mc {
 	set OpeningExplorer				"Opening Explorer"
 
 	# Training
+	set Online "Online"
+	set FocusFollowsSize "Focus follows size on resize"
+	set Donate "Donate"
+	set DonatePayPal "PayPal"
+	set DonateKofi "Ko-fi"
+	set OpeningLine "Look up an opening line"
+	set EnginePlay "Let the engine play"
 	set TacticsTrainer					"Tactics Trainer…"
 	set TrainRepertoire				"Train Repertoire…"
 	set StudyPlan						"Study Plan…"
@@ -216,7 +223,7 @@ namespace eval menu::mc {
 	set LichessTv					"Lichess TV…"
 	set LichessEvents				"Lichess Tournaments…"
 	set LichessPuzzles			"Lichess Puzzles…"
-set StreamOverlay			"Stream to Twitch / YouTube…"
+	set StreamOverlay			"Stream to Twitch / YouTube…"
 	set EngineMatch					"Engine Match…"
 	set StudyPlan						"Study Plan…"
 	set OpponentBrief					"Opponent Brief…"
@@ -509,13 +516,15 @@ proc ::menu::DefineTree {} {
 			[list cmd menu.training.repertoire TrainRepertoire "" {::menu::ModulePresent reptrainer}] \
 			[list sep] \
 			[list cmd menu.training.play_engine PlayAgainstEngine "" {::menu::ModulePresent playengine}] \
+			[list cascade Online "" [list \
 			[list cmd menu.training.play_online PlayOnline "" {::menu::ModulePresent ics}] \
 			[list cmd menu.training.play_lichess PlayLichess "" {::menu::ModulePresent lichess}] \
 			[list cmd menu.training.lichess_social LichessSocial "" {::menu::ModulePresent lichess_social}] \
 			[list cmd menu.training.lichess_tv LichessTv "" {::menu::ModulePresent lichess_tv}] \
 			[list cmd menu.training.lichess_events LichessEvents "" {::menu::ModulePresent lichess_events}] \
 			[list cmd menu.training.lichess_puzzles LichessPuzzles "" {::menu::ModulePresent lichess_puzzles}] \
-			[list cmd menu.training.stream StreamOverlay "" {::menu::ModulePresent stream}] \
+			[list cmd menu.training.stream StreamOverlay "" {::menu::ModulePresent stream_overlay}] \
+			]] \
 			[list cmd menu.training.engine_match EngineMatch "" {::menu::ModulePresent enginematch}] \
 			[list sep] \
 			[list cmd menu.training.studyplan StudyPlan "" {::menu::ModulePresent studyplan}] \
@@ -624,6 +633,15 @@ proc ::menu::TextWidget? {} {
 	set w [focus]
 	if {$w eq ""} { return 0 }
 	return [expr {[winfo class $w] in {Text Entry TEntry TCombobox Spinbox TSpinbox}}]
+}
+
+# Donation destinations are configuration, and absent destinations cannot
+# be invoked from the Ask field or the assistant either.
+proc ::menu::DonateAvailable {provider} {
+	if {$provider eq ""} {
+		return [expr {[llength $::menu::DonateURLs] > 0}]
+	}
+	return [expr {[dict exists $::menu::DonateURLs $provider] && [dict get $::menu::DonateURLs $provider] ne ""}]
 }
 
 proc ::menu::TextWidget {} {
@@ -855,6 +873,9 @@ proc ::menu::RegisterTree {} {
 
 	# Offer the support page when the assistant is asked how to donate.
 	dict set ::action::Registry menu.help.support ai 1
+	dict set ::action::Registry menu.help.support label [MC SupportChesswiz]
+	dict set ::action::Registry menu.help.support visible {expr {$::menu::SupportURL ne ""}}
+	dict set ::action::Registry menu.help.support enabled {expr {$::menu::SupportURL ne ""}}
 	dict set ::action::Registry menu.help.support doc "Open the Chesswiz support page to donate or support development."
 
 	# The New Game variants are dispatched by ::menu::Invoke but have no
@@ -1813,6 +1834,7 @@ proc ::menu::DumpNodes {menu nodes indent topLevel} {
 # and the old widget paths resolve to real actions.
 # ----------------------------------------------------------------------
 proc ::menu::RegisterExtras {} {
+	if {[llength [info commands ::online::view::RegisterActions]]} { ::online::view::RegisterActions }
 	::inventoryaction::Register
 	if {[dict exists $::action::Registry app-fullscreen]} {
 		dict set ::action::Registry app-fullscreen args {{state {type enum default toggle enum {toggle on off} description {Use off to exit fullscreen, on to enter, or toggle}}}}
@@ -1848,6 +1870,23 @@ proc ::menu::RegisterExtras {} {
 	Register view.focus_ratio "Zoom ratio" "" "" "" "00.003"
 	Register view.focus_pin "Pin board size" "" "" "" "00.004"
 	Register view.focus_follows_size "Focus follows size on resize" "" "" "" "00.005"
+	dict set ::action::Registry view.focus_follows_size label [MC FocusFollowsSize]
+	dict set ::action::Registry view.focus_follows_size enabled {expr {[::menu::PaneTWM] ne ""}}
+	foreach {id label} {opening_line OpeningLine engine_play EnginePlay set_position SetStartPosition} {
+		dict set ::action::Registry $id label [MC $label]
+	}
+	foreach {id label provider} {
+		menu.help.donate Donate {}
+		menu.help.donate_paypal DonatePayPal PayPal
+		menu.help.donate_kofi DonateKofi Ko-fi
+	} {
+		Register $id [MC $label] "" [list ::menu::DonateAvailable $provider] [list ::menu::DonateAvailable $provider] "00.006"
+		dict set ::action::Registry $id label [MC $label]
+		set purpose [expr {$provider eq "" ? "Show ways to donate to Chesswiz development." : "Open the $provider page to support Chesswiz development."}]
+		dict set ::action::Registry $id purpose $purpose
+		dict set ::action::Registry $id when "When you want to contribute to continued Chesswiz development."
+		dict set ::action::Registry $id examples [list $purpose "Please [string tolower $purpose]"]
+	}
 	# The former Extras 3D entries: PROPOSAL section 5 places them in the
 	# board pane header / View > Panes. They stay registry actions so the
 	# assistant and the palette can reach them when the module is present.
@@ -2410,6 +2449,13 @@ proc ::menu::Invoke {id {argsDict {}}} {
 
 proc ::menu::Do {id} {
 	switch -- $id {
+		menu.help.donate {
+			set b $::application::Vars(donate)
+			tk_popup [winfo parent $b].donate_menu [winfo rootx $b] [expr {[winfo rooty $b] + [winfo height $b]}]
+			return
+		}
+		menu.help.donate_paypal { return [::web::open .application [dict get $::menu::DonateURLs PayPal]] }
+		menu.help.donate_kofi { return [::web::open .application [dict get $::menu::DonateURLs Ko-fi]] }
 		menu.file.new.normal { return [::menu::dbNew .application Normal] }
 		menu.file.new.three { return [::menu::dbNew .application ThreeCheck] }
 		menu.file.new.crazy { return [::menu::dbNew .application Crazyhouse] }

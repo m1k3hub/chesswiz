@@ -3752,3 +3752,13 @@
 ::context::mc::c12_export "Partie exportieren"
 
 # vi:set ts=3 sw=3:
+
+# Training > Online (2026-11-12)
+::menu::mc::Online "Im Internet"
+::menu::mc::PlayOnline "Auf FICS spielen\u2026"
+::menu::mc::PlayLichess "Auf Lichess spielen\u2026"
+::menu::mc::LichessSocial "Lichess-Spieler\u2026"
+::menu::mc::LichessTv "Lichess-Fernsehen\u2026"
+::menu::mc::LichessEvents "Lichess-Turniere\u2026"
+::menu::mc::LichessPuzzles "Lichess-Aufgaben\u2026"
+::menu::mc::StreamOverlay "Auf Twitch / YouTube streamen\u2026"

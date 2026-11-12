@@ -3700,3 +3700,13 @@
 ::application::assistant::panel::mc::NoModelHint	"Ingen modell \u00e4r ansluten \u00e4n. \u00d6ppna Verktyg > V\u00e4lj modell\u2026 f\u00f6r att ansluta en; f\u00f6rslagen ovan fungerar utan."
 
 # vi:set ts=3 sw=3:
+
+# Training > Online (2026-11-12)
+::menu::mc::Online "P\xe5 n\xe4tet"
+::menu::mc::PlayOnline "Spela p\xe5 FICS\u2026"
+::menu::mc::PlayLichess "Spela p\xe5 Lichess\u2026"
+::menu::mc::LichessSocial "Lichess-spelare\u2026"
+::menu::mc::LichessTv "Lichess-s\xe4ndningar\u2026"
+::menu::mc::LichessEvents "Lichess-turneringar\u2026"
+::menu::mc::LichessPuzzles "Lichess-problem\u2026"
+::menu::mc::StreamOverlay "Str\xf6mma p\xe5 Twitch / YouTube\u2026"

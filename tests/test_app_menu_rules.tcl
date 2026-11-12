@@ -134,8 +134,9 @@ proc ::scidb::test::rules::ModuleGatedRows {} {
 				}
 			}
 			foreach module [dict keys $::capability::Modules] {
-				if {[string first "ModulePresent $module" $text] >= 0
-				 || [string first "capability::present $module" $text] >= 0} {
+				# A capability name is a complete word: lichess must not
+				# match lichess_tv, nor stream match stream_overlay.
+				if {[regexp [format {(?:ModulePresent|capability::present)\s+%s\M} $module] $text]} {
 					lappend rows [list $surface $module $id]
 				}
 			}
@@ -438,7 +439,7 @@ tcltest::test rules-module-absent-all-surfaces {no surface shows an action of an
 	puts "VAL-RULE-003: [llength [dict keys $::capability::Modules]] declared modules, [llength $rows] gated rows in [llength $modules] modules, [llength $leaks] leaks"
 	foreach l $leaks { puts "  LEAK [join $l { }]" }
 	list [llength $leaks] [llength $rows]
-# Approved unsupported-leaf removal leaves 43 gated rows; zero leaks remains mandatory.
-} -result {0 43}
+# The seven Online leaves extend the prior 43 rows; zero leaks remains mandatory.
+} -result {0 50}
 
 tcltest::cleanupTests

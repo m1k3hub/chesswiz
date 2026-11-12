@@ -199,7 +199,8 @@ proc open {} {
 	if {[llength $::menu::DonateURLs]} {
 		set dm [menu $nb.donate_menu -tearoff 0]
 		foreach {name url} $::menu::DonateURLs {
-			$dm add command -label $name -command [list ::web::open .application $url]
+			set id [dict get {PayPal menu.help.donate_paypal Ko-fi menu.help.donate_kofi} $name]
+			$dm add command -label $name -command [list ::action::run $id]
 		}
 		tk::button $Vars(donate) \
 			-borderwidth 1 \
@@ -211,9 +212,7 @@ proc open {} {
 			-foreground #c0143c \
 			-activeforeground white \
 			-text $mc::Donate \
-			-command [list apply {{b m} {
-				tk_popup $m [winfo rootx $b] [expr {[winfo rooty $b] + [winfo height $b]}]
-			}} $nb.donate $dm] \
+			-command [list ::action::run menu.help.donate] \
 			;
 		::tooltip::tooltip $Vars(donate) [namespace current]::mc::DonateTip
 		bind $Vars(donate) <<LanguageChanged>> [list $Vars(donate) configure -text $mc::Donate]

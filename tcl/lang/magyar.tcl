@@ -3692,3 +3692,13 @@
 ::application::assistant::panel::mc::NoModelHint	"M\u00e9g nincs modell csatlakoztatva. Nyissa meg az Eszk\u00f6z\u00f6k > Modell kiv\u00e1laszt\u00e1sa\u2026 men\u00fcpontot; a fenti javaslatok modell n\u00e9lk\u00fcl is m\u0171k\u00f6dnek."
 
 # vi:set ts=8 sw=8:
+
+# Training > Online (2026-11-12)
+::menu::mc::Online "Interneten"
+::menu::mc::PlayOnline "J\xe1t\xe9k a FICS-en\u2026"
+::menu::mc::PlayLichess "J\xe1t\xe9k a Lichessen\u2026"
+::menu::mc::LichessSocial "Lichess-j\xe1t\xe9kosok\u2026"
+::menu::mc::LichessTv "Lichess-k\xf6zvet\xedt\xe9s\u2026"
+::menu::mc::LichessEvents "Lichess-versenyek\u2026"
+::menu::mc::LichessPuzzles "Lichess-feladv\xe1nyok\u2026"
+::menu::mc::StreamOverlay "K\xf6zvet\xedt\xe9s Twitchen / YouTube-on\u2026"
