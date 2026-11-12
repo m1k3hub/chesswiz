@@ -134,6 +134,7 @@ proc ::lichess::api::Start {id} {
 		return
 	}
 	dict set Requests $id timer {}
+	dict set Requests $id startedAt [clock milliseconds]
 	set r [dict get $Requests $id]
 	set url [dict get $r url]
 	set opts [list -method [dict get $r method] -binary 1 -keepalive 0 \
@@ -153,6 +154,7 @@ proc ::lichess::api::Start {id} {
 		lappend opts -type [dict get $r contentType] -query [encoding convertto utf-8 [dict get $r form]]
 	}
 	if {[dict get $r stream]} {
+		if {[dict get $r attempts] == 0} { dict set Requests $id lastActivity [clock milliseconds] }
 		lappend opts -handler [list ::lichess::api::Read $id] -timeout 0
 	}
 	if {[catch {
@@ -165,7 +167,6 @@ proc ::lichess::api::Start {id} {
 	if {[dict exists $Requests $id]} {
 		dict set Requests $id http $h
 		if {[dict get $r stream]} {
-			if {[dict get $r attempts] == 0} { dict set Requests $id lastActivity [clock milliseconds] }
 			ArmWatchdog $id
 		}
 	}
@@ -327,13 +328,25 @@ proc ::lichess::api::Done {id h} {
 	set r [dict get $Requests $id]
 	::http::cleanup $h
 	dict set Requests $id http {}
-	if {[dict get $r stream] && ($code == 0 || $code >= 500 && $code <= 599)} {
+	# A successful HTTP response does not mean an open-ended feed is done.
+	set eof [expr {[dict get $r stream] && [dict get $reply ok] && ![StreamComplete $id]}]
+	if {$eof} {
+		# Short connections may send valid data before every EOF. Keep their
+		# recovery budget across those reads, otherwise they retry forever.
+		if {![dict exists $r eofSince]} { dict set Requests $id eofSince [clock milliseconds] }
+		set attempts [dict get $r attempts]
+		if {[dict exists $r eofAttempts]} { set attempts [expr {max($attempts, [dict get $r eofAttempts])}] }
+		dict set Requests $id attempts $attempts
+		dict set Requests $id eofAttempts [expr {$attempts + 1}]
+	}
+	if {[dict get $r stream] && ($eof || $code == 0 || $code >= 500 && $code <= 599)} {
 		if {$code >= 500} {
 			dict set Requests $id serverError $code
 		} else {
 			dict unset Requests $id serverError
 		}
-		Reconnect $id
+		# Deliver the final complete events before advancing the generation.
+		dict set Requests $id timer [after 0 [list ::lichess::api::Reconnect $id]]
 		return
 	}
 	set expired [expr {$code == 401 && [dict get $r authenticated] && ![dict get $r validation]
@@ -390,6 +403,12 @@ proc ::lichess::api::ArmWatchdog {id {activity 0}} {
 	variable StallTimeout
 	if {![dict exists $Requests $id]} { return }
 	if {$activity} {
+		# A connection that stays active for a watchdog interval breaks the
+		# sequence of short EOFs and starts a fresh future recovery budget.
+		if {[dict exists $Requests $id startedAt] && [clock milliseconds] - [dict get $Requests $id startedAt] >= $StallTimeout} {
+			dict unset Requests $id eofSince
+			dict unset Requests $id eofAttempts
+		}
 		dict unset Requests $id serverError
 		dict set Requests $id lastActivity [clock milliseconds]
 		after cancel [dict get $Requests $id deadline]
@@ -406,7 +425,47 @@ proc ::lichess::api::ForgetDelivery {id} {
 }
 proc ::lichess::api::StreamReply {id event} {
 	variable Requests
+	TrackCompletion $id $event
 	after 0 [list ::lichess::api::StreamDeliver $id [dict get $Requests $id generation] [dict get $Requests $id cmd] $event]
+}
+# Completion comes from protocol state, never from EOF alone. TV and event
+# feeds remain open-ended even when a game mentioned by them has finished.
+proc ::lichess::api::TrackCompletion {id event} {
+	variable Requests
+	if {![dict exists $Requests $id url]} { return }
+	set url [dict get $Requests $id url]
+	if {[regexp {/api/(board|bot)/game/stream/|/api/stream/game/} $url]} {
+		set state $event
+		if {[dict exists $event type] && [dict get $event type] eq "gameFull" && [dict exists $event state]} {
+			set state [dict get $event state]
+		}
+		if {[dict exists $state status]} {
+			set status [dict get $state status]
+			if {[dict exists $status name]} { set status [dict get $status name] }
+			dict set Requests $id terminal [expr {$status in {aborted mate resign stalemate timeout draw outoftime cheat noStart unknownFinish variantEnd}}]
+		}
+	} elseif {[string match */api/stream/broadcast/round/*.pgn $url] && [dict exists $event text]} {
+		set text [dict get $event text]
+		set key {}
+		foreach tag {Site Board White Black} {
+			set value {}
+			regexp -line [format {^\[%s "([^"\n]*)"\]} $tag] $text -> value
+			lappend key $value
+		}
+		set result *
+		regexp -line {^\[Result "([^"\n]*)"\]} $text -> result
+		dict set Requests $id pgnResults $key [expr {$result in {1-0 0-1 1/2-1/2}}]
+	}
+}
+proc ::lichess::api::StreamComplete {id} {
+	variable Requests
+	set r [dict get $Requests $id]
+	if {[dict exists $r terminal]} { return [dict get $r terminal] }
+	if {[dict exists $r pgnResults]} {
+		return [expr {0 ni [dict values [dict get $r pgnResults]]}]
+	}
+	# Seek's streaming response is a finite acknowledgement, not a feed.
+	return [string match */api/board/seek [dict get $r url]]
 }
 proc ::lichess::api::StreamDeliver {id generation cmd event} {
 	variable Deliveries
@@ -424,7 +483,9 @@ proc ::lichess::api::Reconnect {id} {
 	if {$attempt >= [llength $ReconnectDelays]} { GiveUp $id; return }
 	if {[dict get $r deadline] eq {}} {
 		# Include the original silence in the 30-second recovery bound.
-		set remaining [expr {max(0, $RecoveryTimeout - ([clock milliseconds] - [dict get $r lastActivity]))}]
+		set since [dict get $r lastActivity]
+		if {[dict exists $r eofSince]} { set since [expr {min($since, [dict get $r eofSince])}] }
+		set remaining [expr {max(0, $RecoveryTimeout - ([clock milliseconds] - $since))}]
 		dict set Requests $id deadline [after $remaining [list ::lichess::api::GiveUp $id]]
 	}
 	dict set Requests $id generation [expr {[dict get $r generation] + 1}]
@@ -457,6 +518,8 @@ proc ::lichess::api::retry {id} {
 	after cancel [dict get $Requests $id deadline]
 	dict set Requests $id deadline {}
 	dict set Requests $id lost 0
+	dict unset Requests $id eofSince
+	dict unset Requests $id eofAttempts
 	dict unset Requests $id serverError
 	dict set Requests $id attempts 0
 	dict set Requests $id buffer {}

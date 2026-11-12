@@ -527,7 +527,14 @@ proc ::lichess::WindowHidden {} {
 proc ::lichess::StreamStatus {id text retry} {
 	if {![winfo exists .online]} { return }
 	set row .online.$id
-	if {$text eq {}} { catch {destroy $row}; return }
+	if {$text eq {}} {
+		if {[winfo exists $row.message] && [winfo exists .online.status]
+			&& [.online.status cget -text] eq [$row.message cget -text]} {
+			::online::window::status {}
+		}
+		catch {destroy $row}
+		return
+	}
 	if {![winfo exists $row]} {
 		ttk::frame $row -padding 4
 		ttk::label $row.message

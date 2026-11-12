@@ -327,17 +327,17 @@ namespace eval ::lichess::phase2 {
 			} -cleanup { Stop } -result ok
 		}
 	}
-	tcltest::test phase2-broadcast-eof {natural EOF flushes the last PGN before closed} -setup { Start } -body {
+	tcltest::test phase2-broadcast-eof {finished-round EOF flushes the last PGN before closed} -setup { Start } -body {
 		::lichess::api::broadcastRoundStream round1 ::lichess::phase2::Event
 		Wait {[llength [::lichess::fake::Requests]] == 1}
 		foreach {chan connection} $::lichess::fake::Connections {
 			if {[dict get $connection kind] eq "broadcast"} {
-				::lichess::fake::WriteRaw $chan "\[Event \"Last\"\]\n\n1. d4 *"
+				::lichess::fake::WriteRaw $chan "\[Event \"Last\"\]\n\[Result \"1-0\"\]\n\n1. d4 1-0"
 				::lichess::fake::Disconnect $chan
 			}
 		}
 		Wait {[llength $Events] == 2}
-		Check [dict get [lindex $Events 0] text] "\[Event \"Last\"\]\n\n1. d4 *"
+		Check [dict get [lindex $Events 0] text] "\[Event \"Last\"\]\n\[Result \"1-0\"\]\n\n1. d4 1-0"
 		Check [dict get [lindex $Events 1] type] closed
 		set result ok
 	} -cleanup { Stop } -result ok

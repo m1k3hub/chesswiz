@@ -240,13 +240,18 @@ namespace eval ::lichess::apitest {
 		list [dict get $Result ok] [llength $Seen] [::lichess::api::signedIn?]
 	} -cleanup { Stop } -result {0 0 0}
 
-	tcltest::test lichess-api-stream {NDJSON, split HTTP chunks and UTF-8, keep-alives, EOF} -setup { Start; set Stored [::lichess::testToken] } -body {
+	tcltest::test lichess-api-stream {NDJSON, split HTTP chunks and UTF-8, keep-alives, EOF recovery} -setup { Start; set Stored [::lichess::testToken] } -body {
+		set ::lichess::api::ReconnectDelays {50 150 450}
 		set h [::lichess::api::streamEvents ::lichess::apitest::Event]
-		Wait {[llength $Events] == 3}
-		list [dict get [lindex $Events 0] type] [dict get [lindex $Events 0] name] \
-			[dict get [lindex $Events 1] type] [dict get [lindex $Events 2] type] \
-			[dict exists $::lichess::api::Requests $h]
-	} -cleanup { Stop } -result {test Bób second closed 0}
+		Wait {[llength $Events] >= 4}
+		set types [lmap event $Events {dict get $event type}]
+		set active [dict exists $::lichess::api::Requests $h]
+		::lichess::api::close $h
+		Wait {[dict get [lindex $Events end] type] eq "closed"}
+		set ::lichess::api::ReconnectDelays {1000 3000 9000}
+		list [lrange $types 0 3] [dict get [lindex $Events 0] name] $active \
+			[llength [lsearch -all -exact [lmap event $Events {dict get $event type}] closed]]
+	} -cleanup { set ::lichess::api::ReconnectDelays {1000 3000 9000}; Stop } -result {{test second test second} Bób 1 1}
 
 	tcltest::test lichess-api-close {closing game/seek handles is idempotent and signals closure} -setup { Start; set Stored [::lichess::testToken]; set Mode hold } -body {
 		set h [::lichess::api::streamGame game1234 ::lichess::apitest::Event]
