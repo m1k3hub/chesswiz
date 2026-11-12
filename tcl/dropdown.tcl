@@ -1090,6 +1090,13 @@ proc ::menu::NoHtmlReport {} {
 	return [expr {[::capability::present report] ? 0 : 1}]
 }
 proc ::menu::Sortable {} {
+	# The game list stores this option per table, not in the namespace's
+	# default Vars array. Ask must read the same table the popup receives.
+	if {![catch {
+		set manager $::application::database::Vars(games).twm
+		set table [set ::application::database::games::${manager}::Priv(table)]
+		set v [set ::gamestable::${table}::Vars(sortable)]
+	}]} { return [expr {$v ? 1 : 0}] }
 	if {[catch { set v $::gamestable::Vars(sortable) }]} { return 1 }
 	return [expr {$v ? 1 : 0}]
 }

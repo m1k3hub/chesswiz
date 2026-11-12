@@ -62,8 +62,11 @@ tcltest::test context-pane-cascade-dispatch {Ask opens the notation choices and 
 } -result {1 1 {opened choices} 1 1}
 tcltest::test context-sort-state-shared {an unsortable current table hides both native and alias sort actions from Ask} -setup {
     ::menu::gameNew .application
-    set savedSortable [::menu::Sortable]
-    set ::gamestable::Vars(sortable) 0
+    set manager $::application::database::Vars(games).twm
+    set table [set ::application::database::games::${manager}::Priv(table)]
+    set sortableVariable ::gamestable::${table}::Vars(sortable)
+    set savedSortable [set $sortableVariable]
+    set $sortableVariable 0
 } -body {
     set ids [lmap row [::action::labels asklist {}] {lindex $row 0}]
     set bad {}
@@ -71,7 +74,7 @@ tcltest::test context-sort-state-shared {an unsortable current table hides both 
         if {$id in $ids || [dict get [::menu::state $id] visible]} {lappend bad $id}
     }
     set bad
-} -cleanup {set ::gamestable::Vars(sortable) $savedSortable} -result {}
+} -cleanup {set $sortableVariable $savedSortable} -result {}
 
 tcltest::test context-column-choice-id {dynamic column checkbuttons resolve and toggle through their action id} -setup {
     ::table::table .posttable
