@@ -626,6 +626,20 @@ ArrangePane(ClientData clientData)	// Structure describing parent whose slaves a
 	Tcl_Preserve((ClientData)mw);
 
 	slave = mw->slaves[0];
+	// Undocking reparents the pane before the old container finishes
+	// forgetting it. An idle redraw can run during that transition;
+	// Tk_MaintainGeometry requires the master to descend from the
+	// pane's parent, and walks off the parent chain otherwise. The new
+	// geometry manager will arrange the pane once reparenting finishes.
+	Tk_Window parent = Tk_Parent(slave->tkwin);
+	for (Tk_Window ancestor = mw->tkwin; ancestor != parent; ancestor = Tk_Parent(ancestor))
+	{
+		if (ancestor == nullptr || Tk_IsTopLevel(ancestor))
+		{
+			Tcl_Release((ClientData)mw);
+			return;
+		}
+	}
 	doubleBw = 2*Tk_Changes(slave->tkwin)->border_width;
 
 	slaveX = slave->padx;

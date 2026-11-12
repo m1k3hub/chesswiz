@@ -1081,6 +1081,39 @@ proc ::context::Rows {cid object} {
 	return {}
 }
 
+# Return a one-element list containing a cascade's children, or an empty
+# list when this pane does not declare that cascade. The wrapper preserves
+# the distinction between an empty cascade and an ordinary command.
+proc ::context::FindCascade {rows id} {
+	foreach row $rows {
+		if {[lindex $row 0] ne "cascade"} { continue }
+		if {[lindex $row 1] eq $id} { return [list [lindex $row 2]] }
+		set found [FindCascade [lindex $row 2] $id]
+		if {[llength $found]} { return $found }
+	}
+	return {}
+}
+
+proc ::context::ActionCascade {id object} {
+	if {[catch {set record [::action::get $id]}]} { return {} }
+	foreach cid [dict get $record context] {
+		set found [FindCascade [Rows $cid $object] $id]
+		if {[llength $found]} { return [list $cid [lindex $found 0]] }
+	}
+	return {}
+}
+
+proc ::context::RunnableChildren {rows object} {
+	foreach row $rows {
+		if {$row eq "-" || [lindex $row 0] in {ask header}} { continue }
+		if {[lindex $row 0] eq "cascade"} {
+			set id [lindex $row 1]
+		} else { set id $row }
+		if {[Visible $id $object] && [Enabled $id $object]} { return 1 }
+	}
+	return 0
+}
+
 # ----------------------------------------------------------------------
 # Predicates (R1..R16 where the object carries the facts).
 # ----------------------------------------------------------------------
@@ -1117,13 +1150,6 @@ proc ::context::ClipboardCanPaste {} {
 proc ::context::Visible {id object} {
 	set st [::menu::state $id $object]
 	set visible [dict get $st visible]
-	if {$id in {c3.sort_column c3.sort_asc c3.sort_desc}} {
-		if {[dict exists $object sortable]} {
-			set visible [expr {$visible && [dict get $object sortable] ? 1 : 0}]
-		}
-	}
-	# R2: trial mode hides the save/replace/strip rows.
-	if {$id in {c4.save_changes} && [::menu::TrialMode]} { set visible 0 }
 	# R6/R7: the engine group belongs to a running line engine.
 	if {$id in {c6.pause_resume c6.close_engine c6.lock_engine c6.opponents_view
 			c6.best_first c6.multiple_variations c6.lines_per_variation}} {
@@ -1240,7 +1266,28 @@ proc ::context::MenuRowIds {cid row object} {
 proc ::context::Build {cid menu {object {}}} {
 	set rows [Rows $cid $object]
 	if {![llength $rows]} { return 0 }
-	return [expr {[BuildRows $cid $menu $rows $object] ? 1 : 0}]
+	BuildRows $cid $menu $rows $object
+	return [HasRunnableRow $menu]
+}
+
+# R8: Ask and disabled explanatory rows do not make a useful popup.
+# Inspect the built menu so dynamic cascades and their availability count
+# exactly as they will when posted.
+proc ::context::HasRunnableRow {menu} {
+	set last [$menu index end]
+	if {$last eq "none"} { return 0 }
+	for {set i 0} {$i <= $last} {incr i} {
+		set type [$menu type $i]
+		if {$type in {separator tearoff}} { continue }
+		if {[$menu entrycget $i -state] eq "disabled"} { continue }
+		if {$type eq "cascade"} {
+			if {[HasRunnableRow [$menu entrycget $i -menu]]} { return 1 }
+		} else {
+			set cmd [$menu entrycget $i -command]
+			if {$cmd ne "" && [lrange $cmd 0 1] ne {::action::run context.ask}} { return 1 }
+		}
+	}
+	return 0
 }
 
 # Add <rows> to <menu>; a cascade may hold another cascade (C2 Strip,
@@ -1278,8 +1325,9 @@ proc ::context::BuildRows {cid menu rows object} {
 			if {$separator} { $menu add separator; set separator 0 }
 			set sub $menu.__ctx[incr Counter]
 			menu $sub -tearoff false
-			set any [CascadePrefix $id $sub $object]
-			if {[BuildRows $cid $sub $subs $object]} { set any 1 }
+			CascadePrefix $id $sub $object
+			BuildRows $cid $sub $subs $object
+			set any [HasRunnableRow $sub]
 			$menu add cascade -label " [L $id] ▸" -menu $sub -state [expr {$any ? "normal" : "disabled"}]
 			incr shown
 			continue
@@ -1327,6 +1375,16 @@ proc ::context::CascadePrefix {id menu object} {
 	switch -- $id {
 		c10.show_column {
 			::table::MakeShowColumnMenu [dict get $object table] $menu
+			set last [$menu index end]
+			if {$last ne "none"} {
+				for {set i 0} {$i <= $last} {incr i} {
+					set call [lindex [$menu entrycget $i -command] 3]
+					set column [lindex $call 2]
+					set variable [$menu entrycget $i -variable]
+					set selected [dict replace $object targetColumn $column showColumn [expr {![set $variable]}]]
+					$menu entryconfigure $i -command [list ::action::run $id [dict create object $selected]]
+				}
+			}
 			return [expr {[$menu index end] ne "none"}]
 		}
 		c11.insert_symbol - c11.insert_emoticon {
@@ -1473,12 +1531,23 @@ proc ::context::CurrentObject {cid} {
 			}
 			if {$index eq ""} { set index 0 }
 			return [dict create base $base variant $variant index $index \
-				column -1 sortable 1]
+				column -1 sortable [::menu::Sortable]]
 		}
 		C4 {
 			set base ""
 			catch { set base [::scidb::db::get name] }
 			return [dict create base $base]
+		}
+		C6 {
+			set pane [CurrentObject C9]
+			if {![dict exists $pane paneUid] || ![regexp {^analysis:(\d+)$} [dict get $pane paneUid] -> number]} { return {} }
+			if {[info exists ::application::MapTerminalToAnalysis($number)]} { set number $::application::MapTerminalToAnalysis($number) }
+			if {![::engine::active? $number] || ![info exists ::application::analysis::NumberToTree($number)]} { return {} }
+			set tree $::application::analysis::NumberToTree($number)
+			lassign [::application::analysis::BestLine $tree] row line
+			set pv [lindex $line 8]
+			if {$pv eq ""} { return {} }
+			return [dict create tree $tree number $number engine [::engine::id $number] lineId $row pv $pv]
 		}
 		C7 {
 			set tree ""
@@ -1530,7 +1599,15 @@ proc ::context::CurrentObject {cid} {
 		C10 {
 			if {[catch { ::application::activeTab } tab]} { return {} }
 			if {$tab ne "database"} { return {} }
-			return [dict create column 0]
+			# A column reference needs its real table, just as the header
+			# popup does; a bare numeric column cannot dispatch any action.
+			if {[catch {
+				set manager $::application::database::Vars(games).twm
+				set scrolled [set ::application::database::games::${manager}::Priv(table)]
+				set table [::scrolledtable::table $scrolled]
+				set column [lindex [$table.t column list -visible] 0]
+			}] || $column eq ""} { return {} }
+			return [dict create table $table column $column]
 		}
 		C11 {
 			set dlg ""
@@ -1592,6 +1669,23 @@ proc ::context::ObjectEnd {object} {
 # R10: strip/truncate/comment rows follow the move object. Returns
 # {visible enabled} or empty when the id has no object rule.
 proc ::context::ObjectRule {id object} {
+	if {$id eq "c4.save_changes" && [::menu::TrialMode]} { return {0 0} }
+	if {$id in {c3.sort_column c3.sort_asc c3.sort_desc c3.sort.column c3.sort.asc c3.sort.desc}} {
+		set sortable [expr {[dict exists $object sortable] ? [dict get $object sortable] : [::menu::Sortable]}]
+		return [list $sortable $sortable]
+	}
+	set cascade [ActionCascade $id $object]
+	if {[llength $cascade]} {
+		set available [RunnableChildren [lindex $cascade 1] $object]
+		if {!$available && $id in {c10.show_column c11.insert_symbol c11.insert_emoticon c11.add_language c11.switch_language c4.maintenance}} {
+			variable Counter
+			set m .contextAvailability[incr Counter]
+			menu $m -tearoff 0
+			catch {CascadePrefix $id $m $object; set available [HasRunnableRow $m]}
+			destroy $m
+		}
+		return [list 1 $available]
+	}
 	if {$id eq "c3.delete" || [string match c3.flag.* $id] || $id eq "c3.flags" || $id eq "c4.import.pgn"} {
 		set base [expr {[dict exists $object base] ? [dict get $object base] : [::menu::CurrentBase]}]
 		set writable 0
@@ -1947,6 +2041,21 @@ proc ::context::Command {id object} {
 	}
 	if {[string match c9.tree.* $id] && ![dict exists $object table]} {
 		dict set object table $::application::tree::Vars(table)
+	}
+	if {$id eq "c10.show_column" && [dict exists $object targetColumn]} {
+		set table [dict get $object table]
+		set column [dict get $object targetColumn]
+		set optId $::table::IdMap($table)
+		set ::table::${optId}::Options(-visible:$column) [expr {[dict get $object showColumn] ? 1 : 0}]
+		::table::ShowColumn $table $column
+		return "completed $id"
+	}
+	set cascade [ActionCascade $id $object]
+	if {[llength $cascade]} {
+		set m [PopupMenu paneCascade]
+		CascadePrefix $id $m $object
+		BuildRows [lindex $cascade 0] $m [lindex $cascade 1] $object
+		return [PostChoices $m]
 	}
 	switch -glob -- $id {
 		c9.pane.board { ::menu::TogglePaneId board }
@@ -2449,6 +2558,8 @@ proc ::context::ObjectEngineRunning {object} {
 	} elseif {[dict exists $object tree]
 		&& [info exists ::application::analysis::[dict get $object tree]::Vars(number)]} {
 		set number [set ::application::analysis::[dict get $object tree]::Vars(number)]
+	} elseif {[dict exists $object paneUid] && [regexp {^analysis:(\d+)$} [dict get $object paneUid] -> number]} {
+		if {[info exists ::application::MapTerminalToAnalysis($number)]} { set number $::application::MapTerminalToAnalysis($number) }
 	} else {
 		return 0
 	}

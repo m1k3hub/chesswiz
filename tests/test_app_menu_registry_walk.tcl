@@ -13,6 +13,22 @@ package require tcltest 2.5
 
 namespace eval ::scidb::test::rgw {}
 
+# Ordinary posting includes lazy dynamic cascades, unlike Dump mode.
+proc ::scidb::test::rgw::PostTree {menu} {
+    $menu post 20 20
+    update idletasks
+    set last [$menu index end]
+    if {$last ne "none"} {
+        for {set i 0} {$i <= $last} {incr i} {
+            if {[$menu type $i] eq "cascade"} {
+                set sub [$menu entrycget $i -menu]
+                if {$sub ne ""} {::scidb::test::rgw::PostTree $sub}
+            }
+        }
+    }
+    $menu unpost
+}
+
 proc ::scidb::test::rgw::WalkMenu {menu rowsVar {surface ""}} {
 	upvar $rowsVar rows
 	set n [$menu index end]
@@ -141,6 +157,7 @@ proc ::scidb::test::rgw::ResolveRows {rows} {
 			lappend unresolved [list [lindex $row 0] [lindex $row 3] $id]
 		} else {
 			incr resolved
+            puts [list POSTED_ID [lindex $row 0] $id state [lindex $row 2] resolved 1 command $cmd]
 		}
 	}
 	return [list $resolved $exempt $unresolved]
@@ -150,7 +167,7 @@ tcltest::test registry-walk-dropdown {every drop-down command is ::action::run} 
 	catch { destroy .rgwdd }
 	menu .rgwdd -tearoff 0
 	::menu::BuildDropdown .rgwdd
-	::menu::Dump .rgwdd
+	::scidb::test::rgw::PostTree .rgwdd
 	set rows {}
 	::scidb::test::rgw::WalkMenu .rgwdd rows dropdown
 	set bad [::scidb::test::rgw::BadCommands $rows]

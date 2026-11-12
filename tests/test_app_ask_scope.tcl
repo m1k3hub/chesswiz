@@ -191,6 +191,8 @@ proc ::scidb::test::askscope::PostedIds {menu {cid ""}} {
 	if {$last eq "" || $last eq "none"} { return $ids }
 	for {set i 0} {$i <= $last} {incr i} {
 		set type [$menu type $i]
+        # An unavailable cascade cannot be opened, just like a disabled leaf.
+        if {$type ne "separator" && [$menu entrycget $i -state] eq "disabled"} { continue }
 		if {$type eq "cascade"} {
 			set label ""
 			catch { set label [$menu entrycget $i -label] }

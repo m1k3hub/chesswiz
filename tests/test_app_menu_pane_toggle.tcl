@@ -347,8 +347,8 @@ tcltest::test dynamic-game-ids-invoke {the five dynamic Game ids dispatch with a
 	puts "REG-010 paste_tab calls=$::scidb::test::pane::calls rc={$rc $err}"
 	if {$::scidb::test::pane::calls != 1} { lappend bad [list paste_tab $::scidb::test::pane::calls $err] }
 
-	# merge_clip and merge_tab reach the merge handler with the application
-	# window and the current game slot.
+	# Merge Clipbase names the clipbase explicitly; -1 means the current
+	# game, not the most recently copied clipbase game.
 	foreach id {menu.game.merge_clip menu.game.merge_tab} {
 		set ::scidb::test::pane::calls {}
 		::scidb::test::pane::Capture ::gamebar::mergeGame {
@@ -358,7 +358,8 @@ tcltest::test dynamic-game-ids-invoke {the five dynamic Game ids dispatch with a
 		set rc [catch { ::action::run $id } err]
 		::scidb::test::pane::Release ::gamebar::mergeGame
 		puts "REG-010 $id calls={$::scidb::test::pane::calls} rc={$rc $err}"
-		if {$::scidb::test::pane::calls ne {{.application -1}}} {
+		set expected [expr {$id eq "menu.game.merge_clip" ? {{.application clipbase}} : {{.application -1}}}]
+		if {$::scidb::test::pane::calls ne $expected} {
 			lappend bad [list $id $::scidb::test::pane::calls $err]
 		}
 	}

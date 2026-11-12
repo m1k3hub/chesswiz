@@ -283,7 +283,9 @@ foreach {cid handler} {C2 {::application::pgn::PopupMenu .notation 0} C9 {::appl
                 set ::created 0
                 set ::posts {}
                 set ::modal $modal
-                proc ::context::Rows {cid object} {return [lrepeat 32 ask]}
+                # R8 now requires a runnable row besides Ask. Preserve the
+                # 32-row reopen fixture while giving it one real action.
+                proc ::context::Rows {cid object} {return [concat [lrepeat 31 ask] c1.copy_fen]}
                 proc ::context::HasObject {cid object} {return 1}
                 proc ::scidb::game::link? {position} {return {base Normal 0}}
                 proc ::scidb::game::ply {} {return 1}
@@ -307,7 +309,18 @@ foreach {cid handler} {C2 {::application::pgn::PopupMenu .notation 0} C9 {::appl
                 }
                 proc menuOp {w op args} {
                     switch $op {
-                        add {incr ::entries($w)}
+                        add {
+                            set ::row($w,$::entries($w)) [lrange $args 1 end]
+                            incr ::entries($w)
+                        }
+                        index {return [expr {$::entries($w) - 1}]}
+                        type {return command}
+                        entrycget {
+                            lassign $args index option
+                            set opts $::row($w,$index)
+                            if {$option eq "-state" && ![dict exists $opts -state]} {return normal}
+                            return [dict get $opts $option]
+                        }
                         unpost {set ::mapped($w) 0}
                         default {error "unexpected menu operation $op"}
                     }

@@ -2460,8 +2460,11 @@ proc Dock {twm toplevel} {
 	# to catch errors by hand.
 	set errorInfo {}
 	set frame [$twm dock $toplevel {*}$options]
-	if {[string length $errorInfo]} {
+	if {[string length $errorInfo] && ($frame eq "" || ![winfo exists $frame])} {
 		# Note that this cannot be reached if the error handling is working.
+		# A valid returned frame means docking succeeded. Nested callbacks
+		# may catch an expected error (an expired timer, an absent overlay),
+		# leaving global errorInfo set without failing the docking command.
 		# (Test emptiness with string length, not llength: the recorded error
 		# text is arbitrary -- a message containing braces and colons, e.g. a
 		# JSON body from a failing HTTP request, is not a valid list and

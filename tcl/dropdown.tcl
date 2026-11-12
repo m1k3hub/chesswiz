@@ -2543,7 +2543,7 @@ proc ::menu::Do {id} {
 		}
 		menu.game.paste_clip { return [::application::pgn::PasteClipboardGame] }
 		menu.game.paste_tab { return [::application::pgn::PasteClipboardGame] }
-		menu.game.merge_clip { return [::gamebar::mergeGame .application -1] }
+		menu.game.merge_clip { return [::gamebar::mergeGame .application clipbase] }
 		menu.game.merge_tab {
 			set current [::scidb::game::current]
 			set tabs {}

@@ -846,15 +846,18 @@ proc ::action::labels {surface args} {
 
 	set output {}
 	set keyed {}
-	set c9Ids {}
+	set contextIds {}
 	if {$surface eq "asklist"} {
-		# C9 rows belong to the pane the user is in: list only the rows
-		# that pane's own header menu would post (VAL-RULE-006).
+		# Context rows belong to their current object. Use the declared
+		# menu rows for every context, including pane-specific C9 rows,
+		# so unposted compatibility aliases cannot become Ask no-ops.
 		if {[llength [info commands ::context::MenuIds]] \
 		 && [llength [info commands ::context::CurrentObject]]} {
-			if {![catch { set c9Object [::context::CurrentObject C9] }] \
-			 && [dict size $c9Object]} {
-				catch { set c9Ids [::context::MenuIds C9 $c9Object] }
+			foreach cid {C1 C2 C3 C4 C5 C6 C7 C8 C9 C10 C11 C12} {
+				if {![catch {set object [::context::CurrentObject $cid]}] \
+				 && [dict size $object] && [::context::HasObject $cid $object]} {
+					lappend contextIds {*}[::context::MenuIds $cid $object]
+				}
 			}
 		}
 	}
@@ -893,7 +896,8 @@ proc ::action::labels {surface args} {
 			# The context menus' assistant row is not a runnable action.
 			if {$id eq "context.ask"} continue
 			set ctx [dict get $record context]
-			if {"C9" in $ctx && [lsearch -exact $c9Ids $id] < 0} { continue }
+			if {[llength $ctx] && [dict get $record dropdown] eq "" \
+			 && [lsearch -exact $contextIds $id] < 0} { continue }
 		}
 
 		set ep [dict get $record enabled]
@@ -906,6 +910,11 @@ proc ::action::labels {surface args} {
 		set vis 1
 		if {$vp ne ""} {
 			if {[catch { uplevel #0 $vp } state]} { set vis 0 } else { set vis [expr {$state ? 1 : 0}] }
+		}
+		if {$surface eq "dropdown" && [llength [info commands ::menu::state]]} {
+			set state [::menu::state $id]
+			set en [dict get $state enabled]
+			set vis [dict get $state visible]
 		}
 
 		set label [displayLabel [dict get $record label]]
