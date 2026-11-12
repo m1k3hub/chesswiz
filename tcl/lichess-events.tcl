@@ -19,6 +19,9 @@ package require Tk 8.5
 
 namespace eval ::lichess::events {
 namespace eval mc {
+set NoSimuls "No simultaneous exhibitions available."
+set NoSwiss "No Swiss tournaments for this team."
+set NoArenas "No arena tournaments available."
 
 set TabTitle				"Lichess tournaments"
 set ArenasGroup			"Arena tournaments"
@@ -225,9 +228,13 @@ proc ::lichess::events::RefreshArenas {} {
 
 
 proc ::lichess::events::OnArenas {reply} {
+	variable mc
 	variable Priv
 	if {![dict exists $reply ok] || ![dict get $reply ok]} {
-		Status [expr {[dict exists $reply error] ? [dict get $reply error] : "Could not load arenas."}]
+		Status [::lichess::ReplyError $reply]
+		if {[info exists Priv(widget:arenas)]} {
+			::lichess::ListMessage $Priv(widget:arenas) [::lichess::ReplyError $reply] 1
+		}
 		return
 	}
 	set data [expr {[dict exists $reply data] ? [dict get $reply data] : {}}]
@@ -253,6 +260,7 @@ proc ::lichess::events::OnArenas {reply} {
 			if {$Priv(arenaId) eq ""} { set Priv(arenaId) $id }
 		}
 	}
+	::lichess::ListResult $tree $mc::NoArenas
 }
 
 
@@ -367,9 +375,13 @@ proc ::lichess::events::LoadTeamSwiss {{teamId ""}} {
 
 
 proc ::lichess::events::OnSwissList {tid reply} {
+	variable mc
 	variable Priv
 	if {![dict exists $reply ok] || ![dict get $reply ok]} {
-		Status [expr {[dict exists $reply error] ? [dict get $reply error] : "Could not load Swiss tournaments."}]
+		Status [::lichess::ReplyError $reply]
+		if {[info exists Priv(widget:swiss)]} {
+			::lichess::ListMessage $Priv(widget:swiss) [::lichess::ReplyError $reply] 1
+		}
 		return
 	}
 	set items [expr {[dict exists $reply data] ? [dict get $reply data] : {}}]
@@ -388,6 +400,7 @@ proc ::lichess::events::OnSwissList {tid reply} {
 		$tree insert {} end -id $id -values [list $id $name $status $round $nb]
 		if {$Priv(swissId) eq ""} { set Priv(swissId) $id }
 	}
+	::lichess::ListResult $tree $mc::NoSwiss
 }
 
 
@@ -463,9 +476,13 @@ proc ::lichess::events::RefreshSimuls {} {
 
 
 proc ::lichess::events::OnSimuls {reply} {
+	variable mc
 	variable Priv
 	if {![dict exists $reply ok] || ![dict get $reply ok]} {
-		Status [expr {[dict exists $reply error] ? [dict get $reply error] : "Could not load simuls."}]
+		Status [::lichess::ReplyError $reply]
+		if {[info exists Priv(widget:simuls)]} {
+			::lichess::ListMessage $Priv(widget:simuls) [::lichess::ReplyError $reply] 1
+		}
 		return
 	}
 	set data [expr {[dict exists $reply data] ? [dict get $reply data] : {}}]
@@ -497,6 +514,7 @@ proc ::lichess::events::OnSimuls {reply} {
 			if {$Priv(simulId) eq ""} { set Priv(simulId) $id }
 		}
 	}
+	::lichess::ListResult $tree $mc::NoSimuls
 }
 
 

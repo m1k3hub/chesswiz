@@ -17,6 +17,8 @@ package require Tk 8.5
 
 namespace eval ::lichess::tv {
 namespace eval mc {
+set NoBroadcasts "No live broadcasts available."
+set NoChannels "No TV channels available."
 
 set TabTitle				"Lichess TV"
 set ChannelsGroup			"TV channels"
@@ -241,9 +243,13 @@ proc ::lichess::tv::RefreshChannels {} {
 
 
 proc ::lichess::tv::OnChannels {reply} {
+	variable mc
 	variable Priv
 	if {![dict exists $reply ok] || ![dict get $reply ok]} {
-		Status [expr {[dict exists $reply error] ? [dict get $reply error] : "Could not load TV channels."}]
+		Status [::lichess::ReplyError $reply]
+		if {[info exists Priv(widget:channels)]} {
+			::lichess::ListMessage $Priv(widget:channels) [::lichess::ReplyError $reply] 1
+		}
 		return
 	}
 	set data [expr {[dict exists $reply data] ? [dict get $reply data] : {}}]
@@ -266,6 +272,7 @@ proc ::lichess::tv::OnChannels {reply} {
 		$tree insert {} end -id $ch -values [list $ch $player $rating $gid]
 	}
 	RestoreSelection $tree selectedChannel tvChannel
+	::lichess::ListResult $tree $mc::NoChannels
 }
 
 
@@ -466,8 +473,15 @@ proc ::lichess::tv::RefreshBroadcasts {} {
 
 
 proc ::lichess::tv::OnBroadcasts {reply} {
+	variable mc
 	variable Priv
-	if {![dict exists $reply ok] || ![dict get $reply ok]} { return }
+	if {![dict exists $reply ok] || ![dict get $reply ok]} {
+		Status [::lichess::ReplyError $reply]
+		if {[info exists Priv(widget:broadcasts)]} {
+			::lichess::ListMessage $Priv(widget:broadcasts) [::lichess::ReplyError $reply] 1
+		}
+		return
+	}
 	set data [expr {[dict exists $reply data] ? [dict get $reply data] : {}}]
 	set Priv(broadcasts) $data
 	if {![info exists Priv(widget:broadcasts)] || ![winfo exists $Priv(widget:broadcasts)]} { return }
@@ -492,6 +506,7 @@ proc ::lichess::tv::OnBroadcasts {reply} {
 		}
 	}
 	RestoreSelection $tree roundId broadcastRound
+	::lichess::ListResult $tree $mc::NoBroadcasts
 }
 
 

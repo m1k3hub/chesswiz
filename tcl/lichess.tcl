@@ -19,6 +19,15 @@ package require Tk 8.5
 namespace eval ::lichess {
 namespace eval mc {
 
+set PlayersTab "Lichess players"
+set TVTab "Lichess TV"
+set EventsTab "Lichess tournaments"
+set PuzzlesTab "Lichess puzzles"
+set PlayingGroup "Games in progress"
+set RefreshPlaying "Refresh games"
+set NoPlaying "No ongoing games."
+set LoadFailed "Could not load this view."
+set LoadingList "Loading…"
 set Title					"Play Online (Lichess)"
 set SignIn					"Sign in with Lichess"
 set UseToken				"Use a personal token"
@@ -207,6 +216,13 @@ proc ::lichess::open {parent} {
 	pack $l.account -fill x
 	set Priv(widget:account) $l.account
 
+	set pf [ttk::labelframe $l.playing -text $mc::PlayingGroup -padding 6]
+	ttk::label $pf.list -justify left -textvariable [namespace current]::Priv(playingText)
+	set Priv(playingText) {}
+	ttk::button $pf.refresh -text $mc::RefreshPlaying -command [namespace code RefreshPlaying]
+	pack $pf.list $pf.refresh -anchor w
+	pack $pf -fill x
+
 	set sf [ttk::labelframe $l.seek -text $mc::Seek]
 	grid [ttk::label $sf.minutesLabel -text $mc::Minutes] -row 0 -column 0 -sticky w
 	grid [ttk::spinbox $sf.minutes -from 0 -to 180 -width 4 \
@@ -287,13 +303,13 @@ proc ::lichess::open {parent} {
 	pack $bf -fill x -pady [list $::theme::pady 0]
 
 	set tabsBar [ttk::frame $l.tabsBar]
-	ttk::button $tabsBar.social -text "Lichess players" \
+	ttk::button $tabsBar.social -text $mc::PlayersTab \
 		-command {::lichess::social::open .application}
-	ttk::button $tabsBar.tv -text "Lichess TV" \
+	ttk::button $tabsBar.tv -text $mc::TVTab \
 		-command {::lichess::tv::open .application}
-	ttk::button $tabsBar.events -text "Lichess tournaments" \
+	ttk::button $tabsBar.events -text $mc::EventsTab \
 		-command {::lichess::events::open .application}
-	ttk::button $tabsBar.puzzles -text "Lichess puzzles" \
+	ttk::button $tabsBar.puzzles -text $mc::PuzzlesTab \
 		-command {::lichess::puzzles::open .application}
 	pack $tabsBar.social $tabsBar.tv $tabsBar.events $tabsBar.puzzles \
 		-side left -padx [list 0 $::theme::padx]
@@ -1585,3 +1601,45 @@ proc ::lichess::uciToSan {uci} {
 }
 
 # vi:set ts=3 sw=3:
+
+# A message belongs to its list, not the shared status bar: parallel replies
+# must never hide a failure in another section. Keep messages out of tree rows
+# so they cannot be selected as a game, team, or tournament identifier.
+proc ::lichess::ListMessage {tree text {clear 0}} {
+ if {![winfo exists $tree]} { return }
+ if {$clear} { $tree delete [$tree children {}] }
+ set label ${tree}Message
+ if {![winfo exists $label]} {
+  ttk::label $label -anchor w -justify left -wraplength 420
+  pack $label -before $tree -fill x
+ }
+ $label configure -text $text
+}
+proc ::lichess::ListResult {tree emptyText} {
+ ListMessage $tree [expr {[llength [$tree children {}]] ? "" : $emptyText}]
+}
+proc ::lichess::ReplyError {reply} {
+ if {[dict exists $reply error]} { return [dict get $reply error] }
+ return $::lichess::mc::LoadFailed
+}
+proc ::lichess::RefreshPlaying {} {
+ variable mc
+ variable Priv
+ set Priv(playingText) $mc::LoadingList
+ ::lichess::api::Request GET /api/account/playing {} [namespace code OnPlaying]
+}
+proc ::lichess::OnPlaying {reply} {
+ variable Priv
+ variable mc
+ if {![dict exists $reply ok] || ![dict get $reply ok]} {
+  set Priv(playingText) [ReplyError $reply]
+  return
+ }
+ set games {}
+ if {[dict exists $reply data nowPlaying]} {
+  foreach game [dict get $reply data nowPlaying] {
+   if {[dict exists $game gameId]} { lappend games [dict get $game gameId] }
+  }
+ }
+ set Priv(playingText) [expr {[llength $games] ? [join $games "\n"] : $mc::NoPlaying}]
+}

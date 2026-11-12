@@ -21,13 +21,18 @@ package require Tk 8.5
 
 namespace eval ::lichess::social {
 namespace eval mc {
+set ChallengesGroup "Challenges"
+set RefreshChallenges "Refresh challenges"
+set NoIncoming "No incoming challenges."
+set NoOutgoing "No outgoing challenges."
+set NoTeams "This player has no teams."
 
 set TabTitle				"Lichess players"
 set LookupGroup			"Player lookup"
 set UsernameLabel			"Username:"
 set Lookup					"Look up"
 set LookingUp				"Looking up %s…"
-set UserNotFound			"Could not find player %s."
+set UserNotFound			"Player not found: %s."
 set ProfileRatings		"Ratings:"
 set RatingChart			"Rating history"
 set NoRatingHistory		"No rating history available."
@@ -258,6 +263,15 @@ proc ::lichess::social::open {{parent .application}} {
 	pack $tab.status -side bottom -fill x -pady {6 0}
 	set Priv(widget:status) $tab.status
 
+	set cl [ttk::labelframe $right.lists -text $mc::ChallengesGroup -padding 6]
+	ttk::button $cl.refresh -text $mc::RefreshChallenges -command [namespace code RefreshChallenges]
+	pack $cl.refresh -anchor w
+	foreach kind {in out} {
+		set Priv(challenges:$kind) {}
+		ttk::label $cl.$kind -justify left -wraplength 320 -textvariable [namespace current]::Priv(challenges:$kind)
+		pack $cl.$kind -fill x
+	}
+	pack $cl -fill x
 	RefreshIncomingBanner
 	return $tab
 }
@@ -283,6 +297,15 @@ proc ::lichess::social::Lookup {{username ""}} {
 		Status $mc::EnterUsername
 		return 0
 	}
+	set Priv(userData) {}
+	set Priv(profileText) {}
+	set Priv(ratingHistory) {}
+	set Priv(teams) {}
+	set Priv(teamId) {}
+	set Priv(missingUser) {}
+	set Priv(ratingError) {}
+	if {[info exists Priv(widget:teams)]} { ::lichess::ListMessage $Priv(widget:teams) {} 1 }
+	DrawRatingChart
 	Status [format $mc::LookingUp $name]
 	::lichess::api::user $name [namespace code [list OnUser $name]]
 	::lichess::api::ratingHistory $name [namespace code [list OnRatingHistory $name]]
@@ -297,7 +320,16 @@ proc ::lichess::social::OnUser {name reply} {
 	# an answer for an earlier lookup must not replace the current one
 	if {$name ne [string trim $Priv(lookupUser)]} { return }
 	if {![dict exists $reply ok] || ![dict get $reply ok]} {
-		set why [expr {[dict exists $reply error] ? [dict get $reply error] : [format $mc::UserNotFound $name]}]
+		set why [::lichess::ReplyError $reply]
+		if {[dict exists $reply status] && [dict get $reply status] == 404} {
+			set why [format $mc::UserNotFound $name]
+			set Priv(missingUser) $name
+			set Priv(userData) {}
+			set Priv(ratingHistory) {}
+			set Priv(teams) {}
+			DrawRatingChart
+			if {[info exists Priv(widget:teams)]} { ::lichess::ListMessage $Priv(widget:teams) {} 1 }
+		}
 		set Priv(profileText) $why
 		Status $why
 		return
@@ -329,7 +361,14 @@ proc ::lichess::social::OnUser {name reply} {
 proc ::lichess::social::OnRatingHistory {name reply} {
 	variable Priv
 	if {$name ne [string trim $Priv(lookupUser)]} { return }
-	if {![dict exists $reply ok] || ![dict get $reply ok]} { return }
+	if {[info exists Priv(missingUser)] && $Priv(missingUser) eq $name} { return }
+	set Priv(ratingError) {}
+	if {![dict exists $reply ok] || ![dict get $reply ok]} {
+		set Priv(ratingHistory) {}
+		set Priv(ratingError) [::lichess::ReplyError $reply]
+		DrawRatingChart
+		return
+	}
 	set Priv(ratingHistory) [expr {[dict exists $reply data] ? [dict get $reply data] : {}}]
 	DrawRatingChart
 }
@@ -347,6 +386,10 @@ proc ::lichess::social::DrawRatingChart {} {
 	if {$w < 50} { set w [$c cget -width] }
 	if {$h < 50} { set h [$c cget -height] }
 
+	if {[info exists Priv(ratingError)] && $Priv(ratingError) ne ""} {
+		$c create text [expr {$w / 2}] [expr {$h / 2}] -text $Priv(ratingError) -width $w -tags error
+		return
+	}
 	set series {}
 	set seriesName ""
 	foreach entry $Priv(ratingHistory) {
@@ -413,9 +456,16 @@ proc ::lichess::social::DrawRatingChart {} {
 
 
 proc ::lichess::social::OnTeams {name reply} {
+	variable mc
 	variable Priv
 	if {$name ne [string trim $Priv(lookupUser)]} { return }
-	if {![dict exists $reply ok] || ![dict get $reply ok]} { return }
+	if {![dict exists $reply ok] || ![dict get $reply ok]} {
+		if {[info exists Priv(widget:teams)]} {
+			::lichess::ListMessage $Priv(widget:teams) [::lichess::ReplyError $reply] 1
+		}
+		return
+	}
+	if {[info exists Priv(missingUser)] && $Priv(missingUser) eq $name} { return }
 	set Priv(teams) [expr {[dict exists $reply data] ? [dict get $reply data] : {}}]
 	if {![info exists Priv(widget:teams)] || ![winfo exists $Priv(widget:teams)]} { return }
 	set tree $Priv(widget:teams)
@@ -429,6 +479,7 @@ proc ::lichess::social::OnTeams {name reply} {
 			$tree insert {} end -id $id -values [list $id $tname $members]
 		}
 	}
+	::lichess::ListResult $tree $mc::NoTeams
 }
 
 
@@ -723,3 +774,24 @@ proc ::lichess::social::OnMessageSent {target msg reply} {
 }
 
 # vi:set ts=3 sw=3:
+
+proc ::lichess::social::RefreshChallenges {} {
+ ::lichess::api::Request GET /api/challenge {} [namespace code OnChallenges]
+}
+proc ::lichess::social::OnChallenges {reply} {
+ variable Priv
+ variable mc
+ foreach kind {in out} empty [list $mc::NoIncoming $mc::NoOutgoing] {
+  if {![dict exists $reply ok] || ![dict get $reply ok]} {
+   set Priv(challenges:$kind) [::lichess::ReplyError $reply]
+   continue
+  }
+  set lines {}
+  if {[dict exists $reply data $kind]} {
+   foreach challenge [dict get $reply data $kind] {
+    if {[dict exists $challenge id]} { lappend lines [dict get $challenge id] }
+   }
+  }
+  set Priv(challenges:$kind) [expr {[llength $lines] ? [join $lines "\n"] : $empty}]
+ }
+}

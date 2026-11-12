@@ -22,6 +22,9 @@ package require Tk 8.5
 
 namespace eval ::lichess::puzzles {
 namespace eval mc {
+set NoDashboard "No puzzles played yet."
+set DashboardSummary "Last %s days: %s puzzles, %s first-try wins, performance %s"
+set NoActivity "No puzzle activity yet."
 
 set TabTitle				"Lichess puzzles"
 set FetchGroup				"Fetch puzzle"
@@ -560,7 +563,11 @@ proc ::lichess::puzzles::RefreshStats {{days 30} {max 20}} {
 
 proc ::lichess::puzzles::OnDashboard {reply} {
 	variable Priv
-	if {![dict exists $reply ok] || ![dict get $reply ok]} { return }
+	variable mc
+	if {![dict exists $reply ok] || ![dict get $reply ok]} {
+		set Priv(dashboardText) [::lichess::ReplyError $reply]
+		return
+	}
 	set d [expr {[dict exists $reply data] ? [dict get $reply data] : $reply}]
 	set Priv(dashboard) $d
 	set days [expr {[dict exists $d days] ? [dict get $d days] : 30}]
@@ -568,13 +575,19 @@ proc ::lichess::puzzles::OnDashboard {reply} {
 	set nb [expr {[dict exists $g nb] ? [dict get $g nb] : 0}]
 	set firstWins [expr {[dict exists $g firstWins] ? [dict get $g firstWins] : 0}]
 	set perf [expr {[dict exists $g performance] ? [dict get $g performance] : "?"}]
-	set Priv(dashboardText) "Last ${days} days: ${nb} puzzles, ${firstWins} first-try wins, performance ${perf}"
+	set Priv(dashboardText) [expr {$nb == 0 ? $mc::NoDashboard : [format $mc::DashboardSummary $days $nb $firstWins $perf]}]
 }
 
 
 proc ::lichess::puzzles::OnActivity {reply} {
+	variable mc
 	variable Priv
-	if {![dict exists $reply ok] || ![dict get $reply ok]} { return }
+	if {![dict exists $reply ok] || ![dict get $reply ok]} {
+		if {[info exists Priv(widget:activity)]} {
+			::lichess::ListMessage $Priv(widget:activity) [::lichess::ReplyError $reply] 1
+		}
+		return
+	}
 	set items [expr {[dict exists $reply data] ? [dict get $reply data] : {}}]
 	set Priv(activity) $items
 	if {![info exists Priv(widget:activity)] || ![winfo exists $Priv(widget:activity)]} { return }
@@ -592,6 +605,7 @@ proc ::lichess::puzzles::OnActivity {reply} {
 			$tree insert {} end -id $id -values [list $id $rating $win]
 		}
 	}
+	::lichess::ListResult $tree $mc::NoActivity
 }
 
 
