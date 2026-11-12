@@ -119,11 +119,11 @@
   {
     "confirm": 0,
     "debug": 0,
-    "description": "The CQL 6.2 reference card and worked examples (requests a player makes and the scripts that find them). Read it before writing a find_positions script.",
+    "description": "The pattern search reference card and worked examples (requests a player makes and the scripts that find them). Read it before writing a find_positions script.",
     "handler": "::application::assistant::DoCqlHelp",
     "name": "cql_help",
     "params_schema": {"type":"object","properties":{}},
-    "tool_menu_hint": "read the CQL reference"
+    "tool_menu_hint": "read the pattern search reference"
   },
   {
     "confirm": 0,
@@ -263,10 +263,10 @@
   {
     "confirm": 0,
     "debug": 0,
-    "description": "Open the export dialog for the games the game list shows (PGN, HTML, LaTeX, PDF, Scidb formats): after show_search or a find_positions/find_similar run in mode all, that is the selection; otherwise the whole active database. The user picks the format and file there.",
+    "description": "Export the games shown in the game list. Supply filename and format (pgn or html) to write directly; omit filename to choose the file and format in the export dialog. Existing files require overwrite true.",
     "handler": "::application::assistant::DoExport",
     "name": "export_database",
-    "params_schema": {"type":"object","properties":{}},
+    "params_schema": {"type":"object","properties":{"filename":{"type":"string"},"format":{"type":"string","enum":["pgn","html"]},"overwrite":{"type":"boolean"}}},
     "tool_menu_hint": "open the export dialog"
   },
   {
@@ -290,10 +290,10 @@
   {
     "confirm": 0,
     "debug": 0,
-    "description": "Find positions, patterns or tactics in the active database's games with Chesswiz's CQL 6.2 engine. When search_games has the pattern (its 'pattern' list: named mates, forks, the Greek gift, the 7th rank, outposts, pawn structures, Lucena and other endgames), use search_games instead: those searches are vetted and fast. You translate the request into a CQL 6.2 script; CQL decides what matches. Put only the positional part in 'cql', starting with cql() (e.g. 'cql() mate', 'cql() flipcolor {move from N} attacks k'); put names, colour, result, dates, event, ECO and Elo in the other fields, which narrow the games before any is read. Call cql_help first for the CQL 6.2 reference and worked examples unless the script is trivial. Step 1: mode sample (the default) returns up to 3 matching positions (the move that led there, the game, the FEN) and shows them to the user as diagrams in the Report pane; tell the user in one sentence what you searched for and ask whether these are what they meant. Step 2, only after the user agrees: call again with mode all and the same arguments; the game list then shows every matching game. If the script does not parse you get the parser's message: fix it and call again. Never describe a position's quality yourself.",
+    "description": "Find positions, patterns or tactics in the active database's games with Chesswiz's pattern search engine. When search_games has the pattern (its 'pattern' list: named mates, forks, the Greek gift, the 7th rank, outposts, pawn structures, Lucena and other endgames), use search_games instead: those searches are vetted and fast. You translate the request into a pattern search script; the pattern engine decides what matches. Put only the positional pattern expression in the script argument (e.g. 'mate', 'flipcolor {move from N} attacks k'); put names, colour, result, dates, event, ECO and Elo in the other fields, which narrow the games before any is read. Call cql_help first for the pattern search reference and worked examples unless the script is trivial. Step 1: mode sample (the default) returns up to 3 matching positions (the move that led there, the game, the FEN) and shows them to the user as diagrams in the Report pane; tell the user in one sentence what you searched for and ask whether these are what they meant. Step 2, only after the user agrees: call again with mode all and the same arguments; the game list then shows every matching game. If the script does not parse you get the parser's message: fix it and call again. Never describe a position's quality yourself.",
     "handler": "::application::assistant::DoFindPositions",
     "name": "find_positions",
-    "params_schema": {"type":"object","properties":{"request":{"type":"string","description":"what the user asked for, in their words"},"cql":{"type":"string","description":"the CQL 6.2 script for the positional part, starting with cql()"},"mode":{"type":"string","enum":["sample","all"],"description":"sample (default): up to 3 positions to check with the user; all: every match, shown in the game list"},"player":{"type":"string"},"color":{"type":"string","enum":["white","black","any"],"description":"the player's colour, default any"},"result":{"type":"string","enum":["win","draw","loss","1-0","0-1","1/2-1/2"]},"opponent":{"type":"string"},"eco":{"type":"string"},"from":{"type":"string","description":"earliest date"},"to":{"type":"string","description":"latest date"},"event":{"type":"string","description":"part of the event name"},"min_elo":{"type":"integer","description":"minimum average Elo of the two players"},"both_min_elo":{"type":"integer","description":"minimum Elo of each player: both players rated at least this"}},"required":["request","cql"]},
+    "params_schema": {"type":"object","properties":{"request":{"type":"string","description":"what the user asked for, in their words"},"cql":{"type":"string","description":"the pattern search script for the positional part (e.g. 'mate', 'flipcolor {move from N} attacks k')"},"mode":{"type":"string","enum":["sample","all"],"description":"sample (default): up to 3 positions to check with the user; all: every match, shown in the game list"},"player":{"type":"string"},"color":{"type":"string","enum":["white","black","any"],"description":"the player's colour, default any"},"result":{"type":"string","enum":["win","draw","loss","1-0","0-1","1/2-1/2"]},"opponent":{"type":"string"},"eco":{"type":"string"},"from":{"type":"string","description":"earliest date"},"to":{"type":"string","description":"latest date"},"event":{"type":"string","description":"part of the event name"},"min_elo":{"type":"integer","description":"minimum average Elo of the two players"},"both_min_elo":{"type":"integer","description":"minimum Elo of each player: both players rated at least this"}},"required":["request","cql"]},
     "tool_menu_hint": "find positions: %s"
   },
   {
@@ -335,11 +335,11 @@
   {
     "confirm": 1,
     "debug": 0,
-    "description": "Install the ChessBase chess fonts from a Windows font directory.",
+    "description": "Install the figurine chess fonts from a Windows font directory.",
     "handler": "::application::assistant::DoInstallFonts",
     "name": "install_chessbase_fonts",
     "params_schema": {"type":"object","properties":{}},
-    "tool_menu_hint": "install the ChessBase fonts"
+    "tool_menu_hint": "install the figurine chess fonts"
   },
   {
     "confirm": 0,
@@ -488,10 +488,10 @@
   {
     "confirm": 0,
     "debug": 0,
-    "description": "Dock or undock a pane of the board tab: 'dock' puts a floating pane back into the main window, 'undock' makes it a separate window. Panes: board, editor, games, dbgames (game list), tree, media, assistant, analysis (analysis:2 for the second), eco, report.",
+    "description": "Change a pane of the board tab: 'show' opens a pane that is not in the layout (as View > Panes does), 'hide' removes it, 'dock' puts a floating pane back into the main window, 'undock' makes it a separate window, 'maximise' zooms the pane over the others and 'restore' brings the layout back. Panes: board, editor, games, dbgames (game list), tree, explorer (opening explorer), media, report, assistant, analysis (analysis:2 for the second), eco.",
     "handler": "::application::assistant::DoPane",
     "name": "pane",
-    "params_schema": {"type":"object","properties":{"action":{"type":"string","enum":["dock","undock"]},"pane":{"type":"string"}},"required":["action","pane"]},
+    "params_schema": {"type":"object","properties":{"action":{"type":"string","enum":["show","hide","dock","undock","maximise","restore"]},"pane":{"type":"string"}},"required":["action","pane"]},
     "tool_menu_hint": "%s the %s pane"
   },
   {
@@ -614,10 +614,10 @@
   {
     "confirm": 0,
     "debug": 0,
-    "description": "Search the active database; nothing changes, the game list included. Returns the number of games found, the first of them, and the criteria as understood. Names may be partial. 'result' is win/draw/loss from the player's side, or 1-0/0-1/1/2-1/2 without a player. 'eco' is a code, class or range as for opening_score (map opening names to ECO yourself). Dates are YYYY, YYYY.MM or YYYY.MM.DD. To show the games in the game list, call show_search afterwards. 'pattern' keeps only games containing a position pattern (Chesswiz's CQL matcher reads their moves, which takes longer on a large database).",
+    "description": "Search the active database; nothing changes, the game list included. Returns the number of games found, the first of them, and the criteria as understood. Names may be partial. 'result' is win/draw/loss from the player's side, or 1-0/0-1/1/2-1/2 without a player. 'eco' is a code, class or range as for opening_score (map opening names to ECO yourself). Dates are YYYY, YYYY.MM or YYYY.MM.DD. To show the games in the game list, call show_search afterwards. 'pattern' keeps only games containing a position pattern (Chesswiz's pattern matcher reads their moves, which takes longer on a large database).",
     "handler": "::application::assistant::DoSearchGames",
     "name": "search_games",
-    "params_schema": {"type":"object","properties":{"player":{"type":"string"},"color":{"type":"string","enum":["white","black","any"],"description":"the player's colour, default any"},"result":{"type":"string","enum":["win","draw","loss","1-0","0-1","1/2-1/2"]},"opponent":{"type":"string"},"eco":{"type":"string"},"from":{"type":"string","description":"earliest date"},"to":{"type":"string","description":"latest date"},"event":{"type":"string","description":"part of the event name"},"min_elo":{"type":"integer","description":"minimum average Elo of the two players"},"both_min_elo":{"type":"integer","description":"minimum Elo of each player: both players rated at least this"},"pattern":{"type":"string","enum":["checkmate","smothered_mate","stalemate","en_passant","underpromotion","double_check","opposite_castling","rook_endgame","pawn_endgame","endgame","isolated_queen_pawn","opposite_bishops","queenless","back_rank_mate","boden_mate","anastasia_mate","arabian_mate","knight_fork","greek_gift","rook_seventh","doubled_rooks_seventh","knight_outpost","hanging_pawns","carlsbad","maroczy_bind","stonewall","queen_vs_rook","wrong_bishop","lucena","epaulette_mate","queen_pawn_mate","skewer","discovered_check","double_bishop_sacrifice","alekhines_gun","minority_attack","hedgehog","protected_passed_pawn","weakened_fianchetto","pawn_fork","legals_mate","blackburne_mate","pin_attacked_by_pawn","double_attack_loose","philidor_position","vancura_position","backward_pawn","bad_bishop","closed_center","trebuchet","boleslavsky_hole","botvinnik_formation","rook_behind_passed_pawn"],"description":"a position pattern the game must contain, found by Chesswiz's CQL matcher: the game ends in checkmate, a smothered mate, the game ends in stalemate, an en-passant capture, an underpromotion, a double check, kings on opposite wings, a rook ending, a pawn ending, any endgame (at most two pieces a side), an isolated queen's pawn, opposite-coloured bishops, a queenless middlegame, a back-rank mate, a two-bishop (Boden's) mate, Anastasia's mate, an Arabian mate, a knight fork of king and queen or rook, a Greek gift Bxh7+, a rook on the seventh, doubled rooks on the seventh, a knight outpost, hanging pawns, a Carlsbad structure, a Maroczy bind, a Stonewall, queen against rook, a wrong-coloured bishop, a Lucena position (building a bridge), an epaulette mate, a queen-and-pawn (Damiano's, Lolli's) mate, a skewer, a discovered check, a double bishop sacrifice (Lasker-Bauer), Alekhine's gun, a minority attack, a hedgehog, a protected passed pawn, a weakened fianchetto, a pawn fork, Legal's mate, Blackburne's mate, a pinned piece attacked by a pawn, a double attack on loose pieces, the Philidor position (third-rank defence), the Vancura position, a backward pawn, a bad bishop, a closed centre, a trebuchet, the Boleslavsky hole, the Botvinnik formation, a rook behind a passed pawn"}}},
+    "params_schema": {"type":"object","properties":{"player":{"type":"string"},"color":{"type":"string","enum":["white","black","any"],"description":"the player's colour, default any"},"result":{"type":"string","enum":["win","draw","loss","1-0","0-1","1/2-1/2"]},"opponent":{"type":"string"},"eco":{"type":"string"},"from":{"type":"string","description":"earliest date"},"to":{"type":"string","description":"latest date"},"event":{"type":"string","description":"part of the event name"},"min_elo":{"type":"integer","description":"minimum average Elo of the two players"},"both_min_elo":{"type":"integer","description":"minimum Elo of each player: both players rated at least this"},"pattern":{"type":"string","enum":["checkmate","smothered_mate","stalemate","en_passant","underpromotion","double_check","opposite_castling","rook_endgame","pawn_endgame","endgame","isolated_queen_pawn","opposite_bishops","queenless","back_rank_mate","boden_mate","anastasia_mate","arabian_mate","knight_fork","greek_gift","rook_seventh","doubled_rooks_seventh","knight_outpost","hanging_pawns","carlsbad","maroczy_bind","stonewall","queen_vs_rook","wrong_bishop","lucena","epaulette_mate","queen_pawn_mate","skewer","discovered_check","double_bishop_sacrifice","alekhines_gun","minority_attack","hedgehog","protected_passed_pawn","weakened_fianchetto","pawn_fork","legals_mate","blackburne_mate","pin_attacked_by_pawn","double_attack_loose","philidor_position","vancura_position","backward_pawn","bad_bishop","closed_center","trebuchet","boleslavsky_hole","botvinnik_formation","rook_behind_passed_pawn"],"description":"a position pattern the game must contain, found by Chesswiz's pattern matcher: the game ends in checkmate, a smothered mate, the game ends in stalemate, an en-passant capture, an underpromotion, a double check, kings on opposite wings, a rook ending, a pawn ending, any endgame (at most two pieces a side), an isolated queen's pawn, opposite-coloured bishops, a queenless middlegame, a back-rank mate, a two-bishop (Boden's) mate, Anastasia's mate, an Arabian mate, a knight fork of king and queen or rook, a Greek gift Bxh7+, a rook on the seventh, doubled rooks on the seventh, a knight outpost, hanging pawns, a Carlsbad structure, a Maroczy bind, a Stonewall, queen against rook, a wrong-coloured bishop, a Lucena position (building a bridge), an epaulette mate, a queen-and-pawn (Damiano's, Lolli's) mate, a skewer, a discovered check, a double bishop sacrifice (Lasker-Bauer), Alekhine's gun, a minority attack, a hedgehog, a protected passed pawn, a weakened fianchetto, a pawn fork, Legal's mate, Blackburne's mate, a pinned piece attacked by a pawn, a double attack on loose pieces, the Philidor position (third-rank defence), the Vancura position, a backward pawn, a bad bishop, a closed centre, a trebuchet, the Boleslavsky hole, the Botvinnik formation, a rook behind a passed pawn"}}},
     "tool_menu_hint": "search the games"
   },
   {
