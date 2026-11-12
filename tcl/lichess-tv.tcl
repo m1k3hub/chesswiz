@@ -73,6 +73,8 @@ proc ::lichess::tv::open {{parent .application}} {
 	if {[info exists Priv(widget:top)] && [winfo exists $Priv(widget:top)]} {
 		return $tab
 	}
+	set Priv(selectedChannel) $::lichess::Options(tvChannel)
+	set Priv(roundId) $::lichess::Options(broadcastRound)
 	set Priv(tab) $tab
 
 	set top [ttk::frame $tab.top]
@@ -261,10 +263,8 @@ proc ::lichess::tv::OnChannels {reply} {
 		set rating [expr {[dict exists $info rating] ? [dict get $info rating] : ""}]
 		set gid [expr {[dict exists $info gameId] ? [dict get $info gameId] : ""}]
 		$tree insert {} end -id $ch -values [list $ch $player $rating $gid]
-		if {$Priv(selectedChannel) eq ""} {
-			set Priv(selectedChannel) $ch
-		}
 	}
+	RestoreSelection $tree selectedChannel tvChannel
 }
 
 
@@ -275,6 +275,7 @@ proc ::lichess::tv::OnSelectChannel {} {
 	if {[llength $sel]} {
 		set ch [lindex $sel 0]
 		set Priv(selectedChannel) $ch
+		set ::lichess::Options(tvChannel) $ch
 		if {[dict exists $Priv(channels) $ch gameId]} {
 			set Priv(gameId) [dict get $Priv(channels) $ch gameId]
 		}
@@ -288,6 +289,7 @@ proc ::lichess::tv::WatchSelectedChannel {{channel ""}} {
 	if {$channel ne ""} { set Priv(selectedChannel) $channel }
 	set ch [string trim $Priv(selectedChannel)]
 	if {$ch eq ""} { set ch "best" }
+	set ::lichess::Options(tvChannel) $ch
 	StopStream
 	set Priv(streamKind) tvFeed
 	Status [format $mc::WatchingChannel $ch]
@@ -486,9 +488,9 @@ proc ::lichess::tv::OnBroadcasts {reply} {
 			[dict exists $item id] ? [dict get $item id] : ""}]
 		if {$rid ne ""} {
 			$tree insert {} end -id $rid -values [list $tourName $roundName $rid]
-			if {$Priv(roundId) eq ""} { set Priv(roundId) $rid }
 		}
 	}
+	RestoreSelection $tree roundId broadcastRound
 }
 
 
@@ -511,6 +513,7 @@ proc ::lichess::tv::FollowBroadcastRound {{roundId ""}} {
 		Status $mc::EnterRoundId
 		return 0
 	}
+	set ::lichess::Options(broadcastRound) $rid
 	StopStream
 	set Priv(roundGames) {}
 	if {[info exists Priv(widget:roundGames)] && [winfo exists $Priv(widget:roundGames)]} {
@@ -648,3 +651,19 @@ proc ::lichess::tv::ShowRoundGame {gameDict} {
 }
 
 # vi:set ts=3 sw=3:
+
+
+# Restore only a selection, never a stream. Missing/corrupt IDs use the first
+# offered row (or no selection when the server offers nothing).
+proc ::lichess::tv::RestoreSelection {tree field option} {
+	variable Priv
+	set rows [$tree children {}]
+	set saved $::lichess::Options($option)
+	if {$saved ni $rows} { set saved [lindex $rows 0] }
+	set Priv($field) $saved
+	set ::lichess::Options($option) $saved
+	if {$saved ne ""} {
+		$tree selection set [list $saved]
+		$tree see $saved
+	}
+}

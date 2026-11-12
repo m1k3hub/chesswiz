@@ -50,6 +50,8 @@ set PuzzleSolved			"Solved puzzle %s!"
 set WrongMove				"Wrong move (%s). Try again or view the solution."
 set SolutionShown			"Solution: %s"
 set StormRunning			"Storm: %d solved — %d:%02d remaining"
+set StormBest "Best Storm: %d"
+set StormStopped "Storm stopped. Score: %d (not counted)."
 set StormFinished			"Storm finished! Score: %d solved in 3 minutes."
 set RacerOpened			"Opened Puzzle Racer %s in web browser."
 set EnterPuzzleId			"Enter a puzzle ID first."
@@ -66,6 +68,7 @@ variable Difficulties {
 	easiest easier normal harder hardest
 }
 
+# Test-only override; production remains three minutes. Never an option/UI control.
 variable StormDuration 180
 
 array set Priv {
@@ -177,9 +180,12 @@ proc ::lichess::puzzles::open {{parent .application}} {
 	pack $sf -fill x -pady {0 6}
 
 	# 3. Storm & Racer controls
+	UpdateStormBest
 	set tf [ttk::labelframe $left.storm -text $mc::StormGroup -padding 6]
 	ttk::button $tf.start -text $mc::StartStorm -command [namespace code StartStorm]
 	ttk::button $tf.stop -text $mc::StopStorm -command [namespace code StopStorm]
+	ttk::label $tf.best -anchor w -textvariable [namespace current]::Priv(stormBestText)
+	grid $tf.best -row 3 -column 0 -columnspan 2 -sticky ew -pady {4 0}
 	ttk::label $tf.status -anchor w -textvariable [namespace current]::Priv(stormText)
 	ttk::button $tf.racer -text $mc::RacerButton -command [namespace code StartRacer]
 	grid $tf.start -row 0 -column 0 -sticky w -padx {0 4}
@@ -624,7 +630,7 @@ proc ::lichess::puzzles::TickStorm {} {
 	if {!$Priv(stormActive)} { return }
 	set rem [expr {$Priv(stormEndAt) - [clock seconds]}]
 	if {$rem <= 0} {
-		StopStorm
+		StopStorm 1
 		return
 	}
 	set Priv(stormRemaining) $rem
@@ -644,14 +650,33 @@ proc ::lichess::puzzles::UpdateStormStatus {} {
 }
 
 
-proc ::lichess::puzzles::StopStorm {} {
+proc ::lichess::puzzles::UpdateStormBest {} {
+	variable Priv
+	variable mc
+	if {![string is integer -strict $::lichess::Options(stormBest)]
+		|| $::lichess::Options(stormBest) < 0} {
+		set ::lichess::Options(stormBest) 0
+	}
+	set Priv(stormBestText) [format $mc::StormBest $::lichess::Options(stormBest)]
+}
+
+
+proc ::lichess::puzzles::StopStorm {{completed 0}} {
 	variable Priv
 	variable mc
 	after cancel $Priv(stormTimer)
 	set Priv(stormTimer) {}
+	# Only timer expiry of an active run may update the record.
+	set completed [expr {$completed && $Priv(stormActive)
+		&& [clock seconds] >= $Priv(stormEndAt)}]
+	UpdateStormBest
+	if {$completed && $Priv(stormScore) > $::lichess::Options(stormBest)} {
+		set ::lichess::Options(stormBest) $Priv(stormScore)
+		UpdateStormBest
+	}
 	set Priv(stormActive) 0
 	set Priv(stormRemaining) 0
-	set text [format $mc::StormFinished $Priv(stormScore)]
+	set text [format [expr {$completed ? $mc::StormFinished : $mc::StormStopped}] $Priv(stormScore)]
 	set Priv(stormText) $text
 	Status $text
 	return $Priv(stormScore)

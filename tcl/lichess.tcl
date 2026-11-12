@@ -98,6 +98,9 @@ variable Variants {
 # There is deliberately no token entry here. Only ordinary game defaults
 # survive through the options writer; credentials belong to the API.
 array set Options {
+	tvChannel		{}
+	broadcastRound	{}
+	stormBest		0
 	minutes			10
 	increment		0
 	rated			0
