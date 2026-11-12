@@ -507,7 +507,7 @@ proc ::lichess::tv::OnBroadcasts {reply} {
 			$tree insert {} end -id $rid -values [list $tourName $roundName $rid]
 		}
 	}
-	RestoreSelection $tree roundId broadcastRound
+	RestoreSelection $tree roundId broadcastRound 1
 	::lichess::ListResult $tree $mc::NoBroadcasts
 }
 
@@ -672,16 +672,19 @@ proc ::lichess::tv::ShowRoundGame {gameDict} {
 # vi:set ts=3 sw=3:
 
 
-# Restore only a selection, never a stream. Missing/corrupt IDs use the first
-# offered row (or no selection when the server offers nothing).
-proc ::lichess::tv::RestoreSelection {tree field option} {
+# Restore only a selection, never a stream. The top broadcasts list is not
+# exhaustive: a valid saved round stays in the entry even without a listed row.
+# Empty/corrupt values use the first offered row (or no selection).
+proc ::lichess::tv::RestoreSelection {tree field option {preserveMissing 0}} {
 	variable Priv
 	set rows [$tree children {}]
 	set saved $::lichess::Options($option)
-	if {$saved ni $rows} { set saved [lindex $rows 0] }
+	if {$saved ni $rows && !($preserveMissing && [regexp {^[a-zA-Z0-9]+$} $saved])} {
+		set saved [lindex $rows 0]
+	}
 	set Priv($field) $saved
 	set ::lichess::Options($option) $saved
-	if {$saved ne ""} {
+	if {$saved in $rows} {
 		$tree selection set [list $saved]
 		$tree see $saved
 	}

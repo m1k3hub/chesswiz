@@ -62,15 +62,15 @@ if {$phase eq "seed"} {
         list $loaded $selections $streams $::lichess::puzzles::Priv(stormBestText)
     } -result {{Best round1 12} {Best round1} {} {Best Storm: 12}}
 }
-tcltest::test persist-stale {server drops saved channel and round; empty default without streaming} -body {
+tcltest::test persist-stale {server drops channel and top round; keep valid round without streaming} -body {
     ::lichess::tv::open
     ::lichess::fake::Set dropTvChannel Best
     ::lichess::fake::Set dropBroadcastRound round1
     ::lichess::tv::RefreshChannels
     ::lichess::tv::RefreshBroadcasts
-    ::scidb::test::wait::until {$::lichess::tv::Priv(channels) eq "" && $::lichess::tv::Priv(roundId) eq ""}
+    ::scidb::test::wait::until {$::lichess::tv::Priv(channels) eq "" && $::lichess::tv::Priv(roundId) eq "round1" && [llength [$::lichess::tv::Priv(widget:broadcasts) children {}]] == 0}
     list $::lichess::Options(tvChannel) $::lichess::Options(broadcastRound) $::lichess::tv::Priv(streamHandle)
-} -result {{} {} {}}
+} -result {{} round1 {}}
 set ::scidb::test::persist::bestBeforeCorrupt $::lichess::Options(stormBest)
 tcltest::test persist-corrupt {arbitrary saved values fall back safely on offered rows} -body {
     set ::lichess::Options(tvChannel) "\{\[invalid channel"

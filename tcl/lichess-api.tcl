@@ -263,10 +263,10 @@ proc ::lichess::api::Done {id h} {
 			if {[regexp {^[0-9]+$} $value]} {
 				set decimal [string trimleft $value 0]
 				if {$decimal eq {}} { set decimal 0 }
-				set until [expr {$now + max(1, min(3600, $decimal)) * 1000}]
+				set until [expr {$now + max(1, $decimal) * 1000}]
 			} elseif {![catch {clock scan $value -format {%a, %d %b %Y %H:%M:%S GMT} -locale en -gmt 1} date]
 				&& $date * 1000 > $now} {
-				set until [expr {min($now + 3600000, $date * 1000)}]
+				set until [expr {$date * 1000}]
 			}
 		}
 		set seconds [expr {($until - $now + 999) / 1000}]
