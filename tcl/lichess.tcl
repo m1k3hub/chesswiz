@@ -470,6 +470,7 @@ proc ::lichess::SignedIn {reply} {
 	} else {
 		set Priv(userId) [string tolower $Priv(username)]
 	}
+	ToggleBotMode [expr {[dict exists $reply title] && [dict get $reply title] eq "BOT"}]
 	catch {destroy .online.sessionExpired}
 	set Priv(state) lobby
 	StartEvents
@@ -535,6 +536,7 @@ proc ::lichess::AccountResult {reply} {
 	variable mc
 	if {$Priv(state) ne "lobby"} { return }
 	if {[dict exists $reply ok] && [dict get $reply ok]} {
+		ToggleBotMode [expr {[dict exists $reply title] && [dict get $reply title] eq "BOT"}]
 		set Priv(username) [dict get $reply username]
 		set Priv(userId) [dict get $reply id]
 		ShowView lobby
@@ -598,7 +600,8 @@ proc ::lichess::OpenGame {game} {
 	Status $mc::OpeningGame
 	# events of an older stream (its "closed" comes after this one opens)
 	# carry an older generation and are dropped
-	set Priv(gameHandle) [::lichess::api::streamGame $id \
+	set Priv(gameBot) $Priv(botMode)
+	set Priv(gameHandle) [GameApi streamGame $id \
 		[namespace code [list OnGame [incr Priv(gameGen)]]]]
 }
 
@@ -1051,7 +1054,7 @@ proc ::lichess::ViewAction {action args} {
 			set Priv(pendingMove) $uci
 			Status [format $mc::WaitingMove [OpponentName]]
 			if {[catch {
-				::lichess::api::move $gameId $uci [namespace code [list MoveResult $gameId $uci $ply]]
+				GameApi move $gameId $uci [namespace code [list MoveResult $gameId $uci $ply]]
 			} err]} {
 				MoveResult $gameId $uci $ply [dict create ok 0 error $err]
 			}
@@ -1063,12 +1066,7 @@ proc ::lichess::ViewAction {action args} {
 		accept	{ if {$Priv(takebackOffer)} { Takeback yes } else { AcceptDraw } }
 		decline	{ if {$Priv(takebackOffer)} { Takeback no } else { DeclineDraw } }
 		takeback	{ Takeback yes }
-		chat {
-			if {$Priv(gameId) ne ""} {
-				::lichess::api::chat $Priv(gameId) [lindex $args 0] [namespace code ActionResult]
-				::online::view::chat $Priv(view) $Priv(username) [lindex $args 0]
-			}
-		}
+		chat { SendChat [lindex $args 0] }
 		analyse	{ Analyse }
 		close {
 			if {$Priv(active) && $Priv(state) eq "playing"} { return }
@@ -1137,7 +1135,7 @@ proc ::lichess::StatusForTurn {} {
 proc ::lichess::LeaveBoard {} {
 	variable Priv
 	if {$Priv(active) && $Priv(state) eq "playing"} {
-		catch { ::lichess::api::resign $Priv(gameId) [namespace code ActionResult] }
+		catch { GameApi resign $Priv(gameId) [namespace code ActionResult] }
 	}
 	FinishBoard
 	if {$Priv(state) ne "offline"} {
@@ -1160,10 +1158,28 @@ proc ::lichess::FinishBoard {} {
 # Game commands and result
 # ======================================================================
 
+# Use the account mode captured when this game opened for every game action.
+proc ::lichess::GameApi {action args} {
+	variable Priv
+	if {[info exists Priv(gameBot)] && $Priv(gameBot)} {
+		set action bot[string toupper [string index $action 0]][string range $action 1 end]
+	}
+	# The generic board wrappers also consult Mode. Keep an already-open
+	# board game on board endpoints if the lobby checkbox changes later.
+	set savedMode $::lichess::api::Mode
+	set ::lichess::api::Mode [expr {[info exists Priv(gameBot)] && $Priv(gameBot) ? "bot" : "board"}]
+	try {
+		return [::lichess::api::$action {*}$args]
+	} finally {
+		set ::lichess::api::Mode $savedMode
+	}
+}
+
+
 proc ::lichess::Resign {} {
 	variable Priv
 	if {$Priv(active) && $Priv(state) eq "playing"} {
-		::lichess::api::resign $Priv(gameId) [namespace code ActionResult]
+		GameApi resign $Priv(gameId) [namespace code ActionResult]
 	}
 }
 
@@ -1171,7 +1187,7 @@ proc ::lichess::Resign {} {
 proc ::lichess::OfferDraw {} {
 	variable Priv
 	if {$Priv(active) && $Priv(state) eq "playing"} {
-		::lichess::api::draw $Priv(gameId) yes [namespace code ActionResult]
+		GameApi draw $Priv(gameId) yes [namespace code ActionResult]
 	}
 }
 
@@ -1179,7 +1195,7 @@ proc ::lichess::OfferDraw {} {
 proc ::lichess::AcceptDraw {} {
 	variable Priv
 	if {$Priv(active) && $Priv(state) eq "playing" && $Priv(drawOffer)} {
-		::lichess::api::draw $Priv(gameId) yes [namespace code ActionResult]
+		GameApi draw $Priv(gameId) yes [namespace code ActionResult]
 	}
 }
 
@@ -1187,7 +1203,7 @@ proc ::lichess::AcceptDraw {} {
 proc ::lichess::DeclineDraw {} {
 	variable Priv
 	if {$Priv(active) && $Priv(state) eq "playing" && $Priv(drawOffer)} {
-		::lichess::api::draw $Priv(gameId) no [namespace code ActionResult]
+		GameApi draw $Priv(gameId) no [namespace code ActionResult]
 	}
 }
 
@@ -1195,7 +1211,7 @@ proc ::lichess::DeclineDraw {} {
 proc ::lichess::Abort {} {
 	variable Priv
 	if {$Priv(active) && $Priv(state) eq "playing"} {
-		::lichess::api::abort $Priv(gameId) [namespace code ActionResult]
+		GameApi abort $Priv(gameId) [namespace code ActionResult]
 	}
 }
 
@@ -1271,7 +1287,7 @@ proc ::lichess::UpdateGameButtons {} {
 proc ::lichess::Takeback {answer} {
 	variable Priv
 	if {$Priv(active) && $Priv(state) eq "playing"} {
-		::lichess::api::takeback $Priv(gameId) $answer [namespace code ActionResult]
+		GameApi takeback $Priv(gameId) $answer [namespace code ActionResult]
 	}
 }
 
@@ -1295,7 +1311,7 @@ proc ::lichess::SendChat {text} {
 	variable Priv
 	set text [string trim $text]
 	if {$text eq "" || $Priv(gameId) eq ""} { return 0 }
-	::lichess::api::chat $Priv(gameId) $text [namespace code ActionResult]
+	GameApi chat $Priv(gameId) $text [namespace code ActionResult]
 	if {[ViewExists]} {
 		::online::view::chat $Priv(view) $Priv(username) $text
 	}

@@ -463,6 +463,7 @@ proc ::lichess::api::AccountReply {cmd reply} {
 			set reply [dict create ok 0 error $mc::Invalid status 200]
 		} else {
 			set reply [dict create ok 1 username [dict get $d username] id [dict get $d id]]
+			if {[dict exists $d title]} { dict set reply title [dict get $d title] }
 		}
 	}
 	Reply $cmd $reply
@@ -490,6 +491,7 @@ proc ::lichess::api::Validated {tok cmd epoch reply} {
 			set reply [dict create ok 0 error "Could not store the Lichess credential."]
 		} else {
 			set reply [dict create ok 1 username [dict get $d username] id [dict get $d id]]
+			if {[dict exists $d title]} { dict set reply title [dict get $d title] }
 		}
 	}
 	Reply $cmd $reply
