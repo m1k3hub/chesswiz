@@ -523,7 +523,7 @@ proc ::lichess::StreamStatus {id text retry} {
 		ttk::label $row.message
 		ttk::button $row.retry -text $::lichess::api::mc::Retry -command [list ::lichess::api::retry $id]
 		pack $row.message -side left
-		pack $row -side bottom -fill x
+		pack $row -before .online.tabs -side bottom -fill x
 	}
 	$row.message configure -text $text
 	if {$retry} { pack $row.retry -side left -padx 6 } else { pack forget $row.retry }

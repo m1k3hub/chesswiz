@@ -17,6 +17,7 @@ package require Tk 8.5
 
 namespace eval ::lichess::tv {
 namespace eval mc {
+set RoundPrompt "Follow a broadcast round to load its games."
 set NoBroadcasts "No live broadcasts available."
 set NoChannels "No TV channels available."
 
@@ -172,6 +173,7 @@ proc ::lichess::tv::open {{parent .application}} {
 	bind $gtree <<TreeviewSelect>> [namespace code OnSelectRoundGame]
 	pack $gtree -fill both -expand yes
 	set Priv(widget:roundGames) $gtree
+	::lichess::ListMessage $gtree $mc::RoundPrompt
 	pack $bf -fill both -expand yes
 
 	# Right column: embedded read-only ::online::view
@@ -587,6 +589,7 @@ proc ::lichess::tv::OnBroadcastPgn {serial rid event} {
 			}
 			incr idx
 		}
+		::lichess::ListMessage $tree {}
 	}
 	if {$Priv(followKey) eq ""} { set Priv(followKey) $key }
 	if {$key eq $Priv(followKey)} { ShowRoundGame $parsed }

@@ -19,6 +19,7 @@ package require Tk 8.5
 
 namespace eval ::lichess::events {
 namespace eval mc {
+set SwissPrompt "Enter a team ID and load its Swiss tournaments."
 set NoSimuls "No simultaneous exhibitions available."
 set NoSwiss "No Swiss tournaments for this team."
 set NoArenas "No arena tournaments available."
@@ -201,6 +202,7 @@ proc ::lichess::events::open {{parent .application}} {
 		-textvariable [namespace current]::Priv(statusText)
 	pack $tab.status -side bottom -fill x -pady {6 0}
 
+	::lichess::ListMessage $stree $mc::SwissPrompt
 	RefreshArenas
 	RefreshSimuls
 	return $tab

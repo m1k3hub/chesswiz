@@ -25,6 +25,8 @@ namespace eval mc {
 set NoDashboard "No puzzles played yet."
 set DashboardSummary "Last %s days: %s puzzles, %s first-try wins, performance %s"
 set NoActivity "No puzzle activity yet."
+set PuzzlePrompt "Choose Daily puzzle, Next puzzle or Load ID to start solving."
+set StatsPrompt "Refresh dashboard & activity to load your puzzle statistics."
 
 set TabTitle				"Lichess puzzles"
 set FetchGroup				"Fetch puzzle"
@@ -121,6 +123,8 @@ proc ::lichess::puzzles::open {{parent .application}} {
 		return $tab
 	}
 	set Priv(tab) $tab
+	set Priv(infoText) $mc::PuzzlePrompt
+	set Priv(dashboardText) $mc::StatsPrompt
 
 	set top [ttk::frame $tab.top]
 	pack $top -fill both -expand yes
@@ -217,6 +221,7 @@ proc ::lichess::puzzles::open {{parent .application}} {
 	pack $atree -fill both -expand yes
 	pack $df -fill both -expand yes
 	set Priv(widget:activity) $atree
+	::lichess::ListMessage $atree $mc::StatsPrompt
 
 	# Right column: interactive board view
 	set viewPath $right.view

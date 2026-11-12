@@ -26,6 +26,8 @@ set RefreshChallenges "Refresh challenges"
 set NoIncoming "No incoming challenges."
 set NoOutgoing "No outgoing challenges."
 set NoTeams "This player has no teams."
+set LookupPrompt "Look up a player to see their profile, rating history and teams."
+set ChallengesPrompt "Refresh challenges to load incoming and outgoing challenges."
 
 set TabTitle				"Lichess players"
 set LookupGroup			"Player lookup"
@@ -124,6 +126,7 @@ proc ::lichess::social::open {{parent .application}} {
 		return $tab
 	}
 	set Priv(tab) $tab
+	set Priv(profileText) $mc::LookupPrompt
 
 	set top [ttk::frame $tab.top]
 	pack $top -fill both -expand yes
@@ -176,6 +179,7 @@ proc ::lichess::social::open {{parent .application}} {
 	pack $rf.canvas -fill both -expand yes
 	pack $rf -fill both -expand yes -pady {0 6}
 	set Priv(widget:canvas) $rf.canvas
+	$rf.canvas create text 190 75 -text $mc::LookupPrompt -width 350 -fill #666666 -tags initial
 
 	set tf [ttk::labelframe $left.teams -text $mc::TeamsGroup -padding 6]
 	set tree [ttk::treeview $tf.tree -height 5 -selectmode browse \
@@ -189,6 +193,7 @@ proc ::lichess::social::open {{parent .application}} {
 	bind $tree <<TreeviewSelect>> [namespace code SelectTeam]
 	pack $tree -fill both -expand yes -pady {0 4}
 	set Priv(widget:teams) $tree
+	::lichess::ListMessage $tree $mc::LookupPrompt
 
 	set tform [ttk::frame $tf.form]
 	ttk::label $tform.idl -text $mc::TeamIdLabel
@@ -267,7 +272,7 @@ proc ::lichess::social::open {{parent .application}} {
 	ttk::button $cl.refresh -text $mc::RefreshChallenges -command [namespace code RefreshChallenges]
 	pack $cl.refresh -anchor w
 	foreach kind {in out} {
-		set Priv(challenges:$kind) {}
+		set Priv(challenges:$kind) $mc::ChallengesPrompt
 		ttk::label $cl.$kind -justify left -wraplength 320 -textvariable [namespace current]::Priv(challenges:$kind)
 		pack $cl.$kind -fill x
 	}

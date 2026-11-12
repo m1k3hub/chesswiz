@@ -28,6 +28,8 @@ namespace eval ::lichess::api {
 		set InvalidToken "Invalid Lichess token. Please check it and try again."
 		set Reconnecting "Reconnecting to Lichess…"
 		set Lost "Lichess connection lost."
+		set ServerReconnecting "Lichess server error (%d) — reconnecting…"
+		set ServerLost "Lichess server error (%d) — connection lost."
 		set Retry "Retry"
 		set Invalid "Lichess returned an invalid response."
 		set Rejected "Lichess rejected the request."
@@ -254,14 +256,20 @@ proc ::lichess::api::Done {id h} {
 	if {![string is integer -strict $code]} { set code 0 }
 	set reply [dict create ok 0 error $mc::Network status $code]
 	if {$code == 429} {
-		set seconds 60
+		set now [clock milliseconds]
+		set until [expr {$now + 60000}]
 		foreach {key value} [::http::meta $h] {
-			if {[string equal -nocase $key Retry-After] && [regexp {^[0-9]+$} $value] && $value > 0} {
+			if {![string equal -nocase $key Retry-After]} { continue }
+			if {[regexp {^[0-9]+$} $value] && $value > 0} {
 				set decimal [string trimleft $value 0]
-				set seconds [expr {min(3600, $decimal)}]
+				set until [expr {$now + min(3600, $decimal) * 1000}]
+			} elseif {![catch {clock scan $value -format {%a, %d %b %Y %H:%M:%S GMT} -locale en -gmt 1} date]
+				&& $date * 1000 > $now} {
+				set until [expr {min($now + 3600000, $date * 1000)}]
 			}
 		}
-		set BackoffUntil [expr {max($BackoffUntil, [clock milliseconds] + $seconds * 1000)}]
+		set seconds [expr {($until - $now + 999) / 1000}]
+		set BackoffUntil [expr {max($BackoffUntil, $until)}]
 		dict set reply error [format $mc::Limited $seconds]
 		Notice [dict get $reply error]
 	} elseif {$code == 401} {
@@ -319,6 +327,11 @@ proc ::lichess::api::Done {id h} {
 	::http::cleanup $h
 	dict set Requests $id http {}
 	if {[dict get $r stream] && ($code == 0 || $code >= 500 && $code <= 599)} {
+		if {$code >= 500} {
+			dict set Requests $id serverError $code
+		} else {
+			dict unset Requests $id serverError
+		}
 		Reconnect $id
 		return
 	}
@@ -376,6 +389,7 @@ proc ::lichess::api::ArmWatchdog {id {activity 0}} {
 	variable StallTimeout
 	if {![dict exists $Requests $id]} { return }
 	if {$activity} {
+		dict unset Requests $id serverError
 		dict set Requests $id lastActivity [clock milliseconds]
 		after cancel [dict get $Requests $id deadline]
 		dict set Requests $id deadline {}
@@ -420,7 +434,9 @@ proc ::lichess::api::Reconnect {id} {
 	dict unset Requests $id framed
 	dict set Requests $id attempts [expr {$attempt + 1}]
 	dict set Requests $id timer [after [lindex $ReconnectDelays $attempt] [list ::lichess::api::Start $id]]
-	RecoveryNotice $id $::lichess::api::mc::Reconnecting
+	set text $::lichess::api::mc::Reconnecting
+	if {[dict exists $r serverError]} { set text [format $::lichess::api::mc::ServerReconnecting [dict get $r serverError]] }
+	RecoveryNotice $id $text
 }
 proc ::lichess::api::GiveUp {id} {
 	variable Requests
@@ -429,7 +445,9 @@ proc ::lichess::api::GiveUp {id} {
 	after cancel [dict get $Requests $id deadline]
 	dict set Requests $id deadline {}
 	dict set Requests $id lost 1
-	RecoveryNotice $id $::lichess::api::mc::Lost 1
+	set text $::lichess::api::mc::Lost
+	if {[dict exists $Requests $id serverError]} { set text [format $::lichess::api::mc::ServerLost [dict get $Requests $id serverError]] }
+	RecoveryNotice $id $text 1
 }
 proc ::lichess::api::retry {id} {
 	variable Requests
@@ -438,6 +456,7 @@ proc ::lichess::api::retry {id} {
 	after cancel [dict get $Requests $id deadline]
 	dict set Requests $id deadline {}
 	dict set Requests $id lost 0
+	dict unset Requests $id serverError
 	dict set Requests $id attempts 0
 	dict set Requests $id buffer {}
 	dict set Requests $id wire {}
