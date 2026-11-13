@@ -988,6 +988,13 @@ proc ::menu::state {id {object {}} {arguments {}}} {
 		}
 	}
 
+	# A native Fold/Unfold row names one direction. The general setter is
+	# idempotent, while a posted row with no titlebars in that direction is
+	# disabled. Keep that restriction in posted state, not the setter API.
+	if {$id eq "menu.view.layout.fold" && [dict exists $arguments fold]} {
+		set enabled [expr {$enabled && [LayoutActionEnabled fold $arguments 1]}]
+	}
+
 	# R16: whole cascades greyed (never hidden) on the other tab.
 	set top [::menu::TopOf $id]
 	if {$top eq "Board" && [::menu::OnDatabaseTab]} { set enabled 0 }
@@ -1554,14 +1561,14 @@ proc ::menu::RegisterDynamicActions {} {
 # The native layout popup targets existing saved layouts and individual
 # fold directions; the top-level manager can also open an empty collection.
 # Carry that target in typed arguments so direct dispatch sees the same state.
-proc ::menu::LayoutActionEnabled {operation {arguments {}}} {
+proc ::menu::LayoutActionEnabled {operation {arguments {}} {postedState 0}} {
 	set twm [CurrentTWM]
 	if {$twm eq ""} {return 0}
 	if {$operation eq "manage"} {
 		if {![::action::_dg $arguments saved_only 0]} {return 1}
 		return [expr {[llength [::application::twm::glob $::application::Vars($twm:id)]] > 0}]
 	}
-	if {[dict exists $arguments fold]} {
+	if {$postedState && [dict exists $arguments fold]} {
 		set selector [expr {[dict get $arguments fold] ? "!flat" : "flat"}]
 		return [expr {[llength [$twm collect $selector]] > 0}]
 	}
