@@ -49,7 +49,7 @@ tcltest::test menu-toolset-exact-effective-schemas {AI ids, generated tools and 
         set id [dict get $frozen name]
         lappend expected $id
         set r [::action::get $id]
-        set ai [expr {$id eq "app-quit" ? "debug" : [dict get $frozen ai]}]
+        set ai [dict get $frozen ai]
         if {[dict get $r ai] ne $ai || [dict get $r operator] != [dict get $frozen operator]
             || [dict get $r confirm] != [dict get $frozen confirm]} {
             error "baseline generated flags differ: $id"
@@ -89,7 +89,7 @@ tcltest::test menu-toolset-exact-effective-schemas {AI ids, generated tools and 
     foreach id $expected {
         if {[dict get [::action::get $id] ai] eq "1"} {lappend expectedNormal $id}
     }
-    if {[lsort $normal] ne [lsort $expectedNormal] || "app-quit" in $normal} {
+    if {[lsort $normal] ne [lsort $expectedNormal]} {
         error [list normal-toolset-mismatch expected $expectedNormal actual $normal]
     }
     puts "TOOLSJSON|normal|[join [lsort $normal] ,]"
@@ -111,4 +111,40 @@ tcltest::test menu-toolset-exact-effective-schemas {AI ids, generated tools and 
 } -cleanup {
     set ::application::assistant::Priv(debug) $savedDebug
 } -result {}
+# Exercise the normal assistant through its production confirmation gate.
+# Only the dialog response and final shutdown leaf are replaced.
+foreach answer {yes no} {
+    tcltest::test menu-toolset-app-quit-$answer {assistant confirms before shutdown; decline has no effect} -setup {
+        set savedPriv [array get ::application::assistant::Priv]
+        set ::application::assistant::Priv(debug) 0
+        set ::application::assistant::Priv(reqconfirm) {}
+        set ::application::assistant::Priv(confirm) ::application::assistant::ConfirmDialog
+        set ::scidb::test::toolset::answer $answer
+        set ::scidb::test::toolset::events {}
+        rename ::dialog::question ::scidb::test::toolset::realQuestion
+        proc ::dialog::question {args} {
+            lappend ::scidb::test::toolset::events [list confirm [dict get $args -message]]
+            return $::scidb::test::toolset::answer
+        }
+        rename ::application::shutdown ::scidb::test::toolset::realShutdown
+        proc ::application::shutdown {} {
+            lappend ::scidb::test::toolset::events quit
+            return quit-stub
+        }
+    } -body {
+        set reply [::application::assistant::runTool app-quit {}]
+        set message [format $::application::assistant::mc::Confirm [dict get [::action::get app-quit] what]]
+        set expected [list [list confirm $message]]
+        if {$answer eq "yes"} {lappend expected quit}
+        list [expr {$::scidb::test::toolset::events eq $expected}] \
+            [expr {$answer eq "yes" ? $reply eq "quit-stub" : $reply eq $::application::assistant::mc::Denied}]
+    } -cleanup {
+        rename ::dialog::question {}
+        rename ::scidb::test::toolset::realQuestion ::dialog::question
+        rename ::application::shutdown {}
+        rename ::scidb::test::toolset::realShutdown ::application::shutdown
+        array unset ::application::assistant::Priv
+        array set ::application::assistant::Priv $savedPriv
+    } -result {1 1}
+}
 ::tcltest::cleanupTests

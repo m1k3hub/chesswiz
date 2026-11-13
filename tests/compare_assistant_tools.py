@@ -60,7 +60,7 @@ def compare(log, fixtures, snapshot_path=Path(__file__).with_name('assistant-gen
     for row in generated:
         name = row['name']
         flags = dict(confirm=row['confirm'], operator=row['operator'],
-                     debug=int(name == 'app-quit' or row['ai'] == 'debug'))
+                     debug=int(row['ai'] == 'debug'))
         for key, value in flags.items():
             if actual.get(name, {}).get(key) != value:
                 bad.append((name, key))
@@ -74,7 +74,7 @@ def compare(log, fixtures, snapshot_path=Path(__file__).with_name('assistant-gen
         wanted = set(expected)
         if mode == 'normal':
             debug_names = {row['name'] for row in baseline + metadata if row.get('debug')}
-            debug_names |= {row['name'] for row in generated if row['ai'] == 'debug'} | {'app-quit'}
+            debug_names |= {row['name'] for row in generated if row['ai'] == 'debug'}
             wanted -= debug_names
         if mode not in surfaces:
             surface_errors[mode] = 'missing toolsJson evidence'

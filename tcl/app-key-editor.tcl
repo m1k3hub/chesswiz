@@ -343,14 +343,14 @@ proc ::application::keyEditor::RegisterActions {} {
 		lassign $entry action labelVar tag keySpec cbSpec cmd
 		if {[dict exists $::action::Registry $action]} { continue }
 		set label [ActionLabel $action $labelVar]
-		# Preserve the baseline shortcut tools; quitting is diagnostic-only.
+		# Preserve the baseline assistant exposure of shortcut tools.
 		::action::register $action [dict create \
 			label    $label \
 			object   {} \
 			args     {} \
 			handler  [list ::application::keyEditor::RunAction $action] \
 			what     $label \
-			ai       [expr {$action eq "app-quit" ? "debug" : 1}] \
+			ai       1 \
 			keys     [list $keySpec $cbSpec] \
 			menu     {} \
 			dropdown {} \
