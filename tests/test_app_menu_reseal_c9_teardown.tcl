@@ -6,6 +6,7 @@ set base [::scidb::test::actions::fixture]
 ::action::run open_database [list path $base]
 ::action::run open_game {number 1 move 2 after black}
 set ::c9errors {}
+set ::c9replies {}
 proc ::captureC9Bgerror {cmd op} {
  lappend ::c9errors [lindex $cmd 1]
  puts [list C9_BGERROR [lindex $cmd 1] errorInfo $::errorInfo]
@@ -22,12 +23,16 @@ foreach id {c9.close c9.fold c9.float} {
  if {$id ni $listed} {error "$id not listed in real editor context"}
  puts [list C9_BGPROBE_BEFORE $id object $object leaves [[dict get $object twm] leaves]]
  set reply [::action::run $id]
+ lappend ::c9replies $reply
  for {set i 0} {$i<12} {incr i} {after 50;update}
  puts [list C9_BGPROBE_AFTER $id reply $reply errors $::c9errors]
- if {$id ne "c9.close"} {::action::run $id [dict create object [::context::CurrentObject C9]];update}
+ if {$id ne "c9.close"} {lappend ::c9replies [::action::run $id [dict create object $object]];update}
  ::application::openPane editor
  for {set i 0} {$i<12} {incr i} {after 50;update}
 }
 trace remove execution $actualBgerror enter ::captureC9Bgerror
 tcltest::test populated-c9-no-bgerrors {each listed editor layout row runs without a background Tcl error in a loaded game} -body {set ::c9errors} -result {}
+tcltest::test populated-c9-reverse-replies {forward and reverse operations must not return action errors} -body {
+ lsearch -all -inline -glob $::c9replies error:*
+} -result {}
 ::tcltest::cleanupTests

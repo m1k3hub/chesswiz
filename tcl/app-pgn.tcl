@@ -192,7 +192,7 @@ proc build {top width height} {
 		# the shortcuts the notation's context menu lists (Ctrl-A, Ctrl-Shift-C ...)
 		[namespace parent]::board::needBinding $pgn
 		$pgn mark set insert begin left ;# fix the position of this mark
-		bind $pgn <Button-3> [namespace code [list PopupMenu $edit $i]]
+		bind $pgn <Button-3> [namespace code [list PopupMenu $edit $i %W %x %y]]
 		bind $pgn <Double-3> {#} ;# catch double clicks
 		bind $pgn <Leave> [namespace code [list HidePosition $pgn]]
 		set evalStrip [tk::canvas $edit.f$i.evalstrip -width 1 -height 22 -highlightthickness 0 -background [expr {[::theme::isDark] ? [::colors::lookup pgn,background] : "white"}]]
@@ -2445,7 +2445,7 @@ proc UpdateButtons {} {
 }
 
 
-proc PopupMenu {parent position} {
+proc PopupMenu {parent position {text ""} {x 0} {y 0}} {
 	variable ::annotation::mc::Nag
 	variable ::annotation::LastNag
 	variable ::scidb::scratchbaseName
@@ -2460,6 +2460,9 @@ proc PopupMenu {parent position} {
 		if {[winfo ismapped $menu]} { return }
 		destroy $menu
 	}
+	# A widget binding also receives clicks on whitespace. Only move tags
+	# identify a C2 object; never substitute the current move for no object.
+	if {$text ne "" && "m:move" ni [$text tag names @$x,$y]} { return }
 	menu $menu
 	catch { wm attributes $menu -type popup_menu }
 

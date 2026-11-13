@@ -1144,6 +1144,13 @@ proc ToggleHeader {twm frame} {
 
 	if {$flat} {
 		pack forget $hdr.__flat__
+		# Fixed panes have a simple packed title, unlike movable frames.
+		if {[$twm ispane $frame]} {
+			pack $hdr.title -side left
+			pack $hdr.zoom -side right
+			event generate $twm <<TwmHeader>> -data $frame
+			return
+		}
 		ShowHeaderButtons $twm $frame
 		HeaderBindings $twm $frame $frame
 		HeaderBindings $twm $frame $hdr
@@ -1178,6 +1185,7 @@ proc MakeFlatHeader {twm frame} {
 	if {[llength $slaves]} { grid forget {*}$slaves }
 	foreach w [place slaves $hdr] { place forget $w }
 	$twm set $frame labels {}
+	foreach w [pack slaves $hdr] { pack forget $w }
 	pack $decor -fill x -side top -expand yes
 	if {$Vars(state) eq "normal"} {
 		bind $decor <ButtonRelease-1> [list [namespace current]::ToggleHeaders $twm $frame]

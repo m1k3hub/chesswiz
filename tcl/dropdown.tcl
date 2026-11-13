@@ -963,6 +963,12 @@ proc ::menu::state {id {object {}} {arguments {}}} {
 		}
 	}
 
+	# R1 applies to aliases as well as the posted dynamic rows.
+	if {[string match menu.game.paste_* $id] || [string match menu.game.merge_* $id]
+	 || [string match menu.game.history.* $id]} {
+		if {![GameLoaded]} { set visible 0 }
+	}
+
 	# Object-scoped rules (R10): strip/truncate/comment rows follow the
 	# move the menu or the Ask list is acting on.
 	if {[llength [info commands ::context::ObjectRule]]} {
@@ -1239,6 +1245,8 @@ proc ::menu::FillNodes {nodes menu level} {
 				set labelName [lindex $node 1]
 				set accel [::menu::CascadeAccel $labelName [lindex $node 2]]
 				set children [lindex $node 3]
+				if {!$DropdownForceAll && $labelName in {PasteGame MergeGame GameHistory}
+				 && ![GameLoaded]} { continue }
 				# A static cascade whose rows are all hidden (module absent,
 				# no database, ...) would be a dead entry: drop it.
 				if {!$DropdownForceAll && $children ne "dynamic"} {

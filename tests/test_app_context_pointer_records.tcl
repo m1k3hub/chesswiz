@@ -44,7 +44,14 @@ tcltest::test context-native-square-record {right clicking the board canvas pass
 tcltest::test context-native-move-record {right clicking the notation passes the actual SAN and same move as implicit Ask} -body {
     set frame $::application::pgn::Vars(frame)
     set w [::scidb::test::pointer::findPgn $frame]
-    ::scidb::test::pointer::click $w
+    # Target the move itself: the widget center can be blank notation.
+    set range [::application::pgn::FindRange $w [::scidb::game::position key] [::scidb::game::current]]
+    if {![llength $range]} {error {current move has no text range}}
+    $w see [lindex $range 0]
+    update
+    lassign [$w bbox [lindex $range 0]] x y width height
+    if {"m:move" ni [$w tag names @$x,$y]} {error {pointer must be over a move}}
+    ::scidb::test::pointer::click $w $x $y
     set expected [::scidb::game::query move [::scidb::game::position key]]
     $frame.__menu__ invoke 0
     set record $::scidb::test::pointer::record

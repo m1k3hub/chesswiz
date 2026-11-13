@@ -2127,6 +2127,10 @@ proc ::context::ObjectEnd {object} {
 # R10: strip/truncate/comment rows follow the move object. Returns
 # {visible enabled} or empty when the id has no object rule.
 proc ::context::ObjectRule {id object} {
+	# R2 also guards explicit-object dispatch, not just menu construction.
+	if {($id in {c2.add_variation c2.replace_move c2.strip}
+	 || [string match c2.strip.* $id]) && [::menu::TrialMode]} { return {0 0} }
+
 	if {$id eq "c5.player_url" && [dict exists $object webUrl]} {
 		return [list 1 [WebChoiceAvailable $object]]
 	}

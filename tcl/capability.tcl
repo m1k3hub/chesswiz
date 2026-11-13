@@ -101,7 +101,7 @@ namespace eval ::capability {
 		board3d {view.board3d.open}
 		brief {opponent_brief menu.training.brief}
 		chooseengine {menu.analysis.review_engine}
-		download {download_games menu.tools.download}
+		download {download_games menu.tools.download c4.download_games}
 		embed3d {view.board3d.embed}
 		endtrainer {menu.training.endgame}
 		enginematch {menu.training.engine_match}
