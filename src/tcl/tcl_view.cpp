@@ -1066,6 +1066,10 @@ cmdStrip(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 				types |= 1 << MoveInfo::CorrespondenceChessSent;
 			else if (::strcasecmp(attr, "videoTime") == 0)
 				types |= 1 << MoveInfo::VideoTime;
+			else if (::strcasecmp(attr, "corrClock") == 0)
+				types |= 1 << MoveInfo::CorrespondenceClock;
+			else if (::strcasecmp(attr, "corrElapsed") == 0)
+				types |= 1 << MoveInfo::CorrespondenceElapsed;
 			else
 				return error(CmdStrip, 0, 0, "unknown attribute '%s'", attr);
 		}

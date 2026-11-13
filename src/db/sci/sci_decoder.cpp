@@ -1606,7 +1606,9 @@ Decoder::stripTags(TagMap const& tags)
 
 	if (stripped)
 	{
-		if (r == data)
+		// The tail [p, q) still contains unselected tags plus its terminator.
+		// An empty copied prefix alone does not mean the whole section is empty.
+		if (r == data && q - p == 1)
 		{
 			m_strm.strip(data - m_strm.base(), q - data);
 			ByteStream::set(m_strm.base(), uint16_t(flags & ~flags::TagSection));

@@ -2675,11 +2675,11 @@ proc ::menu::Do {id} {
 		menu.db.reports.timecontrol { return [::application::assistant::runTool event_types {}] }
 		menu.db.reports.trends { return [::application::assistant::runTool database_trend {}] }
 		menu.db.maintenance.compact { return [::application::assistant::runTool compact_database {}] }
-		menu.db.maintenance.strip_moves { return [::scidb::game::strip moves] }
-		menu.db.maintenance.strip_tags { return [::scidb::game::strip tags] }
+		menu.db.maintenance.strip_moves { return [::application::database::StripMoveInfo .application [CurrentBase]] }
+		menu.db.maintenance.strip_tags { return [::application::database::StripPGNTags .application [CurrentBase]] }
 		menu.db.maintenance.convert { return [::application::assistant::runTool convert_database {}] }
 		menu.db.maintenance.recode { return [::application::database::Recode [CurrentBase] .application] }
-		menu.db.maintenance.change_icon { return [::menu::DbProperties] }
+		menu.db.maintenance.change_icon { return [::application::database::ChangeIcon .application [CurrentBase]] }
 		menu.db.discover { return [::application::database::discover::open .application] }
 		menu.db.properties { return [::menu::DbProperties] }
 		menu.db.readonly {

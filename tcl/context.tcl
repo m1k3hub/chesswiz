@@ -2647,7 +2647,7 @@ proc ::context::Command {id object} {
 		}
 		c2.load_continuation { ::context::MoveAction load $object }
 		c2.replace_move { ::context::MoveAction replace $object }
-		c2.add_variation { ::context::MoveAction variation $object }
+		c2.add_variation { ::application::pgn::InsertMoves [dict get $object parent] }
 		c2.new_main_line { ::context::MoveAction mainline $object }
 		c2.try_variation { ::application::pgn::flipTrialMode }
 		c2.exchange_move { ::context::MoveAction exchange $object }
