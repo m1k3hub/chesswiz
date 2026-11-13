@@ -2751,7 +2751,7 @@ proc ::context::Command {id object} {
 				c11.translate_comment {TranslateComment}
 			}
 			if {[lindex $call 0] ni [dict get $allowed $id]} { error "$id: unexpected row [lindex $call 0]" }
-			return [namespace inscope ::comment $call]
+			return [namespace inscope ::comment [list {*}$call]]
 		}
 		c11.select_all { [dict get $object widget] tag add sel 1.0 end }
 		c11.clear { ::comment::Clear }

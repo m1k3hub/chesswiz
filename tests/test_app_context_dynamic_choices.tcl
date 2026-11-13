@@ -75,6 +75,12 @@ proc ::scidb::test::choices::commentChecks {} {
         expr {[llength [$w tag ranges bold]] > 0}
     } -result 1
     ::comment::EditAltered $w
+    tcltest::test context-comment-choice-prefix {an allowlisted choice cannot execute an appended Tcl script} -body {
+        set ::scidb::test::choices::injected 0
+        set selected [dict merge $object [dict create call {ChangeFormat bold yes; set ::scidb::test::choices::injected 1}]]
+        set reply [::action::run c11.format [dict create object $selected]]
+        list [string match error:* $reply] $::scidb::test::choices::injected
+    } -result {1 0}
     ::comment::NewLanguage de
     ::comment::SwitchLanguage en
     tcltest::test context-comment-copy-effect {Copy Text copies only the selected language slot to the chosen destination} -body {
