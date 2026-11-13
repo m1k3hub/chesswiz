@@ -2677,9 +2677,11 @@ proc ::menu::Do {id} {
 			set tree $::application::analysis::NumberToTree($number)
 			set best [::application::analysis::BestLine $tree]
 			if {![llength $best]} { return }
-			set row [lindex $best 0]
-			return [::application::ai::explainLine .application \
-				[set ${tree}::Vars(pv:$row)] [::scidb::pos::fen]]
+			# BestLine returns the analysis snapshot itself. Reading a
+			# relative widget namespace here resolves under ::menu and
+			# fails unless an unrelated caller happened to alias it.
+			set pv [lindex [lindex $best 1] 8]
+			return [::application::ai::explainLine .application $pv [::scidb::pos::fen]]
 		}
 		menu.analysis.explain.move { return [::application::pgn::ExplainMove .application [::scidb::game::current]] }
 		menu.analysis.explain.comment {
