@@ -267,4 +267,37 @@ tcltest::test dropdown-build-wrapper {::menu::build still wraps the drop-down bu
 	list $n $first
 } -result {9 File}
 
+tcltest::test dropdown-two-legacy-wrappers {independent legacy menus both lazily fill their File cascade} -setup {
+	foreach menu {.ddwrapA .ddwrapB} {
+		catch {destroy $menu}
+		menu $menu -tearoff 0
+		::menu::build $menu
+	}
+} -body {
+	set filled {}
+	foreach menu {.ddwrapA .ddwrapB} {
+		# Invoke the real lazy postcommand, exactly as Tk does when posted.
+		set sub $menu.[::menu::WidgetName [::menu::MC File]]
+		{*}[$sub cget -postcommand]
+		lappend filled [expr {[$sub index end] ne "none"}]
+	}
+	set filled
+} -cleanup {
+	destroy .ddwrapA .ddwrapB
+} -result {1 1}
+
+tcltest::test dropdown-wrapper-rebuild {rebuilding a filled instance invalidates its own lazy cache} -setup {
+	menu .ddwrapA -tearoff 0
+	::menu::build .ddwrapA
+} -body {
+	set sub .ddwrapA.[::menu::WidgetName [::menu::MC File]]
+	{*}[$sub cget -postcommand]
+	::menu::build .ddwrapA
+	set empty [expr {[$sub index end] eq "none"}]
+	{*}[$sub cget -postcommand]
+	list $empty [expr {[$sub index end] ne "none"}]
+} -cleanup {
+	destroy .ddwrapA
+} -result {1 1}
+
 tcltest::cleanupTests

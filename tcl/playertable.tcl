@@ -477,53 +477,14 @@ proc popupMenu {menu base variant info {playerCard {}} {playerIndex {}}} {
 
 	# C5: the one player context menu (players table, game list, game bar,
 	# browser, crosstable and player card all call this builder).
-	if {[llength [info commands ::context::Build]]} {
-		set name [lindex $info 0]
-		if {$name eq ""} { set name $playerIndex }
-		# The player items (Insights, opening prep) take base, variant and index.
-		set object [dict create kind player name $name base $base variant $variant \
-			parent $parent index $playerIndex playerIndex $playerIndex \
-			playerCard $playerCard info $info]
-		if {[::context::Build C5 $menu $object]} { return }
-		return
-	}
-
-	if {[llength $playerCard]} {
-		$menu add command \
-			-compound left \
-			-image $::icon::16x16::playercard \
-			-label " $mc::ShowPlayerCard" \
-			-command [namespace code [list ::playercard::show $base $variant {*}$playerCard]] \
-			;
-	}
-
-	if {[string length $playerIndex]
-		&& [llength [info commands ::application::database::player::addPrepReportMenuEntry]]} {
-		::application::database::player::addPrepReportMenuEntry $menu $parent $base $variant $playerIndex
-		if {[llength [info commands ::application::database::player::addInsightsMenuEntry]]} {
-			::application::database::player::addInsightsMenuEntry $menu $parent $base $variant $playerIndex
-		}
-	}
-
-	set m [menu $menu.web -tearoff false]
-	$menu add cascade \
-		-menu $m \
-		-label " $::engine::mc::OpenUrl" \
-		-image $::icon::16x16::internet \
-		-compound left \
-		;
-	
-	if {![::playercard::buildWebMenu $parent $m $info]} {
-		$menu entryconfigure end -state disabled
-	}
-
-#	if {![::scidb::db::get readonly? $base $variant]} {
-#		$menu add separator
-#		$menu add command \
-#			-label " $::mc::Edit..." \
-#			-command [namespace code [list RenamePlayer $parent $index]] \
-#			;
-#	}
+	set name [lindex $info 0]
+	if {$name eq ""} { set name $playerIndex }
+	# The player items (Insights, opening prep) take base, variant and index.
+	set object [dict create kind player name $name base $base variant $variant \
+		parent $parent index $playerIndex playerIndex $playerIndex \
+		playerCard $playerCard info $info]
+	::context::Build C5 $menu $object
+	return
 }
 
 

@@ -71,6 +71,179 @@ proc ::context::LabelVar {id} {
 	return [string map {. _ : _ - _} $id]
 }
 
+# Native labels shared with the original object menus. Resolve at read time
+# so language switches and later mc updates reach menus and the registry.
+namespace eval ::context {
+	variable NativeLabels
+	array set NativeLabels {
+		c1.board_setup ::board::options::mc::BoardSetup
+		c1.copy_fen ::setup::board::mc::CopyFen
+		c1.edit_annotation ::application::pgn::mc::EditAnnotation
+		c1.flip_board ::overview::mc::RotateBoard
+		c1.set_start_board ::setup::board::mc::SetStartBoard
+		c1.set_start_position ::setup::position::mc::SetStartPosition
+		c1.start.chess960 ::mc::VariantName(Chess960)
+		c1.start.shuffle ::setup::board::mc::Shuffle
+		c1.start.standard ::engine::mc::Variant(standard)
+		c1.start_position ::gamebar::mc::StartPosition
+		c10.auto_stretch ::table::mc::AutoStretchColumn
+		c10.configure ::table::mc::Configure
+		c10.fill_column ::table::mc::FillColumn
+		c10.fit ::table::mc::FitColumns
+		c10.hide ::table::mc::Hide
+		c10.optimize ::table::mc::OptimizeColumns
+		c10.show_column ::table::mc::ShowColumn
+		c10.squeeze ::table::mc::SqueezeColumns
+		c11.add_language ::comment::mc::AddLanguage
+		c11.clear ::mc::Clear
+		c11.copy ::mc::Copy
+		c11.copy_text ::comment::mc::CopyText
+		c11.cut ::mc::Cut
+		c11.format ::comment::mc::Formatting
+		c11.insert_emoticon ::comment::mc::InsertEmoticon
+		c11.insert_symbol ::comment::mc::InsertSymbol
+		c11.paste ::mc::Paste
+		c11.redo ::mc::Redo
+		c11.revert ::widget::mc::Label(revert)
+		c11.select_all ::mc::SelectAll
+		c11.switch_language ::comment::mc::SwitchLanguage
+		c11.undo ::mc::Undo
+		c12.clear_history ::game::mc::ClearHistory
+		c12.close_tab ::gamebar::mc::CloseGame
+		c12.copy_clipboard ::gamebar::mc::CopyThisGameToClipboard
+		c12.copy_game ::gamebar::mc::CopyGame
+		c12.import_game ::import::mc::ImportPgnGame
+		c12.load_number ::gamebar::mc::LoadGameNumber
+		c12.merge.game ::mc::Game
+		c12.new.chess960 ::mc::VariantName(Chess960)
+		c12.new.standard ::engine::mc::Variant(standard)
+		c12.new_game ::gamebar::mc::GameNew
+		c12.paste ::mc::Paste
+		c12.paste.game ::mc::Game
+		c12.paste.variation ::gamestable::mc::F_Variation
+		c12.reload ::gamebar::mc::ReloadCurrentGame
+		c12.save_game ::dialog::save::mc::SaveGame
+		c2.add_variation ::move::mc::Action(variation)
+		c2.collapse ::application::pgn::mc::CollapseVariations
+		c2.comment_after ::comment::mc::CommentAfterMove
+		c2.comment_before ::comment::mc::CommentBeforeMove
+		c2.copy_comments ::application::pgn::mc::Command(copy:comments)
+		c2.exchange_move ::move::mc::Action(exchange)
+		c2.expand ::application::pgn::mc::ExpandVariations
+		c2.import_game ::import::mc::ImportPgnGame
+		c2.import_variation ::import::mc::ImportPgnVariation
+		c2.insert_diagram ::application::pgn::mc::InsertDiagram
+		c2.insert_diagram_black ::application::pgn::mc::InsertDiagramFromBlack
+		c2.load_continuation ::move::mc::Action(load)
+		c2.marks_palette ::marks::mc::MarksPalette
+		c2.move_info ::application::pgn::mc::EditMoveInformation
+		c2.new_main_line ::move::mc::Action(mainline)
+		c2.promote_variation ::application::pgn::mc::Command(variation:promote)
+		c2.redo ::mc::Redo
+		c2.remove_variation ::application::pgn::mc::Command(variation:remove)
+		c2.replace_move ::move::mc::Action(replace)
+		c2.strip ::application::pgn::mc::Strip
+		c2.strip.annotations ::application::pgn::mc::Command(strip:annotations)
+		c2.strip.comments ::application::pgn::mc::Command(strip:comments)
+		c2.strip.info ::application::pgn::mc::Command(strip:info)
+		c2.strip.language ::comment::mc::Language
+		c2.strip.marks ::application::pgn::mc::Command(strip:marks)
+		c2.strip.moves ::application::pgn::mc::Command(strip:moves)
+		c2.strip.truncate ::application::pgn::mc::Command(strip:truncate)
+		c2.strip.variations ::application::pgn::mc::Command(strip:variations)
+		c2.try_variation ::move::mc::Action(trial)
+		c2.undo ::mc::Undo
+		c3.browse ::browser::mc::BrowseGame
+		c3.copy_game ::gamebar::mc::CopyGame
+		c3.delete ::gamestable::mc::DeleteGame
+		c3.edit_characteristics ::dialog::save::mc::EditCharacteristics
+		c3.flags ::gamestable::mc::Flags
+		c3.load ::browser::mc::LoadGame
+		c3.merge ::browser::mc::MergeGame
+		c3.open_url ::engine::mc::OpenUrl
+		c3.overview ::gamestable::mc::F_Overview
+		c3.sort.asc ::gamestable::mc::SortAscending
+		c3.sort.column ::gamestable::mc::F_Date
+		c3.sort.desc ::gamestable::mc::SortDescending
+		c3.sort_asc ::gamestable::mc::SortAscending
+		c3.sort_desc ::gamestable::mc::SortDescending
+		c3.tournament ::gamestable::mc::ShowTournamentTable
+		c4.close ::mc::Close
+		c4.export.pgn ::application::database::mc::T_PGNFile
+		c4.import.pgn ::application::database::mc::T_PGNFile
+		c4.maintenance ::menu::mc::Maintenance
+		c4.new.pgn ::application::database::mc::T_PGNFile
+		c4.new_database ::application::database::mc::FileNew
+		c4.open_database ::application::database::mc::FileOpen
+		c4.open_recent ::application::database::mc::FileOpenRecent
+		c4.properties ::application::database::mc::Properties
+		c4.readonly ::database::switcher::mc::ReadOnly
+		c4.save_changes ::application::database::mc::FileSaveChanges
+		c4.search ::application::database::mc::Search
+		c4.symbol.large ::application::database::mc::Large
+		c4.symbol.small ::application::database::mc::Small
+		c4.symbol_size ::application::database::mc::SymbolSize
+		c5.event_table ::gamestable::mc::ShowTournamentTable
+		c5.event_url ::engine::mc::OpenUrl
+		c5.player_card ::playertable::mc::ShowPlayerCard
+		c5.player_url ::engine::mc::OpenUrl
+		c5.site_url ::engine::mc::OpenUrl
+		c6.add_all ::application::analysis::mc::Add(all)
+		c6.add_include ::application::analysis::mc::Add(incl)
+		c6.add_line ::application::analysis::mc::Add(line)
+		c6.add_merge ::application::analysis::mc::Add(merge)
+		c6.add_move ::application::analysis::mc::Add(move)
+		c6.add_sequence ::application::analysis::mc::Add(seq)
+		c6.best_first ::application::analysis::mc::BestFirstOrder
+		c6.close_engine ::application::analysis::mc::CloseEngine
+		c6.copy_fen ::setup::board::mc::CopyFen
+		c6.insert_comment ::application::analysis::mc::InsertMoveAsComment
+		c6.lines_per_variation ::application::analysis::mc::LinesPerVariation
+		c6.lock_engine ::application::analysis::mc::LockEngine
+		c6.multiple_variations ::application::analysis::mc::MultipleVariations
+		c6.opponents_view ::application::analysis::mc::OpponentsView
+		c6.setup_engine ::application::analysis::mc::SetupEngine
+		c6.setup_eval_edges ::application::analysis::mc::SetupEvalEdges
+		c8.automatic ::application::tree::mc::AutomaticSearch
+		c8.inside_variations ::application::tree::mc::SearchInsideVariations
+		c8.lock_reference ::application::tree::mc::LockReferenceBase
+		c8.reference.none ::database::switcher::mc::None
+		c8.reference_base ::application::tree::mc::ChooseReferenceBase
+		c8.start_search ::application::tree::mc::StartSearch
+		c9.amalgamate ::twm::mc::Amalgamate
+		c9.analysis.best ::application::analysis::mc::BestFirstOrder
+		c9.analysis.lines ::application::analysis::mc::LinesPerVariation
+		c9.analysis.multi ::application::analysis::mc::MultipleVariations
+		c9.analysis.opponents ::application::analysis::mc::OpponentsView
+		c9.analysis.setup ::application::analysis::mc::SetupEngine
+		c9.board_setup ::board::options::mc::BoardSetup
+		c9.flip_board ::overview::mc::RotateBoard
+		c9.fold ::application::twm::mc::FoldTitleBar
+		c9.games.columns ::export::mc::Columns
+		c9.hide_leaving ::application::twm::mc::HideWhenLeavingTab
+		c9.maximise ::menu::mc::MaximisePane
+		c9.not.diagrams ::pgn::setup::mc::Setup(Diagrams)
+		c9.not.display ::application::pgn::mc::Display
+		c9.not.emoticons ::pgn::setup::mc::Emoticons(show)
+		c9.not.font_dec ::font::mc::DecreaseFontSize
+		c9.not.font_inc ::font::mc::IncreaseFontSize
+		c9.not.font_reset ::mc::Reset
+		c9.not.language ::application::pgn::mc::LanguageSelection
+		c9.not.markers ::pgn::setup::mc::Display(markers)
+		c9.not.move_notation ::application::pgn::mc::MoveNotation
+		c9.not.numbering ::pgn::setup::mc::Setup(numbering)
+		c9.not.spacing ::pgn::setup::mc::ParLayout(use-spacing)
+		c9.report.family ::dialog::choosefont::mc::Family
+		c9.report.font ::dialog::choosefont::mc::Font
+		c9.report.size ::export::mc::Size
+		c9.start_position ::gamebar::mc::StartPosition
+		c9.stay_on_top ::application::twm::mc::StayOnTop
+		c9.tree.automatic ::application::tree::mc::AutomaticSearch
+		c9.tree.reference ::application::tree::mc::ChooseReferenceBase
+
+	}
+}
+
 proc ::context::L {id} {
 	variable SortLabels
 	if {[info exists SortLabels($id)] && [info exists $SortLabels($id)]} {
@@ -82,6 +255,10 @@ proc ::context::L {id} {
 	# switching back to English clears a previous translation.
 	if {[info exists ::mc::langID] && $::mc::langID eq "en"} {
 		if {[info exists Labels($id)]} { return $Labels($id) }
+	}
+	variable NativeLabels
+	if {[info exists NativeLabels($id)] && [info exists $NativeLabels($id)]} {
+		return [set $NativeLabels($id)]
 	}
 	if {[info exists ::context::mc::$var]} { return [set ::context::mc::$var] }
 	if {[info exists Labels($id)]} { return $Labels($id) }

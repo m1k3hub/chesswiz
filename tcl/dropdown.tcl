@@ -1147,13 +1147,14 @@ proc ::menu::BuildDropdown {menu} {
 	# so a stale label would otherwise survive until the app is restarted.
 	RegisterTree
 	RegisterExtras
-	set DropdownFilled [dict create]
 	catch { $menu delete 0 end }
 	foreach top $DropdownTree {
 		if {[lindex $top 0] ne "cascade"} { continue }
 		set labelName [lindex $top 1]
 		set accel [::menu::CascadeAccel $labelName [lindex $top 2]]
 		set sub $menu.[WidgetName [MC $labelName]]
+		# Rebuilding this instance invalidates only its own lazy-fill entry.
+		dict unset DropdownFilled [list $sub $labelName]
 		catch { destroy $sub }
 		menu $sub -tearoff 0
 		$sub configure -postcommand [list ::menu::FillTop $labelName $sub]
@@ -1180,8 +1181,9 @@ proc ::menu::FillTop {labelName menu} {
 	variable DropdownForceAll
 
 	if {![info exists DropdownForceAll]} { set DropdownForceAll 0 }
-	if {!$DropdownForceAll && [dict exists $DropdownFilled $labelName]} { return }
-	dict set DropdownFilled $labelName 1
+	set cacheKey [list $menu $labelName]
+	if {!$DropdownForceAll && [dict exists $DropdownFilled $cacheKey]} { return }
+	dict set DropdownFilled $cacheKey 1
 
 	set children {}
 	foreach top $DropdownTree {

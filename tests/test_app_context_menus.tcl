@@ -694,6 +694,11 @@ tcltest::test context-one-builder {each object menu is built by ::context::Build
 		if {[llength [info procs $proc]]} { set body [info body $proc] }
 		if {[string first "::context::Build" $body] < 0
 		 && [string first "::context::Post" $body] < 0} { lappend bad $proc }
+		# A delegate substring also occurs in guarded legacy builders.
+		# Those are duplicates too: no row construction may remain here.
+		if {[regexp {\$[[:alnum:]_:]+[[:space:]]+add[[:space:]]+(command|cascade|separator|checkbutton|radiobutton)} $body]} {
+			lappend bad [list $proc legacy-menu-add]
+		}
 	}
 	set bad
 } -result {}

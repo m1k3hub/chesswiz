@@ -456,59 +456,20 @@ proc SaveEventGamesWorkingSet {parent base variant view index {menu ""}} {
 
 proc popupMenu {parent menu base variant view index source} {
 	# C5: the one event context menu.
-	if {[llength [info commands ::context::Build]]} {
-		# Gamebar/browser callers supply an absolute game number; table
-		# callers supply an event row. Resolve both to an event reference.
-		if {$source eq "game"} {
-			set key [::scidb::db::get eventKey $base $variant game $index]
-			set eventIndex [::scidb::db::find event $base $variant $key]
-			set view 0
-			set index [::scidb::db::get lookupEvent $eventIndex $view $base $variant]
-		}
-		if {$index < 0} {return}
-		set info [::scidb::db::get eventInfo $index $view $base $variant]
-		set object [dict create kind event name [column $info event] base $base \
-			parent $parent variant $variant view $view index $index]
-		if {[::context::Build C5 $menu $object]} { return }
-		return
+	# Gamebar/browser callers supply an absolute game number; table
+	# callers supply an event row. Resolve both to an event reference.
+	if {$source eq "game"} {
+		set key [::scidb::db::get eventKey $base $variant game $index]
+		set eventIndex [::scidb::db::find event $base $variant $key]
+		set view 0
+		set index [::scidb::db::get lookupEvent $eventIndex $view $base $variant]
 	}
-	set accel $::gamestable::mc::Accel(tourntable)
-	$menu add command \
-		-compound left \
-		-image $::icon::16x16::crossTable \
-		-label " $::gamestable::mc::ShowTournamentTable" \
-		-accelerator $accel \
-		-command [namespace code [list OpenCrosstable $parent $source $base $variant $view $index]] \
-		;
-	set cmd [namespace code [list OpenCrosstable $parent $source $base $variant $view $index $menu]]
-	::bind $menu <Key-$accel> $cmd
-	::bind $menu <Key-[string tolower $accel]> $cmd
-
-	set accel $::gamestable::mc::Accel(openurl)
-	# XXX not working, because parent is not table
-	set site [GetSite $base $variant $view $index]
-	if {[::web::isWebLink $site]} {
-		set cmd [namespace code [list ::web::open $parent $site]]
-		$menu add command \
-			-compound left \
-			-image $::icon::16x16::internet \
-			-label " $::engine::mc::OpenUrl" \
-			-accelerator $accel \
-			-command $cmd \
-			;
-		::bind $menu <Key-$accel> $cmd
-		::bind $menu <Key-[string tolower $accel]> $cmd
-	}
-
-	$menu add separator
-	$menu add command \
-		-label " $::application::database::mc::RepertoireOpenInSwitcher" \
-		-command [namespace code [list OpenEventGamesInSwitcher $parent $base $variant $view $index $menu]] \
-		;
-	$menu add command \
-		-label " $::application::database::mc::SaveWorkingSet" \
-		-command [namespace code [list SaveEventGamesWorkingSet $parent $base $variant $view $index $menu]] \
-		;
+	if {$index < 0} {return}
+	set info [::scidb::db::get eventInfo $index $view $base $variant]
+	set object [dict create kind event name [column $info event] base $base \
+		parent $parent variant $variant view $view index $index]
+	::context::Build C5 $menu $object
+	return
 }
 
 
