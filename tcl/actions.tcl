@@ -77,7 +77,8 @@ proc ::action::_requiredState {opts} {
 # ----------------------------------------------------------------------
 # register: store an action record after validation.
 # Record fields (all optional except label):
-#   label      mc variable name (required)
+#   label      display text (required)
+#   label-command optional native label resolver, evaluated at read time
 #   object     app|board|game|move|db|player|engine-line|media|pane|...
 #   args       Tcl-native args spec -> JSON schema generated
 #   schema     pre-built JSON schema string (passthrough, no generation)
@@ -164,6 +165,7 @@ proc ::action::register {id record} {
 		effect   [_dg $record effect change] \
 		effect-command [_dg $record effect-command {}] \
 		label    [dict get $record label] \
+		label-command [_dg $record label-command {}] \
 		object   [_dg $record object {}] \
 		args     [_dg $record args {}] \
 		schema   [_dg $record schema {}] \
@@ -207,6 +209,12 @@ proc ::action::get {id} {
 	variable Registry
 	if {![dict exists $Registry $id]} {
 		return -code error "error: unknown action id '$id'"
+	}
+	# Native rows supply their label resolver to generated surfaces. Resolve
+	# at read time, including derived mc text changed after a language switch.
+	set command [_dg [dict get $Registry $id] label-command {}]
+	if {$command ne ""} {
+		dict set Registry $id label [uplevel #0 $command]
 	}
 	return [dict get $Registry $id]
 }
@@ -840,7 +848,7 @@ proc ::action::displayLabel {label} {
 # The text a query is matched against: label, doc and accelerator.
 proc ::action::searchText {id} {
 	variable Registry
-	set record [dict get $Registry $id]
+	set record [get $id]
 	set text "[displayLabel [dict get $record label]] [dict get $record doc]"
 	set ks [dict get $record keys]
 	if {[llength $ks] >= 2 && [lindex $ks 1] ne ""} { append text " " [lindex $ks 1] }
@@ -891,7 +899,7 @@ proc ::action::labels {surface args} {
 		}
 	}
 	foreach id [dict keys $Registry] {
-		set record [dict get $Registry $id]
+		set record [get $id]
 
 		if {[dict get $record ai] eq "debug"} { continue }
 

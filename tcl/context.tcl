@@ -73,7 +73,9 @@ proc ::context::LabelVar {id} {
 
 proc ::context::L {id} {
 	variable SortLabels
-	if {[info exists SortLabels($id)]} { return [set $SortLabels($id)] }
+	if {[info exists SortLabels($id)] && [info exists $SortLabels($id)]} {
+		return [set $SortLabels($id)]
+	}
 	variable Labels
 	set var [LabelVar $id]
 	# English is the source language: use the defaults in this file, so
@@ -115,6 +117,7 @@ proc ::context::Item {id text contexts {keys {}} {visible {}} {enabled {}}} {
 	if {![dict exists $::action::Registry $id]} {
 		::action::register $id [dict create \
 			label $text \
+			label-command [list ::context::L $id] \
 			object {} \
 			args $selectionArgs \
 			handler [list ::context::InvokeArgs $id] \
@@ -2973,6 +2976,7 @@ proc ::context::RegisterNamedSorts {} {
 			foreach direction {ascending descending} {
 				set id c5.sort.$kind.$column.$direction
 				Item $id $label C5
+				set SortLabels($id) [NamedSortLabelVar $kind $column]
 				dict set ::action::Registry $id operator 1
 				dict set ::action::Registry $id doc "Sort the $kind table by $label ($direction)."
 			}
@@ -2981,8 +2985,27 @@ proc ::context::RegisterNamedSorts {} {
 	foreach id {c5.sort_ascending c5.sort_descending} { dict set ::action::Registry $id operator 1 }
 }
 
+# Use the same table heading variable as the native sort submenu, even
+# before a table has been posted or its column has been made visible.
+proc ::context::NamedSortLabelVar {kind column} {
+	set suffix [string toupper $column 0 0]
+	foreach ns [list ${kind}table gamestable playertable] {
+		foreach prefix {T F} {
+			set variable ::${ns}::mc::${prefix}_$suffix
+			if {[info exists $variable]} { return $variable }
+		}
+	}
+	# These headings are derived when the first player table is built.
+	if {$kind eq "player" && $column eq "federationId"} {
+		return ::playertable::mc::F_FederationId
+	}
+	if {$kind eq "player" && $column in {rating1 rating2}} {
+		return ::playertable::mc::T_$suffix
+	}
+	error "missing native sort heading: $kind $column"
+}
+
 proc ::context::NamedSortRows {object} {
-	variable SortLabels
 	if {![dict exists $object sortTable] || [dict get $object kind] ni {player event}} { return {} }
 	set kind [dict get $object kind]
 	set visible [::scrolledtable::visibleColumns [dict get $object sortTable]]
@@ -2992,14 +3015,6 @@ proc ::context::NamedSortRows {object} {
 		foreach column $visible {
 			set id c5.sort.$kind.$column.$direction
 			if {![dict exists $::action::Registry $id]} { error "unregistered named-table sort column: $id" }
-			set suffix [string toupper $column 0 0]
-			foreach ns [list ${kind}table gamestable playertable] {
-				set labelVar ::${ns}::mc::T_$suffix
-				if {[info exists $labelVar]} { break }
-				set labelVar ::${ns}::mc::F_$suffix
-				if {[info exists $labelVar]} { break }
-			}
-			set SortLabels($id) $labelVar
 			lappend children $id
 		}
 		lappend rows [list cascade c5.sort_$direction $children]

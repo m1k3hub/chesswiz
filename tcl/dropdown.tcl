@@ -1908,6 +1908,14 @@ proc ::menu::RegisterExtras {} {
 			handler ::menu::CloseNamedDialog]
 	}
 	RegisterDynamicActions
+	# Layout rows also appear in the native pane layout popup. Keep its mc
+	# labels as the source rather than independent menu defaults.
+	foreach {operation variable} {
+		fold ::application::twm::mc::FoldAllTitleBars
+		manage ::application::twm::mc::ManageLayouts
+	} {
+		dict set ::action::Registry menu.view.layout.$operation label-command [list set $variable]
+	}
 	foreach operation {fold manage} {
 		dict set ::action::Registry menu.view.layout.$operation enabled [list ::menu::LayoutActionEnabled $operation]
 		dict set ::action::Registry menu.view.layout.$operation enabled-args 1
