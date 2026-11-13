@@ -1286,6 +1286,9 @@ proc ::menu::FillNodes {nodes menu level} {
 					set $var [PaneChecked $paneSuffix]
 					lappend opts -variable $var -onvalue 1 -offvalue 0
 					eval [list $menu add checkbutton] $opts
+				} elseif {$id eq ""} {
+					# Informational placeholders have no action to dispatch.
+					eval [list $menu add cascade] $opts
 				} else {
 					eval [list $menu add command] $opts
 				}

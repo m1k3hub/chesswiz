@@ -1343,7 +1343,7 @@ proc ::context::BuildRows {cid menu rows object} {
 		set kind [lindex $row 0]
 		if {$kind eq "header"} {
 			if {$separator} { $menu add separator; set separator 0 }
-			$menu add command -label " [Header [lindex $row 1] $object]" -state disabled
+			$menu add cascade -label " [Header [lindex $row 1] $object]" -state disabled
 			incr shown
 			continue
 		}
@@ -1453,7 +1453,7 @@ proc ::context::CascadePrefix {id menu object} {
 	} else {
 		set hint $::application::database::mc::MaintenanceReadOnly
 	}
-	$menu add command -label " $hint" -state disabled
+	$menu add cascade -label " $hint" -state disabled
 	return 1
 }
 

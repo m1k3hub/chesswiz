@@ -2,10 +2,9 @@
 # Static registry walk (VAL-REG-002)
 # ======================================================================
 # Every built menu surface and every toolbar button must dispatch through
-# ::action::run. The only non-cascade commands allowed are disabled
-# header/hint rows (they carry no -command at all) and the fixed dynamic
-# row classes named in the contract (recent files, layout names, language
-# and country lists). This file reports the count of each surface.
+# ::action::run. Headings and hints are non-command structural rows.
+# Only the fixed dynamic row classes named in the contract may be exempt.
+# This file reports the count of each surface.
 # ======================================================================
 
 package require Tcl 8.5
@@ -111,10 +110,30 @@ proc ::scidb::test::rgw::Toolbars {w rowsVar} {
 			if {$cls ni {Button DropdownButton Checkbutton Radiobutton}} { continue }
 			set cmd ""
 			catch { set cmd [$child cget -command] }
+			# SetState clears native -command while disabled, retaining the
+			# actual activation callback in the toolbar's own Specs table.
+			if {$cmd eq "" && [info exists ::toolbar::Specs(command:$child:$w)]} {
+				set cmd $::toolbar::Specs(command:$child:$w)
+			}
+			set type $cls
+			if {$cls eq "DropdownButton" && $cmd eq ""
+			 && [info exists ::toolbar::Specs(menucmd:$child:$w)]
+			 && $::toolbar::Specs(menucmd:$child:$w) ne ""} {
+				# This is a menu opener, like a Tk cascade; its leaves are
+				# walked as menu commands, not as an empty button callback.
+				set type cascade
+				set popup $child.rgwmenu
+				catch {destroy $popup}
+				menu $popup -tearoff 0
+				{*}$::toolbar::Specs(menucmd:$child:$w) $child $popup
+				::scidb::test::rgw::PostTree $popup
+				::scidb::test::rgw::WalkMenu $popup rows toolbar-menu
+				destroy $popup
+			}
 			set label ""
 			catch { set label [$child cget -text] }
 			if {$label eq ""} { catch { set label [$child cget -tooltip] } }
-			lappend rows [list toolbar $cls normal $label $cmd]
+			lappend rows [list toolbar $type normal $label $cmd]
 			# Custom toolbar checkbuttons mutate state in widget bindings.
 			# Walk activation bindings too, even when -command is empty.
 			foreach event [bind $child] {
@@ -137,11 +156,6 @@ proc ::scidb::test::rgw::BadCommands {rows} {
 	foreach row $rows {
 		lassign $row surface type state label cmd
 		if {$type eq "cascade"} { continue }
-		if {[string trim $cmd] eq ""} {
-			# No command means no command to dispatch: disabled header/hint
-			# rows and dropdown buttons whose popup is itself a menu.
-			continue
-		}
 		if {![string match "::action::run *" [string trim $cmd]]} {
 			lappend bad $row
 		}
@@ -172,6 +186,11 @@ proc ::scidb::test::rgw::ResolveRows {rows} {
 	}
 	return [list $resolved $exempt $unresolved]
 }
+
+tcltest::test registry-walk-empty-command-is-bad {blank command rows are not an exemption, even when disabled} -body {
+    set rows {{native command disabled Games {}} {dropdown command normal Hint {}}}
+    expr {[::scidb::test::rgw::BadCommands $rows] eq $rows}
+} -result 1
 
 tcltest::test registry-walk-dropdown {every drop-down command is ::action::run} -body {
 	catch { destroy .rgwdd }

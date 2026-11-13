@@ -913,7 +913,7 @@ proc addRecentlyUsedToMenu {parent m} {
 			-command [list ::action::run menu.file.recent.clear] \
 			;
 	} else {
-		$m add command -label "($::mc::Empty)"
+		$m add cascade -label "($::mc::Empty)" -state disabled
 	}
 
 	return [llength $recentFiles]

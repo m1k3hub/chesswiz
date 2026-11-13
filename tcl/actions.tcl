@@ -972,41 +972,6 @@ proc ::action::labels {surface args} {
 # invoke: run an action as a user click would (with confirmation gate).
 # ----------------------------------------------------------------------
 proc ::action::invoke {id args} {
-	variable Registry
-
-	if {![dict exists $Registry $id]} {
-		return "error: unknown action id '$id'"
-	}
-
-	set record [dict get $Registry $id]
-	
-	set aiFlag [dict get $record ai]
-	if {$aiFlag eq "debug"} {
-		variable DebugGate
-		if {$DebugGate ne ""} {
-			if {[catch {uplevel #0 $DebugGate} debugEnabled]} {
-				set debugEnabled 0
-			}
-		} else {
-			set debugEnabled 0
-		}
-		if {!$debugEnabled} {
-			return "error: '$id' is only available in debug mode (--ai-debug or SCIDB_AI_DEBUG=1)"
-		}
-	}
-	
-	if {[dict get $record confirm]} {
-		set what [dict get $record what]
-		if {$what eq ""} {
-			set what "perform action '$id'"
-		}
-		if {[llength [info commands ::dialog::question]]} {
-			set answer [::dialog::question -message $what -default no]
-			if {$answer ne "yes"} {
-				return "declined"
-			}
-		}
-	}
-
+	# Use the same validated, formatted confirmation gate as a menu click.
 	return [::action::run $id {*}$args]
 }
