@@ -858,7 +858,7 @@ proc ::menu::Register {id label {accel ""} {visible ""} {enabled ""} {order ""}}
 
 proc ::menu::RegisterTree {} {
 	variable DropdownTree
-	Register menu.file.recent.clear $::game::mc::ClearHistory
+	Register menu.file.recent.clear [MC ClearHistory]
 	set n 0
 	foreach top $DropdownTree {
 		incr n
