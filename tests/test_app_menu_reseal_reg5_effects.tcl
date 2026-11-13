@@ -25,6 +25,7 @@ proc ::reg5effect::postInvoke {id} {
  return $result
 }
 proc ::reg5effect::findRow {m id} {
+ if {$m eq "" || ![winfo exists $m]} {return {}}
  set last [$m index end]
  if {$last eq "none"} {return {}}
  for {set i 0} {$i <= $last} {incr i} {

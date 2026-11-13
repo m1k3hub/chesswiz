@@ -10,11 +10,13 @@ puts [list INITIAL gameHistory [llength $::game::History] recentFiles [llength $
 menu .freshhistory -tearoff 0
 ::menu::BuildDropdown .freshhistory
 proc walkHistory {m} {
+ if {$m eq "" || ![winfo exists $m]} {return {}}
  set last [$m index end]
  if {$last eq "none"} {return {}}
  for {set i 0} {$i <= $last} {incr i} {
   if {[$m type $i] eq "cascade"} {
    set sub [$m entrycget $i -menu]
+   if {$sub eq "" || ![winfo exists $sub]} {continue}
    $sub post 30 30
    set found [walkHistory $sub]
    $sub unpost

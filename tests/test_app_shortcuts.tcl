@@ -37,6 +37,7 @@ proc ::shortcutTest::Build {} {
 }
 
 proc ::shortcutTest::FindCommand {menu cmd} {
+	if {$menu eq "" || ![winfo exists $menu]} { return "" }
 	set n [$menu index end]
 	if {$n eq "" || $n eq "none"} { return "" }
 	for {set i 0} {$i <= $n} {incr i} {
@@ -66,6 +67,7 @@ proc ::shortcutTest::CommandAccel {id} {
 }
 
 proc ::shortcutTest::FindCascade {menu label} {
+	if {$menu eq "" || ![winfo exists $menu]} { return "" }
 	set n [$menu index end]
 	if {$n eq "" || $n eq "none"} { return "" }
 	for {set i 0} {$i <= $n} {incr i} {
@@ -93,6 +95,7 @@ proc ::shortcutTest::CascadeAccel {labelName} {
 # Every accelerator in a built drop-down, as a flat list.
 proc ::shortcutTest::AllAccels {menu {resultVar ""}} {
 	upvar $resultVar out
+	if {$menu eq "" || ![winfo exists $menu]} { return "" }
 	set n [$menu index end]
 	if {$n eq "" || $n eq "none"} { return }
 	for {set i 0} {$i <= $n} {incr i} {

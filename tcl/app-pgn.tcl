@@ -165,8 +165,6 @@ proc build {top width height} {
 	grid remove $corrclock
 	grid $panes   -row 3 -column 1 -sticky nsew
 
-	::gamebar::addReceiver $gamebar [namespace code GameBarEvent]
-
 	set popupcmd [namespace code [list ::gamebar::popupMenu $gamebar $top no]]
 	bind $main <Button-3> $popupcmd
 	bind $main <Double-3> {#} ;# catch double clicks
@@ -350,16 +348,19 @@ proc build {top width height} {
 
 	set previous [::scidb::game::current]
 	InitScratchGame ;# before subscribing
-	::scidb::db::subscribe gameSwitch [namespace current]::GameSwitched
 	::pgn::setup::setupNags editor
 	# A pane can be destroyed while the games remain open. Rebuild its
 	# gamebar and notation from those slots before any selection lookup.
 	foreach position [::game::usedPositions?] {
 		::gamebar::add $gamebar $position [::game::tags? $position]
 		ResetGame $Vars(pgn:$position) $position [::game::tags? $position]
+		::scidb::game::refresh $position -immediate
 		if {[::game::locked? $position]} { ::gamebar::lock $gamebar $position }
 		::gamebar::setState $gamebar $position [::game::modified? $position]
 	}
+	# Reconnect selection only after every replacement text has fresh state.
+	::gamebar::addReceiver $gamebar [namespace code GameBarEvent]
+	::scidb::db::subscribe gameSwitch [namespace current]::GameSwitched
 	if {$previous in [::game::usedPositions?]} {
 		::scidb::game::switch $previous
 		select $previous

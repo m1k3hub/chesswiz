@@ -163,10 +163,50 @@ proc ::scidb::test::rgw::BadCommands {rows} {
 	return $bad
 }
 
-# Resolve every posted id through ::action::get. Rows with no command, or
-# with a command that is not ::action::run (data rows built by Fill*-style
-# helpers), are the contract's dynamic exemptions and are counted, not
-# resolved.
+# Replace only the final handler: real argument validation, capability,
+# object, enabled, confirmation and bulk gates remain in the invoke path.
+# Named real effects are tested separately without these sentinels.
+proc ::scidb::test::rgw::Leaf {id args} {
+    variable reached
+    incr reached
+    return posted-handler
+}
+proc ::scidb::test::rgw::Accept {args} { return 1 }
+
+proc ::scidb::test::rgw::InvokeRow {row id} {
+    variable reached
+    set record [::action::get $id]
+    set confirm $::action::ConfirmHook
+    set bulk $::action::BulkHook
+    set reached 0
+    dict set ::action::Registry $id handler [list ::scidb::test::rgw::Leaf $id]
+    set ::action::ConfirmHook ::scidb::test::rgw::Accept
+    set ::action::BulkHook ::scidb::test::rgw::Accept
+    # Bindings may end with a Tcl "break" command after the action.
+    set command [lindex $row 4]
+    if {[lindex $row 0] eq "toolbar-binding"} {
+        set command [lindex [split $command "\n;"] 0]
+    }
+    set code [catch {
+        set result [::action::invoke $id {*}[lrange $command 2 end]]
+        # Native context rows defer until popup tracking has ended.
+        update idletasks
+        set result
+    } reply options]
+    # Restore even on exceptions so later rows cannot inherit substitutions.
+    dict set ::action::Registry $id $record
+    set ::action::ConfirmHook $confirm
+    set ::action::BulkHook $bulk
+    set expected [expr {[lindex $row 2] ne "disabled"}]
+    puts [list POSTED_INVOKE [lindex $row 0] $id state [lindex $row 2] catch $code reply $reply leaf $reached expected $expected]
+    if {$code} { return -options $options $reply }
+    if {$reached != $expected} {
+        error "posted $id: expected $expected handler calls, got $reached: $reply"
+    }
+}
+
+# Resolve and invoke every registered posted row. The existing bad-command
+# assertions still reject unregistered commands and count exemptions.
 proc ::scidb::test::rgw::ResolveRows {rows} {
 	set resolved 0
 	set exempt {}
@@ -181,6 +221,7 @@ proc ::scidb::test::rgw::ResolveRows {rows} {
 			lappend unresolved [list [lindex $row 0] [lindex $row 3] $id]
 		} else {
 			incr resolved
+            ::scidb::test::rgw::InvokeRow $row $id
             puts [list POSTED_ID [lindex $row 0] $id state [lindex $row 2] resolved 1 command $cmd]
 		}
 	}

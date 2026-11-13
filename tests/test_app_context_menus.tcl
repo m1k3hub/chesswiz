@@ -91,7 +91,12 @@ proc ::scidb::test::ctx::List {menu} {
 			regsub { ▸$} $label "" label
 			set sub ""
 			catch { set sub [$menu entrycget $i -menu] }
-			lappend out [list CASCADE $label $state [List $sub]]
+			if {$sub eq "" || ![winfo exists $sub]} {
+				# Structural headings retain their fixture representation.
+				lappend out [list HEADER $label]
+			} else {
+				lappend out [list CASCADE $label $state [List $sub]]
+			}
 			continue
 		}
 		set accel ""

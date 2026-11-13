@@ -2457,8 +2457,11 @@ proc ::menu::Invoke {id {argsDict {}}} {
 		} else { ::menu::Do $id }
 	} result options]} {
 		::debuglog::log menu "$id: [dict get $options -errorinfo]"
-		if {[llength [info commands ::log::error]]} {
-			catch { ::log::error menu "$id: $result" }
+		# Debug logging can be off. Always surface synchronous callback
+		# errors through the application log, falling back to bgerror.
+		if {![llength [info commands ::log::error]]
+		 || [catch { ::log::error menu "$id: [dict get $options -errorinfo]" }]} {
+			after idle [list ::scidb::bgerror "$id: $result" $options]
 		}
 		return "error: $result"
 	}

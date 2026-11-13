@@ -662,8 +662,13 @@ proc goto {step} {
 proc deselectInHandPiece {} {
 	variable Vars
 
-	::board::holding::deselect $Vars(holding:w)
-	::board::holding::deselect $Vars(holding:b)
+	# Moves can be reset while the board pane is closed. Its holding
+	# widgets and their namespaces belong to that pane lifetime.
+	foreach color {w b} {
+		if {[info exists Vars(holding:$color)] && [winfo exists $Vars(holding:$color)]} {
+			::board::holding::deselect $Vars(holding:$color)
+		}
+	}
 }
 
 
