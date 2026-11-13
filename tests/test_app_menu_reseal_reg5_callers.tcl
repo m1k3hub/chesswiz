@@ -55,11 +55,15 @@ tcltest::test reg5-browser-board-effect {registered browser resizing changes its
 tcltest::test reg5-browser-ask-selection {implicit browser actions resolve the focused browser and vanish after leaving it} -body {
  focus -force $board
  update
+ # The preceding size probe may leave the board at its minimum.
+ ::action::run browser.increase
+ update
  set ids [lmap row [::action::labels asklist {}] {lindex $row 0}]
  set before [set ${ns}::Vars(board:size)]
  set result [::action::run browser.decrease]
  update
  set changed [expr {[set ${ns}::Vars(board:size)] < $before}]
+ ::application::switchTab board
  focus -force $::application::board::Vars(widget:frame)
  update
  set other [lmap row [::action::labels asklist {}] {lindex $row 0}]
