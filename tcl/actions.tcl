@@ -84,6 +84,7 @@ proc ::action::_requiredState {opts} {
 #   validate   cross-arg validation hook (command prefix, receives validated dict)
 #   handler    command prefix (validated args dict appended)
 #   enabled    predicate command (returns 1/0)
+#   enabled-args  append validated arguments to enabled on dispatch (default 0)
 #   visible    predicate command (returns 1/0)
 #   keys       {chesswiz {} chessbase Control-n}
 #   confirm    0|1
@@ -139,7 +140,7 @@ proc ::action::register {id record} {
 		}
 	}
 
-	foreach boolField {confirm bulk async ends-in-dialog} {
+	foreach boolField {confirm bulk async ends-in-dialog enabled-args} {
 		if {[dict exists $record $boolField]} {
 			set bval [dict get $record $boolField]
 			if {$bval ni {0 1 true false yes no}} {
@@ -168,6 +169,7 @@ proc ::action::register {id record} {
 		validate [_dg $record validate {}] \
 		handler  [_dg $record handler {}] \
 		enabled  [_dg $record enabled {}] \
+		enabled-args [expr {[_dg $record enabled-args 0] ? 1 : 0}] \
 		visible  [_dg $record visible {}] \
 		keys     [_dg $record keys {}] \
 		confirm  [expr {[_dg $record confirm 0] ? 1 : 0}] \
@@ -695,6 +697,11 @@ proc ::action::Dispatch {id args approval} {
 
 	set enabledPred [dict get $record enabled]
 	if {$enabledPred ne ""} {
+		# Argument-aware predicates use the exact validated object supplied
+		# by the caller. Existing no-argument predicates keep their API.
+		if {[dict get $record enabled-args]} {
+			lappend enabledPred $validatedArgs
+		}
 		set isEnabled [catch {uplevel #0 $enabledPred} result]
 		if {$isEnabled || !$result} {
 			return "error: action '$id' is not enabled"

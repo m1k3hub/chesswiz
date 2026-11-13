@@ -1439,6 +1439,7 @@ proc ActionCommand {operation position board parent {value ""}} {
 		::action::register $id [dict create label "Browser: $operation" object {} \
 			args {{object {type object default {}}}} ai 0 \
 			visible [list ::browser::CurrentActionAvailable $operation] \
+			enabled [list ::browser::ActionAvailable $operation] enabled-args 1 \
 			handler [list ::browser::InvokeAction $operation] \
 			what "Browser: $operation" doc "Apply $operation to the selected game browser."]
 	}
@@ -1461,10 +1462,27 @@ proc CurrentObject {} {
 proc CurrentActionAvailable {operation} {
 	set object [CurrentObject]
 	if {![dict size $object]} {return 0}
+	# Value-taking rows require explicit arguments and stay out of Ask.
+	if {$operation in {notation column_style_check}} {return 0}
+	return [ActionAvailable $operation [dict create object $object]]
+}
+
+# Shared invoke/menu availability, evaluated against the supplied browser
+# rather than whichever window currently owns the keyboard focus.
+proc ActionAvailable {operation {arguments {}}} {
+	set object {}
+	if {[dict exists $arguments object]} {set object [dict get $arguments object]}
+	if {![dict size $object]} {set object [CurrentObject]}
+	if {![dict size $object]} {return 0}
+	foreach key {position board parent} {
+		if {![dict exists $object $key]} {return 0}
+	}
 	set position [dict get $object position]
+	if {![namespace exists ::browser::$position]} {return 0}
 	variable ${position}::Vars
+	if {![info exists Vars(board)] || $Vars(board) ne [dict get $object board]
+	 || ![winfo exists $Vars(board)]} {return 0}
 	switch -- $operation {
-		notation - column_style_check {return 0}
 		load {return [expr {!$Vars(closed) && $Vars(index) >= 0}]}
 		reload {return [expr {!$Vars(closed) && $Vars(modified)}]}
 		merge {return [expr {!$Vars(closed) && [::scidb::game::current] < 9 && ![::merge::alreadyMerged [::scidb::game::current] $position]}]}
@@ -1472,6 +1490,8 @@ proc CurrentActionAvailable {operation} {
 		next - last {return [expr {!$Vars(closed) && $Vars(index)+1 < [::scidb::view::count games $Vars(base) $Vars(variant) $Vars(view)]}]}
 		increase - decrease - maximise - minimise {return [expr {!$Vars(fullscreen)}]}
 		fullscreen {return [UseFullscreen?]}
+		notation {return [expr {[dict exists $object value] && [dict get $object value] in $::notation::moveStyles}]}
+		column_style_check {return [expr {[dict exists $object value] && [string is boolean -strict [dict get $object value]]}]}
 	}
 	return 1
 }
