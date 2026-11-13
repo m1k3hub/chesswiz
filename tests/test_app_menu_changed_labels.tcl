@@ -301,6 +301,17 @@ foreach lang {de es it hu sv} {
     } -result 142
 }
 if {[info exists ::scidb::test::changedLabels::base]} {
-    ::application::database::closeBase .application $::scidb::test::changedLabels::base
+    # Only our generated, unmodified game is open. Close it without the
+    # normal interactive release-all question, then restore user options.
+    set savedReleaseQuestion $::game::Options(askAgain:releaseAll)
+    set savedReleaseAnswer $::game::Options(answer:releaseAll)
+    set ::game::Options(askAgain:releaseAll) 0
+    set ::game::Options(answer:releaseAll) 1
+    try {
+        ::application::database::closeBase .application $::scidb::test::changedLabels::base
+    } finally {
+        set ::game::Options(askAgain:releaseAll) $savedReleaseQuestion
+        set ::game::Options(answer:releaseAll) $savedReleaseAnswer
+    }
 }
 tcltest::cleanupTests
