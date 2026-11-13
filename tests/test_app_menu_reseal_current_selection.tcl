@@ -49,6 +49,12 @@ tcltest::test stale-native-selection {implicit named action follows currently se
  exec import -window root [file join $::env(VAL_EVIDENCE) stale-selected-player.png]
  expr {[dict get $current name] eq [lindex $second 0]}
 } -result 1
+tcltest::test reseal-empty-pointer-keeps-current-selection {an empty C5 pointer posts nothing and does not clear the real selected player} -body {
+ menu .emptyPointer -tearoff 0
+ set before [::context::CurrentObject C5]
+ set built [::context::Build C5 .emptyPointer {}]
+ list $built [expr {[::context::CurrentObject C5] eq $before}] [expr {"c5.player_card" in [::scidb::test::askscope::AskContextIds C5]}]
+} -cleanup {catch {destroy .emptyPointer}} -result {0 1 1}
 tcltest::test stale-native-cleared {clearing current native selection removes named Ask rows even after changing the main tab} -body {
  ::application::switchTab board
  update
@@ -88,6 +94,8 @@ foreach kind {event site} {
   set current [::context::CurrentObject C5]
   if {[dict get $current name] eq [dict get $first name]} {error "stale $kind reference: $current"}
   if {![llength [::scidb::test::askscope::AskContextIds C5]] || [::context::CurrentObjectFor c5.open_switcher] ne [list C5 $current]} {error "current $kind Ask/reference unavailable"}
+  set wrongKind [::action::run c5.player_card]
+  if {![string match {error: precondition:*} $wrongKind]} {error "player-only action accepted $kind selection: $wrongKind"}
   ::${kind}table::select $frame none
   ::${kind}table::activate $frame none
   update

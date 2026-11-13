@@ -1289,6 +1289,9 @@ proc ::context::Build {cid menu {object {}}} {
 		}
 		variable NamedSelection
 		set NamedSelection $object
+		# An empty pointer reference must not borrow a different selected
+		# row while menu::state resolves implicit action arguments.
+		if {![HasObject C5 $object]} { return 0 }
 	}
 	set rows [Rows $cid $object]
 	if {![llength $rows]} { return 0 }
@@ -1718,6 +1721,7 @@ proc ::context::CurrentObjectFor {id} {
 	foreach cid $contexts {
 		set object [CurrentObject $cid]
 		if {[dict size $object] && [HasObject $cid $object]} {
+			if {$cid eq "C5" && $id ni [MenuIds $cid $object]} { continue }
 			return [list $cid $object]
 		}
 	}
