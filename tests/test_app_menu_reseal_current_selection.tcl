@@ -70,6 +70,7 @@ tcltest::test stale-native-cleared {clearing current native selection removes na
 } -result {{} {} 1}
 foreach kind {event site} {
  tcltest::test reseal-current-$kind-selection {native selection resolves before popup, after another selection, and after clearing} -body {
+	::application::switchTab database
   ::application::database::select[string totitle $kind] $base Normal 0
   for {set i 0} {$i < 10} {incr i} {after 30;update}
   set manager $::application::database::Vars($kind).twm
