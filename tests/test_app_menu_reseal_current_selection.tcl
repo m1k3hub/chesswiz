@@ -49,7 +49,9 @@ tcltest::test stale-native-selection {implicit named action follows currently se
  exec import -window root [file join $::env(VAL_EVIDENCE) stale-selected-player.png]
  expr {[dict get $current name] eq [lindex $second 0]}
 } -result 1
-tcltest::test stale-native-cleared {clearing current native selection removes named Ask rows and refuses implicit action} -body {
+tcltest::test stale-native-cleared {clearing current native selection removes named Ask rows even after changing the main tab} -body {
+ ::application::switchTab board
+ update
  ::playertable::select $frame none
  ::playertable::activate $frame none
  update

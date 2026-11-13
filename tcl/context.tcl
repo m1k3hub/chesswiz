@@ -1567,12 +1567,14 @@ proc ::context::CurrentObject {cid} {
 		C5 {
 			# The database table owns its selection; a popup is only a
 			# snapshot for commands invoked from that popup.
-			if {[::application::activeTab] eq "database"
-			 && $::application::database::Vars(current:tab) in {player event site}} {
+			if {$::application::database::Vars(current:tab) in {player event site}} {
 				return [CurrentNamedObject $::application::database::Vars(current:tab)]
 			}
 			variable NamedSelection
 			if {![info exists NamedSelection] || ![HasObject C5 $NamedSelection]} { return {} }
+			if {[dict exists $NamedSelection sortTable]} {
+				return [CurrentNamedObject [dict get $NamedSelection kind]]
+			}
 			if {[dict exists $NamedSelection parent] && ![winfo exists [dict get $NamedSelection parent]]} { return {} }
 			if {[dict exists $NamedSelection base] && [dict get $NamedSelection base] ne ""
 			 && [catch {::scidb::db::get variant? [dict get $NamedSelection base]}]} { return {} }
@@ -2154,6 +2156,11 @@ proc ::context::Command {id object} {
 		return [PostChoices $m]
 	}
 	switch -glob -- $id {
+		c5.sort_ascending - c5.sort_descending {
+			# Available table cascades are handled by ActionCascade above.
+			# An incomplete explicit reference must fail clearly as well.
+			error "select a named table before choosing a sort column"
+		}
 		c5.sort.* {
 			if {![lindex [ObjectRule $id $object] 1]} { error "selected table does not expose this sort column" }
 			lassign [split $id .] c5 sort kind column direction
