@@ -85,7 +85,7 @@ proc build {path getViewCmd {visibleColumns {}} {args {}}} {
 
 	if {[llength $visibleColumns] == 0} { set visibleColumns $columns }
 
-	set columns {}
+	set columnSpecs {}
 	foreach column $Columns {
 		lassign $column id adjustment minwidth maxwidth width stretch removable ellipsis color
 		set menu {}
@@ -155,11 +155,11 @@ proc build {path getViewCmd {visibleColumns {}} {args {}}} {
 		lappend opts -textvar $fvar
 		lappend opts -tooltipvar $tvar
 
-		lappend columns $id $opts
+		lappend columnSpecs $id $opts
 		lappend Vars(columns) $id
 	}
 
-	set Vars(table) [::scrolledtable::build $path $columns {*}$args]
+	set Vars(table) [::scrolledtable::build $path $columnSpecs {*}$args]
 	::scrolledtable::bindOptions $Vars(id) [namespace current]::${path}::Options [array names Defaults]
 	pack $path -fill both -expand yes
 

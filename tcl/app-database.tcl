@@ -910,7 +910,7 @@ proc addRecentlyUsedToMenu {parent m} {
 			-label " $::game::mc::ClearHistory" \
 			-image $::icon::16x16::clear \
 			-compound left \
-			-command [namespace code ClearHistory] \
+			-command [list ::action::run menu.file.recent.clear] \
 			;
 	} else {
 		$m add command -label "($::mc::Empty)"

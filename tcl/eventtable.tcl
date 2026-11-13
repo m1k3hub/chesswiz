@@ -90,7 +90,7 @@ proc build {path getViewCmd {visibleColumns {}} {args {}}} {
 
 	if {[llength $visibleColumns] == 0} { set visibleColumns $columns }
 
-	set columns {}
+	set columnSpecs {}
 	foreach column $Columns {
 		lassign $column id adjustment minwidth maxwidth width stretch removable ellipsis color
 		set menu {}
@@ -171,11 +171,11 @@ proc build {path getViewCmd {visibleColumns {}} {args {}}} {
 		lappend opts -textvar $fvar
 		lappend opts -tooltipvar $tvar
 
-		lappend columns $id $opts
+		lappend columnSpecs $id $opts
 		lappend Vars(columns) $id
 	}
 
-	set Vars(table) [::scrolledtable::build $path $columns {*}$args]
+	set Vars(table) [::scrolledtable::build $path $columnSpecs {*}$args]
 	pack $path -fill both -expand yes
 	RefreshEventType $path
 
@@ -457,7 +457,17 @@ proc SaveEventGamesWorkingSet {parent base variant view index {menu ""}} {
 proc popupMenu {parent menu base variant view index source} {
 	# C5: the one event context menu.
 	if {[llength [info commands ::context::Build]]} {
-		set object [dict create kind event name $source base $base \
+		# Gamebar/browser callers supply an absolute game number; table
+		# callers supply an event row. Resolve both to an event reference.
+		if {$source eq "game"} {
+			set key [::scidb::db::get eventKey $base $variant game $index]
+			set eventIndex [::scidb::db::find event $base $variant $key]
+			set view 0
+			set index [::scidb::db::get lookupEvent $eventIndex $view $base $variant]
+		}
+		if {$index < 0} {return}
+		set info [::scidb::db::get eventInfo $index $view $base $variant]
+		set object [dict create kind event name [column $info event] base $base \
 			parent $parent variant $variant view $view index $index]
 		if {[::context::Build C5 $menu $object]} { return }
 		return
@@ -733,7 +743,7 @@ proc ShowInfo {path x y} {
 proc GetSite {base variant view index} {
 	if {$index == -1} { return "" }
 	set line [::scidb::db::get eventInfo $index $view $base $variant]
-	return [lindex $line 0]
+	return [column $line site]
 }
 
 

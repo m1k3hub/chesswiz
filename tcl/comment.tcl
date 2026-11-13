@@ -455,17 +455,24 @@ proc GetComment {} {
 # on screen.
 proc ExplainComment {parent} {
 	variable Vars
-	::application::ai::explainSelection $parent comment [list $Vars(pos)]
+	::application::ai::explainComment $parent $Vars(pos) [CurrentText]
 }
 
 
 # A2: detect the language of the comment being edited and, when the current
 # slot is the neutral one, carry its text into the detected language slot.
+# Text belonging to the live editor, including unsaved changes.
+proc CurrentText {} {
+	variable Vars
+	set w $Vars(widget:text:$Vars(lang)).text
+	return [string trim [$w get begin end]]
+}
+
 proc DetectLanguage {parent} {
 	variable Vars
 
 	if {[llength [info commands ::ai::language::detect]] == 0} { return }
-	set text [PlainComment [GetComment]]
+	set text [CurrentText]
 	if {[string trim $text] eq ""} { return }
 	set Vars(detectText) $text
 	::ai::language::detect $text [namespace code [list OnDetected $parent]]
@@ -593,7 +600,7 @@ proc ClassifyComment {parent} {
 	variable Vars
 
 	if {[llength [info commands ::ai::comment::kind]] == 0} { return }
-	set text [PlainComment [GetComment]]
+	set text [CurrentText]
 	if {[string trim $text] eq ""} { return }
 	::ai::comment::kind $text [namespace code [list OnKind $parent]]
 }

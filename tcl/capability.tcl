@@ -32,6 +32,7 @@ proc ::capability::DefineAll {} {
 	Define training    {expr {[llength [info commands ::ai::cql::training]] > 0}}
 	Define quality     {expr {[llength [info commands ::ai::cql::qualityReport]] > 0}}
 	Define event       {expr {[llength [info commands ::ai::event::report]] > 0}}
+	Define eventreport {expr {[llength [info commands ::ai::eventreport::report]] > 0 && [::capability::present ai]}}
 	Define trend       {expr {[llength [info commands ::ai::trend::report]] > 0}}
 	Define factcheck   {expr {[llength [info commands ::ai::factcheck::current]] > 0}}
 	Define annotate    {expr {[llength [info commands ::ai::annotate::toggle]] > 0}}
@@ -93,7 +94,7 @@ proc ::capability::present {module} {
 # an operation whose implementation is missing.
 namespace eval ::capability {
 	variable ActionModules {
-		ai {c2.explain_move c3.ask_about_game c6.explain_line c11.draft_comment c11.explain_comment explain_position menu.analysis.analyze menu.analysis.explain.comment menu.analysis.explain.line menu.analysis.explain.move menu.analysis.explain.position}
+		ai {game.explain similar_games c3.games_like annotate_game opponent_brief study_plan database_trend factcheck_annotations training_set check_results menu.analysis.annotate menu.analysis.factcheck menu.training.studyplan menu.training.brief menu.training.training_set menu.training.check_results menu.db.reports.trends c2.explain_move c3.ask_about_game c6.explain_line c11.draft_comment c11.explain_comment explain_position menu.analysis.analyze menu.analysis.explain.comment menu.analysis.explain.line menu.analysis.explain.move menu.analysis.explain.position}
 		annotate {annotate_game menu.analysis.annotate}
 		assistant {menu.tools.assistant menu.view.panes.assistant}
 		board3d {view.board3d.open}
@@ -103,7 +104,7 @@ namespace eval ::capability {
 		embed3d {view.board3d.embed}
 		endtrainer {menu.training.endgame}
 		enginematch {menu.training.engine_match}
-		event {menu.db.reports.timecontrol}
+		event {event_types menu.db.reports.timecontrol}
 		explorer {c9.explorer.source c9.pane.explorer menu.analysis.explorer menu.view.panes.explorer}
 		factcheck {factcheck_annotations menu.analysis.factcheck}
 		filetypes {menu.tools.file_types}
@@ -130,17 +131,51 @@ namespace eval ::capability {
 		studyplan {study_plan menu.training.studyplan}
 		tablebase {c9.tablebase menu.analysis.tablebase.local menu.analysis.tablebase.online menu.analysis.tablebase.show menu.board.tablebase.local menu.board.tablebase.online menu.board.tablebase.show}
 		training {training_set menu.training.training_set}
-		trend {menu.db.reports.trends}
+		trend {database_trend menu.db.reports.trends}
 		voice {menu.tools.voice}
 		webgl3d {view.board3d.webgl}
 	}
+	# Alias entry points can differ from the menu entry point of the
+	# owning module. Guard the functions actually invoked by each alias.
+	variable ActionCommands {
+		game.explain ::application::ai::explainSelection
+		c2.explain_move ::application::ai::explainSelection
+		menu.analysis.explain.move ::application::ai::explainSelection
+		menu.analysis.explain.line ::application::ai::explainLine
+		c6.explain_line ::application::ai::explainLine
+		menu.analysis.explain.comment ::application::ai::explainComment
+		c11.explain_comment ::application::ai::explainComment
+		c11.draft_comment ::comment::DraftComment
+		c3.games_like ::ai::similar::report
+		annotate_game ::ai::annotate::annotate
+		opponent_brief ::ai::brief::build
+		database_trend ::ai::trend::narrate
+		event_types ::ai::event::profile
+		detect_language ::ai::language::detect
+		c11.detect_language ::ai::language::detect
+		comment_kind ::ai::comment::kind
+		c11.classify_comment ::ai::comment::kind
+		diagnose_import ::ai::import::diagnose
+		novelty_label ::ai::novelty::label
+		structure_profile ::ai::cql::profile
+		similar_games ::ai::similar::report
+		find_similar ::ai::similar::script
+		transcribe_media ::ai::transcript::transcribe
+		set_position ::ai::setup::position
+		engine_evaluate ::ai::engine::evaluate
+		engine_check_move ::ai::engine::evaluate
+		engine_play ::ai::engine::evaluate
+	}
 	# An action can remain useful when just one argument choice is absent.
-	variable ArgumentModules {open_view {kind {player_card playercard}}}
+	variable ArgumentModules {open_view {kind {player_card playercard event_report eventreport}}}
 }
 
 proc ::capability::actionAvailable {id {arguments {}}} {
 	variable ActionModules
 	variable ArgumentModules
+	variable ActionCommands
+	if {[dict exists $ActionCommands $id]
+	 && ![llength [info commands [dict get $ActionCommands $id]]]} {return 0}
 	dict for {module ids} $ActionModules {
 		if {$id in $ids && ![present $module]} {return 0}
 	}

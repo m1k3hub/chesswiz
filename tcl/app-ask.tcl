@@ -330,6 +330,17 @@ proc ::application::ask::RegisterAction {} {
 # ======================================================================
 # Focus and startup.
 # ======================================================================
+# Resolve actions against the pane that owned focus before entering Ask.
+proc ::application::ask::ContextFocus {} {
+	variable Priv
+	set current [focus]
+	if {($current eq [Entry] || [string match ".application.nb.ask.*" $current])
+	 && [info exists Priv(focusBefore)] && [winfo exists $Priv(focusBefore)]} {
+		return $Priv(focusBefore)
+	}
+	return $current
+}
+
 proc ::application::ask::Focus {} {
 	variable Priv
 

@@ -188,7 +188,7 @@ proc ::ai::factcheck::report {parent result} {
 
 # The menu/assistant entry point: check the game on the board and report.
 proc ::ai::factcheck::current {parent} {
-	set result [game 9]
+	set result [game [::scidb::game::current]]
 	report $parent $result
 	if {[dict get $result checked] == 0} { return $mc::NoComments }
 	return [expr {[dict get $result flagged]

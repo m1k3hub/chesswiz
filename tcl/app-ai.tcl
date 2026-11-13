@@ -628,16 +628,20 @@ proc ::application::ai::explainGame {parent} {
 
 
 # Explain the comment stored at <pos> of the current game.
-proc ::application::ai::explainComment {parent pos} {
-	if {[catch {::scidb::game::query comment $pos} comment]} {
-		::dialog::info -parent $parent -message "No comment at this position."
-		return
-	}
-	set plain ""
-	if {[llength [info commands ::ai::factcheck::plain]]} {
-		set plain [::ai::factcheck::plain $comment]
+proc ::application::ai::explainComment {parent pos args} {
+	if {[llength $args]} {
+		set plain [lindex $args 0]
 	} else {
-		regsub -all {<[^>]+>} $comment {} plain
+		if {[catch {::scidb::game::query comment $pos} comment]} {
+			::dialog::info -parent $parent -message "No comment at this position."
+			return
+		}
+		set plain ""
+		if {[llength [info commands ::ai::factcheck::plain]]} {
+			set plain [::ai::factcheck::plain $comment]
+		} else {
+			regsub -all {<[^>]+>} $comment {} plain
+		}
 	}
 	set comment [string trim $plain]
 	if {$comment eq ""} {

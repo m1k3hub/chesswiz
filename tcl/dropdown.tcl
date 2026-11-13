@@ -858,6 +858,7 @@ proc ::menu::Register {id label {accel ""} {visible ""} {enabled ""} {order ""}}
 
 proc ::menu::RegisterTree {} {
 	variable DropdownTree
+	Register menu.file.recent.clear $::game::mc::ClearHistory
 	set n 0
 	foreach top $DropdownTree {
 		incr n
@@ -2470,6 +2471,7 @@ proc ::menu::Do {id} {
 		}
 		menu.help.donate_paypal { return [::web::open .application [dict get $::menu::DonateURLs PayPal]] }
 		menu.help.donate_kofi { return [::web::open .application [dict get $::menu::DonateURLs Ko-fi]] }
+		menu.file.recent.clear { return [::application::database::ClearHistory] }
 		menu.file.new.normal { return [::menu::dbNew .application Normal] }
 		menu.file.new.three { return [::menu::dbNew .application ThreeCheck] }
 		menu.file.new.crazy { return [::menu::dbNew .application Crazyhouse] }

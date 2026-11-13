@@ -2088,6 +2088,13 @@ proc BuildMenu {gamebar id side menu} {
 	variable Options
 
 	HideTags $gamebar
+	# Named-object callers append the same registered game-tab rows as C12.
+	if {[llength [info commands ::context::Build]]} {
+		if {$id < 0} { set id $Specs(selected:$gamebar) }
+		::context::Build C12 $menu [dict create parent $gamebar id $id gameSlot $id]
+		tk_popup $menu {*}[winfo pointerxy $gamebar]
+		return
+	}
 	set sid $Specs(selected:$gamebar)
 	set current [expr {$id == ($Specs(size:$gamebar) == 1 ? $sid : -1)}]
 	set addsep {}

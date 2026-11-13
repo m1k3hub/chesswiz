@@ -1797,6 +1797,7 @@ proc VisitHeader {table mode item column} {
 	variable ${table}::Vars
 
 	if {$mode eq "enter"} {
+		set ::table::CurrentColumn [list $table [$table.t column tag names $column]]
 		Tooltip $table show $item
 	} else {
 		Tooltip $table hide

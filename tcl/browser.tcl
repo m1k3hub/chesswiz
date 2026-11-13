@@ -1431,6 +1431,85 @@ proc SetMinSize {w position} {
 }
 
 
+# Browser rows have stable operation ids and a typed browser reference.
+# No menu widget or executable script travels with the action.
+proc ActionCommand {operation position board parent {value ""}} {
+	set id browser.$operation
+	if {![dict exists $::action::Registry $id]} {
+		::action::register $id [dict create label "Browser: $operation" object {} \
+			args {{object {type object default {}}}} ai 0 \
+			visible [list ::browser::CurrentActionAvailable $operation] \
+			handler [list ::browser::InvokeAction $operation] \
+			what "Browser: $operation" doc "Apply $operation to the selected game browser."]
+	}
+	return [list ::action::run $id [dict create object [dict create position $position board $board parent $parent value $value]]]
+}
+
+proc CurrentObject {} {
+	set focus [::application::ask::ContextFocus]
+	if {$focus eq "" || ![winfo exists $focus]} {return {}}
+	set top [winfo toplevel $focus]
+	foreach ns [namespace children ::browser] {
+		if {[info exists ${ns}::Vars(board)] && [info exists ${ns}::Vars(dlg)]
+		 && [set ${ns}::Vars(dlg)] eq $top} {
+			return [dict create position [namespace tail $ns] board [set ${ns}::Vars(board)] parent $top value {}]
+		}
+	}
+	return {}
+}
+
+proc CurrentActionAvailable {operation} {
+	set object [CurrentObject]
+	if {![dict size $object]} {return 0}
+	set position [dict get $object position]
+	variable ${position}::Vars
+	switch -- $operation {
+		notation - column_style_check {return 0}
+		load {return [expr {!$Vars(closed) && $Vars(index) >= 0}]}
+		reload {return [expr {!$Vars(closed) && $Vars(modified)}]}
+		merge {return [expr {!$Vars(closed) && [::scidb::game::current] < 9 && ![::merge::alreadyMerged [::scidb::game::current] $position]}]}
+		prev - first {return [expr {!$Vars(closed) && $Vars(index) > 0}]}
+		next - last {return [expr {!$Vars(closed) && $Vars(index)+1 < [::scidb::view::count games $Vars(base) $Vars(variant) $Vars(view)]}]}
+		increase - decrease - maximise - minimise {return [expr {!$Vars(fullscreen)}]}
+		fullscreen {return [UseFullscreen?]}
+	}
+	return 1
+}
+
+proc InvokeAction {operation arguments} {
+	set object [dict get $arguments object]
+	if {![dict size $object]} {set object [CurrentObject]}
+	if {![dict size $object]} {error "Select a game browser before running this action."}
+	set position [dict get $object position]
+	set board [dict get $object board]
+	set parent [dict get $object parent]
+	if {![namespace exists ::browser::$position] || ![winfo exists $board]} {error "The game browser is closed."}
+	switch -- $operation {
+		load {LoadGame $parent $position [::scidb::game::fen $position]}
+		merge {::gamebar::mergeGame $parent $position}
+		reload {ReloadGame $parent $position}
+		prev - next - first - last {GotoGame($operation) $parent $position}
+		increase {ChangeBoardSize $position $board +5}
+		decrease {ChangeBoardSize $position $board -5}
+		maximise {ChangeBoardSize $position $board max}
+		minimise {ChangeBoardSize $position $board min}
+		fullscreen {ViewFullscreen $position $board}
+		font_inc {::font::ChangeFontSize browser {} +1}
+		font_dec {::font::ChangeFontSize browser {} -1}
+		column_style {SetupColumnStyle $position}
+		column_style_check {SetupStyle $position}
+		notation {
+			set value [dict get $object value]
+			if {$value ni $::notation::moveStyles} {error "Unknown move notation."}
+			set ::pgn::browser::Options(style:move) $value
+			SetupStyle $position
+		}
+		configure {ConfigureBrowser $parent}
+		help {::help::open .application Game-Browser -parent $parent}
+		default {error "Unknown browser operation."}
+	}
+}
+
 proc PopupMenu {parent board position {what ""}} {
 	variable ${position}::Vars
 
@@ -1440,7 +1519,7 @@ proc PopupMenu {parent board position {what ""}} {
 	set menu $dlg.__menu__
 	catch { destroy $menu }
 	menu $menu -tearoff 0
-	catch { wm attributes $m -type popup_menu }
+	catch { wm attributes $menu -type popup_menu }
 
 	if {!$Vars(closed) && [string length $what]} {
 		EnterItem $position $what yes
@@ -1472,7 +1551,7 @@ proc PopupMenu {parent board position {what ""}} {
 			-label " $mc::LoadGame" \
 			-image $::icon::16x16::document \
 			-compound left \
-			-command [namespace code [list LoadGame $dlg $position [::scidb::game::fen $position]]] \
+			-command [ActionCommand load $position $board $dlg] \
 			-state $state \
 			;
 		if {[::scidb::game::current] < 9} { set state normal } else { set state disabled }
@@ -1481,7 +1560,7 @@ proc PopupMenu {parent board position {what ""}} {
 			-label " $::merge::mc::MergeGameFrom..." \
 			-image $::icon::16x16::merge \
 			-compound left \
-			-command [list gamebar::mergeGame $parent $position] \
+			-command [ActionCommand merge $position $board $parent] \
 			-state $state \
 			;
 		if {$Vars(modified)} { set state normal } else { set state disabled }
@@ -1489,7 +1568,7 @@ proc PopupMenu {parent board position {what ""}} {
 			-label " $mc::ReloadGame" \
 			-image $::icon::16x16::refresh \
 			-compound left \
-			-command [namespace code [list ReloadGame $dlg $position]] \
+			-command [ActionCommand reload $position $board $dlg] \
 			-state $state \
 			;
 		$menu add separator
@@ -1498,7 +1577,7 @@ proc PopupMenu {parent board position {what ""}} {
 			-label " $mc::GotoGame(prev)" \
 			-image $::icon::16x16::backward \
 			-compound left \
-			-command [namespace code [list GotoGame(prev) $parent $position]] \
+			-command [ActionCommand prev $position $board $parent] \
 			-accel "$::mc::Key(Ctrl)-$::mc::Key(Up)" \
 			-state $state \
 			;
@@ -1507,7 +1586,7 @@ proc PopupMenu {parent board position {what ""}} {
 			-label " $mc::GotoGame(next)" \
 			-image $::icon::16x16::forward \
 			-compound left \
-			-command [namespace code [list GotoGame(next) $parent $position]] \
+			-command [ActionCommand next $position $board $parent] \
 			-accel "$::mc::Key(Ctrl)-$::mc::Key(Down)" \
 			-state $state \
 			;
@@ -1516,7 +1595,7 @@ proc PopupMenu {parent board position {what ""}} {
 			-label " $mc::GotoGame(first)" \
 			-image $::icon::16x16::first \
 			-compound left \
-			-command [namespace code [list GotoGame(first) $parent $position]] \
+			-command [ActionCommand first $position $board $parent] \
 			-accel "$::mc::Key(Ctrl)-$::mc::Key(Home)" \
 			-state $state \
 			;
@@ -1525,7 +1604,7 @@ proc PopupMenu {parent board position {what ""}} {
 			-label " $mc::GotoGame(last)" \
 			-image $::icon::16x16::last \
 			-compound left \
-			-command [namespace code [list GotoGame(last) $parent $position]] \
+			-command [ActionCommand last $position $board $parent] \
 			-accel "$::mc::Key(Ctrl)-$::mc::Key(End)" \
 			-state $state \
 			;
@@ -1537,28 +1616,28 @@ proc PopupMenu {parent board position {what ""}} {
 			-label " $mc::IncreaseBoardSize" \
 			-image $::icon::16x16::plus \
 			-compound left \
-			-command [namespace code [list ChangeBoardSize $position $board +5]] \
+			-command [ActionCommand increase $position $board $parent] \
 			-accelerator "+" \
 			;
 		$menu add command \
 			-label " $mc::DecreaseBoardSize" \
 			-image $::icon::16x16::minus \
 			-compound left \
-			-command [namespace code [list ChangeBoardSize $position $board -5]] \
+			-command [ActionCommand decrease $position $board $parent] \
 			-accelerator "\u2212" \
 			;
 		$menu add command \
 			-label " $mc::MaximizeBoardSize" \
 			-image $::icon::16x16::maximize \
 			-compound left \
-			-command [namespace code [list ChangeBoardSize $position $board max]] \
+			-command [ActionCommand maximise $position $board $parent] \
 			-accelerator "${::mc::Key(Alt)} +" \
 			;
 		$menu add command \
 			-label " $mc::MinimizeBoardSize" \
 			-image $::icon::16x16::minimize \
 			-compound left \
-			-command [namespace code [list ChangeBoardSize $position $board min]] \
+			-command [ActionCommand minimise $position $board $parent] \
 			-accelerator "${::mc::Key(Alt)} \u2212" \
 			;
 	}
@@ -1568,25 +1647,29 @@ proc PopupMenu {parent board position {what ""}} {
 			-label " [::mc::stripAmpersand [set ::menu::mc::$var]]" \
 			-image $::icon::16x16::fullscreen \
 			-compound left \
-			-command [namespace code [list ViewFullscreen $position $board]] \
+			-command [ActionCommand fullscreen $position $board $parent] \
 			-accelerator "F11" \
 			;
 	}
 
 	$menu add separator
 	::font::addChangeFontSizeToMenu browser $menu
+	set last [$menu index end]
+	$menu entryconfigure [expr {$last-1}] -command [ActionCommand font_inc $position $board $parent]
+	$menu entryconfigure $last -command [ActionCommand font_dec $position $board $parent]
 	if {$::theme::useCustomStyleMenuEntries} {
 		if {$::pgn::browser::Options(style:column)} { set state Yes } else { set state No }
 		$menu add command \
 			-label " $::pgn::setup::mc::ParLayout(column-style)" \
 			-image [set ::theme::icon::16x16::check$state] \
 			-compound left \
-			-command [namespace code [list SetupColumnStyle $position]] \
+			-command [ActionCommand column_style $position $board $parent] \
 			;
 	} else {
 		$menu add checkbutton \
 			-label " $::pgn::setup::mc::ParLayout(column-style)" \
 			-variable ::pgn::browser::Options(style:column) \
+			-command [ActionCommand column_style_check $position $board $parent] \
 			;
 		::theme::configureCheckEntry $menu
 	}
@@ -1603,13 +1686,13 @@ proc PopupMenu {parent board position {what ""}} {
 			-label $::notation::mc::MoveForm($style) \
 			-variable ::pgn::browser::Options(style:move) \
 			-value $style \
-			-command [namespace code [list SetupStyle $position]] \
+			-command [ActionCommand notation $position $board $parent $style] \
 			;
 		::theme::configureRadioEntry $menu.moveStyles
 	}
 	$menu add command \
 		-label " $::pgn::setup::mc::Configure(browser)..." \
-		-command [namespace code [list ConfigureBrowser $parent]] \
+		-command [ActionCommand configure $position $board $parent] \
 		-image $::icon::16x16::none \
 		-compound left \
 		;
@@ -1619,7 +1702,7 @@ proc PopupMenu {parent board position {what ""}} {
 		-label " $::help::mc::Help" \
 		-image $::icon::16x16::help \
 		-compound left \
-		-command [list ::help::open .application Game-Browser -parent $dlg] \
+		-command [ActionCommand help $position $board $dlg] \
 		-accelerator "F1" \
 		;
 

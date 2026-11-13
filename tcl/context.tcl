@@ -1548,19 +1548,21 @@ proc ::context::CurrentObject {cid} {
 				ply $ply san "" position $pos over $over mainline $mainline]
 		}
 		C3 {
-			if {![GameInTab]} { return {} }
-			set base ""
-			catch { set base [::scidb::db::get name] }
-			if {$base eq ""} { return {} }
-			set index 0
-			set variant Normal
-			if {[catch { set pos [::scidb::game::current] }]} { set pos "" }
-			if {$pos ne ""} {
-				catch { lassign [::scidb::game::link? $pos] b variant index }
-			}
-			if {$index eq ""} { set index 0 }
-			return [dict create base $base variant $variant index $index \
-				column -1 sortable [::menu::Sortable]]
+			# The list owns its selection, independently of the loaded game.
+			if {[catch {
+				set manager $::application::database::Vars(games).twm
+				set path [set ::application::database::games::${manager}::Priv(table)]
+				set row [::gamestable::selection $path]
+				if {$row < 0} { return {} }
+				set index [::scrolledtable::rowToIndex $path $row]
+				set base [::scrolledtable::base $path]
+				set variant [::scrolledtable::variant $path]
+				set viewcmd [set ::gamestable::${path}::Vars(viewcmd)]
+				set view [{*}$viewcmd $base $variant]
+				set count [llength [::game::clipboard::selection $path $base $variant $view]]
+			}]} { return {} }
+			return [dict create path $path parent [winfo toplevel $path] base $base variant $variant \
+				view $view index $index count $count column -1 sortable [::menu::Sortable]]
 		}
 		C4 {
 			set base ""
@@ -1589,8 +1591,12 @@ proc ::context::CurrentObject {cid} {
 			if {[info exists ::application::MapTerminalToAnalysis($number)]} { set number $::application::MapTerminalToAnalysis($number) }
 			if {![::engine::active? $number] || ![info exists ::application::analysis::NumberToTree($number)]} { return {} }
 			set tree $::application::analysis::NumberToTree($number)
-			lassign [::application::analysis::BestLine $tree] row line
-			set pv [lindex $line 8]
+			# Use the line physically highlighted by the analysis widget.
+			set item [set ::application::analysis::${tree}::Vars(current:item)]
+			if {$item eq "" || $item == 0} { return {} }
+			set row [$tree item order $item -visible]
+			if {![info exists ::application::analysis::${tree}::Vars(pv:$row)]} { return {} }
+			set pv [set ::application::analysis::${tree}::Vars(pv:$row)]
 			if {$pv eq ""} { return {} }
 			return [dict create tree $tree number $number engine [::engine::id $number] lineId $row pv $pv]
 		}
@@ -1618,17 +1624,22 @@ proc ::context::CurrentObject {cid} {
 			set fen ""
 			catch { set fen [::scidb::game::query fen] }
 			if {$fen eq ""} { return {} }
-			return [dict create fen $fen move "" table "" row -1]
+			set table $::application::tree::Vars(table)
+			if {![winfo exists $table]} { return {} }
+			set row [::table::selection $table]
+			if {$row < 0} { return {} }
+			set move [::scidb::tree::move $row]
+			return [dict create fen $fen move $move table $table row $row]
 		}
 		C9 {
 			set twm ""
-			catch { set twm [::application::twm board] }
+			catch { set twm [::application::twm] }
 			if {$twm eq ""} { return {} }
 			set leaves {}
 			catch { set leaves [$twm leaves] }
 			if {![llength $leaves]} { return {} }
 			set uid [lindex $leaves 0]
-			set f [focus]
+			set f [::application::ask::ContextFocus]
 			foreach u $leaves {
 				set p ""
 				catch { set p [$twm leaf $u] }
@@ -1642,16 +1653,23 @@ proc ::context::CurrentObject {cid} {
 			return [dict create paneUid $uid twm $twm frame $frame]
 		}
 		C10 {
-			if {[catch { ::application::activeTab } tab]} { return {} }
-			if {$tab ne "database"} { return {} }
-			# A column reference needs its real table, just as the header
-			# popup does; a bare numeric column cannot dispatch any action.
+			# Retain the physically visited header across entering Ask.
+			if {[info exists ::table::CurrentColumn]} {
+				lassign $::table::CurrentColumn table column
+				if {[winfo exists $table.t] && [winfo ismapped $table.t]
+				 && ![catch {$table.t column cget $column -visible} visible] && $visible} {
+					return [dict create table $table column $column]
+				}
+			}
+			# Before any header is visited, retain the table's default
+			# first-column target on the database tab.
+			if {[::application::activeTab] ne "database"} {return {}}
 			if {[catch {
 				set manager $::application::database::Vars(games).twm
 				set scrolled [set ::application::database::games::${manager}::Priv(table)]
 				set table [::scrolledtable::table $scrolled]
 				set column [lindex [$table.t column list -visible] 0]
-			}] || $column eq ""} { return {} }
+			}] || $column eq ""} {return {}}
 			return [dict create table $table column $column]
 		}
 		C11 {
@@ -1660,9 +1678,9 @@ proc ::context::CurrentObject {cid} {
 			if {$dlg eq "" || ![winfo exists $dlg] || ![winfo ismapped $dlg]} {
 				return {}
 			}
-			set w $dlg
-			set f [focus]
-			if {[string match "$dlg*" $f]} { set w $f }
+			set w $::comment::Vars(widget:text:$::comment::Vars(lang)).text
+			set f [::application::ask::ContextFocus]
+			if {[string match "$dlg*" $f] && [winfo class $f] eq "Text"} { set w $f }
 			set index ""
 			catch { set index [::scidb::game::current] }
 			return [dict create widget $w index $index]

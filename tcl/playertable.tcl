@@ -151,7 +151,7 @@ proc build {path getViewCmd {visibleColumns {}} {args {}}} {
 
 	if {[llength $visibleColumns] == 0} { set visibleColumns $columns }
 
-	set columns {}
+	set columnSpecs {}
 	foreach column $Columns {
 		lassign $column id adjustment minwidth maxwidth width stretch removable ellipsis color
 		set menu {}
@@ -269,7 +269,7 @@ proc build {path getViewCmd {visibleColumns {}} {args {}}} {
 		lappend opts -textvar $fvar
 		lappend opts -tooltipvar $tvar
 
-		lappend columns $id $opts
+		lappend columnSpecs $id $opts
 
 		if {$id ne "firstName"} {
 			lappend Vars(columns) $id
@@ -280,7 +280,7 @@ proc build {path getViewCmd {visibleColumns {}} {args {}}} {
 		ttk::frame $path -takefocus 0 -borderwidth 0
 	}
 	set table $path.table
-	set Vars(table) [::scrolledtable::build $table $columns {*}$args]
+	set Vars(table) [::scrolledtable::build $table $columnSpecs {*}$args]
 	pack $table -fill both -expand yes
 
 	::bind $table <<TableFill>>			[namespace code [list TableFill $path %d]]
