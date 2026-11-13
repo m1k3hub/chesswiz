@@ -93,7 +93,7 @@ proc ::capability::present {module} {
 # an operation whose implementation is missing.
 namespace eval ::capability {
 	variable ActionModules {
-		ai {c2.explain_move c3.ask_about_game c6.explain_line c11.draft_comment c11.explain_comment explain_position menu.analysis.analyze menu.analysis.explain.comment menu.analysis.explain.line menu.analysis.explain.position}
+		ai {c2.explain_move c3.ask_about_game c6.explain_line c11.draft_comment c11.explain_comment explain_position menu.analysis.analyze menu.analysis.explain.comment menu.analysis.explain.line menu.analysis.explain.move menu.analysis.explain.position}
 		annotate {annotate_game menu.analysis.annotate}
 		assistant {menu.tools.assistant menu.view.panes.assistant}
 		board3d {view.board3d.open}

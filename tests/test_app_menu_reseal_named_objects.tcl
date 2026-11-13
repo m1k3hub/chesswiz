@@ -25,7 +25,7 @@ foreach state {start mid end} {
      focus -force $frame
      set view [::application::database::player::View $manager $base Normal]
      set info [::scidb::db::get playerInfo 0 $view $base Normal -info]
-     ::playertable::popupMenu .named $base Normal $info 0 0
+     ::playertable::PopupMenu $frame.table .named $base Normal 0 lastName
     }
     event - site {
      ::application::database::select[string totitle $kind] $base Normal 0
@@ -39,7 +39,7 @@ foreach state {start mid end} {
       ::sitetable::PopupMenu $frame .named $base Normal 0 site
      } else {
       set view [::application::database::event::View $manager $base Normal]
-      ::eventtable::popupMenu $frame .named $base Normal $view 0 event
+      ::eventtable::PopupMenu $frame .named $base Normal 0 event
      }
     }
    }
@@ -62,8 +62,14 @@ foreach state {start mid end} {
 # Exercise the actual public action with no manufactured object, and compare
 # its effect to the native row command. Both must open the selected player's card.
 tcltest::test reseal-C5-implicit-effect {native and implicit player action open the same named card} -body {
+ ::application::database::selectPlayer $base Normal 1
+ for {set i 0} {$i < 10} {incr i} {after 30; update}
+ set manager $::application::database::Vars(player).twm
+ set frame [set ::application::database::player::${manager}::Vars(frame:player)]
+ ::playertable::select $frame 1
+ ::playertable::activate $frame 1
  menu .named -tearoff 0
- ::playertable::popupMenu .named $base Normal [list {Generated White}] 0 0
+ ::playertable::PopupMenu $frame.table .named $base Normal 1 lastName
  set row -1
  for {set i 0} {$i <= [.named index end]} {incr i} {
   if {[.named type $i] eq "command" && [lindex [.named entrycget $i -command] 1] eq "c5.player_card"} {set row $i; break}
@@ -91,6 +97,8 @@ tcltest::test reseal-C5-implicit-effect {native and implicit player action open 
 } -cleanup {catch {destroy .named}} -result {0 1 1}
 tcltest::test reseal-C5-empty-selection {empty named popup clears selection and refuses implicit dispatch} -body {
  menu .named -tearoff 0
+ ::playertable::select $frame none
+ ::playertable::activate $frame none
  set built [::context::Build C5 .named {}]
  set reply [::action::run c5.player_card]
  list $built [::context::CurrentObject C5] [::scidb::test::askscope::AskContextIds C5] [string match {error: precondition:*} $reply]

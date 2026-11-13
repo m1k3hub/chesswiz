@@ -2496,3 +2496,21 @@ dict set ::knowledge::Explicit run_job purpose {Prepare for an opponent, review 
 dict set ::knowledge::Explicit classifier_status examples {{Which service chooses actions for my requests?} {Is the action-choosing service responding?}}
 
 dict set ::knowledge::Explicit maintenance_report purpose {Open the database overview, duplicate-game report or opening coverage report.}
+
+# Native named-table sort actions use the existing column translations.
+foreach {kind columns} {
+ player {lastName firstName federationId type sex rating1 rating2 ratingType federation title playerInfo frequency}
+ event {event eventType eventDate eventMode timeMode eventCountry site frequency}
+} {
+ foreach column $columns {
+  foreach direction {ascending descending} {
+   set id c5.sort.$kind.$column.$direction
+   set purpose "Sort the selected $kind table by $column in $direction order."
+   dict set ::knowledge::Explicit $id [dict create purpose $purpose when {Use this to reorder the current named table.} examples [list $purpose "Order the selected $kind entries by $column, $direction."]]
+  }
+ }
+}
+foreach direction {ascending descending} {
+ dict set ::knowledge::Explicit c5.sort_$direction [dict create purpose "Choose a column to sort the named table in $direction order." when {Use this to choose how the selected table is ordered.} examples [list "Sort this table in $direction order" "Choose a column for $direction ordering"]]
+}
+unset kind columns column direction id purpose

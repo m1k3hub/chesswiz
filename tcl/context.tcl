@@ -72,6 +72,8 @@ proc ::context::LabelVar {id} {
 }
 
 proc ::context::L {id} {
+	variable SortLabels
+	if {[info exists SortLabels($id)]} { return [set $SortLabels($id)] }
 	variable Labels
 	set var [LabelVar $id]
 	# English is the source language: use the defaults in this file, so
@@ -1073,7 +1075,13 @@ proc ::context::Rows {cid object} {
 		map {
 			set menu [lindex $entry 1]
 			set key [ObjectKey $cid $object]
-			if {[dict exists $menu $key]} { return [dict get $menu $key] }
+			if {[dict exists $menu $key]} {
+				set rows [dict get $menu $key]
+				if {$cid eq "C5" && [dict exists $object sortTable]} {
+					set rows [concat $rows [NamedSortRows $object]]
+				}
+				return $rows
+			}
 			if {[dict exists $menu default]} { return [dict get $menu default] }
 			return {}
 		}
@@ -1264,10 +1272,21 @@ proc ::context::MenuRowIds {cid row object} {
 # at least one row was added, 0 when the menu must not be posted (R8).
 # ----------------------------------------------------------------------
 proc ::context::Build {cid menu {object {}}} {
-	# Named rows have no universal current selection (they can originate in
-	# several tables and cards). Retain the typed reference supplied by the
-	# native popup so Ask and bare action calls use that same selection.
+	# Non-table named surfaces can retain their typed reference. Native
+	# database tables are always resolved from their live selection below.
 	if {$cid eq "C5"} {
+		# A generic named popup can be called directly by a table client.
+		# Include the same table-only suffix as its native caller, so its
+		# completed menu and the current table's Ask rows remain identical.
+		if {[dict exists $object kind] && [dict exists $object base]
+		 && [dict get $object kind] in {player event}} {
+			set current [CurrentObject C5]
+			if {[dict exists $current sortTable]
+			 && [dict get $current kind] eq [dict get $object kind]
+			 && [dict get $current base] eq [dict get $object base]} {
+				dict set object sortTable [dict get $current sortTable]
+			}
+		}
 		variable NamedSelection
 		set NamedSelection $object
 	}
@@ -1546,6 +1565,12 @@ proc ::context::CurrentObject {cid} {
 			return [dict create base $base]
 		}
 		C5 {
+			# The database table owns its selection; a popup is only a
+			# snapshot for commands invoked from that popup.
+			if {[::application::activeTab] eq "database"
+			 && $::application::database::Vars(current:tab) in {player event site}} {
+				return [CurrentNamedObject $::application::database::Vars(current:tab)]
+			}
 			variable NamedSelection
 			if {![info exists NamedSelection] || ![HasObject C5 $NamedSelection]} { return {} }
 			if {[dict exists $NamedSelection parent] && ![winfo exists [dict get $NamedSelection parent]]} { return {} }
@@ -1646,6 +1671,42 @@ proc ::context::CurrentObject {cid} {
 	return {}
 }
 
+# Resolve the selected row afresh, including selection changes made without
+# opening a menu. Never fall back to the last popup after selection is cleared.
+proc ::context::CurrentNamedObject {kind} {
+	if {[catch {
+		set manager $::application::database::Vars($kind).twm
+		set frame [set ::application::database::${kind}::${manager}::Vars(frame:$kind)]
+		set table $frame
+		if {$kind eq "player"} { append table .table }
+		set row [::scrolledtable::selection $table]
+		if {$row < 0} { return {} }
+		set base [::scrolledtable::base $table]
+		set variant [::scrolledtable::variant $table]
+		set view [::application::database::${kind}::View $manager $base $variant]
+		set index [::scrolledtable::rowToIndex $table $row]
+		set object [dict create kind $kind base $base variant $variant parent $frame view $view]
+		if {$kind in {player event}} { dict set object sortTable $table }
+		switch $kind {
+			player {
+				set info [::scidb::db::get playerInfo $index $view $base $variant -info]
+				set playerIndex [::scidb::db::get playerIndex $index $view $base $variant]
+				dict set object name [lindex $info 0]
+				dict set object index $playerIndex
+				dict set object playerIndex $playerIndex
+				dict set object playerCard $playerIndex
+				dict set object info $info
+			}
+			event {
+				dict set object name [lindex [::scidb::db::get eventInfo $index $view $base $variant] 0]
+				dict set object index $index
+			}
+			site { dict set object name [::sitetable::GetSite $frame $base $variant $view $index] }
+		}
+	}]} { return {} }
+	return $object
+}
+
 # {cid object} for a context-only action, or empty. C1/C2 actions (the
 # edit-annotation row) are listed while either object exists.
 proc ::context::CurrentObjectFor {id} {
@@ -1684,6 +1745,16 @@ proc ::context::ObjectEnd {object} {
 # R10: strip/truncate/comment rows follow the move object. Returns
 # {visible enabled} or empty when the id has no object rule.
 proc ::context::ObjectRule {id object} {
+	if {[string match c5.sort.* $id]} {
+		set allowed 0
+		if {[dict exists $object sortTable] && [dict exists $object kind]} {
+			lassign [split $id .] c5 sort kind column direction
+			if {$kind eq [dict get $object kind]} {
+				catch {set allowed [expr {$column in [::scrolledtable::visibleColumns [dict get $object sortTable]]}]}
+			}
+		}
+		return [list $allowed $allowed]
+	}
 	if {$id eq "c4.save_changes" && [::menu::TrialMode]} { return {0 0} }
 	if {$id in {c3.sort_column c3.sort_asc c3.sort_desc c3.sort.column c3.sort.asc c3.sort.desc}} {
 		set sortable [expr {[dict exists $object sortable] ? [dict get $object sortable] : [::menu::Sortable]}]
@@ -1991,6 +2062,7 @@ proc ::context::RequiredFields {id} {
 		c3.sort* { return {path column} }
 		c3.delete - c3.flag.* - c3.edit_characteristics { return {base index} }
 		c4.readonly - c4.properties - c4.open_new_tab - c4.close - c4.save_changes - c4.maintenance.compact - c4.export.* { return {base} }
+		c5.sort.* { return {kind sortTable} }
 		c5.site_url - c5.player_card - c5.prep_report { return {name} }
 		c5.event_url - c5.event_table - c5.player.prep - c5.insights - c5.player.insights { return {base variant index} }
 		c5.open_switcher - c5.save_working_set { return {base variant kind name} }
@@ -2082,6 +2154,15 @@ proc ::context::Command {id object} {
 		return [PostChoices $m]
 	}
 	switch -glob -- $id {
+		c5.sort.* {
+			if {![lindex [ObjectRule $id $object] 1]} { error "selected table does not expose this sort column" }
+			lassign [split $id .] c5 sort kind column direction
+			set table [dict get $object sortTable]
+			set path $table
+			if {$kind eq "player"} { set path [winfo parent $table] }
+			::${kind}table::SortColumn $path $column $direction
+			return "completed $id"
+		}
 		c9.pane.board { ::menu::TogglePaneId board }
 		c9.pane.notation { ::menu::TogglePaneId editor }
 		c9.pane.games { ::menu::TogglePaneId games }
@@ -2851,8 +2932,77 @@ proc ::context::PaneFontSize {uid} {
 	return [PaneFontBaseSize]
 }
 
+# Table-only additions to C5. Cards and other named-object surfaces keep
+# their ordinary rows; a native table also offers its visible sort columns.
+proc ::context::RegisterNamedSorts {} {
+	variable SortLabels
+	foreach {id variable text} {
+		c5.sort_ascending ::gamestable::mc::SortAscending {Sort (ascending)}
+		c5.sort_descending ::gamestable::mc::SortDescending {Sort (descending)}
+	} {
+		Item $id $text C5
+		set SortLabels($id) $variable
+	}
+	foreach {kind columns} {
+		player {lastName {Last Name} firstName {First Name} federationId {Federation ID} type Type sex Sex rating1 {Rating: Elo} rating2 {Rating: DWZ} ratingType {Rating Type} federation Federation title Title playerInfo {Info Flag} frequency Frequency}
+		event {event Event eventType Type eventDate Date eventMode Mode timeMode {Time Mode} eventCountry {Event Country} site Site frequency Frequency}
+	} {
+		foreach {column label} $columns {
+			foreach direction {ascending descending} {
+				set id c5.sort.$kind.$column.$direction
+				Item $id $label C5
+				dict set ::action::Registry $id operator 1
+				dict set ::action::Registry $id doc "Sort the $kind table by $label ($direction)."
+			}
+		}
+	}
+	foreach id {c5.sort_ascending c5.sort_descending} { dict set ::action::Registry $id operator 1 }
+}
+
+proc ::context::NamedSortRows {object} {
+	variable SortLabels
+	if {![dict exists $object sortTable] || [dict get $object kind] ni {player event}} { return {} }
+	set kind [dict get $object kind]
+	set visible [::scrolledtable::visibleColumns [dict get $object sortTable]]
+	set rows [list -]
+	foreach direction {ascending descending} {
+		set children {}
+		foreach column $visible {
+			set id c5.sort.$kind.$column.$direction
+			if {![dict exists $::action::Registry $id]} { error "unregistered named-table sort column: $id" }
+			set suffix [string toupper $column 0 0]
+			foreach ns [list ${kind}table gamestable playertable] {
+				set labelVar ::${ns}::mc::T_$suffix
+				if {[info exists $labelVar]} { break }
+				set labelVar ::${ns}::mc::F_$suffix
+				if {[info exists $labelVar]} { break }
+			}
+			set SortLabels($id) $labelVar
+			lappend children $id
+		}
+		lappend rows [list cascade c5.sort_$direction $children]
+	}
+	return $rows
+}
+
+proc ::context::AppendNamedSorts {menu kind table} {
+	# The generic builder may already have found this live table.
+	for {set i 0} {$i <= [$menu index end]} {incr i} {
+		if {[$menu type $i] ne "cascade"} {continue}
+		set sub [$menu entrycget $i -menu]
+		if {[$sub index end] ne "none"
+		 && [string match c5.sort.* [lindex [$sub entrycget 0 -command] 1]]} {return}
+	}
+	# Keep the native clicked reference; sorting itself targets the table.
+	set args [lindex [$menu entrycget 0 -command] 2]
+	set object [dict get $args object]
+	dict set object sortTable $table
+	BuildRows C5 $menu [NamedSortRows $object] $object
+}
+
 ::context::RegisterCore
 ::context::Declare
+::context::RegisterNamedSorts
 
 # Owned transient menus are shared by direct and registry entry paths.
 proc ::context::PopupMenu {name} {

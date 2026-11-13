@@ -683,11 +683,12 @@ proc EditAnnotation {{attr {}}} {
 proc ExplainMove {parent position} {
 	variable Vars
 
-	if {![info exists Vars(current:$position)]} { return }
+	if {$position eq ""} { set position [::scidb::game::current] }
+	if {![info exists Vars(current:$position)]} { error "No current move is available to explain." }
 	set key $Vars(current:$position)
-	if {$key eq ""} { return }
+	if {$key eq ""} { error "No current move is available to explain." }
 	set san [::scidb::game::query move $key]
-	if {$san eq ""} { return }
+	if {$san eq ""} { error "No current move is available to explain." }
 	set fen [::scidb::game::query movefen $key]
 	::application::ai::explainSelection $parent move [list $san $fen]
 }

@@ -238,4 +238,41 @@ tcltest::test registry-walk-ask-is-action {the assistant row is a registry actio
 	list [expr {[llength $ask] > 0}] $direct
 } -result {1 {}}
 
+# Native table callers append rows after context::Build returns. Walking
+# only the generic builder misses those rows entirely (VS/VU-reg4).
+tcltest::test registry-walk-native-named-tables {completed player/event popups, including every appended Sort leaf, resolve by id} -body {
+	source tests/app_actions_support.tcl
+	::scidb::test::actions::ready
+	set base [::scidb::test::actions::fixture]
+	::action::run open_database [list path $base]
+	::application::switchTab database
+	set bad {}
+	set unresolved {}
+	set sorts 0
+	foreach kind {player event} {
+		::application::database::select[string totitle $kind] $base Normal 0
+		for {set i 0} {$i < 10} {incr i} {after 30; update}
+		set manager $::application::database::Vars($kind).twm
+		set frame [set ::application::database::${kind}::${manager}::Vars(frame:$kind)]
+		set table $frame
+		if {$kind eq "player"} {append table .table}
+		menu .rgwnative -tearoff 0
+		::${kind}table::PopupMenu $table .rgwnative $base Normal 0 [expr {$kind eq "player" ? "lastName" : "event"}]
+		::scidb::test::rgw::PostTree .rgwnative
+		set rows {}
+		::scidb::test::rgw::WalkMenu .rgwnative rows C5.$kind
+		lappend bad {*}[::scidb::test::rgw::BadCommands $rows]
+		lassign [::scidb::test::rgw::ResolveRows $rows] resolved exempt unknown
+		lappend unresolved {*}$unknown
+		set count 0
+		foreach row $rows {
+			if {[string match c5.sort.* [lindex [lindex $row 4] 1]]} {incr count}
+		}
+		incr sorts $count
+		puts [list NATIVE_REGISTRY_WALK $kind rows [llength $rows] resolved $resolved exempt [llength $exempt] sorts $count unresolved $unknown]
+		destroy .rgwnative
+	}
+	list $bad $unresolved $sorts
+} -cleanup {catch {destroy .rgwnative}} -result {{} {} 30}
+
 tcltest::cleanupTests

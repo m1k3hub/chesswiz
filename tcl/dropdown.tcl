@@ -496,7 +496,7 @@ proc ::menu::DefineTree {} {
 			[list cascade Explain "" [list \
 				[list cmd menu.analysis.explain.position ExplainPosition "" {::menu::ModulePresent ai}] \
 				[list cmd menu.analysis.explain.line ExplainLine "" {::menu::ModulePresent ai}] \
-				[list cmd menu.analysis.explain.move ExplainMove] \
+				[list cmd menu.analysis.explain.move ExplainMove "" {::menu::ModulePresent ai}] \
 				[list cmd menu.analysis.explain.comment ExplainComment "" {::menu::ModulePresent ai}] \
 			]] \
 			[list cmd menu.analysis.annotate AnnotateGameWithAI "" {::menu::ModulePresent annotate}] \
@@ -2679,7 +2679,7 @@ proc ::menu::Do {id} {
 			return [::application::ai::explainLine .application \
 				[set ${tree}::Vars(pv:$row)] [::scidb::pos::fen]]
 		}
-		menu.analysis.explain.move { return [::application::pgn::ExplainMove .application::pgn ""] }
+		menu.analysis.explain.move { return [::application::pgn::ExplainMove .application [::scidb::game::current]] }
 		menu.analysis.explain.comment {
 			set pos after
 			if {[info exists ::comment::Vars(pos)]} {
