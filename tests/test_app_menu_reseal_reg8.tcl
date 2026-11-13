@@ -20,7 +20,6 @@ foreach surface {menu invoke assistant router} {
     foreach answer {yes no} {
         tcltest::test reg8-confirm-$surface-$answer {exactly one formatted confirmation; decline never reaches handler} -setup {
             set savedPriv [array get ::application::assistant::Priv]
-            ::application::assistant::show
             set ::application::assistant::Priv(reqconfirm) {}
             set ::application::assistant::Priv(confirm) ::application::assistant::ConfirmDialog
             set ::reg8::answer $answer
