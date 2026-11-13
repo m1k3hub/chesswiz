@@ -1497,7 +1497,12 @@ proc InvokeAction {operation arguments} {
 		font_inc {::font::ChangeFontSize browser {} +1}
 		font_dec {::font::ChangeFontSize browser {} -1}
 		column_style {SetupColumnStyle $position}
-		column_style_check {SetupStyle $position}
+		column_style_check {
+			set value [dict get $object value]
+			if {![string is boolean -strict $value]} {error "Column style must be boolean."}
+			set ::pgn::browser::Options(style:column) $value
+			SetupStyle $position
+		}
 		notation {
 			set value [dict get $object value]
 			if {$value ni $::notation::moveStyles} {error "Unknown move notation."}
@@ -1669,7 +1674,7 @@ proc PopupMenu {parent board position {what ""}} {
 		$menu add checkbutton \
 			-label " $::pgn::setup::mc::ParLayout(column-style)" \
 			-variable ::pgn::browser::Options(style:column) \
-			-command [ActionCommand column_style_check $position $board $parent] \
+			-command [ActionCommand column_style_check $position $board $parent [expr {!$::pgn::browser::Options(style:column)}]] \
 			;
 		::theme::configureCheckEntry $menu
 	}

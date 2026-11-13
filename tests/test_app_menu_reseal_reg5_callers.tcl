@@ -70,6 +70,27 @@ tcltest::test reg5-browser-ask-selection {implicit browser actions resolve the f
  puts [list BROWSER_ASK before $before result $result changed $changed]
  list [expr {"browser.decrease" in $ids}] $changed [expr {"browser.decrease" in $other}]
 } -result {1 1 0}
+
+tcltest::test reg5-browser-native-check-effect {native checkbutton arguments also change the option through direct action invocation} -setup {
+ set savedCustomStyle $::theme::useCustomStyleMenuEntries
+ set ::theme::useCustomStyleMenuEntries 0
+} -body {
+ set before $::pgn::browser::Options(style:column)
+ ::browser::PopupMenu .application $board $position
+ set m [winfo toplevel $board].__menu__
+ set command {}
+ for {set i 0} {$i <= [$m index end]} {incr i} {
+  if {[$m type $i] eq "checkbutton" && [lindex [$m entrycget $i -command] 1] eq "browser.column_style_check"} {set command [$m entrycget $i -command];break}
+ }
+ if {$command eq {}} {error {native column-style checkbutton did not post}}
+ set reply [::action::invoke browser.column_style_check [lindex $command 2]]
+ update
+ puts [list BROWSER_CHECK_EFFECT before $before after $::pgn::browser::Options(style:column) reply $reply]
+ expr {$::pgn::browser::Options(style:column) != $before}
+} -cleanup {
+ set ::theme::useCustomStyleMenuEntries $savedCustomStyle
+ catch {::tk::MenuUnpost $m};catch {destroy $m}
+} -result 1
 catch {destroy [winfo toplevel $board]}
 
 ::tcltest::cleanupTests
