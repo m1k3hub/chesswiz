@@ -77,6 +77,12 @@ tcltest::test reg5-browser-native-check-effect {native checkbutton arguments als
   if {[$m type $i] eq "checkbutton" && [lindex [$m entrycget $i -command] 1] eq "browser.column_style_check"} {set command [$m entrycget $i -command];break}
  }
  if {$command eq {}} {error {native column-style checkbutton did not post}}
+ # Include the native-checkbutton variant in the same invoke-every-row
+ # inventory, alongside the four completed browser popup kinds above.
+ set rows {}; ::scidb::test::rgw::WalkMenu $m rows browser.native-check
+ if {[llength [::scidb::test::rgw::BadCommands $rows]]} {error {unregistered browser row}}
+ lassign [::scidb::test::rgw::ResolveRows $rows] resolved exempt unknown
+ if {[llength $unknown] || [llength $exempt]} {error [list unresolved-browser-rows $unknown $exempt]}
  set reply [::action::invoke browser.column_style_check [lindex $command 2]]
  update
  puts [list BROWSER_CHECK_EFFECT before $before after $::pgn::browser::Options(style:column) reply $reply]
