@@ -557,7 +557,12 @@ proc show3D {flag} {
 
 
 proc closed {w} {
-	# should only happen after shutdown
+	variable Vars
+
+	# GameSwitch is delivered asynchronously. Drop the old pane's work
+	# before its toolbar is destroyed (including immediate post-load close).
+	after cancel $Vars(afterid:switched)
+	set Vars(afterid:switched) {}
 }
 
 
@@ -2534,6 +2539,8 @@ proc GameSwitched2 {position} {
 	variable Vars
 	variable board
 
+	if {![winfo exists $Vars(widget:frame)]} { return }
+
 	# reset if position is 9 (all games closed)
 
 	set variant [::scidb::game::query $position mainvariant?]
@@ -2669,6 +2676,8 @@ proc UpdateGameControls {position} {
 proc UpdateGameButtonState(list) {position} {
 	variable Vars
 
+	if {![winfo exists $Vars(widget:frame)]} { return }
+
 	if {$Vars(load:method) eq "base"} { return }
 	array set state { random disabled prev disabled next disabled first disabled last disabled }
 
@@ -2698,6 +2707,8 @@ proc UpdateGameButtonState(list) {position} {
 
 proc UpdateGameButtonState(base) {base variant} {
 	variable Vars
+
+	if {![winfo exists $Vars(widget:frame)]} { return }
 
 	if {$Vars(load:method) eq "list"} { return }
 

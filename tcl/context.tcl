@@ -2057,15 +2057,8 @@ proc ::context::Deliver {cid record} {
 	if {$AssistantSink ne ""} {
 		return [uplevel #0 [list {*}$AssistantSink $record]]
 	}
-	if {[llength [info commands ::application::assistant::askContext]]} {
+	if {[::capability::present assistant]} {
 		return [::application::assistant::askContext $record]
-	}
-	set text "$mc::WhatCanIDo [RecordText $cid $record]"
-	if {[llength [info commands ::application::assistant::ask]]} {
-		return [::application::assistant::ask $text]
-	}
-	if {[llength [info commands ::application::assistant::offers::askAbout]]} {
-		return [::application::assistant::offers::askAbout $text]
 	}
 	return
 }

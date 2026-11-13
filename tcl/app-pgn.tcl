@@ -428,6 +428,14 @@ proc activate {w flag} {
 
 
 proc closed {w} {
+	variable Vars
+
+	# Pane-owned resize/idle work must not outlive its text widgets, or
+	# target a replacement editor built before the old timer fires.
+	after cancel $Vars(after)
+	set Vars(after) {}
+	after cancel [namespace code UpdateScrollbar]
+	after cancel [namespace code UpdateButtons]
 	::scidb::db::unsubscribe gameSwitch [namespace current]::GameSwitched
 	# Detach this pane's callbacks before its text widgets disappear.
 	# Rebuilding fonts/styles can notify the still-open games before the
@@ -991,6 +999,8 @@ proc Configure {height} {
 proc Align {height} {
 	variable Vars
 
+	if {![winfo exists $Vars(frame)] || ![winfo exists $Vars(pgn:0)]} { return }
+
 	if {$height != $Vars(height)} {
 		set Vars(height) $height
 		SetAlignment
@@ -1000,6 +1010,8 @@ proc Align {height} {
 
 proc SetAlignment {} {
 	variable Vars
+
+	if {![winfo exists $Vars(frame)] || ![winfo exists $Vars(pgn:0)]} { return }
 
 	set height [winfo height $Vars(frame)]
 	set pady [$Vars(pgn:0) cget -pady]
@@ -1015,6 +1027,8 @@ proc SetAlignment {} {
 
 proc UpdateScrollbar {} {
 	variable Vars
+
+	if {![winfo exists $Vars(frame)] || ![winfo exists $Vars(pgn:0)]} { return }
 
 	::widget::textLineScroll $Vars(pgn:0) moveto 0
 	set position $Vars(index)

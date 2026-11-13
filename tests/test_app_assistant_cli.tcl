@@ -27,6 +27,13 @@ proc ::scidb::test::cli::session {replies messages {answers {}}} {
 	set saved [array get $cfg provider]
 	set ${cfg}(provider) stub
 	::ai::provider::configure -name stub -chatResponses $replies
+	# Match the transport setup in test_app_assistant.tcl: coverage is a
+	# separate classifier dependency, not the socket protocol under test.
+	rename ::ai::systemone::chooseManySync ::scidb::test::cli::realCoverage
+	proc ::ai::systemone::chooseManySync {feature args} {
+		if {$feature eq "assistant_fact_support"} {return {coverage supported}}
+		return [::scidb::test::cli::realCoverage $feature {*}$args]
+	}
 
 	set sock [socket 127.0.0.1 $::remote::Vars(port)]
 	fconfigure $sock -blocking 0 -buffering line -encoding utf-8
@@ -37,6 +44,8 @@ proc ::scidb::test::cli::session {replies messages {answers {}}} {
 	vwait ::scidb::test::cli::Done
 	after cancel $timer
 	catch { close $sock }
+	rename ::ai::systemone::chooseManySync {}
+	rename ::scidb::test::cli::realCoverage ::ai::systemone::chooseManySync
 	array set $cfg $saved
 	return $Lines
 }
@@ -102,7 +111,14 @@ tcltest::test cli-ask-parses-both-forms {--ask takes its value as --ask=X or --a
 	set result
 } -result {{1 {hello there} 0 {}} {1 {hello there} 0 db.sci} {1 {} 0 {}} {0 {} 1 {}}}
 
-tcltest::test cli-session-multiline-tool {a multi-line tool reply arrives whole} -constraints haveServer -body {
+tcltest::test cli-session-multiline-tool {a multi-line tool reply arrives whole} -constraints haveServer -setup {
+	# Ground the exact scripted prose in tool data. The transport assertion
+	# remains exact; production grounding must not be bypassed by this test.
+	rename ::application::assistant::DoAppState ::scidb::test::cli::realAppState
+	proc ::application::assistant::DoAppState {} {
+		return "Two lines\nof answer.\nactive database: generated"
+	}
+} -body {
 	::application::assistant::clear
 	set lines [::scidb::test::cli::session [list \
 		[::scidb::test::cli::call app_state] \
@@ -112,48 +128,72 @@ tcltest::test cli-session-multiline-tool {a multi-line tool reply arrives whole}
 	set tool [lsearch -inline -index 0 $lines tool]
 	list $kinds [lindex $tool 1] [string match "*\nactive database: *" [lindex $tool 2]] \
 		[lindex [lsearch -inline -index 0 $lines reply] 1]
+} -cleanup {
+	rename ::application::assistant::DoAppState {}
+	rename ::scidb::test::cli::realAppState ::application::assistant::DoAppState
 } -result {{hello tool reply ready} app_state 1 {Two lines
 of answer.}}
 
 tcltest::test cli-session-confirm-denied {a terminal "no" keeps the action from running} -constraints haveServer -body {
-	rename ::menu::gameNew ::scidb::test::cli::realGameNew
-	proc ::menu::gameNew {args} { set ::scidb::test::cli::ran 1 }
+	# The frozen new_game schema has confirm=0. Exercise the identical
+	# denial oracle with add_engine, whose frozen schema has confirm=1.
+	rename ::application::assistant::DoAddEngine ::scidb::test::cli::realAddEngine
+	proc ::application::assistant::DoAddEngine {args} { set ::scidb::test::cli::ran 1 }
 	set ::scidb::test::cli::ran 0
 	set lines [::scidb::test::cli::session [list \
-		[::scidb::test::cli::call new_game] \
+		[::scidb::test::cli::call add_engine [list path [info nameofexecutable]]] \
 		[dict create role assistant content "Declined."]] \
-		[list [list ask "start a new game"]] {0}]
-	rename ::menu::gameNew {}
-	rename ::scidb::test::cli::realGameNew ::menu::gameNew
+		[list [list ask "add this engine"]] {0}]
+	rename ::application::assistant::DoAddEngine {}
+	rename ::scidb::test::cli::realAddEngine ::application::assistant::DoAddEngine
 	list [lmap m $lines { lindex $m 0 }] $::scidb::test::cli::ran \
 		[string match "*NOT performed*" [lindex [lsearch -inline -index 0 $lines tool] 2]]
 } -result {{hello confirm tool reply ready} 0 1}
 
 tcltest::test cli-session-confirm-allowed {a terminal "yes" runs the action} -constraints haveServer -body {
+	rename ::application::assistant::DoAddEngine ::scidb::test::cli::realAddEngine
+	proc ::application::assistant::DoAddEngine {args} { set ::scidb::test::cli::ran 1 }
+	set ::scidb::test::cli::ran 0
+	set lines [::scidb::test::cli::session [list \
+		[::scidb::test::cli::call add_engine [list path [info nameofexecutable]]] \
+		[dict create role assistant content "Done."]] \
+		[list [list ask "add this engine"]] {1}]
+	rename ::application::assistant::DoAddEngine {}
+	rename ::scidb::test::cli::realAddEngine ::application::assistant::DoAddEngine
+	list [lmap m $lines {lindex $m 0}] $::scidb::test::cli::ran
+} -result {{hello confirm tool reply ready} 1}
+
+tcltest::test cli-new-game-unconfirmed {the frozen new_game confirm=0 dispatches without a prompt} -constraints haveServer -body {
 	rename ::menu::gameNew ::scidb::test::cli::realGameNew
 	proc ::menu::gameNew {args} { set ::scidb::test::cli::ran 1 }
 	set ::scidb::test::cli::ran 0
-	::scidb::test::cli::session [list \
+	set lines [::scidb::test::cli::session [list \
 		[::scidb::test::cli::call new_game] \
 		[dict create role assistant content "Done."]] \
-		[list [list ask "start a new game"]] {1}
+		[list [list ask "start a new game"]]]
 	rename ::menu::gameNew {}
 	rename ::scidb::test::cli::realGameNew ::menu::gameNew
-	set ::scidb::test::cli::ran
-} -result 1
+	list [lmap m $lines {lindex $m 0}] $::scidb::test::cli::ran
+} -result {{hello tool reply ready} 1}
 
 tcltest::test cli-session-clear-and-errors {clear, empty and unknown requests are answered} -constraints haveServer -body {
 	set lines [::scidb::test::cli::session {} [list [list clear] [list ask "  "] [list frobnicate]]]
 	lmap m $lines { expr {[lindex $m 0] eq "hello" ? "hello" : [lrange $m 0 1]} }
 } -result {hello ready {error {empty request}} ready {error {unknown request 'frobnicate'}} ready}
 
-tcltest::test cli-session-shares-the-pane {terminal requests appear in the assistant pane} -constraints haveServer -body {
+tcltest::test cli-session-shares-the-pane {terminal requests appear in the assistant pane} -constraints haveServer -setup {
+	rename ::application::assistant::DoAppState ::scidb::test::cli::realAppState
+	proc ::application::assistant::DoAppState {} {return "Hi from the pane."}
+} -body {
 	::application::assistant::show
 	::application::assistant::clear
-	::scidb::test::cli::session [list [dict create role assistant content "Hi from the pane."]] \
+	::scidb::test::cli::session [list [::scidb::test::cli::call app_state] [dict create role assistant content "Hi from the pane."]] \
 		[list [list ask "hello from the terminal"]]
 	set text [$::application::assistant::Priv(text) get 1.0 end]
 	list [string match "*> hello from the terminal*" $text] [string match "*Hi from the pane.*" $text]
+} -cleanup {
+	rename ::application::assistant::DoAppState {}
+	rename ::scidb::test::cli::realAppState ::application::assistant::DoAppState
 } -result {1 1}
 
 # the Windows executable loads its own script: a copied script is no other port

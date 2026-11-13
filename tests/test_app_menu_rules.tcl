@@ -69,7 +69,8 @@ proc ::scidb::test::rules::ModuleCommands {} {
 }
 
 proc ::scidb::test::rules::BuilderProcs {} {
-	return {
+	set queue {
+		::menu::BuildDropdown
 		::menu::DefineTree ::menu::RegisterTree ::menu::RegisterNodes
 		::menu::Register ::menu::RegisterExtras ::menu::state
 		::menu::FillTop ::menu::FillNodes ::menu::Do
@@ -77,6 +78,20 @@ proc ::scidb::test::rules::BuilderProcs {} {
 		::context::Build ::context::BuildRows ::context::AddRow
 		::context::Visible ::context::Enabled
 	}
+	# Resolve literal helper calls as well as the historical builder roots.
+	# In particular BuildDropdown -> RegisterExtras must remain in this scan.
+	set seen {}
+	while {[llength $queue]} {
+		set queue [lassign $queue p]
+		if {$p in $seen || ![llength [info procs $p]]} {continue}
+		lappend seen $p
+		foreach word [regexp -all -inline {[[:alpha:]_:][[:alnum:]_:]*} [info body $p]] {
+			set helper [namespace eval [namespace qualifiers $p] [list namespace which -command $word]]
+			if {([string match ::menu::* $helper] || [string match ::context::* $helper])
+			 && $helper ni $seen && $helper ni $queue} {lappend queue $helper}
+		}
+	}
+	return $seen
 }
 
 # R14: no menu builder probes an optional module command with
@@ -88,10 +103,15 @@ proc ::scidb::test::rules::ModuleGuardScan {} {
 	foreach p [::scidb::test::rules::BuilderProcs] {
 		if {![llength [info procs $p]]} { continue }
 		set body [info body $p]
-		foreach cmd $moduleCommands {
-			foreach needle [list "info commands $cmd" "info procs $cmd"] {
-				if {[string first $needle $body] >= 0} {
+		foreach {whole cmd} [regexp -all -inline {info (?:commands|procs)\s+(::[A-Za-z0-9_:*]+)} $body] {
+			foreach entry $moduleCommands {
+				set owner [namespace qualifiers $entry]
+				# Optional modules own registration helpers too. Core namespaces
+				# also contain infrastructure, so match their entrypoints exactly.
+				if {$cmd eq $entry || ($owner ni {::menu ::context ::application ::font}
+				 && [string match ${owner}::* $cmd])} {
 					lappend hits [list $p $cmd]
+					break
 				}
 			}
 		}
@@ -124,6 +144,7 @@ proc ::scidb::test::rules::ModuleGatedRows {} {
 	dict for {module ids} $::capability::ActionModules {
 		foreach id $ids {
 			set rec [::action::get $id]
+			if {[string match toolbar.* $id]} {lappend rows [list toolbar $module $id]}
 			if {[dict get $rec dropdown] ne ""} {lappend rows [list dropdown $module $id]}
 			foreach cid [dict get $rec context] {lappend rows [list context:$cid $module $id]}
 			if {[dict get $rec ai] eq "1"} {lappend rows [list tools $module $id]}
@@ -160,6 +181,32 @@ tcltest::test rules-one-mechanism-module-guards {menu builders use one capabilit
 	puts "  single capability check: present=$capability"
 	list [llength $hits] $capability
 } -result {0 1}
+
+tcltest::test rules-online-registration-absent {posting a menu tolerates a physically absent online registration module} -setup {
+	rename ::online::view::RegisterActions ::online::view::RegisterActions__guardTest
+} -body {
+	menu .reg6module -tearoff 0
+	::menu::BuildDropdown .reg6module
+	list [::capability::present online_actions] [winfo exists .reg6module]
+} -cleanup {
+	destroy .reg6module
+	rename ::online::view::RegisterActions__guardTest ::online::view::RegisterActions
+} -result {0 1}
+
+tcltest::test rules-guard-scan-follows-helpers {nested optional registration guards cannot evade the scanner} -body {
+	set saved [info body ::menu::RegisterExtras]
+	proc ::menu::reg6RegistrationHelper {} {
+		if {[llength [info commands ::online::view::OtherRegistration]]} {return}
+	}
+	proc ::menu::reg6NestedHelper {} {reg6RegistrationHelper}
+	proc ::menu::RegisterExtras {} {reg6NestedHelper}
+	set hits [::scidb::test::rules::ModuleGuardScan]
+	expr {[list ::menu::reg6RegistrationHelper ::online::view::OtherRegistration] in $hits}
+} -cleanup {
+	proc ::menu::RegisterExtras {} $saved
+	rename ::menu::reg6RegistrationHelper {}
+	rename ::menu::reg6NestedHelper {}
+} -result 1
 
 tcltest::test rules-real-state {R1-R5, R8, R9, R11, R14-R16 pass with real state} -body {
 	set out {}

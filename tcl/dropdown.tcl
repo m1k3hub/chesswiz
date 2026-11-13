@@ -1849,7 +1849,7 @@ proc ::menu::DumpNodes {menu nodes indent topLevel} {
 # and the old widget paths resolve to real actions.
 # ----------------------------------------------------------------------
 proc ::menu::RegisterExtras {} {
-	if {[llength [info commands ::online::view::RegisterActions]]} { ::online::view::RegisterActions }
+	if {[::capability::present online_actions]} { ::online::view::RegisterActions }
 	::inventoryaction::Register
 	if {[dict exists $::action::Registry app-fullscreen]} {
 		dict set ::action::Registry app-fullscreen args {{state {type enum default toggle enum {toggle on off} description {Use off to exit fullscreen, on to enter, or toggle}}}}
@@ -2590,7 +2590,7 @@ proc ::menu::Do {id} {
 			::game::openGame .application 0
 			return
 		}
-		menu.game.history.clear { return [::application::database::ClearHistory] }
+		menu.game.history.clear { return [::game::clearHistory] }
 		menu.game.close {
 			set pos [::gamebar::selected $::application::pgn::Vars(gamebar)]
 			if {$pos eq "" || [::gamebar::CheckIfModified .application $pos]} { return }

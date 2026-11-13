@@ -40,6 +40,7 @@ proc ::capability::DefineAll {} {
 	Define voice       {expr {[llength [info commands ::application::voice::toggle]] > 0}}
 	Define download    {expr {[llength [info commands ::application::download::openActive]] > 0}}
 	Define playengine  {expr {[llength [info commands ::playengine::open]] > 0}}
+	Define online_actions {expr {[llength [info commands ::online::view::RegisterActions]] > 0}}
 	Define ics         {expr {[llength [info commands ::ics::open]] > 0}}
 	Define lichess     {expr {[llength [info commands ::lichess::open]] > 0}}
 	Define lichess_social  {expr {[llength [info commands ::lichess::social::open]] > 0}}
@@ -93,6 +94,7 @@ proc ::capability::present {module} {
 # an operation whose implementation is missing.
 namespace eval ::capability {
 	variable ActionModules {
+		online_actions {toolbar.online.resign toolbar.online.draw toolbar.online.takeback toolbar.online.abort toolbar.online.claim toolbar.online.flip toolbar.online.live toolbar.online.accept toolbar.online.decline toolbar.online.analyse toolbar.online.close toolbar.online.chat toolbar.online.autoqueen}
 		ai {game.explain similar_games c3.games_like annotate_game opponent_brief study_plan database_trend factcheck_annotations training_set check_results menu.analysis.annotate menu.analysis.factcheck menu.training.studyplan menu.training.brief menu.training.training_set menu.training.check_results menu.db.reports.trends c2.explain_move c3.ask_about_game c6.explain_line c11.draft_comment c11.explain_comment explain_position menu.analysis.analyze menu.analysis.explain.comment menu.analysis.explain.line menu.analysis.explain.move menu.analysis.explain.position}
 		annotate {annotate_game menu.analysis.annotate}
 		assistant {menu.tools.assistant menu.view.panes.assistant}
