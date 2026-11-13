@@ -101,7 +101,11 @@ proc maintenanceLabels {menu} {
         set type [$menu type $i]
         if {$type eq "cascade"} {
             lappend labels [string trim [$menu entrycget $i -label]]
-            lappend labels {*}[maintenanceLabels [$menu entrycget $i -menu]]
+            # Structural headings have no submenu; retain their label.
+            set submenu [$menu entrycget $i -menu]
+            if {$submenu ne "" && [winfo exists $submenu]} {
+                lappend labels {*}[maintenanceLabels $submenu]
+            }
             continue
         }
         if {$type ne "command"} { continue }
