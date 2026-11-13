@@ -1716,144 +1716,17 @@ proc PopupMenu {table x y} {
 	set row [FindIndex $table $x $y]
 
 	# C8: the one tree-row context menu.
-	if {[llength [info commands ::context::Build]]} {
-		set move ""
-		if {$row >= 0} { catch { set move [::scidb::tree::move $row] } }
-		set fen ""
-		catch { set fen [::scidb::game::query fen] }
-		set object [dict create table $table x $x y $y row $row move $move fen $fen]
-		if {[::context::Build C8 $m $object]} {
-			tk_popup $m $x $y
-			return
-		}
-		destroy $m
+	set move ""
+	if {$row >= 0} { catch { set move [::scidb::tree::move $row] } }
+	set fen ""
+	catch { set fen [::scidb::game::query fen] }
+	set object [dict create table $table x $x y $y row $row move $move fen $fen]
+	if {[::context::Build C8 $m $object]} {
+		tk_popup $m $x $y
 		return
 	}
-
-	if {$row >= 0} {
-		::table::activate $table $row true
-		after idle [list ::table::activate $table $row true]
-		set move [::scidb::tree::move $row]
-		if {[string length $move] && $move ne [::scidb::game::next move]} {
-			::move::addActionsToMenu $m [namespace code [list DoAction $table $row $move]] {append load}
-			$m add separator
-
-			# Add "Analyze this position" option
-			$m add command \
-				-label " $::application::analysis::mc::AnalyzeThisPosition" \
-				-command [list ::application::analysis::AnalyzePosition $table $row] \
-				-image $::icon::16x16::engine \
-				-compound left \
-				;
-			$m add separator
-		}
-	}
-
-#	$m add radiobutton \
-#		-label $mc::ShowMoveTree \
-#		-variable [namespace current]::Options(show:tree) \
-#		-value 1 \
-#		-command [namespace code [list ToggleView $table]] \
-#	;
-#	::theme::configureRadioEntry $m
-#	$m add radiobutton \
-#		-label $mc::ShowMoveOrders \
-#		-variable [namespace current]::Options(show:tree) \
-#		-value 0 \
-#		-command [namespace code [list ToggleView $table]] \
-#	;
-#	::theme::configureRadioEntry $m
-#	$m add separator
-	$m add command \
-		-label " $mc::StartSearch" \
-		-command [namespace code startSearch] \
-		-image $::icon::16x16::start \
-		-compound left \
-		;
-	$m add separator
-	# Opening Report entry
-	$m add command \
-		-label $openingreport::mc::Title \
-		-command [list [namespace current]::openingreport::show $table] \
-		;
-	$m add separator
-	if {$Options(show:tree)} {
-		foreach {mode icon} {exact slow fast fast} {
-			set text " [set mc::Use[string toupper $mode 0 0]Mode]"
-			$m add radiobutton \
-				-label $text \
-				-variable [namespace current]::Options(search:mode) \
-				-value $mode \
-				-image [set ::icon::16x16::$icon] \
-				-compound left \
-				;
-			::theme::configureRadioEntry $m
-		}
-		$m add separator
-	}
-	$m add checkbutton \
-		-label $mc::AutomaticSearch \
-		-variable [namespace current]::Options(search:automatic) \
-		-image $::icon::16x16::search \
-		-compound left \
-		;
-	::theme::configureCheckEntry $m
-	$m add checkbutton \
-		-label " $::application::analysis::mc::HighlightNovelties" \
-		-variable [namespace current]::Options(novelty:highlight) \
-		-command [namespace code [list ToggleNoveltyHighlighting $table]] \
-		;
-	::theme::configureCheckEntry $m
-	$m add checkbutton \
-		-label $mc::SearchInsideVariations \
-		-variable [namespace current]::Options(search:variations) \
-		-image $::icon::16x16::none \
-		-compound left \
-		-command [namespace code [list InvalidateSearch $table]] \
-		;
-	::theme::configureCheckEntry $m
-	$m add checkbutton \
-		-label $mc::LockReferenceBase \
-		-variable [namespace current]::Options(base:lock) \
-		-image $::icon::16x16::lock \
-		-compound left \
-		;
-	::theme::configureCheckEntry $m
-	$m add separator
-
-	set n [menu $m.switch -tearoff false]
-	$m add cascade -menu $n -label $mc::ChooseReferenceBase
-
-	set list {}
-	foreach base [::scidb::tree::list] {
-		if {$base eq $Vars(current:base)} { set _Current $base }
-		lappend list [list [::util::databaseName $base] $base]
-	}
-	if {$Vars(current:base) eq $clipbaseName} {
-		set _Current $clipbaseName
-	}
-
-	set text $::util::clipbaseName
-	$n add radiobutton \
-		-label $text \
-		-value $clipbaseName \
-		-variable [namespace current]::_Current \
-		-command [list ::scidb::tree::set $clipbaseName] \
-		;
-	::theme::configureRadioEntry $n $text
-	foreach base [lsort -dictionary -index 0 $list] {
-		lassign $base text value
-		$n add radiobutton \
-			-label $text \
-			-value $value \
-			-variable [namespace current]::_Current \
-			-command [list ::scidb::tree::set $value] \
-			;
-		::theme::configureRadioEntry $n
-	}
-
-	::bind $m <<MenuUnpost>> [list after idle [list table::doSelection $table]]
-	tk_popup $m $x $y
+	destroy $m
+	return
 }
 
 

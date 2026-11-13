@@ -1477,7 +1477,56 @@ proc ::context::Build {cid menu {object {}}} {
 	set rows [Rows $cid $object]
 	if {![llength $rows]} { return 0 }
 	BuildRows $cid $menu $rows $object
-	return [HasRunnableRow $menu]
+	set runnable [HasRunnableRow $menu]
+	if {$runnable && $cid in {C6 C8}} {
+		# Build is also used for inspection. Touch the native display only
+		# when this menu is actually posted, once per posting.
+		bind $menu <Map> [list ::context::PostedObject $cid $menu $object]
+		bind $menu <<MenuUnpost>> [list ::context::UnpostedObject $cid $object]
+	}
+	return $runnable
+}
+
+proc ::context::PostedObject {cid menu object} {
+	if {$cid eq "C6" && [dict exists $object tree]} {
+		set tree [dict get $object tree]
+		if {![winfo exists $tree]} { return }
+		upvar #0 ::application::analysis::${tree}::Vars vars
+		if {![info exists vars(number)]} { return }
+		set engine [::engine::id $vars(number)]
+		if {$engine < 0} { return }
+		if {[dict exists $object lineId]} {
+			set line [dict get $object lineId]
+			if {[string is integer -strict $line] && $line >= 0
+			 && ![::scidb::engine::empty? $engine $line]
+			 && ![::scidb::game::query expansion?] && [::scidb::engine::bound? $engine]} {
+				$tree activate [set vars(current:item) [expr {$line + 1}]]
+				::scidb::engine::snapshot $engine
+			}
+		}
+		set vars(keep:active) 1
+		set vars(state:suspended) 1
+	} elseif {$cid eq "C8" && [dict exists $object table] && [dict exists $object row]} {
+		set table [dict get $object table]
+		if {![winfo exists $table]} { return }
+		set row [dict get $object row]
+		if {$row >= 0} {
+			::table::activate $table $row true
+			after idle [list ::table::activate $table $row true]
+		}
+	}
+}
+
+proc ::context::UnpostedObject {cid object} {
+	if {$cid eq "C6" && [dict exists $object tree]} {
+		set tree [dict get $object tree]
+		if {[winfo exists $tree] && [info exists ::application::analysis::${tree}::Vars(state:suspended)]
+		 && [set ::application::analysis::${tree}::Vars(state:suspended)]} {
+			::application::analysis::RevertDisplay $tree
+		}
+	} elseif {$cid eq "C8" && [dict exists $object table] && [winfo exists [dict get $object table]]} {
+		after idle [list ::table::doSelection [dict get $object table]]
+	}
 }
 
 # R8: Ask and disabled explanatory rows do not make a useful popup.
@@ -2604,7 +2653,9 @@ proc ::context::Command {id object} {
 		c2.comment_before { ::application::pgn::editComment before }
 		c2.marks_palette { ::application::pgn::openMarksPalette }
 		c2.move_info { ::application::pgn::EditInfo .application }
-		c2.annot.prefix - c2.annot.infix - c2.annot.suffix { ::application::pgn::editAnnotation }
+		c2.annot.prefix - c2.annot.infix - c2.annot.suffix {
+			return [SelectNag $id $object]
+		}
 		c2.explain_move { ::application::pgn::ExplainMove ::application::pgn "" }
 		c2.insert_diagram { ::annotation::addNag suffix 155 }
 		c2.insert_diagram_black { ::annotation::addNag suffix 156 }
@@ -2774,7 +2825,10 @@ proc ::context::Command {id object} {
 			::application::database::newBase $parent Undetermined $file $encoding
 		}
 		c4.open_database { return [::action::run menu.file.open] }
-		c4.help { return [::action::run app-help] }
+		c4.help {
+			set parent [expr {[dict exists $object parent] ? [dict get $object parent] : ".application"}]
+			return [::help::open $parent Database-Switcher]
+		}
 		c5.player_card { return [::action::run open_view [list kind player_card name [dict get $object name]]] }
 		c5.player.prep {
 			::application::database::player::OpenPrepReport [dict get $object parent] [dict get $object base] [dict get $object variant] [dict get $object index]
@@ -3416,6 +3470,61 @@ proc ::context::PopupMenu {name} {
 	catch {destroy $m}
 	menu $m -tearoff 0
 	return $m
+}
+
+# Keep the frozen three Annotate entries; each opens its native symbol
+# choices. Choice callbacks still dispatch through that same registry id.
+proc ::context::NagChoices {type} {
+	set choices {0}
+	if {[::scidb::pos::stm] eq "w"} {
+		upvar #0 ::annotation::isWhiteNag isStmNag
+	} else {
+		upvar #0 ::annotation::isBlackNag isStmNag
+	}
+	foreach range $::annotation::sections($type) {
+		lassign $range descr from to
+		for {set nag $from} {$nag <= $to} {incr nag} {
+			if {((14 <= $nag && $nag <= 21) || !$isStmNag($nag))
+			 && [::font::mapNagToUtfSymbol $nag] ne $nag} { lappend choices $nag }
+		}
+	}
+	return $choices
+}
+
+proc ::context::SelectNag {id object} {
+	set type [lindex [split $id .] end]
+	set choices [NagChoices $type]
+	if {[dict exists $object nag]} {
+		set nag [dict get $object nag]
+		if {$nag ni $choices} { error "invalid $type annotation" }
+		::annotation::addNag $type $nag
+		return "completed $id"
+	}
+	set m [PopupMenu nag]
+	$m add command -label "($::application::pgn::mc::None)" \
+		-command [list ::action::run $id [dict create object [dict replace $object nag 0]]]
+	foreach range $::annotation::sections($type) {
+		lassign $range descr from to
+		set sub $m
+		if {[llength $::annotation::sections($type)] > 1} {
+			set sub [menu $m.s$from -tearoff 0]
+			$m add cascade -label [set ::annotation::mc::$descr] -menu $sub
+		}
+		set nags {}
+		foreach nag $choices {
+			if {$nag < $from || $nag > $to} { continue }
+			$sub add command -label [::font::mapNagToUtfSymbol $nag] \
+				-command [list ::action::run $id [dict create object [dict replace $object nag $nag]]]
+			lappend nags $nag
+		}
+		set columnbreak 1
+		foreach nag $nags {
+			$sub add command -columnbreak $columnbreak -label [string toupper $::annotation::mc::Nag($nag) 0 0] \
+				-command [list ::action::run $id [dict create object [dict replace $object nag $nag]]]
+			set columnbreak 0
+		}
+	}
+	return [PostChoices $m]
 }
 proc ::context::PostChoices {m} {
 	if {[$m index end] eq "none"} { error "no choices are available" }

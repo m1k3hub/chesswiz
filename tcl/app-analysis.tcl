@@ -1412,7 +1412,7 @@ proc Display(pv) {tree score mate depth seldepth time nodes nps tbhits line pv} 
 
 	if {$Vars(state:suspended)} {
 		set args [list $score $mate $depth $seldepth $time $nodes $nps $tbhits $line $pv]
-		set Vars(suspended,[lindex $args 9]) $args
+		set Vars(suspended,$line) $args
 	} else {
 		Display(time) $tree $time $depth $seldepth $nodes $nps $tbhits
 
@@ -1752,224 +1752,25 @@ proc PopupMenu {tree number args} {
 	catch { wm attributes $menu -type popup_menu }
 
 	# C6: the one engine-line context menu.
-	if {[llength [info commands ::context::Build]]} {
-		set engineID -1
-		catch { set engineID [::engine::id $Vars(number)] }
-		set lineId ""
-		set pv ""
-		if {[llength $args]} {
-			set ident [$tree identify {*}$args]
-			if {[lindex $ident 0] eq "item"} {
-				set lineId [$tree item order [lindex $ident 1] -visible]
-				if {[info exists Vars(pv:$lineId)]} { set pv $Vars(pv:$lineId) }
-			}
+	set engineID -1
+	catch { set engineID [::engine::id $Vars(number)] }
+	set lineId ""
+	set pv ""
+	if {[llength $args]} {
+		set ident [$tree identify {*}$args]
+		if {[lindex $ident 0] eq "item"} {
+			set lineId [$tree item order [lindex $ident 1] -visible]
+			if {[info exists Vars(pv:$lineId)]} { set pv $Vars(pv:$lineId) }
 		}
-		set object [dict create tree $tree number $Vars(number) engine $engineID \
-			lineId $lineId pv $pv]
-		if {[::context::Build C6 $menu $object]} {
-			tk_popup $menu {*}[winfo pointerxy $tree]
-			return
-		}
-		destroy $menu
+	}
+	set object [dict create tree $tree number $Vars(number) engine $engineID \
+		lineId $lineId pv $pv]
+	if {[::context::Build C6 $menu $object]} {
+		tk_popup $menu {*}[winfo pointerxy $tree]
 		return
 	}
-
-	if {[llength $args] && [::engine::id $Vars(number)] >= 0} {
-		set id [$tree identify {*}$args]
-
-		if {[lindex $id 0] eq "item"} {
-			set line [$tree item order [lindex $id 1] -visible]
-			set id [::engine::id $Vars(number)]
-			if {	![::scidb::engine::empty? $id $line]
-				&& ![::scidb::game::query expansion?]
-				&& [::scidb::engine::bound? $id]} {
-				$tree activate [set Vars(current:item) [expr {$line + 1}]]
-				if {[set atLineEnd [::scidb::engine::snapshot $id]] eq "atend"} {
-					set action move
-					set icon $icon::16x16::append
-				} else {
-					set action var
-					set icon $::icon::16x16::plus
-				}
-				$menu add command \
-					-label " $mc::Add($action)" \
-					-image $icon \
-					-compound left \
-					-command [namespace code [list InsertMoves $tree $action $line]] \
-					;
-				if {$atLineEnd eq "atend"} {
-					$menu add command \
-						-label " $mc::Add(seq)" \
-						-image $icon::16x16::append \
-						-compound left \
-						-command [namespace code [list InsertMoves $tree seq $line]] \
-						;
-				}
-				if {[::scidb::game::current] != 9} {
-					$menu add command \
-						-label " $mc::Add(line)" \
-						-image $::icon::16x16::plus \
-						-compound left \
-						-command [namespace code [list InsertMoves $tree line $line]] \
-						;
-					if {!$Options(engine:singlePV)} {
-						$menu add command \
-							-label " $mc::Add(all)" \
-							-image $::icon::16x16::plus \
-							-compound left \
-							-command [namespace code [list InsertMoves $tree all $line]] \
-							;
-					}
-					if {!$Vars(engine:opponent)} {
-						$menu add command \
-							-label " $mc::Add(merge)" \
-							-image $::icon::16x16::merge \
-							-compound left \
-							-command [namespace code [list InsertMoves $tree merge $line]] \
-							;
-						if {!$Options(engine:singlePV)} {
-							$menu add command \
-								-label " $mc::Add(incl)" \
-								-image $::icon::16x16::merge \
-								-compound left \
-								-command [namespace code [list InsertMoves $tree incl $line]] \
-								;
-						}
-					}
-					$menu add command \
-						-label " $mc::InsertMoveAsComment" \
-						-image $icon::16x16::insert \
-						-compound left \
-						-command [namespace code [list InsertComment $tree $line]] \
-						;
-				}
-				# C3: explain the engine's line.
-				if {[llength [info commands ::application::ai::explainLine]]
-				 && [info exists Vars(pv:$line)] && [string length $Vars(pv:$line)]} {
-					$menu add command \
-						-label " $mc::ExplainLine" \
-						-image $::icon::16x16::none \
-						-compound left \
-						-command [namespace code [list ::application::ai::explainLine \
-							[winfo toplevel $tree] $Vars(pv:$line) [::scidb::pos::fen]]] \
-						;
-				}
-				$menu add separator
-			}
-		}
-	}
-
-	$menu add command \
-		-label " $mc::SetupEngine..." \
-		-image $::icon::16x16::setup \
-		-compound left \
-		-command [namespace code [list Setup $tree $number]] \
-		;
-	$menu add command \
-		-label " $mc::SetupEvalEdges..." \
-		-image $::icon::16x16::none \
-		-compound left \
-		-command [namespace code [list SetupEvalEdges $tree]]
-		;
-
-	if {[::engine::id $Vars(number)] >= 0} {
-		if {!$Vars(engine:stopped)} {
-			$menu add command \
-				-label " $mc::StopSearch" \
-				-image $::icon::16x16::stop \
-				-compound left \
-				-command [namespace code [list Stop $tree]] \
-				;
-		}
-		if {$Vars(engine:pause)} {
-			set txt $mc::Resume
-			set img $::icon::16x16::start
-		} else {
-			set txt $mc::Pause
-			set img $::icon::16x16::pause
-		}
-		$menu add command \
-			-label " $txt" \
-			-image $img \
-			-compound left \
-			-command [namespace code [list Pause $tree]] \
-			;
-		if {$Vars(number) >= 0} {
-			# powering down is a separate action, it does not stop the search
-			$menu add command \
-				-label " $mc::CloseEngine" \
-				-image $::icon::16x16::close \
-				-compound left \
-				-command [namespace code [list CloseEngine $tree]] \
-				;
-		}
-		$menu add separator
-		$menu add checkbutton \
-			-label " $mc::LockEngine" \
-			-image $::icon::16x16::lock \
-			-compound left \
-			-command [namespace code [list EngineLock $tree]] \
-			-variable [namespace current]::${tree}::Vars(engine:locked) \
-			;
-		::theme::configureCheckEntry $menu
-		$menu add checkbutton \
-			-label " $mc::OpponentsView" \
-			-image $::icon::16x16::rotateBoard \
-			-compound left \
-			-command [namespace code [list restartAnalysis $Vars(number)]] \
-			-variable [namespace current]::${tree}::Vars(engine:opponent) \
-			;
-		::theme::configureCheckEntry $menu
-		$menu add checkbutton \
-			-label " $mc::BestFirstOrder" \
-			-image $::icon::16x16::sort(descending) \
-			-compound left \
-			-command [namespace code [list SetOrdering $tree]] \
-			-variable [namespace current]::${number}::Options(engine:bestFirst) \
-			;
-		::theme::configureCheckEntry $menu
-		$menu add separator
-		set sub [menu $menu.multiPV -tearoff 0]
-		$menu add cascade \
-			-menu $sub \
-			-label " $mc::MultipleVariations"  \
-			-image $::icon::16x16::lines \
-			-compound left \
-			;
-		foreach n {1 2 3 4 5 6 7 8} {
-			$sub add radiobutton \
-				-label $n \
-				-value $n \
-				-variable [namespace current]::${number}::Options(engine:multiPV) \
-				-command [namespace code [list SetMultiPV $tree $n]] \
-				;
-			::theme::configureRadioEntry $sub
-		}
-		if {!$Options(engine:singlePV)} {
-			set sub [menu $menu.lines -tearoff 0]
-			$menu add cascade \
-				-menu $sub \
-				-label " $mc::LinesPerVariation" \
-				-image $::icon::16x16::none \
-				-compound left \
-				;
-			foreach i {1 2 3 4} {
-				$sub add radiobutton \
-					-label $i \
-					-value $i \
-					-variable [namespace current]::${number}::Options(engine:nlines) \
-					-command [namespace code [list SetLinesPerPV $tree]] \
-					;
-				::theme::configureRadioEntry $sub
-			}
-		}
-
-		set Vars(keep:active) 1
-		set Vars(state:suspended) 1
-		::bind $menu <<MenuUnpost>> [namespace code [list RevertDisplay $tree]]
-	}
-
-	tk_popup $menu {*}[winfo pointerxy $tree]
+	destroy $menu
+	return
 }
 
 

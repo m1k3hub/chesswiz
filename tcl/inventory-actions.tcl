@@ -122,7 +122,7 @@ proc ::inventoryaction::Register {} {
         Undo
         database.symbol_size {Set database symbol size}
         {Set the database switcher's icon size in pixels, using the same persistent setting as its symbol-size menu.}
-        {{pixels {type integer required 1 enum {24 32 48}}}}
+        {{pixels {type integer required 1 enum {16 24 32 48}}}}
         SymbolSize
         help.viewer {Operate help viewer}
         {Navigate the local help viewer, expand or collapse its contents tree, show or hide the index, or set text alignment. Use topic to load a help page by its installed filename. The help viewer opens when needed.}
