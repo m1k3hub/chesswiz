@@ -859,6 +859,9 @@ proc ::menu::Register {id label {accel ""} {visible ""} {enabled ""} {order ""}}
 proc ::menu::RegisterTree {} {
 	variable DropdownTree
 	Register menu.file.recent.clear [MC ClearHistory]
+	# This dynamic recent-files leaf has no fixed dropdown ordinal. Keep it
+	# in the generic assistant operator and knowledge surfaces nonetheless.
+	dict set ::action::Registry menu.file.recent.clear operator 1
 	set n 0
 	foreach top $DropdownTree {
 		incr n
@@ -1658,7 +1661,10 @@ proc ::menu::WireLayoutMenu {twm menu} {
 			open { if {[lindex $cmd 0] eq "::application::layout::open"} { set action [list ::action::run menu.view.layout.manage {saved_only 1}] } }
 			ShowAllDockingPoints {
 				set var [$menu entrycget $i -variable]
-				set action [format {::action::run menu.view.layout.docking [dict create show $%s]} $var]
+				# The native popup is rebuilt before each post. Capture the next
+				# check state as typed data, so all callers receive a dictionary
+				# rather than a script requiring a second Tcl evaluation.
+				set action [list ::action::run menu.view.layout.docking [dict create show [expr {![set $var]}]]]
 			}
 		}
 		if {[lindex $cmd 0] eq $twm && [lindex $cmd 1] eq "togglebar" && $type eq "command"} {
