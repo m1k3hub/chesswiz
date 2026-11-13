@@ -985,6 +985,21 @@ proc LayoutSwitcher {w args} {
 proc PopupMenu {w x y {id -1}} {
 	variable ${w}::Vars
 
+	# Icons and text may cover the transparent input rectangle. Resolve
+	# the symbol under the widget-level event as well as its item binding.
+	if {$id < 0} {
+		set canv $w.content
+		set cx [$canv canvasx [expr {$x - [winfo rootx $canv]}]]
+		set cy [$canv canvasy [expr {$y - [winfo rooty $canv]}]]
+		foreach candidate [expr {[info exists Vars(idList)] ? $Vars(idList) : {}}] {
+			lassign [$canv bbox input$candidate] x1 y1 x2 y2
+			if {$x1 ne "" && $cx >= $x1 && $cx <= $x2 && $cy >= $y1 && $cy <= $y2} {
+				set id $candidate
+				break
+			}
+		}
+	}
+
 	if {$id >= 0} {
 		set file [lindex $Vars(bases) $Vars(map:$id) 2]
 	} else {

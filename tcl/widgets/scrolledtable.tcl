@@ -1130,6 +1130,10 @@ proc SetHighlighting {table} {
 proc PopupMenu {table x y} {
 	variable ${table}::
 
+	# The preceding table binding owns column headers (C10). Do not
+	# replace its popup with an outside-row C3/C5 menu.
+	if {[lindex [$table.t identify $x $y] 0] eq "header"} { return }
+
 	::tooltip::hide
 	if {![info exists (variant)]} { return }
 	lassign [::table::identify $table $x $y] row col _ _

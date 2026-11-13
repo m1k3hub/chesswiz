@@ -8,9 +8,9 @@ proc ::scidb::test::pointer::findPgn {w} {
     foreach child [winfo children $w] {set found [findPgn $child];if {$found ne {}} {return $found}}
     return {}
 }
-proc ::scidb::test::pointer::click {w} {
-    set x [expr {[winfo width $w]/2}]
-    set y [expr {[winfo height $w]/2}]
+proc ::scidb::test::pointer::click {w {x {}} {y {}}} {
+    if {$x eq {}} {set x [expr {[winfo width $w]/2}]}
+    if {$y eq {}} {set y [expr {[winfo height $w]/2}]}
     event generate $w <Motion> -warp 1 -x $x -y $y
     update
     if {$w eq [::board::diagram::canvas $::application::board::board]} {
@@ -56,6 +56,39 @@ tcltest::test context-native-move-record {right clicking the notation passes the
     catch {grab release $frame.__menu__}
     catch {destroy $frame.__menu__}
 } -result {1 1 1 {base index ply san variant}}
+::application::switchTab database
+update
+tcltest::test context-native-column-menu {physical header click leaves the C10 popup mapped without building a game-row menu} -body {
+    set manager $::application::database::Vars(games).twm
+    set scroll [set ::application::database::games::${manager}::Priv(table)]
+    set table [::scrolledtable::table $scroll]
+    ::scidb::test::pointer::click $table.t 80 10
+    set mapped 0
+    foreach child [winfo children $table] {
+        if {[string match *.__table_menu_02763278918911__* $child] && [winfo ismapped $child]} {set mapped 1}
+    }
+    list $mapped [winfo exists $table.menu]
+} -cleanup {
+    catch {::tk::MenuUnpost {}}
+    foreach child [winfo children $table] {
+        if {[winfo class $child] eq "Menu"} {catch {grab release $child};destroy $child}
+    }
+} -result {1 0}
+tcltest::test context-native-database-record {physical database symbol click passes that database to Ask even over icon or text} -body {
+    set switcher $::application::database::Vars(switcher)
+    set canvas $switcher.content
+    set id [set ::database::switcher::${switcher}::Vars(id:$base)]
+    lassign [$canvas bbox input$id] x1 y1 x2 y2
+    set x [expr {int(($x1+$x2)/2-[$canvas canvasx 0])}]
+    set y [expr {int(($y1+$y2)/2-[$canvas canvasy 0])}]
+    ::scidb::test::pointer::click $canvas $x $y
+    $canvas.__menu__ invoke 0
+    list [dict keys $::scidb::test::pointer::record] [dict get $::scidb::test::pointer::record base]
+} -cleanup {
+    catch {::tk::MenuUnpost $canvas.__menu__}
+    catch {grab release $canvas.__menu__}
+    catch {destroy $canvas.__menu__}
+} -result [list base $base]
 rename ::ai::egress::ContextDecide {}
 rename ::ai::egress::pointerSavedDecide ::ai::egress::ContextDecide
 set ::context::AssistantSink $savedSink
