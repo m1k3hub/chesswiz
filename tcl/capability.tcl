@@ -32,7 +32,6 @@ proc ::capability::DefineAll {} {
 	Define training    {expr {[llength [info commands ::ai::cql::training]] > 0}}
 	Define quality     {expr {[llength [info commands ::ai::cql::qualityReport]] > 0}}
 	Define event       {expr {[llength [info commands ::ai::event::report]] > 0}}
-	Define eventreport {expr {[llength [info commands ::ai::eventreport::report]] > 0 && [::capability::present ai]}}
 	Define trend       {expr {[llength [info commands ::ai::trend::report]] > 0}}
 	Define factcheck   {expr {[llength [info commands ::ai::factcheck::current]] > 0}}
 	Define annotate    {expr {[llength [info commands ::ai::annotate::toggle]] > 0}}
@@ -167,17 +166,26 @@ namespace eval ::capability {
 		engine_play ::ai::engine::evaluate
 	}
 	# An action can remain useful when just one argument choice is absent.
-	variable ArgumentModules {open_view {kind {player_card playercard event_report eventreport}}}
+	variable ArgumentModules {open_view {kind {player_card playercard event_report ai}}}
+	variable ArgumentCommands {open_view {kind {event_report ::ai::eventreport::report}}}
 }
 
 proc ::capability::actionAvailable {id {arguments {}}} {
 	variable ActionModules
 	variable ArgumentModules
+	variable ArgumentCommands
 	variable ActionCommands
 	if {[dict exists $ActionCommands $id]
 	 && ![llength [info commands [dict get $ActionCommands $id]]]} {return 0}
 	dict for {module ids} $ActionModules {
 		if {$id in $ids && ![present $module]} {return 0}
+	}
+	if {[dict exists $ArgumentCommands $id]} {
+		dict for {param values} [dict get $ArgumentCommands $id] {
+			if {![dict exists $arguments $param]} {continue}
+			set value [dict get $arguments $param]
+			if {[dict exists $values $value] && ![llength [info commands [dict get $values $value]]]} {return 0}
+		}
 	}
 	if {[dict exists $ArgumentModules $id]} {
 		dict for {param values} [dict get $ArgumentModules $id] {

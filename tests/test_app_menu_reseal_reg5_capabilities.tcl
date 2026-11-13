@@ -59,4 +59,16 @@ dict for {id command} $::capability::ActionCommands {
   rename ${command}__reg5_saved $command
  } -result {0 0 0 0}
 }
+
+tcltest::test reg5-optional-event-enum {absent event report removes only its own tool argument alternative} -setup {
+ rename ::ai::eventreport::report ::ai::eventreport::report__reg5_saved
+} -body {
+ set rec [::action::get open_view]
+ set spec [::capability::availableArgs open_view [dict get $rec args]]
+ set values {}
+ foreach param $spec {if {[lindex $param 0] eq "kind"} {set values [dict get [lindex $param 1] enum]}}
+ list [::capability::actionAvailable open_view {kind event_report}] [expr {"event_report" in $values}] [expr {"player_card" in $values}]
+} -cleanup {
+ rename ::ai::eventreport::report__reg5_saved ::ai::eventreport::report
+} -result {0 0 1}
 ::tcltest::cleanupTests
