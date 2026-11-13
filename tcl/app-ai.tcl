@@ -230,7 +230,8 @@ proc ::application::ai::Model {provider model} {
 
 
 proc ::application::ai::Ready {provider} {
-	if {$provider eq "ollama"} { return 1 }
+	# The built-in deterministic provider needs neither a model nor a key.
+	if {$provider in {ollama stub}} { return 1 }
 	if {[Model $provider ""] eq ""} { return 0 }
 	return [expr {[::ai::provider::apiKey $provider] ne ""}]
 }

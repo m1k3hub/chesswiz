@@ -228,11 +228,15 @@ tcltest::test rules-real-state {R1-R5, R8, R9, R11, R14-R16 pass with real state
 
 	# R14: no AI provider hides the AI entries (one capability check per
 	# module); each AI feature module gates its own entry.
-	::capability::Override ai 0
+	set savedAI [array get ::application::ai::Config]
+	set savedProvider [array get ::ai::provider::Config]
+	::application::ai::configure -provider {} -model {}
+	::ai::provider::configure -name {} -model {}
 	set aiHidden [list \
 		[expr {![::scidb::test::rules::Visible menu.analysis.analyze]}] \
 		[expr {![::scidb::test::rules::Visible menu.analysis.explain.position]}]]
-	::capability::ClearOverrides
+	array set ::application::ai::Config $savedAI
+	array set ::ai::provider::Config $savedProvider
 	::capability::Override studyplan 0
 	set studyplanHidden [expr {![::scidb::test::rules::Visible menu.training.studyplan]}]
 	::capability::ClearOverrides

@@ -1264,6 +1264,13 @@ proc ::context::MenuRowIds {cid row object} {
 # at least one row was added, 0 when the menu must not be posted (R8).
 # ----------------------------------------------------------------------
 proc ::context::Build {cid menu {object {}}} {
+	# Named rows have no universal current selection (they can originate in
+	# several tables and cards). Retain the typed reference supplied by the
+	# native popup so Ask and bare action calls use that same selection.
+	if {$cid eq "C5"} {
+		variable NamedSelection
+		set NamedSelection $object
+	}
 	set rows [Rows $cid $object]
 	if {![llength $rows]} { return 0 }
 	BuildRows $cid $menu $rows $object
@@ -1537,6 +1544,14 @@ proc ::context::CurrentObject {cid} {
 			set base ""
 			catch { set base [::scidb::db::get name] }
 			return [dict create base $base]
+		}
+		C5 {
+			variable NamedSelection
+			if {![info exists NamedSelection] || ![HasObject C5 $NamedSelection]} { return {} }
+			if {[dict exists $NamedSelection parent] && ![winfo exists [dict get $NamedSelection parent]]} { return {} }
+			if {[dict exists $NamedSelection base] && [dict get $NamedSelection base] ne ""
+			 && [catch {::scidb::db::get variant? [dict get $NamedSelection base]}]} { return {} }
+			return $NamedSelection
 		}
 		C6 {
 			set pane [CurrentObject C9]

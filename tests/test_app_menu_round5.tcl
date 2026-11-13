@@ -24,17 +24,25 @@ proc ::scidb::test::r5::extract {script {ns ::}} {
 }
 set r5root [file dirname [file dirname [file normalize [info script]]]]
 if {[info exists ::env(R5_SOURCE_ROOT)]} {set r5root $::env(R5_SOURCE_ROOT)}
-foreach f {actions eventtable app-pgn context game dropdown menu info gametable app-analysis app-board app-assistant-offers app-twm app-database-search-nl app-database-openingprep} {
+foreach f {app-ai actions eventtable app-pgn context game dropdown menu info gametable app-analysis app-board app-assistant-offers app-twm app-database-search-nl app-database-openingprep} {
     set fd [open [file join $r5root tcl $f.tcl]]
     ::scidb::test::r5::extract [read $fd]
     close $fd
 }
 proc ::scidb::test::r5::run {script} {
+    global r5root
     variable definitions
     set ip [interp create]
     try {
         foreach definition $definitions {interp eval $ip $definition}
+        interp eval $ip [list source [file join $r5root tcl capability.tcl]]
         interp eval $ip {
+            # Positive handler fixtures use the built-in deterministic provider;
+            # the real capability probe/Ready function still decide availability.
+            namespace eval ::application::ai {
+                variable Config
+                array set Config {provider stub model {}}
+            }
             namespace eval ::scidb::db {}
             namespace eval ::scidb::game {}
             namespace eval ::scidb::engine {}

@@ -681,18 +681,13 @@ proc ::action::Dispatch {id args approval} {
 		}
 	}
 
-	set argsSpec [dict get $record args]
-	set passthrough [dict get $record schema]
-	if {$passthrough ne "" && $argsSpec eq ""} {
-		set validatedArgs $argsDict
-	} else {
-		set validation [::action::validateArgs $id $argsDict]
-		set status [lindex $validation 0]
-		if {$status eq "error"} {
-			return "error: [lindex $validation 1]"
-		}
-		set validatedArgs [lindex $validation 1]
+	# A schema is a presentation format, not an exemption from the shared
+	# args-spec validator. An empty spec still rejects every supplied key.
+	set validation [::action::validateArgs $id $argsDict]
+	if {[lindex $validation 0] eq "error"} {
+		return "error: [lindex $validation 1]"
 	}
+	set validatedArgs [lindex $validation 1]
 
 	if {$approval ne "" && $approval ne [::list $id $validatedArgs]} {
 		return "error: approved action arguments changed"

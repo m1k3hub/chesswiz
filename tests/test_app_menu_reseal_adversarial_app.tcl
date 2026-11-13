@@ -21,6 +21,40 @@ tcltest::test all-tools-unknown-key {every schema rejects invented argument befo
  puts [list UNKNOWN_KEY count $count called $::audit::called bad $bad]
  list $count $::audit::called $bad
 } -result {95 0 {}}
+# VS-reg3 all_tool_sweep: both public paths, including empty args specs.
+tcltest::test all-tools-malformed-both-paths {every tool rejects malformed and unknown arguments without invoking its handler} -body {
+ set bad {}; set count 0
+ set ::audit::called 0
+ set hooks [list $::action::ConfirmHook $::action::BulkHook]
+ set confirm $::application::assistant::Priv(confirm)
+ set required $::application::assistant::Priv(reqconfirm)
+ set ::action::ConfirmHook ::scidb::test::actions::yes
+ set ::action::BulkHook ::scidb::test::actions::yes
+ set ::application::assistant::Priv(confirm) ::scidb::test::actions::yes
+ set ::application::assistant::Priv(reqconfirm) {}
+ try {
+  dict for {name record} $::application::assistant::Actions {
+   set command [lindex $record 5]
+   rename $command ${command}__sweep
+   interp alias {} $command {} ::audit::sentinel
+   try {
+    foreach path {::action::run ::application::assistant::runTool} {
+     foreach value [list {__odd} [format %c 123] {__invented value} {tab board extra foo}] {
+      set code [catch {$path $name $value} reply]
+      incr count
+      if {$code || ![string match error:* $reply]} {lappend bad [list $name $path $value $code $reply]}
+     }
+    }
+   } finally {rename $command {}; rename ${command}__sweep $command}
+  }
+ } finally {
+  lassign $hooks ::action::ConfirmHook ::action::BulkHook
+  set ::application::assistant::Priv(confirm) $confirm
+  set ::application::assistant::Priv(reqconfirm) $required
+ }
+ puts [list ALL_TOOL_MALFORMED count $count called $::audit::called bad $bad]
+ list $count $::audit::called $bad
+} -result {760 0 {}}
 tcltest::test malformed-public-arguments {bad argument container returns error text without exception} -body {
  set bad {}
  set ::audit::called 0

@@ -47,6 +47,7 @@ proc ::reseal::snap {tag} {
   R10-mid {set expect {c2.strip.truncate 1 1 c2.comment_before 1 1}}
   R10-end {set expect {c2.strip.truncate 0 1 c2.comment_before 1 1}}
   R11-* {set expect {c3.sort_column 0 1}}
+  R14-* {set expect {menu.analysis.analyze 0 1 menu.analysis.explain.position 0 1 menu.analysis.explain.line 0 1 menu.analysis.explain.comment 0 1}}
  }
  foreach {id visible enabled} $expect {
   set st [::menu::state $id]
@@ -127,9 +128,14 @@ tcltest::test reseal-rules-real-states {same live fixtures compare dropdown/cont
  ::capability::Override report 0
  ::reseal::snap R13-report-absent
  ::capability::ClearOverrides
- ::capability::Override ai 0
- ::reseal::snap R14-ai-absent
- ::capability::ClearOverrides
+ set savedAI [array get ::application::ai::Config]
+ set savedProvider [array get ::ai::provider::Config]
+ ::application::ai::configure -provider {} -model {}
+ ::ai::provider::configure -name {} -model {}
+ try {::reseal::snap R14-ai-absent} finally {
+  array set ::application::ai::Config $savedAI
+  array set ::ai::provider::Config $savedProvider
+ }
  ::reseal::snap R15-native-platform
  ::application::switchTab database
  update

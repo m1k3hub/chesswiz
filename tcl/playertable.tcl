@@ -473,7 +473,7 @@ proc see {path position} {
 
 
 proc popupMenu {menu base variant info {playerCard {}} {playerIndex {}}} {
-	set parent [winfo toplevel $menu]
+	set parent [winfo toplevel [winfo parent $menu]]
 
 	# C5: the one player context menu (players table, game list, game bar,
 	# browser, crosstable and player card all call this builder).

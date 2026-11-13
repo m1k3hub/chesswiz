@@ -126,10 +126,12 @@ test g1-passthrough-with-args-validates {
 	string match "error:*" $result
 } -result 1
 
-test g1-passthrough-no-args-skips {
-	passthrough schema without args spec skips validation
+test g1-passthrough-no-args-validates {
+	passthrough schema never exempts an empty args spec from validation
 } -setup {
+	set ::scidb::test::g1::passthroughCalls {}
 	proc ::scidb::test::g1::passthroughHandler {argsDict} {
+		lappend ::scidb::test::g1::passthroughCalls $argsDict
 		return passthrough-ok
 	}
 	::action::register test.passthrough.noargs [dict create \
@@ -142,10 +144,12 @@ test g1-passthrough-no-args-skips {
 	]
 } -body {
 	set result [::action::run test.passthrough.noargs [dict create anything goes]]
-	string match "passthrough-ok" $result
+	set rejected [list [string match "error:*" $result] [llength $::scidb::test::g1::passthroughCalls]]
+	list $rejected [::action::run test.passthrough.noargs {}] $::scidb::test::g1::passthroughCalls
 } -cleanup {
 	rename ::scidb::test::g1::passthroughHandler {}
-} -result 1
+	unset ::scidb::test::g1::passthroughCalls
+} -result {{1 0} passthrough-ok {{}}}
 
 # ----------------------------------------------------------------------
 # VAL-REG-006: ConfirmHook/BulkHook wired; debug gate in registry
