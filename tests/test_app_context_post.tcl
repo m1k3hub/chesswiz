@@ -43,6 +43,7 @@ tcltest::test context-post-lone-ask {Ask alone and Ask plus a disabled action ne
 tcltest::test context-pane-cascade-dispatch {Ask opens the notation choices and excludes its empty cascades} -setup {
     source [file join [file dirname [info script]] app_actions_support.tcl]
     ::scidb::test::actions::ready
+    ::menu::gameNew .application
     set twm [::application::twm board]
     ::application::openPane editor
     update
@@ -54,7 +55,7 @@ tcltest::test context-pane-cascade-dispatch {Ask opens the notation choices and 
     update
     set m .contextChoices_paneCascade
     list [expr {"c9.not.display" in $ids}] \
-        [expr {"c9.not.language" ni $ids && "c9.layout" ni $ids}] \
+        [expr {("c9.not.language" in $ids) == [dict get [::menu::state c9.not.language] enabled] && "c9.layout" in $ids}] \
         $result [winfo ismapped $m] [expr {[$m index end] ne "none"}]
 } -cleanup {
     catch {grab release .contextChoices_paneCascade}

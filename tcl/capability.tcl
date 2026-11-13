@@ -95,7 +95,7 @@ proc ::capability::present {module} {
 namespace eval ::capability {
 	variable ActionModules {
 		online_actions {toolbar.online.resign toolbar.online.draw toolbar.online.takeback toolbar.online.abort toolbar.online.claim toolbar.online.flip toolbar.online.live toolbar.online.accept toolbar.online.decline toolbar.online.analyse toolbar.online.close toolbar.online.chat toolbar.online.autoqueen}
-		ai {game.explain similar_games c3.games_like annotate_game opponent_brief study_plan database_trend factcheck_annotations training_set check_results menu.analysis.annotate menu.analysis.factcheck menu.training.studyplan menu.training.brief menu.training.training_set menu.training.check_results menu.db.reports.trends c2.explain_move c3.ask_about_game c6.explain_line c11.draft_comment c11.explain_comment explain_position menu.analysis.analyze menu.analysis.explain.comment menu.analysis.explain.line menu.analysis.explain.move menu.analysis.explain.position}
+		ai {game.explain similar_games c3.games_like annotate_game opponent_brief study_plan database_trend factcheck_annotations training_set check_results menu.analysis.annotate menu.analysis.factcheck menu.training.studyplan menu.training.brief menu.training.training_set menu.training.check_results menu.db.reports.trends c2.explain_move c3.ask_about_game c6.explain_line c11.draft_comment c11.explain_comment c11.translate_comment explain_position menu.analysis.analyze menu.analysis.explain.comment menu.analysis.explain.line menu.analysis.explain.move menu.analysis.explain.position}
 		annotate {annotate_game menu.analysis.annotate}
 		assistant {menu.tools.assistant menu.view.panes.assistant}
 		board3d {view.board3d.open}

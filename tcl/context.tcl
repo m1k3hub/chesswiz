@@ -1106,6 +1106,7 @@ proc ::context::FindCascade {rows id} {
 }
 
 proc ::context::ActionCascade {id object} {
+	if {[dict exists $object call] || [dict exists $object webUrl] || [dict exists $object notationOption]} { return {} }
 	if {[catch {set record [::action::get $id]}]} { return {} }
 	foreach cid [dict get $record context] {
 		set found [FindCascade [Rows $cid $object] $id]
@@ -1403,8 +1404,103 @@ proc ::context::RouteCommentRows {id menu object} {
 	}
 }
 
+proc ::context::RouteWebRows {id menu object} {
+	set last [$menu index end]
+	if {$last eq "none"} { return }
+	for {set i 0} {$i <= $last} {incr i} {
+		if {[$menu type $i] eq "cascade"} {
+			RouteWebRows $id [$menu entrycget $i -menu] $object
+		} elseif {[$menu type $i] eq "command"} {
+			set call [$menu entrycget $i -command]
+			if {[lindex $call 0] ne "::web::open"} { continue }
+			$menu entryconfigure $i -command [list ::action::run $id [dict create object [dict merge $object [dict create webUrl [lindex $call 2]]]]]
+		}
+	}
+}
+
 proc ::context::CascadePrefix {id menu object} {
 	switch -- $id {
+		c9.not.move_notation {
+			foreach style $::notation::moveStyles {
+				$menu add radiobutton -label $::notation::mc::MoveForm($style) \
+					-variable ::pgn::editor::Options(style:move) -value $style \
+					-command [list ::action::run $id [dict create object [dict merge $object [dict create notationOption style:move notationValue $style]]]]
+				::theme::configureRadioEntry $menu
+			}
+			return 1
+		}
+		c9.not.move_info - c9.not.language {
+			if {$id eq "c9.not.move_info"} {
+				set choices {eval clk emt ccsnt video cclk cemt}
+			} else {
+				set choices [list xx {*}$::application::pgn::Vars(lang:set)]
+			}
+			foreach choice $choices {
+				if {$id eq "c9.not.move_info"} {
+					set variable ::pgn::setup::ShowMoveInfo($choice)
+					set label $::application::pgn::mc::MoveInfo($choice)
+					set option moveinfo:$choice
+				} else {
+					set variable ::application::pgn::Vars(lang:active:$choice)
+					if {![info exists $variable]} {set $variable 0}
+					set label [expr {$choice eq "xx" ? $::languagebox::mc::AllLanguages : [::encoding::languageName $choice]}]
+					set option language:$choice
+				}
+				$menu add checkbutton -label $label -variable $variable \
+					-command [list ::action::run $id [dict create object [dict merge $object [dict create notationOption $option notationValue [expr {![set $variable]}]]]]]
+				::theme::configureCheckEntry $menu
+			}
+			return 1
+		}
+		c5.player_url {
+			set info [expr {[dict exists $object info] ? [dict get $object info] : [list [dict get $object name]]}]
+			::playercard::buildWebMenu .application $menu $info
+			RouteWebRows $id $menu $object
+			return 1
+		}
+		c11.format - c11.copy_text - c11.translate_comment {
+			switch $id {
+				c11.format {
+					foreach format {Bold Italic Underline} {
+						$menu add command -label [set ::comment::mc::$format] \
+							-command [list ::comment::ChangeFormat [string tolower $format] yes]
+					}
+				}
+				c11.copy_text {
+					foreach lang [list xx {*}$::comment::Vars(langSet)] {
+						if {$lang eq $::comment::Vars(lang)} continue
+						$menu add command -label [::comment::LanguageName $lang] \
+							-command [list ::comment::CopyText $::comment::Vars(lang) $lang]
+					}
+				}
+				c11.translate_comment {
+					foreach lang {en de fr es it pt nl ru pl cs uk tr el ar he zh ja ko} {
+						$menu add command -label [::ai::language::Name $lang] \
+							-command [list ::comment::TranslateComment [expr {[dict exists $object widget] && [winfo exists [dict get $object widget]] ? [winfo toplevel [dict get $object widget]] : ".application"}] $lang]
+					}
+				}
+			}
+			RouteCommentRows $id $menu $object
+			return [expr {[$menu index end] ne "none"}]
+		}
+		c9.layout {
+			set gamebar $::application::pgn::Vars(gamebar)
+			if {![winfo exists $gamebar] || ![::gamebar::size $gamebar]} { return 0 }
+			foreach {option label} {
+				separateColumn SeparateHeader
+				selectedAtBottom ShowActiveAtBottom
+				separateLines ShowPlayersOnSeparateLines
+			} {
+				set variable ::gamebar::Options($option)
+				set selected [dict merge $object [dict create layoutOption $option layoutValue [expr {![set $variable]}]]]
+				set state normal
+				if {$option eq "selectedAtBottom" && $::gamebar::Options(separateColumn)} { set state disabled }
+				$menu add checkbutton -label [set ::gamebar::mc::$label] -variable $variable -state $state \
+					-command [list ::action::run $id [dict create object $selected]]
+				::theme::configureCheckEntry $menu
+			}
+			return 1
+		}
 		c10.show_column {
 			::table::MakeShowColumnMenu [dict get $object table] $menu
 			set last [$menu index end]
@@ -1790,7 +1886,7 @@ proc ::context::ObjectRule {id object} {
 	set cascade [ActionCascade $id $object]
 	if {[llength $cascade]} {
 		set available [RunnableChildren [lindex $cascade 1] $object]
-		if {!$available && $id in {c10.show_column c11.insert_symbol c11.insert_emoticon c11.add_language c11.switch_language c4.maintenance}} {
+		if {!$available && $id in {c9.layout c9.not.move_notation c9.not.move_info c9.not.language c5.player_url c11.format c11.copy_text c11.translate_comment c10.show_column c11.insert_symbol c11.insert_emoticon c11.add_language c11.switch_language c4.maintenance}} {
 			variable Counter
 			set m .contextAvailability[incr Counter]
 			menu $m -tearoff 0
@@ -2103,6 +2199,7 @@ proc ::context::RequiredFields {id} {
 }
 
 proc ::context::MissingFields {id object} {
+	if {[llength [ActionCascade $id $object]]} { return {} }
 	set missing {}
 	foreach key [RequiredFields $id] {
 		if {![dict exists $object $key] || [dict get $object $key] eq ""} { lappend missing $key }
@@ -2164,6 +2261,39 @@ proc ::context::Command {id object} {
 		set optId $::table::IdMap($table)
 		set ::table::${optId}::Options(-visible:$column) [expr {[dict get $object showColumn] ? 1 : 0}]
 		::table::ShowColumn $table $column
+		return "completed $id"
+	}
+	if {[dict exists $object notationOption] && $id in {c9.not.move_notation c9.not.move_info c9.not.language}} {
+		set option [dict get $object notationOption]
+		set value [dict get $object notationValue]
+		if {$id eq "c9.not.move_notation" && $option eq "style:move" && $value in $::notation::moveStyles} {
+			set ::pgn::editor::Options(style:move) $value
+			::application::pgn::Refresh style:move
+		} elseif {$id eq "c9.not.move_info" && [string match moveinfo:* $option] && [string range $option 9 end] in {eval clk emt ccsnt video cclk cemt} && [string is boolean -strict $value]} {
+			set type [string range $option 9 end]
+			set ::pgn::setup::ShowMoveInfo($type) $value
+			::application::pgn::Refresh moveinfo:$type
+		} elseif {$id eq "c9.not.language" && [string match language:* $option] && [string range $option 9 end] in [list xx {*}$::application::pgn::Vars(lang:set)] && [string is boolean -strict $value]} {
+			set ::application::pgn::Vars(lang:active:[string range $option 9 end]) $value
+			::application::pgn::SetLanguages $::application::pgn::Vars(position)
+		} else { error "invalid notation choice" }
+		return "completed $id"
+	}
+	if {$id eq "c5.player_url" && [dict exists $object webUrl]} {
+		set url [dict get $object webUrl]
+		if {![::web::isWebLink $url]} { error "invalid player URL" }
+		::web::open .application $url
+		return "completed $id"
+	}
+	if {$id eq "c9.layout" && [dict exists $object layoutOption]} {
+		set option [dict get $object layoutOption]
+		set callbacks [dict create separateColumn ShowSeparateColumn selectedAtBottom ShowAtBottom separateLines ShowAtSeparateLines]
+		if {![dict exists $callbacks $option]} { error "unknown gamebar layout option" }
+		set value [dict get $object layoutValue]
+		if {![string is boolean -strict $value]} { error "layout value must be a boolean" }
+		if {$option eq "selectedAtBottom" && $::gamebar::Options(separateColumn)} { error "separate header is active" }
+		set ::gamebar::Options($option) $value
+		::gamebar::[dict get $callbacks $option] $::application::pgn::Vars(gamebar)
 		return "completed $id"
 	}
 	set cascade [ActionCascade $id $object]
@@ -2604,13 +2734,16 @@ proc ::context::Command {id object} {
 			set ::comment::Options(showEmoticons) [expr {!$::comment::Options(showEmoticons)}]
 			::comment::DisplayEmoticons
 		}
-		c11.insert_symbol - c11.insert_emoticon - c11.add_language - c11.switch_language {
+		c11.format - c11.copy_text - c11.translate_comment - c11.insert_symbol - c11.insert_emoticon - c11.add_language - c11.switch_language {
 			set call [dict get $object call]
 			set allowed {
 				c11.insert_symbol {InsertFigurine InsertNag InsertText}
 				c11.insert_emoticon {InsertEmoticon}
 				c11.add_language {NewLanguage}
 				c11.switch_language {SwitchLanguage}
+				c11.format {ChangeFormat}
+				c11.copy_text {CopyText}
+				c11.translate_comment {TranslateComment}
 			}
 			if {[lindex $call 0] ni [dict get $allowed $id]} { error "$id: unexpected row [lindex $call 0]" }
 			return [namespace inscope ::comment $call]
