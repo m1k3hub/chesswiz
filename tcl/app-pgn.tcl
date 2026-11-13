@@ -2471,7 +2471,7 @@ proc PopupMenu {parent position} {
 		set mainline 1
 		catch { set mainline [::scidb::game::position isMainline?] }
 		set object [dict create parent $parent base $base variant $variant \
-			index $index ply [::scidb::game::ply] san "" position $position \
+			index $index ply [::scidb::game::ply] san [::scidb::game::query move [::scidb::game::position key]] position $position \
 			over $over mainline $mainline]
 		if {[::context::Build C2 $menu $object]} {
 			tk_popup $menu {*}[winfo pointerxy $parent]

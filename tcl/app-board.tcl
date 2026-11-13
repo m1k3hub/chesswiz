@@ -1255,8 +1255,8 @@ proc PopupMenu {w} {
 	catch { set fen [::scidb::game::query fen] }
 	set square ""
 	catch {
-		set sq [::board::getSquare $w [winfo pointerx $w] [winfo pointery $w]]
-		if {$sq >= 0} { set square [lindex $::board::squareIndex $sq] }
+		set sq [::board::diagram::getSquare $board [winfo pointerx $w] [winfo pointery $w]]
+		if {$sq >= 0} { set square [lindex $::board::diagram::squareIndex $sq] }
 	}
 	if {[llength [info commands ::context::Post]]
 	 && [::context::Post C1 $m [dict create widget $w square $square fen $fen]]} {

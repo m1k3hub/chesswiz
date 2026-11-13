@@ -1644,7 +1644,7 @@ proc ::context::CurrentObject {cid} {
 			set mainline 1
 			catch { set mainline [::scidb::game::position isMainline?] }
 			return [dict create base $base variant $variant index $index \
-				ply $ply san "" position $pos over $over mainline $mainline]
+				ply $ply san [::scidb::game::query move [::scidb::game::position key]] position $pos over $over mainline $mainline]
 		}
 		C3 {
 			# The list owns its selection, independently of the loaded game.
