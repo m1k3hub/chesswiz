@@ -1418,6 +1418,39 @@ proc ::context::RouteWebRows {id menu object} {
 	}
 }
 
+# Rebuild the native link list to validate a selected URL against its actual
+# enabled row, rather than accepting a syntactically valid but disabled link.
+proc ::context::WebMenuHasUrl {menu url} {
+	set last [$menu index end]
+	if {$last eq "none"} { return 0 }
+	for {set i 0} {$i <= $last} {incr i} {
+		if {[$menu type $i] eq "separator" || [$menu entrycget $i -state] eq "disabled"} { continue }
+		if {[$menu type $i] eq "cascade"} {
+			if {[WebMenuHasUrl [$menu entrycget $i -menu] $url]} { return 1 }
+		} elseif {[$menu type $i] eq "command"} {
+			set call [$menu entrycget $i -command]
+			if {[lindex $call 0] eq "::web::open" && [lindex $call 2] eq $url} { return 1 }
+		}
+	}
+	return 0
+}
+
+proc ::context::WebChoiceAvailable {object} {
+	variable Counter
+	set menu .contextWebChoice[incr Counter]
+	menu $menu -tearoff 0
+	set available 0
+	catch {
+		if {[dict get $object kind] eq "player"} {
+			set info [expr {[dict exists $object info] ? [dict get $object info] : [list [dict get $object name]]}]
+			::playercard::buildWebMenu .application $menu $info
+			set available [WebMenuHasUrl $menu [dict get $object webUrl]]
+		}
+	}
+	destroy $menu
+	return $available
+}
+
 proc ::context::CascadePrefix {id menu object} {
 	switch -- $id {
 		c9.not.move_notation {
@@ -1868,6 +1901,27 @@ proc ::context::ObjectEnd {object} {
 # R10: strip/truncate/comment rows follow the move object. Returns
 # {visible enabled} or empty when the id has no object rule.
 proc ::context::ObjectRule {id object} {
+	if {$id eq "c5.player_url" && [dict exists $object webUrl]} {
+		return [list 1 [WebChoiceAvailable $object]]
+	}
+	if {$id eq "c11.switch_language" && [dict exists $object call]} {
+		set call [dict get $object call]
+		set available [expr {[llength $call] == 2 && [lindex $call 0] eq "SwitchLanguage"
+			&& [lindex $call 1] in [list xx {*}$::comment::Vars(langSet)]
+			&& [lindex $call 1] ne $::comment::Vars(lang)}]
+		return [list 1 $available]
+	}
+	if {$id eq "c9.layout" && [dict exists $object layoutOption]} {
+		set option [dict get $object layoutOption]
+		set available [expr {$option in {separateColumn selectedAtBottom separateLines}
+			&& [dict exists $object layoutValue] && [string is boolean -strict [dict get $object layoutValue]]
+			&& [info exists ::application::pgn::Vars(gamebar)]
+			&& [winfo exists $::application::pgn::Vars(gamebar)]
+			&& [::gamebar::size $::application::pgn::Vars(gamebar)] > 0
+			&& ($option ne "selectedAtBottom" || !$::gamebar::Options(separateColumn))}]
+		return [list 1 $available]
+	}
+
 	if {[string match c5.sort.* $id]} {
 		set allowed 0
 		if {[dict exists $object sortTable] && [dict exists $object kind]} {

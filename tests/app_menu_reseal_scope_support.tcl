@@ -102,6 +102,18 @@ proc ::scidb::test::askscope::LabelId {label {cid ""}} {
 	return [lindex $matches 0]
 }
 
+# Cascades have no command of their own. A dynamic cascade may share its
+# label with another object's leaf (C5 Open URL); its actual child commands
+# identify the parent without guessing from that ambiguous label.
+proc ::scidb::test::askscope::CascadeId {label cid children} {
+	regsub { ▸$} $label "" label
+	set label [string trim $label]
+	foreach id $children {
+		if {![catch {::context::L $id} text] && $text eq $label} { return $id }
+	}
+	return [LabelId $label $cid]
+}
+
 proc ::scidb::test::askscope::MenuIds {menu {cid ""}} {
 	set ids {}
 	set last ""
@@ -114,16 +126,16 @@ proc ::scidb::test::askscope::MenuIds {menu {cid ""}} {
 			catch { set sub [$menu entrycget $i -menu] }
 			set label ""
 			catch { set label [$menu entrycget $i -label] }
-			set id [LabelId $label $cid]
+			set children [expr {$sub ne "" ? [MenuIds $sub $cid] : {}}]
+			set id [CascadeId $label $cid $children]
 			if {$id ne ""} { lappend ids $id }
-			if {$sub ne ""} { lappend ids {*}[MenuIds $sub $cid] }
+			lappend ids {*}$children
 			continue
 		}
 		if {$type ne "command"} { continue }
-		set label ""
-		catch { set label [$menu entrycget $i -label] }
-		set id [LabelId $label $cid]
-		if {$id ne ""} { lappend ids $id }
+		set cmd ""
+		catch { set cmd [$menu entrycget $i -command] }
+		if {[regexp {::action::run (\S+)} $cmd -> id] && $id ne "context.ask"} {lappend ids $id}
 	}
 	return [lsort -unique $ids]
 }
@@ -197,11 +209,12 @@ proc ::scidb::test::askscope::PostedIds {menu {cid ""}} {
 		if {$type eq "cascade"} {
 			set label ""
 			catch { set label [$menu entrycget $i -label] }
-			set id [LabelId $label $cid]
-			if {$id ne "" && $id ne "context.ask"} { lappend ids $id }
 			set sub ""
 			catch { set sub [$menu entrycget $i -menu] }
-			if {$sub ne ""} { lappend ids {*}[PostedIds $sub $cid] }
+			set children [expr {$sub ne "" ? [PostedIds $sub $cid] : {}}]
+			set id [CascadeId $label $cid $children]
+			if {$id ne "" && $id ne "context.ask"} { lappend ids $id }
+			lappend ids {*}$children
 			continue
 		}
 		if {$type ne "command"} { continue }

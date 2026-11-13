@@ -297,6 +297,13 @@ foreach {cid handler} {C2 {::application::pgn::PopupMenu .notation 0} C9 {::appl
                 proc ::context::HasObject {cid object} {return 1}
                 proc ::scidb::game::link? {position} {return {base Normal 0}}
                 proc ::scidb::game::ply {} {return 1}
+                # The real popup now carries the current move's SAN.
+                proc ::scidb::game::position {what} {
+                    ::switch $what {key {return m-0.1} atEnd? {return 0} isMainline? {return 1}}
+                }
+                proc ::scidb::game::query {what args} {
+                    ::switch $what {move {return e4} default {return {}}}
+                }
                 proc .pane {args} {return board}
                 proc bind {args} {}
                 proc wm {args} {}
