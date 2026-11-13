@@ -988,6 +988,7 @@ proc ::menu::state {id {object {}}} {
 	if {$top eq "Board" && [::menu::OnDatabaseTab]} { set enabled 0 }
 	if {$top eq "Database" && [::menu::BoardOnlyLayout]} { set enabled 0 }
 
+	if {![::capability::actionAvailable $id]} {set visible 0; set enabled 0}
 	return [dict create visible $visible enabled $enabled]
 }
 
@@ -1058,7 +1059,7 @@ proc ::menu::GameOver {} {
 }
 proc ::menu::NormalVariant {} {
 	set v Normal
-	catch { set v [::scidb::db::get variant?] }
+	catch { set v [::scidb::game::query variant?] }
 	return [expr {$v eq "Normal" ? 1 : 0}]
 }
 proc ::menu::ModulePresent {module} {
@@ -1143,7 +1144,9 @@ proc ::menu::BuildDropdown {menu} {
 		menu $sub -tearoff 0
 		$sub configure -postcommand [list ::menu::FillTop $labelName $sub]
 		lassign [AmpText [MC $labelName]] text ul
-		$menu add cascade -label $text -underline $ul -menu $sub -accelerator $accel
+		set state normal
+		if {($labelName eq "Board" && [OnDatabaseTab]) || ($labelName eq "Database" && [BoardOnlyLayout])} {set state disabled}
+		$menu add cascade -label $text -underline $ul -menu $sub -accelerator $accel -state $state
 	}
 	# First-run selection and other callers use mc::setLang directly.
 	# Keep cached menus in sync through the common notification, too.
@@ -1478,13 +1481,17 @@ proc ::menu::SyncPaneCheck {suffix} {
 }
 
 proc ::menu::TogglePane {twm uid} {
-	# A pane that is part of the layout is hidden (or restored from the
-	# collapsed presentation by ChangeState). A pane that is absent is
+	# A pane that is part of the layout is hidden, including collapsed
+	# panes. A pane that is absent is
 	# reopened through the layout's show API, which creates the leaf and
 	# brings its tab/parent to the front.
 	if {$uid eq ""} { return 0 }
 	if {$uid in [$twm leaves]} {
-		catch { ::application::twm::ChangeState $twm $uid }
+		# Presence is also what PaneChecked reports. Collapsed leaves must
+		# close on the first toggle, rather than being restored by ChangeState.
+		set leaf [$twm leaf $uid]
+		::application::reflow::explicitHide $twm $leaf
+		destroy $leaf
 	} elseif {[llength [info commands ::application::openPane]]} {
 		::application::openPane $uid
 	} else {

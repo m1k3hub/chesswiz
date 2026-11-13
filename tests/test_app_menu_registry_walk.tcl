@@ -115,6 +115,16 @@ proc ::scidb::test::rgw::Toolbars {w rowsVar} {
 			catch { set label [$child cget -text] }
 			if {$label eq ""} { catch { set label [$child cget -tooltip] } }
 			lappend rows [list toolbar $cls normal $label $cmd]
+			# Custom toolbar checkbuttons mutate state in widget bindings.
+			# Walk activation bindings too, even when -command is empty.
+			foreach event [bind $child] {
+				if {![regexp {^<(Button(?:Press|Release)?-1|Key.*|Return|space)>$} $event]} {continue}
+				set script [string trim [bind $child $event]]
+				# Button press only hides the tooltip (or blocks a disabled
+				# control). Neither performs a product operation.
+				if {$script in {"" break ::tooltip::hide}} {continue}
+				lappend rows [list toolbar-binding $event normal $label $script]
+			}
 		}
 	}
 	foreach child [winfo children $w] {

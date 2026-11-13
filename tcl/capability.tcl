@@ -62,7 +62,7 @@ proc ::capability::DefineAll {} {
 	Define playercard  {expr {[llength [info commands ::playercard::show]] > 0}}
 	Define explorer    {expr {[llength [info commands ::application::explorer::positionChanged]] > 0}}
 	Define tablebase   {expr {[llength [info commands ::tablebase::toggle]] > 0}}
-	Define print       {expr {[llength [info commands ::print::open]] > 0}}
+	Define print       {expr {[llength [info commands ::print::game]] > 0}}
 	Define report      {expr {[llength [info commands ::application::report::show]] > 0}}
 	return
 }
@@ -87,3 +87,90 @@ proc ::capability::present {module} {
 }
 
 ::capability::DefineAll
+
+# Action ownership is independent of visible/enabled predicates. This covers
+# aliases as well as their menu rows, so an omitted predicate cannot advertise
+# an operation whose implementation is missing.
+namespace eval ::capability {
+	variable ActionModules {
+		ai {explain_position menu.analysis.analyze menu.analysis.explain.comment menu.analysis.explain.line menu.analysis.explain.position}
+		annotate {annotate_game menu.analysis.annotate}
+		assistant {menu.tools.assistant menu.view.panes.assistant}
+		board3d {view.board3d.open}
+		brief {opponent_brief menu.training.brief}
+		chooseengine {menu.analysis.review_engine}
+		download {download_games menu.tools.download}
+		embed3d {view.board3d.embed}
+		endtrainer {menu.training.endgame}
+		enginematch {menu.training.engine_match}
+		event {menu.db.reports.timecontrol}
+		explorer {c9.explorer.source c9.pane.explorer menu.analysis.explorer menu.view.panes.explorer}
+		factcheck {factcheck_annotations menu.analysis.factcheck}
+		filetypes {menu.tools.file_types}
+		guessmove {menu.training.guess}
+		ics {menu.training.play_online}
+		insights {c5.insights c5.player.insights}
+		legacyfonts {install_chessbase_fonts menu.tools.legacy_fonts}
+		lichess {menu.training.play_lichess}
+		lichess_events {menu.training.lichess_events}
+		lichess_puzzles {menu.training.lichess_puzzles}
+		lichess_social {menu.training.lichess_social}
+		lichess_tv {menu.training.lichess_tv}
+		models {menu.tools.choose_model}
+		playengine {open_play_engine menu.training.play_engine}
+		playercard {c5.player_card menu.tools.player_card}
+		playerdata {update_player_data}
+		print {print}
+		quality {check_results menu.training.check_results}
+		report {menu.view.panes.report}
+		reptrainer {menu.training.repertoire}
+		review {menu.analysis.game_review}
+		stream {c7.open_stream c9.media.stream open_stream}
+		stream_overlay {menu.training.stream}
+		studyplan {study_plan menu.training.studyplan}
+		tablebase {c9.tablebase menu.analysis.tablebase.local menu.analysis.tablebase.online menu.analysis.tablebase.show menu.board.tablebase.local menu.board.tablebase.online menu.board.tablebase.show}
+		training {training_set menu.training.training_set}
+		trend {menu.db.reports.trends}
+		voice {menu.tools.voice}
+		webgl3d {view.board3d.webgl}
+	}
+	# An action can remain useful when just one argument choice is absent.
+	variable ArgumentModules {open_view {kind {player_card playercard}}}
+}
+
+proc ::capability::actionAvailable {id {arguments {}}} {
+	variable ActionModules
+	variable ArgumentModules
+	dict for {module ids} $ActionModules {
+		if {$id in $ids && ![present $module]} {return 0}
+	}
+	if {[dict exists $ArgumentModules $id]} {
+		dict for {param values} [dict get $ArgumentModules $id] {
+			if {![dict exists $arguments $param]} {continue}
+			set value [dict get $arguments $param]
+			if {[dict exists $values $value] && ![present [dict get $values $value]]} {return 0}
+		}
+	}
+	return 1
+}
+
+proc ::capability::availableArgs {id spec} {
+	variable ArgumentModules
+	if {![dict exists $ArgumentModules $id]} {return $spec}
+	set result {}
+	set changed 0
+	foreach param $spec {
+		lassign $param name opts
+		if {[dict exists $ArgumentModules $id $name] && [dict exists $opts enum]} {
+			set values {}
+			foreach value [dict get $opts enum] {
+				if {[actionAvailable $id [dict create $name $value]]} {lappend values $value}
+			}
+			if {$values ne [dict get $opts enum]} {set changed 1}
+			dict set opts enum $values
+		}
+		lappend result [list $name $opts]
+	}
+	if {!$changed} {return $spec}
+	return $result
+}

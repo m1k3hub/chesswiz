@@ -117,29 +117,16 @@ proc ::scidb::test::rules::OtherGuardScan {} {
 	return $hits
 }
 
-# Rows whose visible or enabled predicate names an optional module.
+# Enumerate ownership from capabilities, never from predicates under test.
+# In particular this includes aliases that accidentally omit their predicate.
 proc ::scidb::test::rules::ModuleGatedRows {} {
 	set rows {}
-	foreach surface [list dropdown {*}[lmap c {C1 C2 C3 C4 C5 C6 C7 C8 C9 C10 C11 C12} {list context:$c}]] {
-		foreach row [::action::labels $surface] {
-			lassign $row id label
-			if {[catch { ::action::get $id } rec]} { continue }
-			set text ""
-			catch { set text [dict get $rec visible] }
-			catch { set text "$text [dict get $rec enabled]" }
-			if {[info exists ::context::Predicates] && [dict exists $::context::Predicates $id]} {
-				set pred [dict get $::context::Predicates $id]
-				foreach key {visible enabled} {
-					if {[dict exists $pred $key]} { append text " " [dict get $pred $key] }
-				}
-			}
-			foreach module [dict keys $::capability::Modules] {
-				# A capability name is a complete word: lichess must not
-				# match lichess_tv, nor stream match stream_overlay.
-				if {[regexp [format {(?:ModulePresent|capability::present)\s+%s\M} $module] $text]} {
-					lappend rows [list $surface $module $id]
-				}
-			}
+	dict for {module ids} $::capability::ActionModules {
+		foreach id $ids {
+			set rec [::action::get $id]
+			if {[dict get $rec dropdown] ne ""} {lappend rows [list dropdown $module $id]}
+			foreach cid [dict get $rec context] {lappend rows [list context:$cid $module $id]}
+			if {[dict get $rec ai] eq "1"} {lappend rows [list tools $module $id]}
 		}
 	}
 	return $rows
@@ -427,10 +414,13 @@ tcltest::test rules-module-absent-all-surfaces {no surface shows an action of an
 	set modules [lsort -unique $modules]
 	foreach module $modules {
 		::capability::Override $module 0
+		set tools [lmap tool [::json::json2dict [::application::assistant::toolsJson]] {dict get $tool function name}]
+		set ask [lmap row [::action::labels asklist {}] {lindex $row 0}]
 		foreach row $rows {
 			lassign $row surface m id
 			if {$m ne $module} { continue }
-			if {[dict get [::scidb::test::rules::State $id] visible]} {
+			if {($surface eq "tools" && $id in $tools) || $id in $ask
+			 || [dict get [::scidb::test::rules::State $id] visible]} {
 				lappend leaks [list $surface $module $id]
 			}
 		}
@@ -438,8 +428,7 @@ tcltest::test rules-module-absent-all-surfaces {no surface shows an action of an
 	}
 	puts "VAL-RULE-003: [llength [dict keys $::capability::Modules]] declared modules, [llength $rows] gated rows in [llength $modules] modules, [llength $leaks] leaks"
 	foreach l $leaks { puts "  LEAK [join $l { }]" }
-	list [llength $leaks] [llength $rows]
-# The seven Online leaves extend the prior 43 rows; zero leaks remains mandatory.
-} -result {0 50}
+	list [llength $leaks] [expr {[lsort $modules] eq [lsort [dict keys $::capability::Modules]]}]
+} -result {0 1}
 
 tcltest::cleanupTests

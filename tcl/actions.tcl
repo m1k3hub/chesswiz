@@ -442,6 +442,10 @@ proc ::action::validateArgs {id argsDict} {
 	set record [dict get $Registry $id]
 	set spec [dict get $record args]
 
+	if {[catch {dict size $argsDict}]} {
+		return [::list error "arguments must be a dictionary"]
+	}
+
 	if {$spec eq ""} {
 		if {[dict size $argsDict] > 0} {
 			return [::list error "action '$id' takes no arguments"]
@@ -611,13 +615,15 @@ proc ::action::run {id args} {
 		after idle [::list ::action::run $id [dict remove [lindex $args 0] defer]]
 		return ""
 	}
-	return [Dispatch $id $args {}]
+	if {[catch {Dispatch $id $args {}} result]} {return "error: $result"}
+	return $result
 }
 
 # Approval is supplied only for the concrete call displayed in a plan.
 # Ordinary run calls always enter Dispatch without approval.
 proc ::action::RunApproved {id cargs} {
-	return [Dispatch $id [::list $cargs] [::list $id $cargs]]
+	if {[catch {Dispatch $id [::list $cargs] [::list $id $cargs]} result]} {return "error: $result"}
+	return $result
 }
 
 proc ::action::Dispatch {id args approval} {
@@ -656,6 +662,13 @@ proc ::action::Dispatch {id args approval} {
 		set argsDict [lindex $args 0]
 	} elseif {[llength $args] > 0} {
 		set argsDict [lindex $args 0]
+	}
+
+	if {[catch {dict size $argsDict}]} {
+		return "error: arguments must be a dictionary"
+	}
+	if {[llength [info commands ::capability::actionAvailable]] && ![::capability::actionAvailable $id $argsDict]} {
+		return "error: action '$id' requires an unavailable module"
 	}
 
 	if {[llength [info commands ::context::NeedsObject]] && [::context::NeedsObject $record $argsDict]} {

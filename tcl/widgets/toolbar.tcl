@@ -911,6 +911,15 @@ proc ::toolbar::InvokeCommand {command argsDict} {
 	return [uplevel #0 $command]
 }
 
+# Custom toolbar checkbuttons are Buttons. Keep their variable mutation
+# and callback together inside the action, including keyboard invocation.
+proc ::toolbar::InvokeCheckbutton {toolbar w variable command} {
+	variable Specs
+	if {$Specs(state:$w:$toolbar) eq "disabled"} {return}
+	CheckButtonPressed $toolbar $w $variable
+	if {$command ne ""} {uplevel #0 $command}
+}
+
 proc ::toolbar::RegistryCommand {toolbar w command {label ""}} {
 	if {![info exists ::action::Registry]} { return $command }
 	set command [string trim $command]
@@ -1037,6 +1046,11 @@ proc Add {toolbar widgetCommand args} {
 	if {[string match *entry $widgetCommand]} { set Specs(takefocus:$toolbar) 1 }
 	if {[string match *spinbox $widgetCommand]} { set variable {} }
 
+	if {$widgetType eq "checkbutton" && $variable ne ""} {
+		set callback ""
+		if {[info exists options(-command)]} {set callback $options(-command)}
+		set options(-command) [list ::toolbar::InvokeCheckbutton $toolbar $w $variable $callback]
+	}
 	if {[info exists options(-command)] && [string trim $options(-command)] ne ""} {
 		set label ""
 		if {[info exists options(-text)]} { set label $options(-text) }
@@ -1085,7 +1099,8 @@ proc Add {toolbar widgetCommand args} {
 			trace add variable $variable write $traceCmd
 			bind $w <Destroy> +[list trace remove variable $variable write $traceCmd]
 			ConfigureCheckButton $toolbar $w $w $variable
-			bind $w <ButtonRelease-1> +[namespace code [list CheckButtonPressed $toolbar $w $variable]]
+			# Stop the Button class binding from invoking the same action again.
+			bind $w <ButtonRelease-1> "$options(-command)\nbreak"
 		} else {
 			if {![info exists $variable]} { set $variable $value }
 			if {[llength $value]} {
@@ -3807,6 +3822,7 @@ namespace eval ::toolbar {
  variable Knowledge [dict create \
 	toolbar.board_tools.0 [dict create label {Set up engine} purpose {Open the engine manager to choose and configure analysis engines.} when {Use this before analysing with an engine that has not been configured.} examples {{Open the engine manager to choose and configure analysis engines} {I want to open the engine manager to choose and configure analysis engines}}] \
 	toolbar.board_layout.0 [dict create label {Rotate board} purpose {Turn the displayed board so the other colour is at the bottom.} when {Use this when reviewing the position from your opponent's side.} examples {{Turn the displayed board so the other colour is at the bottom} {I want to turn the displayed board so the other colour is at the bottom}}] \
+	toolbar.board_layout.1 [dict create label {Suggested move} purpose {Toggle suggested-move highlighting on the board.} when {Use this to show or hide the suggested move.} examples {{Show suggested moves on the board} {Hide the suggested move}}] \
 	toolbar.board_layout.2 [dict create label {Side-to-move indicator} purpose {Apply the selected visibility of the board side-to-move indicator.} when {Use this when you want to see or hide whose turn it is beside the board.} examples {{Apply the selected visibility of the board side-to-move indicator} {I want to apply the selected visibility of the board side-to-move indicator}}] \
 	toolbar.board_database.0 [dict create label {Previous database game} purpose {Load the preceding game from the current database selection.} when {Use this while reviewing games in database order.} examples {{Load the preceding game from the current database selection} {I want to load the preceding game from the current database selection}}] \
 	toolbar.board_database.1 [dict create label {Next database game} purpose {Load the following game from the current database selection.} when {Use this after finishing the game currently on the board.} examples {{Load the following game from the current database selection} {I want to load the following game from the current database selection}}] \

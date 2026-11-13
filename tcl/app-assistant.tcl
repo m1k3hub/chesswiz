@@ -2039,6 +2039,7 @@ proc ::application::assistant::Finish {result round} {
 # model as text, never raised: the model can correct itself.
 # ======================================================================
 proc ::application::assistant::runTool {name cargs {approval {}}} {
+	if {[catch {dict size $cargs}]} {return "error: arguments must be a dictionary"}
 	# Public script calls supply their own arguments; provenance protects the
 	# active model turn, not explicit callers of the scripting API.
 	variable Priv
@@ -2046,7 +2047,7 @@ proc ::application::assistant::runTool {name cargs {approval {}}} {
 	set Priv(scriptPosition) [expr {![info exists Priv(busy)] || !$Priv(busy)}]
 	set code [catch {RunTool $name $cargs $approval} result options]
 	set Priv(scriptPosition) $oldTrusted
-	if {$code} {return -options $options $result}
+	if {$code} {set result [list error 0 "error: $result"]}
 	lassign $result outcome asked reply
 	# a later answer is logged when it arrives (Resolve)
 	if {$outcome ne "later"} {
@@ -2085,6 +2086,12 @@ proc ::application::assistant::RunTool {name cargs {approval {}}} {
 	variable MaxReply
 	variable Priv
 	variable mc
+	if {[catch {dict size $cargs}]} {
+		return [list error 0 "error: arguments must be a dictionary"]
+	}
+	if {![::capability::actionAvailable $name $cargs]} {
+		return [list error 0 "error: action '$name' requires an unavailable module"]
+	}
 	if {[TurnRefused]} {
 		return [list declined 0 [BoundsDecline $Priv(lastRequest)]]
 	}
@@ -2297,11 +2304,15 @@ proc ::application::assistant::toolsJson {} {
 		} elseif {$ai ne "1"} {
 			continue
 		}
+		if {![::capability::actionAvailable $name]} { continue }
 		set description [dict get $record doc]
 		set schema [dict get $record schema]
 		if {$schema eq ""} {
 			set schema [::action::schemaJson [dict get $record args]]
 		}
+		set spec [dict get $record args]
+		set availableSpec [::capability::availableArgs $name $spec]
+		if {$availableSpec ne $spec} {set schema [::action::schemaJson $availableSpec]}
 		lappend defs [format {{"type":"function","function":{"name":"%s","description":"%s","parameters":%s}}} \
 			$name [::ai::provider::jsonEscape $description] $schema]
 	}
