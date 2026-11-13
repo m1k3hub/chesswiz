@@ -874,6 +874,7 @@ proc ::menu::RegisterTree {} {
 
 	# Keep Support available through run_action; dedicated tools are opt-in.
 	dict set ::action::Registry menu.help.support ai 0
+	dict set ::action::Registry menu.help.support operator 1
 	dict set ::action::Registry menu.help.support label [MC SupportChesswiz]
 	dict set ::action::Registry menu.help.support visible {expr {$::menu::SupportURL ne ""}}
 	dict set ::action::Registry menu.help.support enabled {expr {$::menu::SupportURL ne ""}}
@@ -1880,7 +1881,7 @@ proc ::menu::RegisterExtras {} {
 		dict set ::action::Registry app-fullscreen handler {::menu::Invoke app-fullscreen}
 	}
 	if {![dict exists $::action::Registry help.close]} {
-		::action::register help.close [dict create label "Close Help" what "Close Help" object {} ai 0 \
+		::action::register help.close [dict create label "Close Help" what "Close Help" object {} ai 0 operator 1 \
 			doc "Close the Help window after reading the manual." \
 			purpose "Close the Help window after reading the manual." \
 			when "Use this after reading a manual page to return to the main application." \
@@ -1888,7 +1889,7 @@ proc ::menu::RegisterExtras {} {
 			args {} handler ::menu::CloseHelp]
 	}
 	if {![dict exists $::action::Registry view.dialog.close]} {
-		::action::register view.dialog.close [dict create label "Close dialog" what "Close dialog" object {} ai 0 \
+		::action::register view.dialog.close [dict create label "Close dialog" what "Close dialog" object {} ai 0 operator 1 \
 			doc "Close a named information or preferences dialog. Unsaved form fields are discarded." \
 			args {{dialog {type enum required 1 enum {about correspondence crosstable engine_dictionary iccf keyboard pgn player_dictionary review_engine}}}} \
 			handler ::menu::CloseNamedDialog]

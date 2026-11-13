@@ -311,6 +311,7 @@ proc ::application::ask::RegisterAction {} {
 		handler  [list ::application::ask::Preferences] \
 		what     $mc::PrefsWhat \
 		ai       0 \
+		operator 1 \
 		doc      $mc::PrefsDoc \
 	]
 	if {[dict exists $::action::Registry app.preferences.assistant]} {

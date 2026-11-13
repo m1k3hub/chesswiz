@@ -352,6 +352,7 @@ proc ::application::keyEditor::RegisterActions {} {
 			handler  [list ::application::keyEditor::RunAction $action] \
 			what     $label \
 			ai       0 \
+			operator [expr {$action ne "app-quit"}] \
 			keys     [list $keySpec $cbSpec] \
 			menu     {} \
 			dropdown {} \
