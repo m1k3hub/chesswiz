@@ -462,28 +462,20 @@ proc TableFill {path args} {
 }
 
 
-proc PopupMenu {path menu base variant index column} {
+proc PopupMenu {path table menu base variant index column} {
 	variable [namespace parent]::${path}::Vars
 
 	if {$index eq "none" || $index eq "outside"} { return }
 	set view $Vars($base:$variant:view)
 	set position [scidb::db::get position $index $view $base $variant]
-	set positionId [lindex $position 0]
+	set rowId [lindex $position 0]
 	set label [lindex $position 1]
 	if {![string length $label]} {
-		set label $positionId
+		set label $rowId
 	}
 
-	$menu add command \
-		-label " $::application::database::mc::RepertoireOpenInSwitcher" \
-		-command [namespace code [list OpenPositionGamesInSwitcher \
-			$path $base $variant $positionId $label]] \
-		;
-	$menu add command \
-		-label " $::application::database::mc::SaveWorkingSet" \
-		-command [namespace code [list SavePositionGamesWorkingSet \
-			$path $base $variant $positionId $label]] \
-		;
+	::context::Build C5 $menu [dict create kind position name $label rowId $rowId \
+		parent $path base $base variant $variant]
 }
 
 

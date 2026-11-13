@@ -63,6 +63,8 @@ proc ::scidb::test::rgw::Objects {} {
 		C5.player [dict create kind player name {Carlsen, Magnus} base b] \
 		C5.event [dict create kind event name Wijk base b] \
 		C5.site [dict create kind site name wijk.com base b] \
+		C5.annotator [dict create kind annotator name Generated rowId Generated base b variant Normal] \
+		C5.position [dict create kind position name Standard rowId 518 base b variant Normal] \
 		C6 [dict create engine SF lineId 1 pv {e4 e5 Nf3}] \
 		C7 [dict create base b mediaId m1 path /tmp/clip.mp4] \
 		C8 [dict create fen {8/8/8/8/4P3/8/8/8 w - - 0 1} move e4 table .rgwtree] \

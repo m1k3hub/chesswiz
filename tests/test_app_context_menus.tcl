@@ -674,9 +674,33 @@ tcltest::test context-live-site-popup {the Sites table's registered -popupcmd po
 
 # --- VAL-CTX-003: one builder per object -------------------------------
 
+# Inspect actual registered callbacks too: a new table must not escape the
+# audit merely because it has not been added to the named legacy list.
+proc ::scidb::test::ctx::LivePopupProcs {ns} {
+	set procs {}
+	foreach var [list ${ns}::(popupcmd) ${ns}::Vars(popupcmd)] {
+		if {![info exists $var]} { continue }
+		set callback [set $var]
+		if {$callback eq ""} { continue }
+		if {[lrange $callback 0 1] eq {::namespace inscope}} {
+			set proc [namespace eval [lindex $callback 2] \
+				[list namespace which -command [lindex [lindex $callback 3] 0]]]
+		} else { set proc [lindex $callback 0] }
+		lappend procs $proc
+	}
+	foreach child [namespace children $ns] {
+		lappend procs {*}[LivePopupProcs $child]
+	}
+	return [lsort -unique $procs]
+}
+
 tcltest::test context-one-builder {each object menu is built by ::context::Build, not a copy} -body {
 	set dir [file dirname [file normalize [info script]]]
 	set bad {}
+	set builders {}
+	# Native row adapters forward through these separately audited wrappers.
+	set forwards [dict create ::playertable::PopupMenu ::playertable::popupMenu \
+		::eventtable::PopupMenu ::eventtable::popupMenu]
 	foreach {file proc} {
 		app-board.tcl	::application::board::PopupMenu
 		app-pgn.tcl		::application::pgn::PopupMenu
@@ -684,16 +708,32 @@ tcltest::test context-one-builder {each object menu is built by ::context::Build
 		app-database.tcl ::application::database::PopupMenu
 		app-analysis.tcl ::application::analysis::PopupMenu
 		app-tree.tcl	::application::tree::PopupMenu
+		playertable.tcl ::playertable::PopupMenu
 		playertable.tcl ::playertable::popupMenu
+		eventtable.tcl ::eventtable::PopupMenu
 		eventtable.tcl	::eventtable::popupMenu
 		sitetable.tcl	::sitetable::popupMenu
 		sitetable.tcl	::sitetable::PopupMenu
+		app-db-annotators.tcl ::application::database::annotator::names::PopupMenu
+		app-db-positions.tcl ::application::database::position::position::PopupMenu
+		player-dict.tcl ::playerdict::PopupMenu
 		app-twm.tcl		::application::twm::Menu
 	} {
+		lappend builders $proc
+	}
+	set live [::scidb::test::ctx::LivePopupProcs ::scrolledtable]
+	lappend live {*}[::scidb::test::ctx::LivePopupProcs ::database::switcher]
+	if {![llength $live]} {lappend bad no-live-popupcmds}
+	puts [list LIVE_POPUPCMD_BUILDERS [lsort -unique $live]]
+	foreach proc [lsort -unique [concat $builders $live]] {
 		set body ""
 		if {[llength [info procs $proc]]} { set body [info body $proc] }
 		if {[string first "::context::Build" $body] < 0
-		 && [string first "::context::Post" $body] < 0} { lappend bad $proc }
+		 && [string first "::context::Post" $body] < 0} {
+			if {![dict exists $forwards $proc]
+			 || [dict get $forwards $proc] ni $builders
+			 || ![regexp {(?m)^\s*popupMenu\s} $body]} {lappend bad $proc}
+		}
 		# A delegate substring also occurs in guarded legacy builders.
 		# Those are duplicates too: no row construction may remain here.
 		if {[regexp {\$[[:alnum:]_:]+[[:space:]]+add[[:space:]]+(command|cascade|separator|checkbutton|radiobutton)} $body]} {

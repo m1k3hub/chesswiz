@@ -424,28 +424,20 @@ proc TableFill {path args} {
 }
 
 
-proc PopupMenu {path menu base variant index column} {
+proc PopupMenu {path table menu base variant index column} {
 	variable [namespace parent]::${path}::Vars
 
 	if {$index eq "none" || $index eq "outside"} { return }
 	set view $Vars($base:$variant:view)
 	set annotator [scidb::db::get annotator $index $view $base $variant]
-	set annotatorId [lindex $annotator 0]
+	set rowId [lindex $annotator 0]
 	set label [lindex $annotator 1]
 	if {![string length $label]} {
 		set label [set [namespace parent]::mc::NoAnnotator]
 	}
 
-	$menu add command \
-		-label " $::application::database::mc::RepertoireOpenInSwitcher" \
-		-command [namespace code [list OpenAnnotatorGamesInSwitcher \
-			$path $base $variant $annotatorId $label]] \
-		;
-	$menu add command \
-		-label " $::application::database::mc::SaveWorkingSet" \
-		-command [namespace code [list SaveAnnotatorGamesWorkingSet \
-			$path $base $variant $annotatorId $label]] \
-		;
+	::context::Build C5 $menu [dict create kind annotator name $label rowId $rowId \
+		parent $path base $base variant $variant]
 }
 
 

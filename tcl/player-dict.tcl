@@ -1326,7 +1326,8 @@ proc Refresh {table} {
 proc PopupMenu {table menu _ _ index _} {
 	if {![string is digit -strict $index]} { return }
 	set info [scidb::player::info $index -web 1]
-	::playercard::buildWebMenu $table $menu $info
+	::context::Build C5 $menu [dict create kind player name [lindex $info 0] \
+		info $info parent $table base {}]
 }
 
 

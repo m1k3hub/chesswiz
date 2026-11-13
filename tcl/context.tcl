@@ -187,6 +187,8 @@ namespace eval ::context {
 		c5.event_url ::engine::mc::OpenUrl
 		c5.player_card ::playertable::mc::ShowPlayerCard
 		c5.player_url ::engine::mc::OpenUrl
+		c5.filtered.open_switcher ::application::database::mc::RepertoireOpenInSwitcher
+		c5.filtered.save_working_set ::application::database::mc::SaveWorkingSet
 		c5.site_url ::engine::mc::OpenUrl
 		c6.add_all ::application::analysis::mc::Add(all)
 		c6.add_include ::application::analysis::mc::Add(incl)
@@ -685,6 +687,14 @@ proc ::context::Declare {} {
 		-
 		c5.open_switcher
 		c5.save_working_set
+	}
+
+	# Preserve the native labels of the two-row filtered group menus.
+	Item c5.filtered.open_switcher "Open In Switcher" C5
+	Item c5.filtered.save_working_set "Save Working Set..." C5
+	# Additional named database rows use the same filtered-view operations.
+	foreach kind {annotator position} {
+		DefineObject C5 $kind {ask - c5.filtered.open_switcher c5.filtered.save_working_set}
 	}
 
 	# --- C6: an engine line in the analysis pane ------------------
@@ -2470,7 +2480,7 @@ proc ::context::RequiredFields {id} {
 		c5.sort.* { return {kind sortTable} }
 		c5.site_url - c5.player_card - c5.prep_report { return {name} }
 		c5.event_url - c5.event_table - c5.player.prep - c5.insights - c5.player.insights { return {base variant index} }
-		c5.open_switcher - c5.save_working_set { return {base variant kind name} }
+		c5.open_switcher - c5.save_working_set - c5.filtered.open_switcher - c5.filtered.save_working_set { return {base variant kind name} }
 		c6.copy_fen { return {} }
 		c6.copy_line - c6.explain_line { return {pv} }
 		c6.lock_engine - c6.opponents_view - c6.best_first - c6.lines.* - c6.setup_engine { return {tree number} }
@@ -2840,20 +2850,22 @@ proc ::context::Command {id object} {
 		}
 		c5.prep_report { return [::action::run open_view [list kind prep_report name [dict get $object name]]] }
 		c5.insights - c5.player.insights { ::insights::show [dict get $object parent] [dict get $object base] [dict get $object variant] [dict get $object index] }
-		c5.open_switcher - c5.save_working_set {
+		c5.open_switcher - c5.save_working_set - c5.filtered.open_switcher - c5.filtered.save_working_set {
 			set base [dict get $object base]
 			set variant [dict get $object variant]
 			set kind [dict get $object kind]
 			set name [dict get $object name]
-			set view [::scidb::view::new $base $variant unused unused unused unused master slave]
 			switch $kind {
 				player { set query [list playername white $name]; set other [list playername black $name]; set query [list OR $query $other] }
 				event { set query [list eventname $name] }
 				site { set query [list sitename $name] }
+				annotator - position { set query [list $kind [dict get $object rowId]] }
+				default { error "unsupported named object kind: $kind" }
 			}
+			set view [::scidb::view::new $base $variant unused unused unused unused master slave]
 			set code [catch {
 				::scidb::view::search $base $variant $view null none $query
-				if {$id eq "c5.open_switcher"} {
+				if {$id in {c5.open_switcher c5.filtered.open_switcher}} {
 					::application::database::OpenFilteredViewInSwitcher [dict get $object parent] $base $variant $view $kind $name
 				} else {
 					::application::database::SaveFilteredViewAsWorkingSet [dict get $object parent] $base $variant $view $kind $name
