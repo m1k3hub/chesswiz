@@ -872,8 +872,8 @@ proc ::menu::RegisterTree {} {
 		}
 	}
 
-	# Offer the support page when the assistant is asked how to donate.
-	dict set ::action::Registry menu.help.support ai 1
+	# Keep Support available through run_action; dedicated tools are opt-in.
+	dict set ::action::Registry menu.help.support ai 0
 	dict set ::action::Registry menu.help.support label [MC SupportChesswiz]
 	dict set ::action::Registry menu.help.support visible {expr {$::menu::SupportURL ne ""}}
 	dict set ::action::Registry menu.help.support enabled {expr {$::menu::SupportURL ne ""}}
@@ -922,7 +922,7 @@ proc ::menu::RegisterNodes {node order top} {
 # ----------------------------------------------------------------------
 # State. One mechanism for drop-down and context menus (R1-R16).
 # ----------------------------------------------------------------------
-proc ::menu::state {id {object {}}} {
+proc ::menu::state {id {object {}} {arguments {}}} {
 	set visible 1
 	set enabled 1
 
@@ -931,12 +931,15 @@ proc ::menu::state {id {object {}}} {
 	}
 	if {$rec ne ""} {
 		set vp [dict get $rec visible]
+		if {$arguments eq {} && $object ne {}} {set arguments [dict create object $object]}
 		if {$vp ne ""} {
+			if {[dict get $rec visible-args] && $arguments ne {}} {lappend vp $arguments}
 			if {[catch { uplevel #0 $vp } answer]} { set answer 1 }
 			set visible [expr {$answer ? 1 : 0}]
 		}
 		set ep [dict get $rec enabled]
 		if {$ep ne ""} {
+			if {[dict get $rec enabled-args] && $arguments ne {}} {lappend ep $arguments}
 			if {[catch { uplevel #0 $ep } answer]} { set answer 1 }
 			set enabled [expr {$answer ? 1 : 0}]
 		}
@@ -1547,6 +1550,23 @@ proc ::menu::RegisterDynamicActions {} {
 	}
 }
 
+# The native layout popup targets existing saved layouts and individual
+# fold directions; the top-level manager can also open an empty collection.
+# Carry that target in typed arguments so direct dispatch sees the same state.
+proc ::menu::LayoutActionEnabled {operation {arguments {}}} {
+	set twm [CurrentTWM]
+	if {$twm eq ""} {return 0}
+	if {$operation eq "manage"} {
+		if {![::action::_dg $arguments saved_only 0]} {return 1}
+		return [expr {[llength [::application::twm::glob $::application::Vars($twm:id)]] > 0}]
+	}
+	if {[dict exists $arguments fold]} {
+		set selector [expr {[dict get $arguments fold] ? "!flat" : "flat"}]
+		return [expr {[llength [$twm collect $selector]] > 0}]
+	}
+	return [expr {[llength [$twm collect flat]] + [llength [$twm collect !flat]] > 0}]
+}
+
 proc ::menu::RunDynamic {id arguments} {
 	switch -- $id {
 		menu.view.colors { set ::colors::Scheme [dict get $arguments name]; return $::colors::Scheme }
@@ -1628,7 +1648,7 @@ proc ::menu::WireLayoutMenu {twm menu} {
 			ChangeState { set action [list ::action::run menu.view.layout.pane [dict create uid [lindex $cmd 2]]] }
 			loadLayout { set action [list ::action::run menu.view.layout.load [dict create name [lindex $cmd 2]]] }
 			SaveLayout { set action [list ::action::run menu.view.layout.save] }
-			open { if {[lindex $cmd 0] eq "::application::layout::open"} { set action [list ::action::run menu.view.layout.manage] } }
+			open { if {[lindex $cmd 0] eq "::application::layout::open"} { set action [list ::action::run menu.view.layout.manage {saved_only 1}] } }
 			ShowAllDockingPoints {
 				set var [$menu entrycget $i -variable]
 				set action [format {::action::run menu.view.layout.docking [dict create show $%s]} $var]
@@ -1860,7 +1880,7 @@ proc ::menu::RegisterExtras {} {
 		dict set ::action::Registry app-fullscreen handler {::menu::Invoke app-fullscreen}
 	}
 	if {![dict exists $::action::Registry help.close]} {
-		::action::register help.close [dict create label "Close Help" what "Close Help" object {} ai 1 \
+		::action::register help.close [dict create label "Close Help" what "Close Help" object {} ai 0 \
 			doc "Close the Help window after reading the manual." \
 			purpose "Close the Help window after reading the manual." \
 			when "Use this after reading a manual page to return to the main application." \
@@ -1868,16 +1888,20 @@ proc ::menu::RegisterExtras {} {
 			args {} handler ::menu::CloseHelp]
 	}
 	if {![dict exists $::action::Registry view.dialog.close]} {
-		::action::register view.dialog.close [dict create label "Close dialog" what "Close dialog" object {} ai 1 \
+		::action::register view.dialog.close [dict create label "Close dialog" what "Close dialog" object {} ai 0 \
 			doc "Close a named information or preferences dialog. Unsaved form fields are discarded." \
 			args {{dialog {type enum required 1 enum {about correspondence crosstable engine_dictionary iccf keyboard pgn player_dictionary review_engine}}}} \
 			handler ::menu::CloseNamedDialog]
 	}
 	RegisterDynamicActions
+	foreach operation {fold manage} {
+		dict set ::action::Registry menu.view.layout.$operation enabled [list ::menu::LayoutActionEnabled $operation]
+		dict set ::action::Registry menu.view.layout.$operation enabled-args 1
+	}
 	foreach operation {rename delete} {
 		if {[dict exists $::action::Registry layout.$operation]} { continue }
 		::action::register layout.$operation [dict create \
-			label "[string totitle $operation] saved layout" object {} ai 1 confirm 1 \
+			label "[string totitle $operation] saved layout" object {} ai 0 confirm 1 \
 			what "$operation saved layout" \
 			args {{name {type string required 1}} {new_name {type string default {}}} {overwrite {type boolean default 0}}} \
 			doc "[string totitle $operation] a saved layout by name without opening the layout manager." \
@@ -2242,6 +2266,7 @@ proc ::menu::OperationSpec {id} {
 			{overwrite {type boolean default 0 description {Allow replacing an existing layout}}}
 		}
 		if {$kind eq "layout-manage"} {
+			lappend spec {saved_only {type boolean default 0 description {Require an existing saved layout collection, as in the native layout popup}}}
 			lappend spec {operation {type enum default {} enum {{} list rename delete load replace link} description {List, rename, delete, load, replace or link saved layouts; omit to open the manager}}}
 			lappend spec {new_name {type string default {} description {New name for the rename operation}}}
 			lappend spec {link {type string default {} description {Board layout to link; empty unlinks the layout}}}

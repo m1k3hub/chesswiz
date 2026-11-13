@@ -1438,7 +1438,7 @@ proc ActionCommand {operation position board parent {value ""}} {
 	if {![dict exists $::action::Registry $id]} {
 		::action::register $id [dict create label "Browser: $operation" object {} \
 			args {{object {type object default {}}}} ai 0 \
-			visible [list ::browser::CurrentActionAvailable $operation] \
+			visible [list ::browser::CurrentActionAvailable $operation] visible-args 1 \
 			enabled [list ::browser::ActionAvailable $operation] enabled-args 1 \
 			handler [list ::browser::InvokeAction $operation] \
 			what "Browser: $operation" doc "Apply $operation to the selected game browser."]
@@ -1459,7 +1459,10 @@ proc CurrentObject {} {
 	return {}
 }
 
-proc CurrentActionAvailable {operation} {
+proc CurrentActionAvailable {operation {arguments {}}} {
+	if {[dict exists $arguments object] && [dict size [dict get $arguments object]]} {
+		return [ActionAvailable $operation $arguments]
+	}
 	set object [CurrentObject]
 	if {![dict size $object]} {return 0}
 	# Value-taking rows require explicit arguments and stay out of Ask.

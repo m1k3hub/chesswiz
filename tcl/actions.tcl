@@ -86,6 +86,7 @@ proc ::action::_requiredState {opts} {
 #   enabled    predicate command (returns 1/0)
 #   enabled-args  append validated arguments to enabled on dispatch (default 0)
 #   visible    predicate command (returns 1/0)
+#   visible-args  append validated arguments to visible on invoke (default 0)
 #   keys       {chesswiz {} chessbase Control-n}
 #   confirm    0|1
 #   bulk       0|1
@@ -140,7 +141,7 @@ proc ::action::register {id record} {
 		}
 	}
 
-	foreach boolField {confirm bulk async ends-in-dialog enabled-args} {
+	foreach boolField {confirm bulk async ends-in-dialog enabled-args visible-args} {
 		if {[dict exists $record $boolField]} {
 			set bval [dict get $record $boolField]
 			if {$bval ni {0 1 true false yes no}} {
@@ -171,6 +172,7 @@ proc ::action::register {id record} {
 		enabled  [_dg $record enabled {}] \
 		enabled-args [expr {[_dg $record enabled-args 0] ? 1 : 0}] \
 		visible  [_dg $record visible {}] \
+		visible-args [expr {[_dg $record visible-args 0] ? 1 : 0}] \
 		keys     [_dg $record keys {}] \
 		confirm  [expr {[_dg $record confirm 0] ? 1 : 0}] \
 		bulk     [expr {[_dg $record bulk 0] ? 1 : 0}] \
@@ -628,7 +630,7 @@ proc ::action::RunApproved {id cargs} {
 	return $result
 }
 
-proc ::action::Dispatch {id args approval} {
+proc ::action::Dispatch {id args approval {postedState 0}} {
 	variable Registry
 	variable ConfirmHook
 	variable BulkHook
@@ -708,9 +710,21 @@ proc ::action::Dispatch {id args approval} {
 		}
 	}
 
-	# Context-only actions act on the object they are listed for. With no
-	# object (or an object whose R10 rule hides the row) they must not run.
-	if {[llength [dict get $record context]] && [dict get $record dropdown] eq "" \
+	# Every invocation follows the posted row's visibility and enabled state,
+	# including dropdown tab restrictions (R16). Resolve context rules against
+	# the validated explicit object, just as a native caller does.
+	if {$postedState && [llength [info commands ::menu::state]]} {
+		set object {}
+		if {[dict exists $validatedArgs object]} {
+			set object [dict get $validatedArgs object]
+		} elseif {[llength [dict get $record context]]} {
+			set object $validatedArgs
+		}
+		set state [::menu::state $id $object $validatedArgs]
+		if {![dict get $state visible] || ![dict get $state enabled]} {
+			return "error: action '$id' is not available here"
+		}
+	} elseif {[llength [dict get $record context]] && [dict get $record dropdown] eq "" \
 	 && [llength [info commands ::menu::state]]} {
 		# A caller that supplies the object (a context menu, the assistant) is
 		# judged by that object's rule; only a bare call uses the current one.
@@ -979,6 +993,13 @@ proc ::action::labels {surface args} {
 # invoke: run an action as a user click would (with confirmation gate).
 # ----------------------------------------------------------------------
 proc ::action::invoke {id args} {
-	# Use the same validated, formatted confirmation gate as a menu click.
-	return [::action::run $id {*}$args]
+	# Preserve native popup deferral without dropping the posted-state gate.
+	if {[llength $args] == 1 && ![catch {dict exists [lindex $args 0] defer} has] \
+	 && $has && [dict get [lindex $args 0] defer] eq "idle"} {
+		after idle [::list ::action::invoke $id [dict remove [lindex $args 0] defer]]
+		return ""
+	}
+	# Dispatch owns validation and the single formatted confirmation gate.
+	if {[catch {Dispatch $id $args {} 1} result]} {return "error: $result"}
+	return $result
 }
