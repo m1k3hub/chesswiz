@@ -85,8 +85,15 @@ tcltest::test reseal-rules-real-states {same live fixtures compare dropdown/cont
  set base [::scidb::test::actions::fixture]
  ::action::run open_database [dict create path $base]
  ::reseal::snap R4-readonly-pgn
+ # Populate and select the native row before reading its C3 metadata.
+ ::application::switchTab database
+ for {set i 0} {$i < 10} {incr i} {after 30; update}
  set gameManager $::application::database::Vars(games).twm
  set gameTable [set ::application::database::games::${gameManager}::Priv(table)]
+ ::gamestable::select $gameTable 0
+ ::gamestable::activate $gameTable 0
+ focus -force $gameTable
+ update
  set ::gamestable::${gameTable}::Vars(sortable) 0
  if {[dict get [::context::CurrentObject C3] sortable]} {error {unsortable table lost its state}}
  ::reseal::snap R11-unsortable
@@ -98,6 +105,12 @@ tcltest::test reseal-rules-real-states {same live fixtures compare dropdown/cont
  for {set i 0} {$i < 50 && ![::menu::EngineRunning]} {incr i} {after 50; update}
  if {![::menu::EngineRunning]} {error {owned engine did not start}}
  ::scidb::test::askscope::FocusPane analysis
+ # C6 follows the physically highlighted PV, so visit the populated first line.
+ set engineTree $::application::analysis::NumberToTree($ownEngine)
+ ::scidb::test::actions::waitUntil {[info exists ::application::analysis::${engineTree}::Vars(pv:0)] && [set ::application::analysis::${engineTree}::Vars(pv:0)] ne ""}
+ focus -force $engineTree
+ ::application::analysis::VisitItem $engineTree enter Moves [$engineTree item id Line0] 10 10
+ update
  for {set i 0} {$i < 100 && ![dict size [::context::CurrentObject C6]]} {incr i} {after 50;update}
  set engineObject [::context::CurrentObject C6]
  if {![dict size $engineObject]} {error {running engine has no current line reference}}
