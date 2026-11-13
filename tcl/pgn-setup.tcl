@@ -475,6 +475,11 @@ proc configureText {path {fontContext ""}} {
 		$w configure -tabs {} -tabstyle tabular
 	}
 
+	# Loading a game or refreshing its style restores the shared text/tag
+	# fonts above. Reapply this notation pane's saved size afterwards.
+	if {$context eq "editor" && [llength [info commands ::context::PaneFontApply]]} {
+		::context::PaneFontApply $path editor
+	}
 	set linespace [font metrics [$w cget -font] -linespace]
 	set linespace [expr {2*$linespace}]
 	::widget::bindMouseWheel $w $linespace pixels

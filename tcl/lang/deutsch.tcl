@@ -646,7 +646,7 @@
 ::application::twm::mc::RenameLayout				"Layout umbenennen"
 ::application::twm::mc::LoadLayout					"Layout wiederherstellen"
 ::application::twm::mc::NewLayout					"Neues Layout"
-::application::twm::mc::ManageLayouts				"Layouts verwalten"
+::application::twm::mc::ManageLayouts				"Layouts verwalten..."
 ::application::twm::mc::ShowAllDockingPoints		"Alle Andockpunkte zeigen"
 ::application::twm::mc::DockingArrowSize			"Andockpfeilgröße"
 ::application::twm::mc::LinkLayout					"Layout '%s' verbinden"

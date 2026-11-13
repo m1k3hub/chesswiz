@@ -532,7 +532,7 @@
 ::application::twm::mc::RenameLayout				"Rename Layout"
 ::application::twm::mc::LoadLayout					"Load Layout"
 ::application::twm::mc::NewLayout					"New Layout"
-::application::twm::mc::ManageLayouts				"Manage Layouts"
+::application::twm::mc::ManageLayouts				"Manage Layouts..."
 ::application::twm::mc::ShowAllDockingPoints		"Show all Docking Points"
 ::application::twm::mc::DockingArrowSize			"Docking Arrow Size"
 ::application::twm::mc::LinkLayout					"Link Layout '%s'"

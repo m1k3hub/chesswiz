@@ -48,7 +48,7 @@ set SaveLayoutAs					"Save Layout as %s"
 set RenameLayout					"Rename Layout"
 set LoadLayout						"Restore Layout"
 set NewLayout						"New Layout"
-set ManageLayouts					"Manage Layouts"
+set ManageLayouts					"Manage Layouts…"
 set ShowAllDockingPoints		"Show all Docking Points"
 set DockingArrowSize				"Docking Arrow Size"
 set LinkLayout						"Link Layout '%s'"
@@ -1166,7 +1166,7 @@ proc makeLayoutMenu {twm menu {w ""}} {
 		set cur $myName
 		set cmd [list [namespace parent]::layout::open $twm $myID $Vars($myID:layout:variant) $cur]
 		$menu add command \
-			-label " $mc::ManageLayouts..." \
+			-label " $mc::ManageLayouts" \
 			-image $::icon::16x16::setup \
 			-compound left \
 			-command $cmd \

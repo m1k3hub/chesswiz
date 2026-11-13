@@ -662,7 +662,7 @@
 ::application::twm::mc::RenameLayout		"Rename Layout" ;# NEW
 ::application::twm::mc::LoadLayout		"Load Layout" ;# NEW
 ::application::twm::mc::NewLayout		"New Layout" ;# NEW
-::application::twm::mc::ManageLayouts		"Manage Layouts" ;# NEW
+::application::twm::mc::ManageLayouts		"Elrendezések kezelése…" ;# NEW
 ::application::twm::mc::ShowAllDockingPoints	"Show all Docking Points" ;# NEW
 ::application::twm::mc::DockingArrowSize	"Docking Arrow Size" ;# NEW
 ::application::twm::mc::LinkLayout		"Link Layout '%s'" ;# NEW
