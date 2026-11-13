@@ -218,7 +218,9 @@ proc ::scidb::test::trn::Untranslatable {} {
 proc ::scidb::test::trn::AskLabel {} {
 	catch { destroy .trnask }
 	menu .trnask -tearoff 0
-	::context::Build C1 .trnask [dict create]
+	# Translation coverage needs a real board-square identity: R8 forbids
+	# building an Ask row from an empty pointer object.
+	::context::Build C1 .trnask [dict create square e4]
 	set label ""
 	catch { set label [string trim [.trnask entrycget 0 -label]] }
 	destroy .trnask

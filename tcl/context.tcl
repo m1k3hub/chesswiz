@@ -1484,6 +1484,9 @@ proc ::context::Build {cid menu {object {}}} {
 		# row while menu::state resolves implicit action arguments.
 		if {![HasObject C5 $object]} { return 0 }
 	}
+	# Native callers use Build directly as well as Post. Refuse their hit
+	# misses here too; C4 deliberately retains R5's base-less New/Open menu.
+	if {$cid ne "C4" && ![HasObject $cid $object]} { return 0 }
 	set rows [Rows $cid $object]
 	if {![llength $rows]} { return 0 }
 	BuildRows $cid $menu $rows $object
@@ -2275,53 +2278,44 @@ proc ::context::ObjectRule {id object} {
 # ----------------------------------------------------------------------
 proc ::context::HasObject {cid object} {
 	if {![dict size $object]} { return 0 }
+	# Native hit tests often supply the full record with empty identity
+	# values on a miss. A key's presence alone is not an object; zero is
+	# still a valid row, line, media or game ID.
 	switch -- $cid {
-		C1 {
-			if {[dict exists $object fen]} { return [expr {[dict get $object fen] ne ""}] }
-			if {[dict exists $object square]} { return [expr {[dict get $object square] ne ""}] }
-			return 0
-		}
-		C2 {
-			if {[dict exists $object index] || [dict exists $object ply]} { return 1 }
-			if {[dict exists $object san]} { return [expr {[dict get $object san] ne ""}] }
-			return 0
-		}
+		C1 { set keys {fen square} }
+		C2 { set keys {index ply san} }
 		C3 {
-			if {[dict exists $object index]} {
-				return [expr {[dict get $object index] ni {"" none outside}}]
+			return [expr {[dict exists $object index]
+				&& [dict get $object index] ni {"" none outside}}]
+		}
+		C4 { set keys {base} }
+		C5 { set keys {name} }
+		C6 { set keys {lineId pv} }
+		C7 { set keys {mediaId path} }
+		C8 {
+			# A native tree hit also carries the current FEN and table on a
+			# miss. They cannot turn its explicit no-row result into a hit.
+			if {[dict exists $object row]
+			 && (![string is integer -strict [dict get $object row]]
+				 || [dict get $object row] < 0)} { return 0 }
+			set keys {fen table}
+		}
+		C9 { set keys {paneUid} }
+		C10 { set keys {column} }
+		C11 { set keys {widget index} }
+		C12 {
+			foreach key {gameSlot id} {
+				if {[dict exists $object $key]
+				 && [dict get $object $key] ni {"" -1}} { return 1 }
 			}
 			return 0
 		}
-		C4 { return 1 }
-		C5 {
-			if {![dict exists $object name]} { return 0 }
-			return [expr {[dict get $object name] ne ""}]
-		}
-		C6 {
-			return [expr {[dict exists $object lineId] || [dict exists $object pv]}]
-		}
-		C7 { return [expr {[dict exists $object mediaId] || [dict exists $object path]}] }
-		C8 {
-			return [expr {[dict exists $object fen] || [dict exists $object table]}]
-		}
-		C9 {
-			set uid [expr {[dict exists $object paneUid] ? [dict get $object paneUid] : ""}]
-			return [expr {$uid ne ""}]
-		}
-		C10 {
-			if {[dict exists $object column]} { return [expr {[dict get $object column] ne ""}] }
-			return 0
-		}
-		C11 {
-			return [expr {[dict exists $object widget] || [dict exists $object index]}]
-		}
-		C12 {
-			if {[dict exists $object gameSlot]} { return 1 }
-			if {[dict exists $object id]} { return [expr {[dict get $object id] ne "-1"}] }
-			return 0
-		}
+		default { return 1 }
 	}
-	return 1
+	foreach key $keys {
+		if {[dict exists $object $key] && [dict get $object $key] ne ""} { return 1 }
+	}
+	return 0
 }
 
 proc ::context::Post {cid menu object {x ""} {y ""}} {
