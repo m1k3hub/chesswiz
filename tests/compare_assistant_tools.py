@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare effective CANONICAL tool records with the frozen approved toolset.
+"""Compare effective registry tools with legacy fixtures plus baseline generated tools.
 
 Run test_app_menu_toolset.tcl, then pass its log. Empty schemas are an error:
 producers must emit schemaJson(args) when the stored schema is empty.
@@ -29,6 +29,8 @@ def compare(log, fixtures, snapshot_path=Path(__file__).with_name('assistant-gen
         if not line.startswith('CANONICAL|'):
             continue
         _, name, confirm, ai, operator, schema, hint = line.split('|')
+        if ai not in ('1', 'debug'):
+            raise ValueError(f'invalid exposed AI flag for {name}: {ai}')
         if name in actual:
             raise ValueError(f'duplicate runtime tool: {name}')
         if not schema:

@@ -55,7 +55,7 @@ tcltest::test menu-toolset-exact-effective-schemas {AI ids, generated tools and 
             error "baseline generated flags differ: $id"
         }
     }
-    set expected [lsort -unique $expected]
+    set expected [lsort $expected]
     set generated {}
     foreach tool [::json::json2dict [::application::assistant::toolsJson]] {
         set definition [dict get $tool function]
