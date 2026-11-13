@@ -343,16 +343,14 @@ proc ::application::keyEditor::RegisterActions {} {
 		lassign $entry action labelVar tag keySpec cbSpec cmd
 		if {[dict exists $::action::Registry $action]} { continue }
 		set label [ActionLabel $action $labelVar]
-		# Shortcut registration does not opt in to a dedicated assistant tool.
-		# The assistant can request these operations through run_action.
+		# Preserve the baseline shortcut tools; quitting is diagnostic-only.
 		::action::register $action [dict create \
 			label    $label \
 			object   {} \
 			args     {} \
 			handler  [list ::application::keyEditor::RunAction $action] \
 			what     $label \
-			ai       0 \
-			operator [expr {$action ne "app-quit"}] \
+			ai       [expr {$action eq "app-quit" ? "debug" : 1}] \
 			keys     [list $keySpec $cbSpec] \
 			menu     {} \
 			dropdown {} \

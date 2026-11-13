@@ -872,9 +872,8 @@ proc ::menu::RegisterTree {} {
 		}
 	}
 
-	# Keep Support available through run_action; dedicated tools are opt-in.
-	dict set ::action::Registry menu.help.support ai 0
-	dict set ::action::Registry menu.help.support operator 1
+	# Preserve the baseline assistant Support tool.
+	dict set ::action::Registry menu.help.support ai 1
 	dict set ::action::Registry menu.help.support label [MC SupportChesswiz]
 	dict set ::action::Registry menu.help.support visible {expr {$::menu::SupportURL ne ""}}
 	dict set ::action::Registry menu.help.support enabled {expr {$::menu::SupportURL ne ""}}
@@ -1888,7 +1887,7 @@ proc ::menu::RegisterExtras {} {
 		dict set ::action::Registry app-fullscreen handler {::menu::Invoke app-fullscreen}
 	}
 	if {![dict exists $::action::Registry help.close]} {
-		::action::register help.close [dict create label "Close Help" what "Close Help" object {} ai 0 operator 1 \
+		::action::register help.close [dict create label "Close Help" what "Close Help" object {} ai 1 \
 			doc "Close the Help window after reading the manual." \
 			purpose "Close the Help window after reading the manual." \
 			when "Use this after reading a manual page to return to the main application." \
@@ -1896,7 +1895,7 @@ proc ::menu::RegisterExtras {} {
 			args {} handler ::menu::CloseHelp]
 	}
 	if {![dict exists $::action::Registry view.dialog.close]} {
-		::action::register view.dialog.close [dict create label "Close dialog" what "Close dialog" object {} ai 0 operator 1 \
+		::action::register view.dialog.close [dict create label "Close dialog" what "Close dialog" object {} ai 1 \
 			doc "Close a named information or preferences dialog. Unsaved form fields are discarded." \
 			args {{dialog {type enum required 1 enum {about correspondence crosstable engine_dictionary iccf keyboard pgn player_dictionary review_engine}}}} \
 			handler ::menu::CloseNamedDialog]
@@ -1909,7 +1908,7 @@ proc ::menu::RegisterExtras {} {
 	foreach operation {rename delete} {
 		if {[dict exists $::action::Registry layout.$operation]} { continue }
 		::action::register layout.$operation [dict create \
-			label "[string totitle $operation] saved layout" object {} ai 0 confirm 1 \
+			label "[string totitle $operation] saved layout" object {} ai 1 confirm 1 \
 			what "$operation saved layout" \
 			args {{name {type string required 1}} {new_name {type string default {}}} {overwrite {type boolean default 0}}} \
 			doc "[string totitle $operation] a saved layout by name without opening the layout manager." \

@@ -2469,7 +2469,7 @@ proc application::media::DoOpenStream {cargs} {
 	args {{url {type string default {} description {a stream link; leave empty to open the dialog}}}} \
 	handler ::application::media::DoOpenStream \
 	what {open the stream %s} \
-	ai 0 operator 1 \
+	ai 1 \
 	doc "Open a video stream or a live tournament broadcast. With a link, play it; without one, open the stream dialog with the live sites." \
 ]
 

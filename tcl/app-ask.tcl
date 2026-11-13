@@ -310,8 +310,7 @@ proc ::application::ask::RegisterAction {} {
 		object   {} \
 		handler  [list ::application::ask::Preferences] \
 		what     $mc::PrefsWhat \
-		ai       0 \
-		operator 1 \
+		ai       1 \
 		doc      $mc::PrefsDoc \
 	]
 	if {[dict exists $::action::Registry app.preferences.assistant]} {

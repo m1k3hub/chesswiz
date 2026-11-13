@@ -1,0 +1,228 @@
+{
+  "commit": "08ba7f1bb79e2a0182e9c7fc21e3d4b02a674a88",
+  "derivation": "baseline registry ai in {1 debug}, excluding baseline assistant::Actions",
+  "tools": [
+    {
+      "name": "annot-bad-move",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "annot-comment-after",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "annot-comment-before",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "annot-good-move",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "annot-marks",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "annot-palette",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "app-find",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "app-fullscreen",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "app-help",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "app-log",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "app-quit",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 1
+    },
+    {
+      "name": "app.preferences.assistant",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "board-flip",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "board-null-move",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "game-first",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "game-last",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "game-new",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "game-next",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "game-prev",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "game-replace",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "game-save",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "game.copy",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "game.paste",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "help.close",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "layout.delete",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 1
+    },
+    {
+      "name": "layout.rename",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 1
+    },
+    {
+      "name": "menu.help.support",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "nav-back",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "nav-end",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "nav-enter-var",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "nav-fast-back",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "nav-fast-forward",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "nav-forward",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "nav-leave-var",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "nav-start",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "open_stream",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    },
+    {
+      "name": "view.dialog.close",
+      "ai": 1,
+      "operator": 1,
+      "confirm": 0
+    }
+  ]
+}

@@ -43,6 +43,19 @@ tcltest::test menu-toolset-exact-effective-schemas {AI ids, generated tools and 
         }
     }
     close $f
+    set f [open tests/assistant-generated-baseline.json]
+    set snapshot [::json::json2dict [read $f]]; close $f
+    foreach frozen [dict get $snapshot tools] {
+        set id [dict get $frozen name]
+        lappend expected $id
+        set r [::action::get $id]
+        set ai [expr {$id eq "app-quit" ? "debug" : [dict get $frozen ai]}]
+        if {[dict get $r ai] ne $ai || [dict get $r operator] != [dict get $frozen operator]
+            || [dict get $r confirm] != [dict get $frozen confirm]} {
+            error "baseline generated flags differ: $id"
+        }
+    }
+    set expected [lsort -unique $expected]
     set generated {}
     foreach tool [::json::json2dict [::application::assistant::toolsJson]] {
         set definition [dict get $tool function]
@@ -58,7 +71,7 @@ tcltest::test menu-toolset-exact-effective-schemas {AI ids, generated tools and 
         set schema [dict get $r schema]
         if {$schema eq {}} {set schema [::action::schemaJson [dict get $r args]]}
         # Evidence format consumed by tests/compare_assistant_tools.py.
-        puts "CANONICAL|$id|[dict get $r confirm]|[dict get $r ai]|[binary encode base64 -maxlen 0 [encoding convertto utf-8 $schema]]|[binary encode base64 -maxlen 0 [encoding convertto utf-8 [dict get $r toolmenu]]]"
+        puts "CANONICAL|$id|[dict get $r confirm]|[dict get $r ai]|[dict get $r operator]|[binary encode base64 -maxlen 0 [encoding convertto utf-8 $schema]]|[binary encode base64 -maxlen 0 [encoding convertto utf-8 [dict get $r toolmenu]]]"
         if {![dict exists $generated $id] || [::scidb::test::toolset::Canonical [dict get $generated $id]] ne [::scidb::test::toolset::Canonical [::action::schemaOf $id]]} {
             error "generated schema differs from effective registry schema: $id"
         }
@@ -66,6 +79,20 @@ tcltest::test menu-toolset-exact-effective-schemas {AI ids, generated tools and 
     if {[lsort $expected] ne [lsort $exposed] || [lsort $exposed] ne [lsort [dict keys $generated]]} {
         error [list toolset-mismatch expected [lsort $expected] exposed [lsort $exposed] generated [lsort [dict keys $generated]]]
     }
+    puts "TOOLSJSON|debug|[join [lsort [dict keys $generated]] ,]"
+    set ::application::assistant::Priv(debug) 0
+    set normal {}
+    foreach tool [::json::json2dict [::application::assistant::toolsJson]] {
+        lappend normal [dict get $tool function name]
+    }
+    set expectedNormal {}
+    foreach id $expected {
+        if {[dict get [::action::get $id] ai] eq "1"} {lappend expectedNormal $id}
+    }
+    if {[lsort $normal] ne [lsort $expectedNormal] || "app-quit" in $normal} {
+        error [list normal-toolset-mismatch expected $expectedNormal actual $normal]
+    }
+    puts "TOOLSJSON|normal|[join [lsort $normal] ,]"
     set bad {}
     foreach frozen [concat $baseline $metadata] {
         set id [dict get $frozen name]

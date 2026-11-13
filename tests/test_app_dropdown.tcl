@@ -50,7 +50,13 @@ proc ::scidb::test::dd::WalkCommands {menu resultVar} {
 		set type [$menu type $i]
 		if {$type eq "separator"} { continue }
 		if {$type eq "cascade"} {
-			WalkCommands [$menu entrycget $i -menu] result
+			set child [$menu entrycget $i -menu]
+			# Structural headings have no submenu to traverse.
+			if {$child ne ""} {
+				WalkCommands $child result
+			} else {
+				lappend result [list $type {} [$menu entrycget $i -label]]
+			}
 			continue
 		}
 		if {$type eq "command" || $type eq "checkbutton" || $type eq "radiobutton"} {
