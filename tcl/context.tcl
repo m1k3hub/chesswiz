@@ -1565,7 +1565,7 @@ proc ::context::AddRow {menu id object} {
 	# C3: several selected rows read "Copy Games" (VAL-CTX-005).
 	if {$id eq "c3.copy_game" && [dict exists $object count]
 			&& [dict get $object count] > 1} {
-		set label [expr {[llength [info commands ::game::clipboard::mc::CopyGames]] \
+		set label [expr {[info exists ::game::clipboard::mc::CopyGames] \
 			? $::game::clipboard::mc::CopyGames : "Copy Games"}]
 	}
 
@@ -1877,6 +1877,11 @@ proc ::context::ObjectRule {id object} {
 			}
 		}
 		return [list $allowed $allowed]
+	}
+	if {$id eq "c3.paste_games"} {
+		set base [expr {[dict exists $object base] ? [dict get $object base] : [::menu::CurrentBase]}]
+		set variant [expr {[dict exists $object variant] ? [dict get $object variant] : [::scidb::db::get variant?]}]
+		return [list 1 [expr {[::game::clipboard::reason $base $variant] eq ""}]]
 	}
 	if {$id eq "c4.save_changes" && [::menu::TrialMode]} { return {0 0} }
 	if {$id in {c3.sort_column c3.sort_asc c3.sort_desc c3.sort.column c3.sort.asc c3.sort.desc}} {

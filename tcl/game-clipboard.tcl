@@ -212,15 +212,53 @@ proc ::game::clipboard::LogCopy {args} { return 0 }
 
 
 # The game numbers of the selected rows in a game list, 0-based in the
-# database. A game list currently has one selected row; <extra> carries
-# additional rows for a multi-selection when the table grows one.
+# database, in visible order. <extra> preserves additional caller-supplied numbers.
+# Keep the primary row used by previews while Ctrl-click toggles the native
+# selection. Normal clicks return to one row through the existing binding.
+proc ::game::clipboard::ToggleRow {path x y} {
+	set table [::scrolledtable::table $path]
+	lassign [::table::identify $table $x $y] row column item
+	if {$row < 0} { return }
+	set selected [$table.t selection get]
+	if {[::scrolledtable::selection $path] < 0} {set selected {}}
+	if {$item in $selected} {
+		set selected [lsearch -all -inline -not -exact $selected $item]
+	} else { lappend selected $item }
+	set primary none
+	if {[llength $selected]} {set primary [lindex [$table.t item tag names [lindex $selected end]] 0]}
+	::scrolledtable::select $path $primary
+	$table.t selection clear
+	foreach selectedItem $selected {$table.t selection add $selectedItem}
+	::focus $table.t
+}
+
+proc ::game::clipboard::SingleRow {path x y} {
+	set table [::scrolledtable::table $path]
+	if {[llength [$table.t selection get]] > 1} {
+		lassign [::table::identify $table $x $y] row column item
+		if {$row < 0} { return }
+		::scrolledtable::select $path $row
+		$table.t selection clear
+		$table.t selection add $item
+	}
+}
+
 proc ::game::clipboard::selection {path base variant view {extra {}}} {
 	variable LastPath
 	set LastPath $path
 	set numbers $extra
-	set row [::scrolledtable::selection $path]
-	if {$row >= 0} {
-		lassign [::scidb::db::get gameInfo $row $view $base $variant] number
+	set table [::scrolledtable::table $path]
+	set rows {}
+	foreach item [$table.t selection get] {
+		set row [lindex [$table.t item tag names $item] 0]
+		if {[string is integer -strict $row] && $row >= 0} {lappend rows $row}
+	}
+	# Preserve callers that select through the scrolled table before mapping.
+	if {![llength $rows]} {set rows [list [::scrolledtable::selection $path]]}
+	foreach row [lsort -integer -unique $rows] {
+		if {$row < 0} { continue }
+		set index [::scrolledtable::rowToIndex $path $row]
+		lassign [::scidb::db::get gameInfo $index $view $base $variant] number
 		if {[string is integer -strict $number]} {
 			set number [expr {$number - 1}]
 			if {$number ni $numbers} { lappend numbers $number }

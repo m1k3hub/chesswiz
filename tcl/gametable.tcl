@@ -586,6 +586,11 @@ proc build {path getViewCmd {visibleColumns {}} {args {}}} {
 	}
 
 	set Vars(table) [::scrolledtable::build $path $columns {*}$args]
+	set target $Vars(table).t
+	::bind $target <ButtonPress-1> "[list ::game::clipboard::SingleRow $path %x %y]\n[::bind $target <ButtonPress-1>]"
+	::bind $target <Control-ButtonPress-1> "[list ::game::clipboard::ToggleRow $path %x %y]\nbreak"
+	::bind $target <Control-Double-ButtonPress-1> "[list ::game::clipboard::ToggleRow $path %x %y]\nbreak"
+	::bind $target <Control-ButtonRelease-1> {break}
 	pack $path -fill both -expand yes
 	::font::registerTextFonts movelist {normal bold}
 	::font::registerFigurineFonts movelist
