@@ -1734,6 +1734,7 @@ proc ::menu::SwitchLanguage {lang} {
 	set n [lsearch -exact -index 0 $::i18n::languages $lang]
 	if {$n >= 0} { set lang [lindex $::i18n::languages $n 1] }
 	if {[catch { ::mc::setLang $lang }]} { return }
+	::toolbar::RefreshRegistryLabels
 	::menu::RegisterTree
 	::menu::RegisterExtras
 	set menu ""

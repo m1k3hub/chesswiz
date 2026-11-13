@@ -458,6 +458,7 @@ proc childconfigure {w args} {
 		SetupTooltips $w
 		if {"-state" in $args} { Tooltip hide $w }
 	}
+	RefreshRegistryLabels
 }
 
 
@@ -950,7 +951,7 @@ proc ::toolbar::RegistryCommand {toolbar w command {label ""}} {
 	set knowledge {}
 	if {[dict exists $::toolbar::Knowledge "$base.$seq"]} {
 		set knowledge [dict get $::toolbar::Knowledge "$base.$seq"]
-		set label [dict get $knowledge label]
+		if {$label eq ""} { set label [dict get $knowledge label] }
 	}
 	if {$label eq ""} { set label "Toolbar action" }
 	::action::register $id [dict merge $knowledge [dict create \
@@ -962,7 +963,32 @@ proc ::toolbar::RegistryCommand {toolbar w command {label ""}} {
 		ai 0 \
 		doc $label \
 	]]
+	set ::toolbar::Specs(registry:$w:$toolbar) $id
 	return [list ::action::run $id]
+}
+
+# Resolve the native tooltip after mc has finished updating derived variables.
+# Some tooltips are replaced at runtime (start/stop, enable/disable).
+proc ::toolbar::RefreshRegistryLabels {} {
+	variable Specs
+	foreach children [array names Specs children:*] {
+		set toolbar [string range $children 9 end]
+		foreach w $Specs($children) {
+			set key registry:$w:$toolbar
+			if {![info exists Specs($key)] || ![winfo exists $w]} { continue }
+			set label ""
+			set var $Specs(tooltipvar:$w:$toolbar)
+			if {$var ne "" && [info exists $var]} {
+				set label [set $var]
+			} else {
+				set label $Specs(tooltip:$w:$toolbar)
+			}
+			if {$label eq ""} { catch {set label [$w cget -text]} }
+			if {$label ne "" && [dict exists $::action::Registry $Specs($key)]} {
+				dict set ::action::Registry $Specs($key) label [string trim [string map {& {}} $label]]
+			}
+		}
+	}
 }
 
 proc Add {toolbar widgetCommand args} {
@@ -1052,17 +1078,11 @@ proc Add {toolbar widgetCommand args} {
 		set options(-command) [list ::toolbar::InvokeCheckbutton $toolbar $w $variable $callback]
 	}
 	if {[info exists options(-command)] && [string trim $options(-command)] ne ""} {
-		set label ""
-		if {[info exists options(-text)]} { set label $options(-text) }
-		if {$label eq "" && [info exists options(-tooltip)]} {
-			set label $options(-tooltip)
-		}
-		if {$label eq "" && [info exists options(-tooltipvar)]} {
-			set var [string trim $options(-tooltipvar)]
-			if {$var ne "" && ![catch { set label [set $var] }]} {
-				set label [string trim [string map {& {}} $label]]
-			}
-		}
+		set label $Specs(tooltip:$w:$toolbar)
+		set labelvar $Specs(tooltipvar:$w:$toolbar)
+		if {$labelvar ne "" && [info exists $labelvar]} { set label [set $labelvar] }
+		if {$label eq "" && [info exists options(-text)]} { set label $options(-text) }
+		set label [string trim [string map {& {}} $label]]
 		set options(-command) \
 			[::toolbar::RegistryCommand $toolbar $w $options(-command) $label]
 	}
