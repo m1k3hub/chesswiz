@@ -2532,3 +2532,7 @@ foreach direction {ascending descending} {
  dict set ::knowledge::Explicit c5.sort_$direction [dict create purpose "Choose a column to sort the named table in $direction order." when {Use this to choose how the selected table is ordered.} examples [list "Sort this table in $direction order" "Choose a column for $direction ordering"]]
 }
 unset kind columns column direction id purpose
+
+# Explicit, local player-data maintenance. Opening these actions is nonmutating.
+dict set ::knowledge::Explicit menu.db.maintenance.fix_names [dict create purpose {Preview stored player-name corrections for the current database.} when {Use only for explicit database maintenance; confirm selected changes and save separately.} examples {{Preview player name fixes} {Undo the last player name fix}}]
+dict set ::knowledge::Explicit menu.db.player.lists [dict create purpose {Open DWZ, ECF and ICCF source information and explicit import controls.} when {Use to request a national or correspondence list; imports take effect after restart.} examples {{Open national rating lists} {Import an ICCF CSV}}]

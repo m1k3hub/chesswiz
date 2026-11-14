@@ -214,6 +214,9 @@ proc OpenMaintenanceReport {parent file variant {tab overview}} {
 		set actions [ttk::frame $dlg.actions]
 		pack $actions -side top -fill x -padx 6 -pady {6 2}
 
+		ttk::button $actions.names -text "Fix player names…" \
+			-command [list ::playerdata::fixNames $dlg $file]
+		pack $actions.names -side left -padx 4
 		ttk::button $actions.duplicates -text $mc::ReviewDuplicates \
 			-command [namespace code [list SelectMaintenanceTab $dlg duplicates]]
 		ttk::button $actions.compact -text $mc::CompactNow \

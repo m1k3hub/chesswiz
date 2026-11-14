@@ -851,7 +851,7 @@ proc ::playerdata::fixNames {parent {base {}}} {
 	::widget::busyCursor on
 	set rows [NameProposals $base]
 	::widget::busyCursor off
-	if {![llength $rows]} {
+	if {![llength $rows] && (![info exists NameFix(undo,$base)] || ![llength $NameFix(undo,$base)])} {
 		::dialog::info -parent $parent -message $mc::FixNamesNone
 		return
 	}
@@ -874,7 +874,21 @@ proc ::playerdata::fixNames {parent {base {}}} {
 		-addbuttons [namespace code [list AddNameFixButtons $base]]]
 
 	switch -- $reply {
-		yes		{ ApplyNameFixes $parent $base }
+		yes {
+			set selected 0
+			set games 0
+			set i 0
+			foreach row $rows {
+				if {$NameFix(tick,$i)} { incr selected; incr games [lindex $row 4] }
+				incr i
+			}
+			if {$selected && [::dialog::question -parent $parent -default no \
+				-title $mc::FixNamesTitle \
+				-message "Apply $selected selected name fixes ($games game references)?" \
+				-buttons {{yes "Apply selected name fixes"} {no Cancel}}] eq "yes"} {
+				ApplyNameFixes $parent $base
+			}
+		}
 		revert	{ revertNames $parent $base }
 	}
 	return
