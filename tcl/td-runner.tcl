@@ -11,6 +11,9 @@ package require Tk 8.5
 
 namespace eval ::td::runner {
 	variable Counter 0
+	variable NextSlot 200
+	variable FreeSlots {}
+	variable SentinelSlot 199
 	variable StartFen {rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1}
 	variable MoveTimeout 2000
 	variable StartTimeout 30000
@@ -35,6 +38,13 @@ proc ::td::runner::Defaults {} {
 
 proc ::td::runner::StateName {id} { return "::td::runner::${id}::State" }
 
+proc ::td::runner::UseSlot {id} {
+	upvar 0 [StateName $id] S
+	if {$S(pos) >= 0 && [::scidb::game::current] != $S(pos)} {
+		::scidb::game::switch $S(pos)
+	}
+}
+
 proc ::td::runner::StateChanged {id args} {
 	set ns "::td::runner::$id"
 	if {![namespace exists $ns]} { return }
@@ -50,25 +60,110 @@ proc ::td::runner::Status {id} {
 	foreach key {active phase pos white black side token clock:w clock:b pipe:w pipe:b result termination reason saved} {
 		if {[info exists S($key)]} { dict set out $key $S($key) }
 	}
-	dict set out pgn [expr {$S(phase) eq "over" ? [::scidb::game::toPGN original -position $S(pos)] : ""}]
+	dict set out pgn [expr {[info exists S(pgn)] && $S(pgn) ne "" ? $S(pgn) : ($S(phase) eq "over" && $S(pos) >= 0 ? [ExportPgn $id] : "")}]
 	return $out
+}
+
+proc ::td::runner::ExportPgn {id} {
+	upvar 0 [StateName $id] S
+	set moves [expr {[info exists S(moves)] ? $S(moves) : {}}]
+	set res [expr {[info exists S(result)] && $S(result) ne "" ? $S(result) : "*"}]
+	set term [termTag [expr {[info exists S(termination)] ? $S(termination) : "normal"}]]
+	set date [clock format [clock seconds] -format {%Y.%m.%d}]
+	set tc [TimeControlText $S(noclock) $S(base_ms) $S(increment_ms) $S(movetime)]
+	set lines [list \
+		"\[Event \"$S(event)\"\]" \
+		"\[Site \"$S(site)\"\]" \
+		"\[Date \"$date\"\]" \
+		"\[Round \"$S(round)\"\]" \
+		"\[White \"$S(white)\"\]" \
+		"\[Black \"$S(black)\"\]" \
+		"\[Result \"$res\"\]" \
+		"\[TimeControl \"$tc\"\]" \
+		"\[Termination \"$term\"\]" \
+		""]
+	set movetext {}
+	set plyIdx 0
+	foreach san $moves {
+		if {$plyIdx % 2 == 0} {
+			lappend movetext "[expr {$plyIdx / 2 + 1}]. $san"
+		} else {
+			lappend movetext $san
+		}
+		incr plyIdx
+	}
+	lappend movetext $res
+	lappend lines [join $movetext " "]
+	return "[join $lines "\n"]\n"
 }
 
 proc ::td::runner::Snapshot {id} { return [Status $id] }
 
+proc ::td::runner::EnsureSentinel {} {
+	variable SentinelSlot
+	if {[catch {::scidb::game::query $SentinelSlot open?} open] || !$open} {
+		::scidb::game::new $SentinelSlot Normal
+		::scidb::game::subscribe board $SentinelSlot ::td::runner::LogSink
+	}
+	return $SentinelSlot
+}
+
 proc ::td::runner::ClaimSlot {id} {
+	variable NextSlot
+	variable FreeSlots
 	upvar 0 [StateName $id] S
 	if {$S(pos) >= 0} {
 		if {![catch {::scidb::game::query $S(pos) open?} open] && $open} {
-			::scidb::game::switch $S(pos)
 			return $S(pos)
 		}
 	}
-	if {[catch {::game::new .application -variant Normal} pos] || $pos < 0} {
-		error "no free game slot; close a game tab first"
+	EnsureSentinel
+	while {[llength $FreeSlots]} {
+		set pos [lindex $FreeSlots 0]
+		set FreeSlots [lrange $FreeSlots 1 end]
+		if {![catch {::scidb::game::query $pos open?} open] && $open} {
+			if {[::scidb::game::current] == $pos} {
+				catch {::scidb::game::switch [EnsureSentinel]}
+			}
+			catch {::scidb::game::release $pos}
+		}
+		::scidb::game::new $pos Normal
+		set S(ownSlot) 1
+		return $pos
 	}
-	::scidb::game::switch $pos
+	set pos [incr NextSlot]
+	while {![catch {::scidb::game::query $pos open?} open] && $open} {
+		set pos [incr NextSlot]
+	}
+	::scidb::game::new $pos Normal
+	set S(ownSlot) 1
 	return $pos
+}
+
+proc ::td::runner::ReleaseSlot {id} {
+	variable FreeSlots
+	upvar 0 [StateName $id] S
+	if {![info exists S(ownSlot)] || !$S(ownSlot) || $S(pos) < 0} { return }
+	set pos $S(pos)
+	set S(ownSlot) 0
+	if {[::scidb::game::current] == $pos || [::scidb::game::current] < 0} {
+		set switched 0
+		foreach ns [namespace children ::td::runner] {
+			if {![regexp {^game[0-9]+$} [namespace tail $ns]] || [namespace tail $ns] eq $id} { continue }
+			upvar 0 ${ns}::State O
+			if {[info exists O(pos)] && $O(pos) >= 0 && $O(pos) != $pos} {
+				catch {::scidb::game::switch $O(pos)}
+				if {[::scidb::game::current] == $O(pos)} { set switched 1; break }
+			}
+		}
+		if {!$switched || [::scidb::game::current] == $pos} {
+			catch {::scidb::game::switch [EnsureSentinel]}
+		}
+	}
+	if {[::scidb::game::current] != $pos && ![catch {::scidb::game::query $pos open?} open] && $open} {
+		catch {::scidb::game::release $pos}
+	}
+	if {$pos ni $FreeSlots} { lappend FreeSlots $pos }
 }
 
 proc ::td::runner::Start {spec} {
@@ -86,7 +181,7 @@ proc ::td::runner::Start {spec} {
 	namespace eval $ns {}
 	upvar 0 ${ns}::State S
 	array set S {
-		active 0 busy 0 phase idle side w token 0 history {} tbLatch 0
+		active 0 busy 0 phase idle side w token 0 history {} moves {} tbLatch 0 ownSlot 0 pgn {}
 		pending:w 0 pending:b 0 pipe:w {} pipe:b {} pipeState:w off pipeState:b off
 		watchdog {} handshake:w {} handshake:b {} subscribed 0 result {} termination {} reason {} saved 0
 	}
@@ -103,6 +198,7 @@ proc ::td::runner::Start {spec} {
 		if {$S(watch_switch)} { ::scidb::db::subscribe gameSwitch [list ::td::runner::GameSwitched $id] }
 		set S(subscribed) 1
 	}
+	UseSlot $id
 	set S(active) 1
 	Setup $id
 	if {$S(phase) eq "play"} { StartTurn $id [::scidb::pos::stm] }
@@ -112,7 +208,9 @@ proc ::td::runner::Start {spec} {
 proc ::td::runner::Setup {id} {
 	variable StartFen
 	upvar 0 [StateName $id] S
+	UseSlot $id
 	set S(phase) setup
+	set S(moves) {}
 	set S(busy) 1
 	set failed [catch {
 		::scidb::game::clear $StartFen
@@ -122,6 +220,7 @@ proc ::td::runner::Setup {id} {
 				error "the opening holds the illegal move $san"
 			}
 			::scidb::game::go 1
+			lappend S(moves) $san
 		}
 		::scidb::game::go end
 	} err]
@@ -136,6 +235,7 @@ proc ::td::runner::Update {id position cmd data promoted} {
 	if {!$S(active) || $S(busy) || $position != $S(pos) || $cmd ne "move"} { return }
 	if {[llength $data] && ![lindex $data end]} { return }
 	set S(busy) 1
+	UseSlot $id
 	::scidb::game::go -1
 	::scidb::game::strip truncate
 	set S(busy) 0
@@ -169,6 +269,7 @@ proc ::td::runner::DriveMove {id side} {
 	if {!$S(active) || $S(phase) ne "play" || $S(side) ne $side} { return }
 	if {[Connect $id $side]} { set S(pending:$side) 1; return }
 	if {$S(pipeState:$side) ne "ready"} { return }
+	UseSlot $id
 	set fen [::scidb::pos::fen]
 	StartSegment $id $side [clock milliseconds]
 	if {$S(noclock)} {
@@ -234,14 +335,22 @@ proc ::td::runner::SendOptions {id side} {
 }
 
 proc ::td::runner::OnReadable {id side} {
+	if {![namespace exists "::td::runner::$id"]} { return }
 	upvar 0 [StateName $id] S
 	if {[catch {
-		while {[gets $S(pipe:$side) line] >= 0} { if {$line ne ""} { OnEngineLine $id $side $line} }
-	}]} { EngineDied $id $side ""; return }
+		while {[namespace exists "::td::runner::$id"] && $S(pipe:$side) ne "" && [gets $S(pipe:$side) line] >= 0} {
+			if {$line ne ""} { OnEngineLine $id $side $line }
+		}
+	}]} {
+		if {[namespace exists "::td::runner::$id"]} { EngineDied $id $side "" }
+		return
+	}
+	if {![namespace exists "::td::runner::$id"] || $S(pipe:$side) eq ""} { return }
 	if {[catch {eof $S(pipe:$side)} atEof] || $atEof} { EngineDied $id $side "" }
 }
 
 proc ::td::runner::OnEngineLine {id side line} {
+	if {![namespace exists "::td::runner::$id"]} { return }
 	upvar 0 [StateName $id] S
 	switch -glob -- $line {
 		uciok {
@@ -250,7 +359,7 @@ proc ::td::runner::OnEngineLine {id side line} {
 			Send $id $side isready
 		}
 		readyok {
-			if {$S(pipeState:$side) eq "starting"} {
+			if {[namespace exists "::td::runner::$id"] && $S(pipeState:$side) eq "starting"} {
 				after cancel $S(handshake:$side)
 				set S(handshake:$side) {}
 				set S(pipeState:$side) ready
@@ -262,11 +371,11 @@ proc ::td::runner::OnEngineLine {id side line} {
 		}
 		info* {
 			lassign [::playengine::infoScore $line] kind value
-			if {$kind ne ""} { set S(eval:$side) [list $kind $value] }
+			if {$kind ne "" && [namespace exists "::td::runner::$id"]} { set S(eval:$side) [list $kind $value] }
 		}
 		bestmove* {
 			set move [lindex $line 1]
-			set S(pipeState:$side) ready
+			if {[namespace exists "::td::runner::$id"]} { set S(pipeState:$side) ready }
 			GotMove $id $side $move
 		}
 	}
@@ -295,6 +404,7 @@ proc ::td::runner::GotMove {id side uci} {
 	}
 	set S(busy) 1
 	catch {::scidb::game::move $san; ::scidb::game::go 1}
+	lappend S(moves) $san
 	set S(busy) 0
 	set end [NaturalEnd $id]
 	if {[llength $end]} { EndGame $id {*}$end; return }
@@ -361,11 +471,12 @@ proc ::td::runner::TbAnswer {id fen token result} {
 proc ::td::runner::SaveGame {id result termKey} {
 	upvar 0 [StateName $id] S
 	if {$S(base) eq ""} { return 0 }
+	UseSlot $id
 	set tags [list Event $S(event) Site $S(site) Date [clock format [clock seconds] -format {%Y.%m.%d}] \
 		Round $S(round) White $S(white) Black $S(black) Result $result \
 		TimeControl [TimeControlText $S(noclock) $S(base_ms) $S(increment_ms) $S(movetime)] \
 		Termination [termTag $termKey]]
-	set ok [::scidb::game::save $S(base) Normal $tags {} {} ::td::runner::LogSink {}]
+	set ok [::scidb::game::save $S(base) Normal $tags {} {} ::td::runner::LogSink {} -position $S(pos)]
 	if {$ok} { set S(saved) 1; catch {::application::database::refreshBase $S(base)} }
 	return $ok
 }
@@ -382,7 +493,9 @@ proc ::td::runner::EndGame {id result termKey reason} {
 	after cancel $S(watchdog)
 	set S(watchdog) {}
 	ShutdownPipes $id
+	UseSlot $id
 	set S(saved) [expr {$result in {1-0 0-1 1/2-1/2} ? [SaveGame $id $result $termKey] : 0}]
+	set S(pgn) [expr {$S(pos) >= 0 ? [ExportPgn $id] : ""}]
 	set outcome [Status $id]
 	set S(active) 0
 	if {$S(onComplete) ne ""} { uplevel #0 [list {*}$S(onComplete) $id $outcome] }
@@ -421,6 +534,7 @@ proc ::td::runner::Remaining {id side now} { return [RemainingVar [StateName $id
 
 proc ::td::runner::FlagFall {id side} {
 	upvar 0 [StateName $id] S
+	UseSlot $id
 	set name [EngineName $id $side]
 	if {[::playengine::insufficientMaterial [::scidb::pos::fen]]} {
 		EndGame $id 1/2-1/2 time "$name ran out of time, but the opponent cannot mate"
@@ -471,7 +585,7 @@ proc ::td::runner::Stop {id} {
 	if {$S(subscribed)} {
 		catch {::scidb::game::unsubscribe board $S(pos) [list ::td::runner::Update $id]}
 		catch {::scidb::db::unsubscribe gameClose [list ::td::runner::GameClosed $id]}
-		catch {::scidb::db::unsubscribe gameSwitch [list ::td::runner::GameSwitched $id]}
+		if {$S(watch_switch)} { catch {::scidb::db::unsubscribe gameSwitch [list ::td::runner::GameSwitched $id]} }
 		set S(subscribed) 0
 	}
 }
@@ -479,12 +593,15 @@ proc ::td::runner::Stop {id} {
 proc ::td::runner::Release {id} {
 	Stop $id
 	set ns "::td::runner::$id"
-	if {[namespace exists $ns]} { namespace delete $ns }
+	if {[namespace exists $ns]} {
+		ReleaseSlot $id
+		namespace delete $ns
+	}
 }
 
 proc ::td::runner::StopAll {} {
 	foreach ns [namespace children ::td::runner] {
-		if {[regexp {^game[0-9]+$} [namespace tail $ns]]} { Stop [namespace tail $ns] }
+		if {[regexp {^game[0-9]+$} [namespace tail $ns]]} { Release [namespace tail $ns] }
 	}
 }
 

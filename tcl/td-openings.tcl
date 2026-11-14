@@ -18,6 +18,16 @@ proc ::td::openings::EcoRange {eco} {
 	error "ECO must be a code, class or range such as A46, A4 or A40-A49"
 }
 
+proc ::td::openings::CleanSan {moves} {
+	set out {}
+	foreach tok $moves {
+		regsub {^\d+\.(\.\.)?} $tok {} san
+		set san [string trimright $san "!?"]
+		if {$san ne "" && $san ni {1-0 0-1 1/2-1/2 *}} { lappend out $san }
+	}
+	return $out
+}
+
 proc ::td::openings::Named {name} {
 	set words {}
 	foreach word [regexp -all -inline {[^\s,;:()]+} $name] {
@@ -25,15 +35,23 @@ proc ::td::openings::Named {name} {
 	}
 	if {![llength $words]} { error "empty opening name" }
 	if {[catch {::scidb::ai::ecoLines $words} rows]} { error "opening table unavailable: $rows" }
+	set exact {}
 	set best {}
+	set fullWant [string tolower [string trim $name]]
 	foreach row $rows {
 		lassign $row code label moves
-		set parsed [::enginematch::parsePgnMoves $moves 100]
-		if {[llength $parsed]} { lappend best [list [llength $parsed] [string length $label] $code $label $parsed] }
+		set parsed [CleanSan [::enginematch::parsePgnMoves $moves 100]]
+		if {![llength $parsed]} { continue }
+		set item [list [llength $parsed] [string length $label] $code $label $parsed]
+		if {[string first $fullWant [string tolower $label]] >= 0} {
+			lappend exact $item
+		}
+		lappend best $item
 	}
 	if {![llength $best]} { error "Chesswiz's ECO table has no opening named '$name'" }
+	if {[llength $exact]} { set best $exact }
 	set best [lsort -integer -index 1 [lsort -integer -index 0 $best]]
-	return [list [list [lindex $best 0] end]]
+	return [list [lindex $best 0 end]]
 }
 
 proc ::td::openings::Pgn {path from to plies} {
@@ -110,6 +128,7 @@ proc ::td::openings::Resolve {domain} {
 	if {[dict exists $domain moves] && [llength [dict get $domain moves]]} {
 		set moves [dict get $domain moves]
 		if {[llength $moves] == 1} { set moves [::enginematch::parsePgnMoves [lindex $moves 0] 100] }
+		set moves [CleanSan $moves]
 		if {![llength $moves]} { error "the opening move list is empty" }
 		return [list $moves]
 	}

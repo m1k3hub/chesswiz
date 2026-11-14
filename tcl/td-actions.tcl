@@ -87,7 +87,7 @@ proc ::td::actions::Register {} {
 	set createSpec [MutationSpec [list \
 		{name {type string default Tournament}} {system {type enum default double-round-robin enum {round-robin double-round-robin}}} \
 		{players {type array default {}}} {engines {type array default {}}} {kind {type enum default engine enum {human engine}}} \
-		{engine_count {type integer default 4 range {0 64}}} {time_control {type string default 3+2}} \
+		{engine_count {type integer default 0 range {0 64}}} {time_control {type string default 3+2}} \
 		{opening {type string default {}}} {eco {type string default {}}} {moves {type array default {}}} {suite {type string default {}}} \
 		{opening_plies {type integer default 10 range {1 40}}} {overhead_ms {type integer default 100 range {0 10000}}} \
 		{concurrency {type integer default 2 range {1 16}}} {max_plies {type integer default 0 range {0 1000}}} \

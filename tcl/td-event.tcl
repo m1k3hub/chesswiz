@@ -34,7 +34,7 @@ proc ::td::event::Execute {command arguments} {
 	if {$command eq "stop"} { StopRunners $path }
 	if {$command eq "withdraw"} { StopRunners $path 1 }
 	if {$command in {create start pair_round} && [dg $state status setup] eq "active" && [EnginesOnly $state]} {
-		after idle [list ::td::event::Pump $path]
+		SchedulePump $path
 	}
 	if {$command eq "advance" && [dg $state status setup] eq "finished"} { ResolveAssistant $path }
 	Notify $path $state
@@ -66,6 +66,7 @@ proc ::td::event::ResolveAssistant {path} {
 
 proc ::td::event::StopRunners {path {onlyFinished 0}} {
 	variable Runs
+	if {!$onlyFinished} { after cancel [list ::td::event::Pump $path] }
 	if {![dict exists $Runs $path]} { if {!$onlyFinished} { ResolveStopped $path }; return }
 	set run [dict get $Runs $path]
 	dict for {pairing id} [dg $run handles {}] {
@@ -75,7 +76,7 @@ proc ::td::event::StopRunners {path {onlyFinished 0}} {
 			foreach q [dg $state pairings {}] { if {[dict get $q id] eq $pairing && [dg $q status pending] eq "running"} { set keep 1 } }
 			if {$keep} { continue }
 		}
-		catch {::td::runner::Stop $id}
+		catch {::td::runner::Release $id}
 		dict unset run handles $pairing
 	}
 	dict set Runs $path $run
@@ -93,7 +94,7 @@ proc ::td::event::ResolveStopped {path} {
 }
 
 proc ::td::event::HashBudget {state} {
-	set concurrency [max 1 [dg $state concurrency 1]]
+	set concurrency [expr {max(1, [dg $state concurrency 1])}]
 	set total 2048
 	catch {set total [::engine::MemTotal]}
 	return [expr {max(1,min(16,$total/(4*$concurrency)))}]
@@ -119,7 +120,7 @@ proc ::td::event::StartPairing {path p} {
 	if {[catch {::td::runner::Start $spec} id err]} {
 		Commit $path complete [dict create pairing $pairing attempt $attempt result 0-0 category double-forfeit played 0 termination abandoned pgn {}] \
 			"result:$pairing:$attempt"
-		after idle [list ::td::event::Pump $path]
+		SchedulePump $path
 		return {}
 	}
 	variable Runs
@@ -141,9 +142,15 @@ proc ::td::event::OnComplete {path pairing attempt id outcome} {
 		termination [dict get $outcome termination] played [expr {[dict get $outcome result] ne "*"}] category played pgn [dg $outcome pgn {}]]
 	if {[catch {Commit $path complete $domain "result:$pairing:$attempt"} result]} {
 		# A recovered/stopped/replaced attempt cannot write a duplicate result.
+		::td::runner::Release $id
 		return
 	}
 	::td::runner::Release $id
+	SchedulePump $path
+}
+
+proc ::td::event::SchedulePump {path} {
+	after cancel [list ::td::event::Pump $path]
 	after idle [list ::td::event::Pump $path]
 }
 
@@ -184,10 +191,10 @@ proc ::td::event::PumpBody {path} {
 		set committed [Commit $path advance [dict create round $round] "advance:$round:[dict get $state revision]"]
 		set state [dict get $committed state]
 		if {[dg $state status setup] eq "finished"} { ResolveAssistant $path; return }
-		after idle [list ::td::event::Pump $path]
+		SchedulePump $path
 		return
 	}
-	set available [expr {[max 1 [dg $state concurrency 2]] - $running}]
+	set available [expr {max(1, [dg $state concurrency 2]) - $running}]
 	foreach p $pending {
 		if {$available <= 0} { break }
 		StartPairing $path $p
