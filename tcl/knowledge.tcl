@@ -603,6 +603,7 @@ foreach {id purpose keywords} {
 	menu.training.endgame "Open the endgame trainer." {endgame endgames trainer practise practice}
 	menu.training.repertoire "Train your opening repertoire move by move." {train repertoire opening trainer practise drill}
 	menu.training.engine_match "Set up and run a match between two engines." {engine match engines tournament versus play}
+	menu.training.tournament_director "Run a tournament for people or engines: enter players, make pairings, record results and see the standings." {tournament director arbiter round robin pairings standings crosstable event}
 	menu.training.guess "Guess the next move of a game." {guess move training}
 	menu.training.brief "Open the opponent brief tool to prepare for an opponent." {opponent brief preparation prepare tool}
 	menu.training.studyplan "Make a study plan from your games." {study plan games improve}
@@ -2319,6 +2320,7 @@ dict set ::knowledge::Explicit menu.tools.player_card when {When looking up a pl
 dict set ::knowledge::Explicit menu.tools.player_dictionary when {When finding a player beyond the current collection's list.}
 dict set ::knowledge::Explicit menu.training.brief when {When preparing to face a specific opponent.}
 dict set ::knowledge::Explicit menu.training.engine_match when {When testing two engines against one another.}
+dict set ::knowledge::Explicit menu.training.tournament_director when {When organising a club event or an engine tournament and you need pairings, results and standings kept for you.}
 dict set ::knowledge::Explicit menu.training.guess when {When practicing prediction by choosing the next move yourself.}
 dict set ::knowledge::Explicit menu.training.play_engine when {When you want the computer to play the opposing side.}
 dict set ::knowledge::Explicit menu.training.play_online when {When you want to play a person over the internet.}

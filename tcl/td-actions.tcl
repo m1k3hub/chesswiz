@@ -99,7 +99,7 @@ proc ::td::actions::Register {} {
 		{board {type integer default -1 range {-1 10000}}} {result {type enum required 1 enum {1-0 0-1 1/2-1/2 0-0}}} \
 		{category {type enum default played enum {played forfeit forfeit-loss double-forfeit}}}]]
 	foreach {id label doc spec handler effect} [list \
-		td.create {Create tournament} {Create a C.05 round robin for humans or engines. Preview with commit false, then commit at the supplied revision. Engine quickstart can pair and run every round with a named opening, ECO suite or moves.} $createSpec Create change \
+		td.create {Create tournament} {Create a C.05 round robin for humans or engines. Preview with commit false, then commit at the supplied revision. For an engine event it can also pair and play every round from a named opening, an opening code range or a list of moves.} $createSpec Create change \
 		td.register {Register players} {Register human or configured engine players before pairings are published.} $registerSpec [list Run register] change \
 		td.pair_round {Pair round} {Preview or commit Berger pairings for one round, or all rounds when round is zero.} $pairSpec [list Run pair_round] change \
 		td.start {Start tournament} {Start or resume an event and schedule engine games with bounded concurrency.} $pairSpec [list Run start] change \
@@ -113,11 +113,11 @@ proc ::td::actions::Register {} {
 		td.finish {Finish tournament} {Finish an event when every non-bye game is complete and return the final standings.} $controls [list Run finish] change \
 		td.undo {Undo tournament command} {Undo the latest reversible domain command at the current revision without deleting audit history.} $controls Undo change \
 		td.redo {Redo tournament command} {Redo an undone domain command at the current revision without deleting audit history.} $controls Redo change \
-		td.status {Tournament status} {Read event revision, round, player and pairing counts, backend and undo/redo availability.} $query Status query \
+		td.status {Tournament status} {Show the event's revision, current round, how many players and pairings it has, how it is saved, and whether undo or redo is available.} $query Status query \
 		td.standings {Tournament standings} {Compute exact C.07 standings and every tiebreak breakdown.} $query Standings query \
 		td.crosstable {Tournament crosstable} {Return the event crosstable as text, or open its journal-backed HTML view.} [concat $query {{open {type boolean default 0}}}] Crosstable change \
 		td.audit {Tournament audit} {Return immutable journal records, including commands, revisions, idempotency keys and before/after state.} $query Audit query \
-		td.export {Export tournament} {Export journaled PGN games or the exact crosstable HTML to an explicit filename.} [concat $query {{filename {type string required 1}} {format {type enum default pgn enum {pgn html}}} {overwrite {type boolean default 0}}}] Export change \
+		td.export {Export tournament} {Save the tournament's games, or its crosstable as a web page, to a file you name.} [concat $query {{filename {type string required 1}} {format {type enum default pgn enum {pgn html}}} {overwrite {type boolean default 0}}}] Export change \
 		td.workspace {Tournament Director workspace} {Open the Event, Players, Pairings, Results and Standings workspace, close it, or select a tab.} [concat $query {{operation {type enum default open enum {open close select}}} {tab {type enum default event enum {event players pairings results standings}}}}] Workspace change \
 	] {
 		if {[dict exists $::action::Registry $id]} { continue }

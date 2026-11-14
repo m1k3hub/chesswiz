@@ -1,5 +1,5 @@
 Chesswiz knowledge pack
 Generated from the action registry by tcl/knowledge.tcl.
 Do not edit by hand: run 'make knowledge'.
-Actions: 770
-Topics: 6
+Actions: 791
+Topics: 7
