@@ -24,13 +24,11 @@
 #   user presses Enter. Nothing is linked into the app for audio or
 #   speech: recorders and recognisers are external subprocesses.
 #
-#   Linux: sherpa-onnx's sherpa-onnx-offline with a transducer model
-#          (preferred when present; optional hotword list), else
-#          whisper.cpp's whisper-cli (CPU only; CUDA_VISIBLE_DEVICES="")
-#          plus arecord or ffmpeg. Windows: the operating system's Win+H
-#          dictation. macOS: the system dictation hint. With no path the
-#          microphone is hidden and Preferences > Assistant says what to
-#          install (no error dialog).
+#   All platforms prefer sherpa-onnx-offline with a transducer model,
+#   otherwise whisper-cli with GPU disabled. Recording uses arecord or
+#   ffmpeg (PulseAudio on Linux, DirectShow on Windows, AVFoundation on
+#   macOS). Windows/macOS retain native dictation when tools are missing.
+#   Bundled tools are discovered under tests/tmp-app/speech-tools/bin.
 #
 #   ::application::ask::Build <notebook>   place the field in the top strip
 #   ::application::ask::Focus              Ctrl+K / Ctrl+Shift+K
@@ -830,6 +828,30 @@ proc ::application::speech::Fixture {} {
 	return $result
 }
 
+# Keep platform selection separate so device-free tests can exercise every OS.
+proc ::application::speech::Host {} {
+	if {$::tcl_platform(platform) eq "windows"} { return win-x64 }
+	if {$::tcl_platform(os) eq "Darwin"} { return macos-universal2 }
+	return linux-x64
+}
+
+proc ::application::speech::NullDevice {} {
+	if {[Host] eq "win-x64"} { return NUL }
+	return /dev/null
+}
+
+proc ::application::speech::BundledTool {name} {
+	set root [file join [RepoRoot] tests tmp-app speech-tools bin [Host]]
+	if {[Host] eq "win-x64"} { append name .exe }
+	foreach pattern [list [file join $root $name] [file join $root * $name] \
+			[file join $root * bin $name] [file join $root * * bin $name]] {
+		foreach path [glob -nocomplain -types f $pattern] {
+			if {[file executable $path]} { return $path }
+		}
+	}
+	return ""
+}
+
 # The speech path in effect: {mode available reason cli model recorder stub}.
 proc ::application::speech::detect {} {
 	variable Settings
@@ -847,24 +869,21 @@ proc ::application::speech::detect {} {
 	if {$model eq "" && [dict exists $fixture model]} {
 		set model [file join $root [dict get $fixture model]]
 	}
-	if {$recorder eq "" && [dict exists $fixture recorder]} { set recorder [dict get $fixture recorder] }
+	if {$recorder eq "" && [Host] eq "linux-x64" && [dict exists $fixture recorder]} { set recorder [dict get $fixture recorder] }
 
-	set platform $::tcl_platform(platform)
 	if {$stub ne ""} {
 		return [dict create mode stub available 1 reason "" cli $cli model $model recorder $recorder stub $stub]
-	}
-	if {$platform eq "windows"} {
-		return [dict create mode windows available 1 reason "" cli "" model "" recorder "" stub ""]
-	}
-	if {$::tcl_platform(os) eq "Darwin"} {
-		return [dict create mode mac available 1 reason "" cli "" model "" recorder "" stub ""]
 	}
 
 	set recPath ""
 	if {$recorder ne "" && $recorder ne "auto"} {
 		set recPath [which $recorder]
 	} else {
-		foreach candidate {arecord ffmpeg} {
+		set recPath [BundledTool ffmpeg]
+		set candidates {ffmpeg}
+		if {[Host] eq "linux-x64"} { set candidates {arecord ffmpeg} }
+		foreach candidate $candidates {
+			if {$recPath ne ""} { break }
 			set recPath [which $candidate]
 			if {$recPath ne ""} { break }
 		}
@@ -872,6 +891,7 @@ proc ::application::speech::detect {} {
 
 	set sherpa [SherpaModel $Settings(sherpaModel)]
 	set sherpaCli [which $Settings(sherpaCli)]
+	if {$Settings(sherpaCli) eq ""} { set sherpaCli [BundledTool sherpa-onnx-offline] }
 	if {$sherpaCli ne "" && [dict size $sherpa] && $recPath ne ""} {
 		return [dict create mode sherpa available 1 reason "" cli $sherpaCli \
 			model [dict get $sherpa dir] recorder $recPath stub "" sherpa $sherpa]
@@ -881,6 +901,10 @@ proc ::application::speech::detect {} {
 	set modelPath $model
 	if {![file exists $modelPath]} { set modelPath "" }
 	set available [expr {$cliPath ne "" && $modelPath ne "" && $recPath ne ""}]
+	if {!$available && [Host] in {win-x64 macos-universal2}} {
+		set mode [expr {[Host] eq "win-x64" ? "windows" : "mac"}]
+		return [dict create mode $mode available 1 reason "" cli "" model "" recorder "" stub ""]
+	}
 	set reason ""
 	if {!$available} {
 		set missing {}
@@ -956,11 +980,12 @@ proc ::application::speech::search {} {
 	set sherpaRoots [list [file join $home .local share sherpa-onnx] /usr/local/share/sherpa-onnx \
 		/opt/sherpa-onnx [file join [RepoRoot] tests tmp-app speech-tools]]
 	if {[which $Settings(sherpaCli)] eq ""} {
-		set path [which sherpa-onnx-offline]
+		set path [BundledTool sherpa-onnx-offline]
+		if {$path eq ""} { set path [which sherpa-onnx-offline] }
 		foreach root $sherpaRoots {
 			if {$path ne ""} break
 			foreach cand [glob -nocomplain -types f [file join $root bin sherpa-onnx-offline] \
-					[file join $root bin linux-x64 sherpa-onnx * bin sherpa-onnx-offline]] {
+					[file join $root bin [Host] sherpa-onnx * bin sherpa-onnx-offline*]] {
 				if {[file executable $cand]} { set path $cand; break }
 			}
 		}
@@ -1013,6 +1038,13 @@ proc ::application::speech::search {} {
 			set best [lindex [lsort -command {apply {{a b} {expr {[file size $a] - [file size $b]}}}} $models] 0]
 			set Settings(whisperModel) $best
 			lappend found "model $best"
+		}
+	}
+	if {$Settings(recorder) in {"" auto}} {
+		set recorder [BundledTool ffmpeg]
+		if {$recorder ne ""} {
+			set Settings(recorder) $recorder
+			lappend found "ffmpeg $recorder"
 		}
 	}
 	return $found
@@ -1106,7 +1138,14 @@ proc ::application::speech::Start {} {
 	}
 	set pids {}
 	if {[catch {
-		set pids [exec {*}[RecorderArgv $d $file] > /dev/null 2>@1 &]
+		set argv [RecorderArgv $d $file]
+		if {[file rootname [file tail [dict get $d recorder]]] eq "arecord"} {
+			set pids [exec {*}$argv > [NullDevice] 2>@1 &]
+		} else {
+			set Priv(recordChan) [open [list | {*}$argv > [NullDevice] 2>@1] w]
+			fconfigure $Priv(recordChan) -blocking 0 -buffering none
+			set pids [pid $Priv(recordChan)]
+		}
 	} err]} {
 		Cleanup
 		SetState idle
@@ -1124,21 +1163,52 @@ proc ::application::speech::RecordTimeout {file} {
 	if {$Priv(state) eq "recording" && $Priv(recordFile) eq $file} { StopRecording }
 }
 
-proc ::application::speech::RecorderArgv {d file} {
-	set recoder [dict get $d recorder]
-	set base [file tail $recoder]
-	if {$base eq "arecord" || $base eq "arecord.exe"} {
-		return [list $recoder -q -f S16_LE -r 16000 -c 1 -t wav $file]
+# ffmpeg reports devices on stderr and exits unsuccessfully after listing.
+proc ::application::speech::WindowsAudioDevices {recorder} {
+	catch {exec $recorder -hide_banner -list_devices true -f dshow -i dummy 2>@1} output
+	set devices {}
+	foreach line [split $output \n] {
+		if {[regexp {"(.*)" \(audio\)} $line -> name]} { lappend devices $name }
 	}
-	# ffmpeg: PulseAudio is the usual Linux desktop, ALSA the fallback.
-	return [list $recoder -y -loglevel quiet -f pulse -i default -ar 16000 -ac 1 -c:a pcm_s16le $file]
+	return $devices
+}
+
+proc ::application::speech::RecorderArgv {d file} {
+	variable Settings
+	set recorder [dict get $d recorder]
+	if {[file rootname [file tail $recorder]] eq "arecord"} {
+		return [list $recorder -q -f S16_LE -r 16000 -c 1 -t wav $file]
+	}
+	switch -- [Host] {
+		win-x64 {
+			set devices [WindowsAudioDevices $recorder]
+			if {![llength $devices]} { error "No DirectShow audio recording device found" }
+			set input [list -f dshow -i "audio=[lindex $devices 0]"]
+		}
+		macos-universal2 { set input [list -f avfoundation -i :0] }
+		default { set input [list -f pulse -i default] }
+	}
+	return [list $recorder -y -loglevel error {*}$input -t $Settings(maxSeconds) \
+		-ar 16000 -ac 1 -c:a pcm_s16le $file]
+}
+
+proc ::application::speech::CloseRecorder {} {
+	variable Priv
+	if {[info exists Priv(recordChan)]} {
+		catch {close $Priv(recordChan)}
+		unset Priv(recordChan)
+	}
 }
 
 proc ::application::speech::StopRecording {} {
 	variable Priv
 
 	if {$Priv(state) ne "recording"} { return }
-	foreach pid $Priv(recordPids) { catch { exec kill -TERM $pid } }
+	if {[info exists Priv(recordChan)]} {
+		catch {puts $Priv(recordChan) q; flush $Priv(recordChan)}
+	} else {
+		foreach pid $Priv(recordPids) { catch {::platform::sys::kill $pid TERM} }
+	}
 	set file $Priv(recordFile)
 	set Priv(recordFile) ""
 	SetState transcribing
@@ -1167,7 +1237,8 @@ proc ::application::speech::WaitRecorder {file deadline} {
 		Schedule 50 [list WaitRecorder $file $deadline]
 		return
 	}
-	foreach pid $alive { catch { exec kill -KILL $pid } }
+	foreach pid $alive { catch { ::platform::sys::kill $pid KILL } }
+	CloseRecorder
 	set Priv(recordPids) {}
 	StartTranscribe $file
 }
@@ -1183,11 +1254,12 @@ proc ::application::speech::Cancel {} {
 	# the recording is thrown away: a recorder that ignores TERM (it may
 	# already have been asked to stop) is killed
 	foreach pid $Priv(recordPids) {
-		catch { exec kill -KILL $pid }
+		catch { ::platform::sys::kill $pid KILL }
 	}
 	foreach pid $Priv(transcribePids) {
-		catch { exec kill -TERM $pid }
+		catch { ::platform::sys::kill $pid TERM }
 	}
+	CloseRecorder
 	set Priv(recordPids) {}
 	set Priv(transcribePids) {}
 	set Priv(recordFile) ""
@@ -1236,12 +1308,12 @@ proc ::application::speech::StartTranscribe {file} {
 	if {[dict get $d mode] eq "sherpa"} {
 		set argv [SherpaArgv $d $file]
 	} else {
-		set argv [list $cli -m $model -f $file -nt -np]
+		set argv [list $cli -m $model -f $file -nt -np -ng]
 	}
 	set Priv(transcribeMode) [dict get $d mode]
-	set cmd [list env CUDA_VISIBLE_DEVICES= {*}$argv]
+	set cmd $argv
 	set pids {}
-	if {[catch { set pids [exec {*}$cmd >@ $output 2> /dev/null &] } err]} {
+	if {[catch { set pids [exec {*}$cmd >@ $output 2> [NullDevice] &] } err]} {
 		close $output
 		Cleanup
 		SetState idle
@@ -1273,7 +1345,7 @@ proc ::application::speech::FinishStub {text} {
 
 proc ::application::speech::Alive? {pids} {
 	foreach pid $pids {
-		if {[catch { exec kill -0 $pid }]} { continue }
+		if {![::platform::sys::alive $pid]} { continue }
 		return 1
 	}
 	return 0
@@ -1347,11 +1419,11 @@ proc ::application::speech::transcribeFile {file} {
 		return [string trim [RunStub [dict get $d stub]]]
 	}
 	if {[dict get $d mode] eq "sherpa"} {
-		return [SherpaText [exec env CUDA_VISIBLE_DEVICES= {*}[SherpaArgv $d $file] 2> /dev/null]]
+		return [SherpaText [exec {*}[SherpaArgv $d $file] 2> [NullDevice]]]
 	}
-	set cmd [list env CUDA_VISIBLE_DEVICES= [dict get $d cli] -m [dict get $d model] \
-		-f $file -nt -np]
-	return [string trim [exec {*}$cmd 2> /dev/null]]
+	set cmd [list [dict get $d cli] -m [dict get $d model] \
+		-f $file -nt -np -ng]
+	return [string trim [exec {*}$cmd 2> [NullDevice]]]
 }
 
 # A directory is created atomically with private permissions. Existing

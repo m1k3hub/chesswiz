@@ -472,4 +472,111 @@ tcltest::test speech-fixture-description {the speech fixture file names the mode
 		[expr {[string match {*fixture_text=*} $data]}]
 } -result {1 1 1}
 
+
+proc ::scidb::test::speech::HostCase {host body} {
+	rename ::application::speech::Host ::application::speech::RealHost
+	proc ::application::speech::Host {} [list return $host]
+	set rc [catch {uplevel 1 $body} result options]
+	rename ::application::speech::Host {}
+	rename ::application::speech::RealHost ::application::speech::Host
+	return -options $options $result
+}
+
+tcltest::test speech-xplat-enumeration {audio enumeration ignores video and handles nonzero ffmpeg exit} -body {
+	rename ::exec ::scidb::test::speech::realExec
+	proc ::exec {args} {
+		return -code error {[dshow @ x] "Camera" (video)
+[dshow @ x] "USB Microphone" (audio)
+[dshow @ x] Alternative name "@device_cm_foo"
+[dshow @ x] "Built-in Mic" (audio)}
+	}
+	set devices [::application::speech::WindowsAudioDevices ffmpeg]
+	rename ::exec {}
+	rename ::scidb::test::speech::realExec ::exec
+	set devices
+} -result {{USB Microphone} {Built-in Mic}}
+
+tcltest::test speech-xplat-recorder {platform input and mono PCM argv without real devices} -body {
+	rename ::application::speech::WindowsAudioDevices ::application::speech::RealDevices
+	proc ::application::speech::WindowsAudioDevices {recorder} { return [list {USB Microphone}] }
+	set result {}
+	foreach host {win-x64 macos-universal2 linux-x64} {
+		::scidb::test::speech::HostCase $host {
+			set a [::application::speech::RecorderArgv [dict create recorder {/tools with spaces/ffmpeg}] {out file.wav}]
+			lappend result [lrange $a 4 7] [lrange $a end-6 end]
+		}
+	}
+	rename ::application::speech::WindowsAudioDevices {}
+	rename ::application::speech::RealDevices ::application::speech::WindowsAudioDevices
+	set result
+} -result {{-f dshow -i {audio=USB Microphone}} {-ar 16000 -ac 1 -c:a pcm_s16le {out file.wav}} {-f avfoundation -i :0} {-ar 16000 -ac 1 -c:a pcm_s16le {out file.wav}} {-f pulse -i default} {-ar 16000 -ac 1 -c:a pcm_s16le {out file.wav}}}
+
+tcltest::test speech-xplat-fallback {local sherpa wins on both hosts; missing recorder preserves native dictation} -constraints linuxOnly -body {
+	::scidb::test::speech::isolated {
+		lassign [::scidb::test::speech::FakeSherpa] cli model dir
+		set result {}
+		foreach host {win-x64 macos-universal2} {
+			::scidb::test::speech::HostCase $host {
+				::application::speech::configure sherpaCli $cli sherpaModel $model recorder true stub ""
+				lappend result [dict get [::application::speech::detect] mode]
+				::application::speech::configure recorder /nonexistent/ffmpeg
+				lappend result [dict get [::application::speech::detect] mode]
+			}
+		}
+		file delete -force $dir
+		set result
+	}
+} -result {sherpa windows sherpa mac}
+
+tcltest::test speech-xplat-stop {ffmpeg receives q to finalize its WAV} -body {
+	::scidb::test::speech::isolated {
+		set path [::application::speech::TempFile .txt]
+		set ::application::speech::Priv(recordChan) [open $path w]
+		set ::application::speech::Priv(state) recording
+		set ::application::speech::Priv(recordPids) {}
+		::application::speech::StopRecording
+		::application::speech::CloseRecorder
+		set f [open $path r]
+		set text [string trim [read $f]]
+		close $f
+		list $text $::application::speech::Priv(state)
+	}
+} -result {q transcribing}
+
+
+tcltest::test speech-xplat-bundle {find nested platform binaries and reject missing tools} -constraints linuxOnly -body {
+	set root [file join [::application::speech::TempDir] {bundle test}]
+	rename ::application::speech::RepoRoot ::application::speech::RealRepoRoot
+	proc ::application::speech::RepoRoot {} [list return $root]
+	set result {}
+	foreach host {win-x64 macos-universal2} {
+		::scidb::test::speech::HostCase $host {
+			set name sherpa-onnx-offline
+			if {$host eq "win-x64"} { append name .exe }
+			set path [file join $root tests tmp-app speech-tools bin $host sherpa-onnx version bin $name]
+			file mkdir [file dirname $path]
+			close [open $path w]
+			file attributes $path -permissions 0755
+			lappend result [expr {[::application::speech::BundledTool sherpa-onnx-offline] eq $path}]
+			lappend result [::application::speech::BundledTool ffmpeg]
+		}
+	}
+	rename ::application::speech::RepoRoot {}
+	rename ::application::speech::RealRepoRoot ::application::speech::RepoRoot
+	file delete -force $root
+	set result
+} -result {1 {} 1 {}}
+
+tcltest::test speech-xplat-no-device {an empty device list fails without starting recording} -body {
+	rename ::application::speech::WindowsAudioDevices ::application::speech::RealDevices
+	proc ::application::speech::WindowsAudioDevices {recorder} { return {} }
+	set result [::scidb::test::speech::HostCase win-x64 {
+		catch {::application::speech::RecorderArgv [dict create recorder ffmpeg.exe] out.wav} message
+		set message
+	}]
+	rename ::application::speech::WindowsAudioDevices {}
+	rename ::application::speech::RealDevices ::application::speech::WindowsAudioDevices
+	set result
+} -result {No DirectShow audio recording device found}
+
 tcltest::cleanupTests
