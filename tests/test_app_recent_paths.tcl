@@ -192,6 +192,11 @@ namespace eval ::scidb::test::recentpaths {
 		set sub [$menu entrycget $i -menu]
 		if {![winfo exists $sub]} { return [list $cascadeState empty {}] }
 		if {[$sub index end] eq "none"} { return [list $cascadeState 0 {}] }
+		# The current registry menu renders explanatory rows as disabled,
+		# submenu-less cascades, so they cannot become executable commands.
+		if {[$sub type 0] eq "cascade" && [$sub entrycget 0 -menu] ne ""} {
+			error {read-only maintenance hint unexpectedly has a submenu}
+		}
 		return [list $cascadeState [$sub type 0] [$sub entrycget 0 -label] [$sub entrycget 0 -state]]
 	}
 }
@@ -488,7 +493,7 @@ tcltest::test maintreadonly-pgn {a read-only PGN explains the greyed Maintenance
 } -cleanup {
 	::scidb::test::recentpaths::unpopup
 	::scidb::test::recentpaths::closeBase $::scidb::test::recentpaths::pgn
-} -result {normal command 1 disabled}
+} -result {normal cascade 1 disabled}
 
 tcltest::test maintreadonly-other {a read-only database that is not a PGN gets the general hint} -constraints x11 -setup {
 	set sci [file join $::scidb::test::recentpaths::dir readonly-probe.sci]
@@ -510,7 +515,7 @@ tcltest::test maintreadonly-other {a read-only database that is not a PGN gets t
 	::scidb::test::recentpaths::unpopup
 	::scidb::test::recentpaths::closeBase $sci
 	catch { file delete -force $sci }
-} -result {normal command 1 disabled 1}
+} -result {normal cascade 1 disabled 1}
 
 tcltest::test maintreadonly-writable {a writable database has no read-only hint} -constraints x11 -setup {
 	set sci [file join $::scidb::test::recentpaths::dir writable-probe.sci]

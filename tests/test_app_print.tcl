@@ -339,11 +339,21 @@ tcltest::test print-windows-branch {::print::game uses wscript ShellExecute prin
 	set pdf2 [::print::game .application $pos]
 	lassign [lindex $::scidb::test::appprint::capturedCalls 0] cmd1 async1
 	lassign [lindex $::scidb::test::appprint::capturedCalls 1] cmd2 async2
+	set helper [lindex $cmd2 3]
+	set channel [open $helper r]
+	try {set helperBody [read $channel]} finally {close $channel}
+	set validHelper [expr {
+		[file tail $helper] eq "print.vbs"
+		&& [string match "chesswiz-[pid]-*" [file tail [file dirname $helper]]]
+		&& [lrange $cmd2 0 2] eq {wscript //nologo //B}
+		&& [string first {CreateObject("Shell.Application")} $helperBody] >= 0
+		&& [string first {sh.ShellExecute WScript.Arguments(0), "", "", "print", 1} $helperBody] >= 0
+	}]
 	list \
 		[expr {[file size $pdf1] > 0}] \
 		[expr {[file size $pdf2] > 0}] \
 		[lindex $cmd2 0] \
-		[string match "*chesswiz-print.vbs" [lindex $cmd2 3]] \
+		$validHelper \
 		[expr {[lindex $cmd2 4] eq [file nativename $pdf2]}]
 } -cleanup {
 	if {$hasTemp} {
