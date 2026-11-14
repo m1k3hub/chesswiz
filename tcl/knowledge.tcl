@@ -661,6 +661,22 @@ foreach {id purpose keywords} {
 	dict set ::knowledge::Explicit $id [dict create purpose $purpose keywords $keywords]
 }
 
+dict set ::knowledge::Explicit opening_line when {Use this to look up an opening before exploring its continuations.}
+dict set ::knowledge::Explicit engine_play when {Use this to watch a computer continue the game from the current position.}
+
+dict set ::knowledge::Explicit c5.filtered.open_switcher [dict create \
+	purpose {Open the matching games from the selected table in a database tab.} \
+	when {Use this to browse the games belonging to the selected name.} \
+	examples {{Browse the games matching this table entry} {Open a database tab for this selected name}}]
+dict set ::knowledge::Explicit c5.filtered.save_working_set [dict create \
+	purpose {Save the matching games from the selected table as a named collection.} \
+	when {Use this to keep the selected name's games together for later study.} \
+	examples {{Keep the games matching this table entry} {Save a collection for this selected name}}]
+dict set ::knowledge::Explicit menu.file.recent.clear [dict create \
+	purpose {Clear the list of recently opened databases without deleting any files.} \
+	when {Use this to remove old database shortcuts from the recent list.} \
+	examples {{Empty the recent database list} {Forget which databases I opened recently}}]
+
 set ::knowledge::Topics [list \
 	[dict create \
 		id topic:prepare-against-opponent \
@@ -1967,7 +1983,7 @@ dict set ::knowledge::Explicit menu.db.maintenance.compact [dict create purpose 
 dict set ::knowledge::Explicit menu.db.maintenance.convert [dict create purpose {Open conversion of the current database to native storage.} when {Use this when a collection should use the app's native format.} examples {{Convert the active database to native format} {Open native-format conversion for this collection}}]
 dict set ::knowledge::Explicit menu.db.maintenance.recode [dict create purpose {Open character-encoding conversion for the current database.} when {Use this when names or comments display with incorrect characters.} examples {{Recode the active database's text} {Fix the character encoding of this collection}}]
 dict set ::knowledge::Explicit menu.db.maintenance.strip_moves [dict create purpose {Choose which move information to remove throughout the database.} when {Use this to remove selected clocks or evaluations from every database game.} examples {{Strip database move information} {Remove evaluations throughout the database}}]
-dict set ::knowledge::Explicit menu.db.maintenance.strip_tags [dict create purpose {Choose extra PGN tags to remove throughout the database.} when {Use this to clean selected extra headers from every database game.} examples {{Strip extra header tags from the database} {Choose database tags to remove}}]
+dict set ::knowledge::Explicit menu.db.maintenance.strip_tags [dict create purpose {Choose extra game headers to remove throughout the database.} when {Use this to clean selected extra headers from every database game.} examples {{Strip extra header tags from the database} {Choose database tags to remove}}]
 dict set ::knowledge::Explicit menu.db.player.update [dict create purpose {Open the rating-data update workflow.} when {Use this to refresh the app's supplemental player ratings.} examples {{Update the supplemental player ratings} {Open the player rating-data updater}}]
 dict set ::knowledge::Explicit menu.db.reports.result [dict create purpose {Run the result-checking report for database games.} when {Use this to investigate recorded outcomes that may need review.} examples {{Check recorded database game results} {Create a report of result inconsistencies}}]
 dict set ::knowledge::Explicit menu.db.reports.timecontrol [dict create purpose {Report the time-control types found in the database.} when {Use this to understand which playing speeds the collection contains.} examples {{Show this database's time-control profile} {Summarize playing speeds in the active collection}}]

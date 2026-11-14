@@ -31,7 +31,7 @@ tcltest::test toolbar-knowledge-native-controls {every previously generic shippe
   if {$error ne {} || [dict get $r label] eq {Toolbar action} || [llength [dict get $k examples]] < 2} {lappend bad [list $id $error]}
  }
  list [dict size $::toolbar::Knowledge] $bad
-} -result {65 {}}
+} -result {66 {}}
 tcltest::test toolbar-knowledge-game-start {the named game-start control really returns a generated game to its initial position} -body {
  ::scidb::game::clear {rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1}
  set start [::scidb::pos::fen]
@@ -39,7 +39,7 @@ tcltest::test toolbar-knowledge-game-start {the named game-start control really 
  set played [::scidb::pos::fen]
  ::action::run toolbar.board_control.0
  list [expr {$played ne $start}] [expr {[::scidb::pos::fen] eq $start}] [dict get [::knowledge::For toolbar.board_control.0 en] title]
-} -result {1 1 {Game start}}
+} -result {1 1 {Go to start of game (Home)}}
 # This check covers the whole shipped surface. It deliberately exposes any
 # remaining label-only records, including ones outside the toolbar census.
 tcltest::test knowledge-reject-label-only-records {every shipped purpose and use case describes an operation rather than repeating its label} -body {
@@ -82,7 +82,7 @@ tcltest::test knowledge-plain-words-guard {all purposes and use cases avoid impl
  }
  puts "KNOWLEDGE_PLAIN_FIELDS $checked"
  list $checked $bad
-} -result {2097 {}}
+} -result {2310 {}}
 tcltest::test knowledge-plain-words-canary {implementation terms in future descriptions fail the guard} -body {
  ::toolbarKnowledge::implementationTerms {Configure a native widget by path and callback in the Tcl registry handler.}
 } -result {native widget path callback tcl registry handler}
