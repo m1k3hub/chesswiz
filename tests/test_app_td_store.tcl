@@ -176,6 +176,20 @@ tcltest::test td-workspace {all five TD tabs and journal crosstable are reachabl
 	list [llength $tabs] $selected $exists [winfo exists $dlg]
 } -result {5 .application.tournamentDirector.tabs.standings 1 0}
 
+tcltest::test td-workspace-buttons {workspace buttons commit through Mutate with the current revision} -body {
+	set path [fresh]
+	create $path {A B C D}
+	commit td.workspace [dict create operation open path $path tab pairings]
+	set r0 [dict get [state $path] revision]
+	set ::td::ui::Fields(pair_round) 1
+	::td::ui::PairRound
+	set r1 [dict get [state $path] revision]
+	::td::ui::Undo
+	set r2 [dict get [state $path] revision]
+	commit td.workspace {operation close}
+	list [expr {$r1 > $r0}] [expr {$r2 > $r1}]
+} -result {1 1}
+
 tcltest::test td-withdraw-combined {single 10-player RR event with withdrawal after round 4 (<50% annulled) and round 6 (>=50% forfeits)} -body {
 	set path [fresh]
 	set names {}

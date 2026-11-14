@@ -23,7 +23,7 @@ proc ::td::ui::Key {command} { variable Counter; return "ui-[pid]-$command-[incr
 proc ::td::ui::Mutate {id domain} {
 	variable Path
 	if {$Path eq ""} { error "no tournament selected" }
-	dict set domain path $Path expected_revision [Revision] idempotency [Key $id] commit 0
+	set domain [dict merge $domain [dict create path $Path expected_revision [Revision] idempotency [Key $id] commit 0]]
 	set preview [::action::run $id $domain]
 	if {[string match "error:*" $preview]} { error $preview }
 	dict set domain commit 1
