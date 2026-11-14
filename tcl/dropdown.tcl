@@ -925,7 +925,9 @@ proc ::menu::RegisterNodes {node order top} {
 # ----------------------------------------------------------------------
 # State. One mechanism for drop-down and context menus (R1-R16).
 # ----------------------------------------------------------------------
-proc ::menu::state {id {object {}} {arguments {}}} {
+# Visibility-only callers do not need to construct dynamic cascades to
+# compute their enabled bit. Full state/Ask/dispatch keep the exact check.
+proc ::menu::state {id {object {}} {arguments {}} {visibilityOnly 0}} {
 	set visible 1
 	set enabled 1
 
@@ -972,7 +974,7 @@ proc ::menu::state {id {object {}} {arguments {}}} {
 	# Object-scoped rules (R10): strip/truncate/comment rows follow the
 	# move the menu or the Ask list is acting on.
 	if {[llength [info commands ::context::ObjectRule]]} {
-		set rule [::context::ObjectRule $id $object]
+		set rule [::context::ObjectRule $id $object $visibilityOnly]
 		if {[llength $rule]} {
 			set visible [expr {$visible && [lindex $rule 0] ? 1 : 0}]
 			set enabled [expr {$enabled && [lindex $rule 1] ? 1 : 0}]

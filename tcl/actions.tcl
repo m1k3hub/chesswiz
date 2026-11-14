@@ -1033,10 +1033,38 @@ proc ::action::html::Command {surface operation target {value {}} {key {}}} {
         set ai [expr {[string match trace_* $operation] ? "debug" : "0"}]
         ::action::register $id [dict create label "HTML $surface: $operation" \
             handler [list ::action::html::Invoke $surface $operation] what $operation object {} \
+            enabled [list ::action::html::Enabled $surface $operation] enabled-args 1 \
             args {{target {type string required 1}} {value {type string default {}}} {key {type string default {}}}} \
             ai $ai doc "Apply $operation to an existing $surface window."]
     }
     return [list ::action::run $id [dict create target $target value $value key $key]]
+}
+# Navigation uses the same live button as the dialog, at construction and
+# again at dispatch. A retained command cannot bypass a newly reached end.
+proc ::action::html::Enabled {surface operation arguments} {
+    set target [dict get $arguments target]
+    set button {}
+    switch -- $surface {
+        crosstable {
+            if {$operation in {previous next}} {set button $target.$operation}
+        }
+        overview {
+            if {$operation in {prev first next last}} {
+                set direction [expr {$operation in {prev first} ? "previous" : "next"}]
+                if {![winfo exists $target]} {return 0}
+                set button [winfo toplevel $target].$direction
+            }
+        }
+        help {
+            if {$operation in {prev next back forward}} {
+                if {![info exists ::help::Priv(dlg)] || $target ne $::help::Priv(dlg)
+                    || ![info exists ::help::Priv(button:$operation)]} {return 0}
+                set button $::help::Priv(button:$operation)
+            }
+        }
+    }
+    if {$button eq {}} {return 1}
+    return [expr {[winfo exists $button] && [$button cget -state] ne "disabled"}]
 }
 proc ::action::html::Invoke {surface operation arguments} {
     set target [dict get $arguments target]

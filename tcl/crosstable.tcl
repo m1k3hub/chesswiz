@@ -505,15 +505,20 @@ proc RecordGeometry {dlg} {
 proc NextEvent {dlg step} {
 	variable ${dlg}::Vars
 
+	set index [expr {$Vars(index) + $step}]
+	set count [::scidb::view::count events $Vars(base) $Vars(variant) $Vars(view)]
+	if {$Vars(index) < 0 || $index < 0 || $index >= $count} {return}
 	::scidb::crosstable::release $Vars(tableId) $Vars(viewId)
-	incr Vars(index) $step
+	set Vars(index) $index
 	set view $Vars(view)
 	set base $Vars(base)
 	set variant  $Vars(variant)
 	set index $Vars(index)
 	set number [::scidb::db::get eventIndex $index $view $base $variant]
 	::scidb::view::search $base $variant $Vars(viewId) null none [list event $number]
-	set Vars(info) [::scidb::db::get eventInfo $index $Vars(viewId) $base $variant -card]
+	# index belongs to the caller's event view; the slave view below
+	# contains games only and cannot resolve eventInfo.
+	set Vars(info) [::scidb::db::get eventInfo $index $view $base $variant -card]
 	set Vars(tableId) [::scidb::crosstable::make $base $variant $Vars(viewId)]
 	set Vars(warning) 0
 	set Vars(lastMode) ""
@@ -1388,7 +1393,7 @@ proc BuildMenu {dlg m} {
 	}
 
 	if {[winfo exists $dlg.next]} {
-		set state [expr {$isOpen ? "normal" : "disabled"}]
+		set state [$dlg.previous cget -state]
 		$m add command \
 			-label " [::mc::stripAmpersand $::widget::mc::Label(previous)]" \
 			-command [::action::html::Command crosstable previous $dlg] \
@@ -1397,6 +1402,7 @@ proc BuildMenu {dlg m} {
 			-accelerator "$::mc::Key(Alt)-[::mc::extractAccelerator $::widget::mc::Label(previous)]" \
 			-state $state \
 			;
+		set state [$dlg.next cget -state]
 		$m add command \
 			-label " [::mc::stripAmpersand $::widget::mc::Label(next)]" \
 			-command [::action::html::Command crosstable next $dlg] \

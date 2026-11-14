@@ -1347,7 +1347,7 @@ proc ::context::ClipboardCanPaste {} {
 }
 
 proc ::context::Visible {id object} {
-	set st [::menu::state $id $object]
+	set st [::menu::state $id $object {} 1]
 	set visible [dict get $st visible]
 	# R6/R7: the engine group belongs to a running line engine.
 	if {$id in {c6.pause_resume c6.close_engine c6.lock_engine c6.opponents_view
@@ -2139,7 +2139,7 @@ proc ::context::ObjectEnd {object} {
 
 # R10: strip/truncate/comment rows follow the move object. Returns
 # {visible enabled} or empty when the id has no object rule.
-proc ::context::ObjectRule {id object} {
+proc ::context::ObjectRule {id object {visibilityOnly 0}} {
 	# R2 also guards explicit-object dispatch, not just menu construction.
 	if {($id in {c2.add_variation c2.replace_move c2.strip}
 	 || [string match c2.strip.* $id]) && [::menu::TrialMode]} { return {0 0} }
@@ -2187,6 +2187,10 @@ proc ::context::ObjectRule {id object} {
 	}
 	set cascade [ActionCascade $id $object]
 	if {[llength $cascade]} {
+		# Cascades remain visible even with no runnable child. BuildRows
+		# computes enabled state from the real submenu immediately after
+		# this visibility query; do not build a second throwaway submenu.
+		if {$visibilityOnly} {return {1 1}}
 		set available [RunnableChildren [lindex $cascade 1] $object]
 		if {!$available && $id in {c9.layout c9.not.move_notation c9.not.move_info c9.not.language c5.player_url c11.format c11.copy_text c11.translate_comment c10.show_column c11.insert_symbol c11.insert_emoticon c11.add_language c11.switch_language c4.maintenance}} {
 			variable Counter
