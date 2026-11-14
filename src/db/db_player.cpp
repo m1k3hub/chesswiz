@@ -3668,7 +3668,7 @@ headerValue(mstl::string const& header, char const* key)
 
 // The fields of a comma-separated line: a field in double quotes may hold the
 // separator ("Carlsen,Magnus"), and "" inside it is a quote.
-void
+bool
 csvFields(mstl::string const& line, mstl::vector<mstl::string>& fields)
 {
 	fields.clear();
@@ -3715,6 +3715,7 @@ csvFields(mstl::string const& line, mstl::vector<mstl::string>& fields)
 	}
 
 	fields.push_back(field);
+	return !quoted;
 }
 
 
@@ -3742,9 +3743,11 @@ struct CsvColumns
 	// The number of the column named <a> (or <b>, or <c>), -1 when there is none.
 	int find(char const* a, char const* b = nullptr, char const* c = nullptr) const
 	{
-		for (unsigned i = 0; i < names.size(); ++i)
-			if (names[i] == a || (b && names[i] == b) || (c && names[i] == c))
-				return int(i);
+		char const* choices[] = { a, b, c };
+		for (unsigned k = 0; k < 3; ++k)
+			if (choices[k])
+				for (unsigned i = 0; i < names.size(); ++i)
+					if (names[i] == choices[k]) return int(i);
 
 		return -1;
 	}
@@ -3920,7 +3923,8 @@ convertDwzList(	mstl::istream& stream,
 		else
 			codec.convertFromWindows(line, utf8);
 
-		csvFields(utf8, f);
+		if (!csvFields(utf8, f) || f.size() < columns.names.size())
+			return false;
 
 		ListRecord r;
 		r.name = personName(fieldOf(f, name));
@@ -3988,7 +3992,7 @@ convertEcfList(	mstl::istream& stream,
 	int	rating2	= columns.find("original_standard", "standard");
 	int	grade		= columns.find("grade");
 
-	if (code < 0 || name < 0)
+	if (code < 0 || name < 0 || (rating < 0 && grade < 0))
 		return false;
 
 	sys::utf8::Codec codec(sys::utf8::Codec::windows());
@@ -4009,7 +4013,8 @@ convertEcfList(	mstl::istream& stream,
 		else
 			codec.convertFromWindows(line, utf8);
 
-		csvFields(utf8, f);
+		if (!csvFields(utf8, f) || f.size() < columns.names.size())
+			return false;
 
 		ListRecord r;
 		r.id			= trimmed(fieldOf(f, code));
@@ -4060,7 +4065,7 @@ convertEcfList(	mstl::istream& stream,
 
 
 // The ICCF list: iccf.com offers its rating grid as a CSV without a header --
-// <place> <id> <federation> <titles> <name> <games> <rating> <sex>, the place
+// <place> <id> <federation> <titles> <name> <games> <rating> <RD>, the place
 // column optional, separated by a semicolon or a tab. Without a header the
 // shape of a record has to be recognised, and a line that is not a player is
 // not written.
@@ -4076,7 +4081,7 @@ convertIccfList(	mstl::istream& stream,
 	mstl::string line;
 	mstl::vector<mstl::string> f;
 	mstl::string utf8;
-	unsigned failed = 0;
+	
 
 	while (stream.getline(line))
 	{
@@ -4118,12 +4123,18 @@ convertIccfList(	mstl::istream& stream,
 		{
 			r.id			= f[o];
 			r.federation	= federationOf(f[o + 1]);
-			r.titles		= titlesOf(f[o + 2]);
+			// Correspondence titles have separate bits from OTB titles.
+			mstl::string ct = f[o + 2];
+			r.titles = ct == "GM" ? title::Mask_CGM
+				: ct == "IM" ? title::Mask_CIM
+				: ct == "SIM" ? title::Mask_CSIM
+				: ct == "LGM" ? title::Mask_CLGM
+				: ct == "LIM" ? title::Mask_CLIM : 0;
 			r.name		= personName(f[o + 3]);
 			r.rating		= numberOf(f[o + 5]);
 
-			if (f.size() > unsigned(o) + 6)
-				r.sex = sexOf(f[o + 6]);
+			// RD is uncertainty, not sex; the dictionary has no RD field.
+			if (f.size() <= unsigned(o) + 6 || !isNumber(f[o + 6])) return false;
 		}
 
 		if (	o < 0
@@ -4135,15 +4146,8 @@ convertIccfList(	mstl::istream& stream,
 			|| r.rating == 0
 			|| r.rating > rating::Max_Value)
 		{
-			// a heading, a total, or a file of another shape
-			if (++failed == 100 && kept == 0)
-				return false;
-
-			continue;
+			return false; // reject malformed imports even after a valid prefix
 		}
-
-		if (r.sex == sex::Unspecified && title::containsFemaleTitle(r.titles))
-			r.sex = sex::Female;
 
 		if (r.rating < minRating && r.titles == 0)
 			continue;
@@ -4180,15 +4184,16 @@ Player::convertRatingList(	mstl::string const& kind,
 	mstl::string body;
 	body.reserve(4 << 20);
 
+	bool valid = false;
 	switch (list)
 	{
-		case List_Dwz:	convertDwzList(stream, body, minRating, read, kept); break;
-		case List_Ecf:	convertEcfList(stream, body, minRating, read, kept); break;
-		case List_Iccf:	convertIccfList(stream, body, minRating, read, kept); break;
-		default:			break;
+		case List_Dwz: valid = convertDwzList(stream, body, minRating, read, kept); break;
+		case List_Ecf: valid = convertEcfList(stream, body, minRating, read, kept); break;
+		case List_Iccf: valid = convertIccfList(stream, body, minRating, read, kept); break;
+		default: break;
 	}
 
-	if (kept == 0)
+	if (!valid || kept == 0)
 		return false;
 
 	if (out == nullptr)
