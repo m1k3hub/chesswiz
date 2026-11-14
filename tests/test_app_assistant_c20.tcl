@@ -115,6 +115,34 @@ tcltest::test c20-view-offline {abstaining view intent accepts explicit UI comma
  rename ::c20::choose ::ai::systemone::chooseManySync
 } -result {1 0}
 
+tcltest::test c20-operation-verbs {the target's own verbs outrank a fact answer; pure questions stay refused} -setup {
+ rename ::ai::systemone::chooseManySync ::c20::choose
+ proc ::ai::systemone::chooseManySync {args} {return [list intent $::c20::intent]}
+ set ::c20::intent fact
+} -body {
+ list \
+  [::application::assistant::ViewActionAllowed {Search this computer for chess databases.} discover_databases] \
+  [::application::assistant::ViewActionAllowed {Play a game against Stockfish.} open_play_engine] \
+  [::application::assistant::ViewActionAllowed {What is Carlsen's current rating?} open_view] \
+  [::application::assistant::ViewActionAllowed {Show me Fischer vs Spassky, 1972, game 6.} open_view]
+} -cleanup {
+ rename ::ai::systemone::chooseManySync {}
+ rename ::c20::choose ::ai::systemone::chooseManySync
+} -result {1 1 0 0}
+
+tcltest::test c20-operation-verbs-offline {search and play verbs work without the classifier, facts still do not} -setup {
+ rename ::ai::systemone::chooseManySync ::c20::choose
+ proc ::ai::systemone::chooseManySync {args} {error offline}
+} -body {
+ list \
+  [::application::assistant::ViewActionAllowed {Search this computer for chess databases.} discover_databases] \
+  [::application::assistant::ViewActionAllowed {Play a game against Stockfish.} open_play_engine] \
+  [::application::assistant::ViewActionAllowed {What is Carlsen's current rating?} open_view]
+} -cleanup {
+ rename ::ai::systemone::chooseManySync {}
+ rename ::c20::choose ::ai::systemone::chooseManySync
+} -result {1 1 0}
+
 tcltest::test c20-tree-identity {an explicit opening tree request targets tree; explorer requests keep explorer} -setup {
  set saved [array get ::application::assistant::Priv]
 } -body {
