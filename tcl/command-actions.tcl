@@ -142,18 +142,34 @@ proc ::commandline::Export {arguments {overwrite 0}} {
  return "Exported to $filename"
 }
 proc ::commandline::OpeningMoves {arguments} {
- set wanted [::application::assistant::MoveTokens [Get $arguments after]]
+ variable OpeningLines
+ EnsureEco
+ set opening [Get $arguments opening]
+ set after [Get $arguments after]
+ set wanted [::application::assistant::MoveTokens $after]
+ set targetMove [lindex $wanted end]
+ set lines {}
+ if {[dict exists $OpeningLines $opening]} {
+  set lines [dict get $OpeningLines $opening]
+ } else {
+  foreach row [::scidb::ai::ecoLines [regexp -all -inline {[^\s,;:()]+} $opening]] {
+   lappend lines [lindex $row 2]
+  }
+ }
  set choices {}
- foreach row [::scidb::ai::ecoLines [regexp -all -inline {[^\s,;:()]+} [Get $arguments opening]]] {
-  lassign $row eco label moves
-  set tokens [::application::assistant::MoveTokens $moves]
+ set moveNum 0
+ regexp {^([0-9]+)\.} $after -> moveNum
+ foreach moves $lines {
+  if {$targetMove ne "" && [string first $targetMove $moves] < 0} {continue}
+  set tokens [EcoMovesTokens $moves]
   if {[llength $wanted]} {
-   set at [lsearch -exact $tokens [lindex $wanted end]]
-   if {[regexp {^([0-9]+)\.} [Get $arguments after] -> number]} {
-    set at [expr {2*$number-2}]
-    if {[lindex $tokens $at] ne [lindex $wanted end]} {continue}
+   if {$moveNum > 0} {
+    set at [expr {2*$moveNum-2}]
+    if {[lindex $tokens $at] ne $targetMove} {continue}
+   } else {
+    set at [lsearch -exact $tokens $targetMove]
+    if {$at < 0} {continue}
    }
-   if {$at < 0} {continue}
    set tokens [lrange $tokens 0 $at]
   }
   lappend choices [list [llength $tokens] $tokens]

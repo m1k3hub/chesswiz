@@ -5,6 +5,8 @@ namespace eval ::learningUI {variable Calls {}}
 rename ::action::run ::learningUI::realRun
 proc ::action::run {id args} {lappend ::learningUI::Calls [::list $id {*}$args]; return {}}
 ::tcltest::test command-learning-ui {an alias made in the UI only runs after Enter} -body {
+ set ::commandline::Picks {}
+ set ::commandline::Aliases {}
  set ::application::ask::Query {list engines}
  unset -nocomplain ::application::ask::Priv(filtered)
  ::application::ask::Typed

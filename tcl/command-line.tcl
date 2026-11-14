@@ -3,6 +3,124 @@ if {[llength [info commands ::util::source]]} { ::util::source command-line }
 namespace eval ::commandline {
  variable Source ::commandline::AppSource
  variable Cache {}
+ variable EcoIndex {}
+ variable EcoTokenMap {}
+ variable OpeningLines {}
+ variable MotifIndex {}
+ variable RerankThreshold 40
+}
+proc ::commandline::Tokenize {text} {
+ return [regexp -all -inline {[^\s,;:()]+} [string map [list \x27 "" \u2019 ""] [string tolower $text]]]
+}
+proc ::commandline::WordListMatch {qwords hwords} {
+ foreach word $qwords {
+  set found 0
+  foreach candidate $hwords {if {[WordMatch $word $candidate]} {set found 1; break}}
+  if {!$found} {return 0}
+ }
+ return 1
+}
+proc ::commandline::EnsureEco {} {
+ variable EcoIndex; variable EcoTokenMap; variable OpeningLines
+ if {[llength $EcoIndex]} {return}
+ set seen {}
+ set idx 0
+ foreach letter {a e i o u y} {
+  foreach row [::scidb::ai::ecoLines [list $letter] 50000] {
+   lassign $row code label moves
+   dict lappend OpeningLines $label $moves
+   set key [list $code $label]
+   if {![dict exists $seen $key]} {
+    dict set seen $key 1
+    set llow [string map [list \x27 "" \u2019 ""] [string tolower $label]]
+    set parts [split $llow ,]
+    set first [string trim [lindex $parts 0]]
+    set second [string trim [lindex $parts 1]]
+    set third [string trim [lindex $parts 2]]
+    set cwords [Tokenize "$code $label"]
+    set lwords [Tokenize $label]
+    set flank [expr {[string index $code 0] eq "A" ? 1 : 0}]
+    lappend EcoIndex [list $code $label $llow $first $second $third [string length $label] $flank $cwords $lwords]
+    foreach tok [lsort -unique $cwords] {dict lappend EcoTokenMap $tok $idx}
+    incr idx
+   }
+  }
+ }
+}
+proc ::commandline::EcoCandidates {qwords} {
+ variable EcoIndex; variable EcoTokenMap
+ if {![llength $qwords]} {
+  set all {}
+  for {set i 0} {$i < [llength $EcoIndex]} {incr i} {lappend all $i}
+  return $all
+ }
+ set first [lindex $qwords 0]
+ set candidates {}
+ dict for {tok indices} $EcoTokenMap {
+  if {[WordMatch $first $tok]} {lappend candidates {*}$indices}
+ }
+ return [lsort -unique -integer $candidates]
+}
+proc ::commandline::EcoLookup {type query} {
+ variable EcoIndex
+ EnsureEco
+ set values {}
+ if {$type eq "eco" && [regexp -nocase {^[A-E][0-9]{0,2}$} $query]} {
+  if {![catch {::scidb::misc::lookup opening [string toupper $query] Normal} entry] && [llength $entry]} {
+   lappend values [string toupper $query]
+  }
+ }
+ set qlow [string map [list \x27 "" \u2019 ""] [string tolower [string trim $query]]]
+ set qwords [Tokenize $query]
+ set ranked {}
+ foreach idx [EcoCandidates $qwords] {
+  lassign [lindex $EcoIndex $idx] code label llow first second third len flank codeWords labelWords
+  set words [expr {$type eq "eco" ? $codeWords : $labelWords}]
+  if {$qlow eq "" || [WordListMatch $qwords $words]} {
+   set rank [expr {$qlow eq "" ? 6 : ($qlow eq $first ? 0 : ([string first $qlow $first] == 0 ? 1 : ([string first $qlow $second] == 0 ? 2 : ([string first $qlow $third] == 0 ? 3 : ([string first $qlow $first] >= 0 ? 4 : ([string first $qlow $llow] >= 0 ? 5 : 6))))))}]
+   set penalty [expr {$type eq "eco" ? $flank * 50000 : 0}]
+   lappend ranked [list [expr {$rank * 10000 + $penalty + $len}] [expr {$type eq "eco" ? $code : $label}]]
+  }
+ }
+ set sorted [lsort -integer -index 0 $ranked]
+ foreach item $sorted {
+  set v [lindex $item 1]
+  if {$v ni $values} {lappend values $v}
+  if {[llength $values] >= 8} {break}
+ }
+ return $values
+}
+proc ::commandline::EnsureMotifs {} {
+ variable MotifIndex
+ if {[llength $MotifIndex]} {return}
+ foreach id [::ai::search::patternIds] {
+  set p [::ai::search::pattern $id]
+  set label [string tolower [dict get $p label]]
+  set text "$id $label"
+  if {[info exists ::ai::search::Patterns] && [dict exists $::ai::search::Patterns $id]} {
+   append text " " [join [lindex [dict get $::ai::search::Patterns $id] 2]]
+  }
+  lappend MotifIndex $id $label [Tokenize [string map {_ { }} $text]]
+ }
+}
+proc ::commandline::MotifLookup {query} {
+ variable MotifIndex
+ EnsureMotifs
+ set qlow [string map [list \x27 "" \u2019 ""] [string tolower [string trim $query]]]
+ set qwords [Tokenize [string map {_ { }} $query]]
+ set ranked {}
+ foreach {id label words} $MotifIndex {
+  if {![llength $qwords] || [WordListMatch $qwords $words]} {
+   set exact [expr {$qlow ne "" && ($qlow eq $id || $qlow eq $label || [string first $qlow $label] == 0) ? 0 : 1}]
+   lappend ranked [list $exact $id]
+  }
+ }
+ set sorted [lsort -integer -index 0 $ranked]
+ return [lrange [lmap item $sorted {lindex $item 1}] 0 7]
+}
+proc ::commandline::EcoMovesTokens {moves} {
+ regsub -all {\m[0-9]+\.} $moves { } s
+ return [regexp -all -inline {[^\s]+} $s]
 }
 proc ::commandline::Words {text} {
  return [regexp -all -inline {[^\s]+} [string trim $text]]
@@ -90,8 +208,26 @@ proc ::commandline::Parse {template words arguments {missing {}} {score 0}} {
  if {![llength $words] || [lindex $words 0] eq "<$slot>"} {
   return [Parse $tail [lrange $words 1 end] $arguments [concat $missing $slot] $score]
  }
+ set stop [llength $words]
+ if {[llength $tail]} {
+  set nextItem [lindex $tail 0]
+  if {[lindex $nextItem 0] eq "?" && [llength $nextItem] > 1} {
+   set optFirst [lindex $nextItem 1]
+   if {[string index $optFirst 0] ne "@"} {
+    for {set k 1} {$k < [llength $words]} {incr k} {
+     if {[WordMatch [lindex $words $k] $optFirst]} {set stop $k; break}
+    }
+   }
+  } elseif {[string index $nextItem 0] ne "@"} {
+   set foundLit 0
+   for {set k 1} {$k < [llength $words]} {incr k} {
+    if {[WordMatch [lindex $words $k] $nextItem]} {set stop $k; set foundLit 1; break}
+   }
+   if {!$foundLit} {return {}}
+  }
+ }
  set out {}
- for {set n 1} {$n <= [llength $words]} {incr n} {
+ for {set n 1} {$n <= $stop} {incr n} {
   set query [join [lrange $words 0 [expr {$n-1}]]]
   foreach value [Values $slot $query] {
    set next [dict merge $arguments [dict create $key $value]]
@@ -124,8 +260,16 @@ proc ::commandline::Criteria {words arguments missing score} {
  if {[dict exists $arguments [Key $slot]]} {return {}}
  set rest [lrange $words $consumed end]
  if {![llength $rest]} {return [list [list $arguments [concat $missing $slot] $score]]}
+ set stop [llength $rest]
+ for {set k 1} {$k < [llength $rest]} {incr k} {
+  set kw [string tolower [lindex $rest $k]]
+  if {$kw in {player event from to colour color result opening eco motif pattern min both wins win losses loss draws draw wh white bl black}} {
+   set stop $k
+   break
+  }
+ }
  set out {}
- for {set n 1} {$n <= [llength $rest]} {incr n} {
+ for {set n 1} {$n <= $stop} {incr n} {
   foreach v [Values $slot [join [lrange $rest 0 [expr {$n-1}]]]] {
    lappend out {*}[Criteria [lrange $rest $n end] [dict merge $arguments [dict create [Key $slot] $v]] $missing [expr {$score+5}]]
   }
@@ -134,7 +278,7 @@ proc ::commandline::Criteria {words arguments missing score} {
 }
 proc ::commandline::Match {text} {
  variable Table; variable Cache
- set Cache {}; set words [Words $text]; set out {}; set seen {}
+ set Cache {}; set words [Words $text]; set out {}; set seen {}; set seq 0
  if {![llength $words] || [llength $words] > 50} {return {}}
  foreach entry $Table {
   lassign $entry id action defaults templates
@@ -164,7 +308,7 @@ proc ::commandline::Match {text} {
      append label "  $displayKey=$value"
     }
     foreach slot $missing {append label "  <$slot>"}
-    lappend out [dict create id $id action $action args $arguments missing $missing score $score label $label input $text template $template]
+    lappend out [dict create id $id action $action args $arguments missing $missing score $score seq [incr seq] label $label input $text template $template]
    }
   }
  }
@@ -173,6 +317,9 @@ proc ::commandline::Match {text} {
 proc ::commandline::Compare {a b} {
  set c [expr {[dict get $b score]-[dict get $a score]}]
  if {$c} {return $c}
+ if {[dict exists $a seq] && [dict exists $b seq]} {
+  return [expr {[dict get $a seq]-[dict get $b seq]}]
+ }
  return [string compare [dict get $a label] [dict get $b label]]
 }
 # Native name-index lookups are bounded; never scan game records while typing.
@@ -181,9 +328,22 @@ proc ::commandline::AppSource {type query} {
  switch -- $type {
   player - event - site {
    lassign [::application::assistant::ActiveBase] base variant
-   foreach row [::scidb::db::match $type $base $variant 8 $query] {
-    if {[lindex $row 0] > 0} {lappend values [lindex $row 1]}
+   set raw [string trim [lindex [split $query ,] 0]]
+   if {$raw eq ""} {set raw $query}
+   set seen {}; set ranked {}
+   foreach prefix [lsort -unique [list $raw [string totitle $raw] [string toupper $raw 0 0]]] {
+    if {[catch {::scidb::db::match $type $base $variant 256 $prefix} rows]} {continue}
+    foreach row $rows {
+     lassign $row freq name
+     if {$freq > 0 && ![dict exists $seen $name] && [NameMatch $query $name]} {
+      dict set seen $name 1
+      set exact [string equal -nocase [string trim [lindex [split $name ,] 0]] $raw]
+      lappend ranked [list [expr {$exact ? 1000000+$freq : $freq}] $name]
+     }
+    }
    }
+   set sorted [lsort -integer -decreasing -index 0 $ranked]
+   return [lrange [lmap item $sorted {lindex $item 1}] 0 7]
   }
   database {
    set w [::application::database::switcherWidget]
@@ -192,28 +352,14 @@ proc ::commandline::AppSource {type query} {
    }
    return $values
   }
-  engine {foreach e $::engine::Engines {lappend values [dict get $e Name]}}
+  engine {
+   catch {info exists ::engine::Engines}
+   foreach e $::engine::Engines {lappend values [dict get $e Name]}
+  }
   pane {set values [[::application::twm board] leaves]}
   tab {foreach tab [.application.nb tabs] {lappend values [lindex [split $tab .] end]}}
-  motif {
-   foreach id [::ai::search::patternIds] {
-    set p [::ai::search::pattern $id]
-    if {[NameMatch $query $id] || [NameMatch $query [dict get $p label]]} {lappend values $id}
-   }
-   return [lrange $values 0 7]
-  }
-  opening - eco {
-   set lookup [expr {$query eq "" ? "a" : $query}]
-   foreach row [::scidb::ai::ecoLines [regexp -all -inline {[^\s,;:()]+} $lookup]] {
-    lassign $row code label moves
-    if {$type eq "eco"} {lappend values $code} else {lappend values $label}
-   }
-   if {$type eq "eco" && [regexp -nocase {^[A-E][0-9]{0,2}$} $query]} {
-    if {![catch {::scidb::misc::lookup opening [string toupper $query] Normal} entry] && [llength $entry]} {lappend values [string toupper $query]}
-   }
-   if {$type eq "opening"} {return [lrange [lsort -command ::commandline::ShortName [lsort -unique $values]] 0 7]}
-   return [lrange [lsort -unique $values] 0 7]
-  }
+  motif {return [MotifLookup $query]}
+  opening - eco {return [EcoLookup $type $query]}
   move {
    if {![catch {::scidb::ai::moveFacts $query} facts]} {return [list $query]}
    return {}
@@ -280,5 +426,35 @@ proc ::commandline::ShortName {a b} {
  return [expr {[string length $a]-[string length $b]}]
 }
 
+# Optional System One reorder over already-matched candidate rows when no candidate
+# exceeds RerankThreshold. It may only permute existing rows; it never adds a command,
+# invents a slot value, or executes anything.
+proc ::commandline::Rerank {text rows} {
+ variable RerankThreshold
+ if {[llength $rows] < 2} {return $rows}
+ set top [lindex $rows 0]
+ if {[dict exists $top frequency] && [dict get $top frequency] > 0} {return $rows}
+ if {[dict get $top score] >= $RerankThreshold} {return $rows}
+ if {![llength [info commands ::ai::systemone::chooseSync]]} {return $rows}
+ if {![::ai::systemone::enabled] || ![::ai::systemone::qualified command_rerank]} {return $rows}
+ set limit [expr {min(8, [llength $rows])}]
+ set criteria [dict create none "No candidate is a clearer match than the lexical ranking."]
+ set byKey {}
+ for {set i 0} {$i < $limit} {incr i} {
+  set key c$i
+  set row [lindex $rows $i]
+  dict set criteria $key "[dict get $row label] (action: [dict get $row action])"
+  dict set byKey $key $i
+ }
+ set question [dict create type choice \
+  instructions "Which existing command suggestion best matches the user's command input? Choose none if uncertain." \
+  criteria $criteria]
+ set choice [::ai::systemone::chooseSync command_rerank "COMMAND INPUT: [string range $text 0 200]" $question -timeout 500 -threshold 0.7]
+ if {$choice eq "" || $choice eq "none" || ![dict exists $byKey $choice]} {return $rows}
+ set idx [dict get $byKey $choice]
+ if {$idx == 0} {return $rows}
+ return [concat [list [lindex $rows $idx]] [lreplace $rows $idx $idx]]
+}
+
 # Plain Tcl consumers can use the matcher without loading persistence or Tk.
-proc ::commandline::Suggest {text} {return [Match $text]}
+proc ::commandline::Suggest {text} {return [Rerank $text [Match $text]]}

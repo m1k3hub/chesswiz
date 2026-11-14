@@ -126,7 +126,7 @@ proc ::commandline::Suggest {text} {
   dict set row recent [lindex $stats 1]
   lappend ranked $row
  }
- return [lsort -command ::commandline::LearnedCompare $ranked]
+ return [Rerank $text [lsort -command ::commandline::LearnedCompare $ranked]]
 }
 proc ::commandline::LearnedCompare {a b} {
  foreach key {frequency recent} {

@@ -33,7 +33,7 @@ namespace eval ::commandline {
   {26 command.trends {} {{opening trends}}}
   {27 add_to_repertoire {} {{repertoire add this line}}}
   {27 repertoire_check {} {{repertoire check against my games}}}
-  {28 opponent_brief {prose 0 download 0} {{prepare against @opponent {? i have @colour}}}}
+  {28 opponent_brief {prose 0 download 0} {{prepare against @opponent {? i have @colour}} {prepare against @opponent {? as @colour}}}}
   {29 open_view {kind player_card} {{player card @person}}}
   {30 player_stats {} {{player @person stats} {@person stats}}}
   {30 structure_profile {} {{player @player structures} {@player structures}}}
