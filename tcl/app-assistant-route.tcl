@@ -484,6 +484,25 @@ proc ::application::assistant::RouteCapabilityQuestion {request} {
 }
 
 
+# A whole-window font-size command is unambiguous and must not be lost to a
+# model-authored decline. The two registry actions change every interface
+# font; requests about one pane's notation text stay with the model, which
+# can target that pane's own action.
+proc ::application::assistant::RouteFontSize {request} {
+	set req [string tolower [string trim $request]]
+	if {![regexp {\m(?:fonts?|text|letters?|typeface|ui|interface)\M} $req]} { return {} }
+	if {[regexp {\m(?:notation|move\s*list|pane|comment|game\s*list|database\s*list)\M} $req]} { return {} }
+	if {[regexp {\m(?:do\s+not|don'?t|never)\M} $req]} { return {} }
+	if {[regexp {\m(?:bigger|biger|bigg|larger|large|increase|enlarge|grow|zoom\s+in|up)\M} $req]} {
+		return menu.view.font_inc
+	}
+	if {[regexp {\m(?:smaller|small|shrink|reduce|decrease|tiny|zoom\s+out|down)\M} $req]} {
+		return menu.view.font_dec
+	}
+	return {}
+}
+
+
 # Ask the capability directory first, then let the model phrase the answer
 # from what it found. The call is logged like any other, so the answer is
 # grounded in a tool result from this turn.
@@ -614,6 +633,19 @@ proc ::application::assistant::RouteFallback {request} {
 		array unset Priv routeActual,*
 		ForceCapability $request 0
 		return
+	}
+
+	if {$RouteMode ne "off"} {
+		set fontAction [RouteFontSize $request]
+		if {$fontAction ne ""} {
+			incr Priv(routeGen)
+			set gen $Priv(routeGen)
+			array unset Priv routePred,*
+			array unset Priv routeActual,*
+			RecordRouteActual "run_action routed"
+			DeliverRouted run_action [dict create id $fontAction] 1
+			return
+		}
 	}
 
 	Step 0
@@ -880,6 +912,10 @@ proc ::application::assistant::OnRouted {gen request result} {
 # (::knowledge::Search, offline and deterministic). With no catalog, or no
 # match at all, the router's own two gates decide.
 proc ::application::assistant::RouteAgreesWithCatalog {request name} {
+	if {$name in {install_chessbase_fonts menu.tools.legacy_fonts}
+	 && [RouteFontSize $request] ne ""} {
+		return 0
+	}
 	if {$name eq "engine_analysis" && [regexp -nocase {\mconsole\M} $request]} {
 		return 0
 	}

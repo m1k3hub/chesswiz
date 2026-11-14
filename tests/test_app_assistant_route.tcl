@@ -793,4 +793,24 @@ tcltest::test route-refusal-independent-dispatch {all refusal families at thresh
  }
 } -result 1
 
+tcltest::test route-font-size-deterministic {a whole-window font-size command routes to the real action when the classifier abstains} -body {
+ ::scidb::test::route::isolated {
+  set ::application::assistant::RouteMode active
+  set ::scidb::test::route::RouteReply [::scidb::test::route::reply existing_assistant 0.99 0.99]
+  set ::scidb::test::route::ChatCalls 0
+  set before [expr {abs([font configure TkDefaultFont -size])}]
+  ::scidb::test::route::ask "biger font"
+  update
+  set after [expr {abs([font configure TkDefaultFont -size])}]
+  if {$after > $before} { ::font::changeFontSize -1 }
+  list [expr {$after > $before}] $::scidb::test::route::ChatCalls
+ }
+} -result {1 0}
+
+tcltest::test route-font-size-catalog-veto {font-install actions cannot win a font-size command} -body {
+ list [::application::assistant::RouteAgreesWithCatalog {biger font} install_chessbase_fonts] \
+  [::application::assistant::RouteAgreesWithCatalog {Make the text smaller.} menu.tools.legacy_fonts] \
+  [::application::assistant::RouteAgreesWithCatalog {install the figurine chess fonts} install_chessbase_fonts]
+} -result {0 0 1}
+
 tcltest::cleanupTests
