@@ -2725,6 +2725,50 @@ foreach zoom {0 1} {
     } -result {1 1}
 }
 
+# Replanning the first registered dialog must return its own packed slot,
+# rather than the last member's slot. Exercise the real pair and video layout.
+tcltest::test dlg-v15-b-replan-first {first dialog keeps its own rectangle when the pair is repacked} -setup {
+    ::scidb::test::dlgplace::setupBoard
+    ::scidb::test::dlgplace::loweredMinimum
+} -body {
+    wm geometry .application [::scidb::test::dlgplace::fitGeometry 1000 600]
+    ::scidb::test::dlgplace::waitFor 900
+    ::scidb::test::dlgplace::zoomBoard 0
+    ::scidb::test::dlgplace::realVideo
+    ::playengine::open .application
+    ::scidb::test::dlgplace::waitFor 900
+    ::enginematch::open .application
+    ::scidb::test::dlgplace::waitFor 1100
+    set pair {}
+    foreach dlg $::util::place::BesideDialogs {
+        if {$dlg in {.application.playengine .application.enginematch}} {lappend pair $dlg}
+    }
+    ::scidb::test::dlgplace::require [expr {[llength $pair] == 2}] {both dialogs must be registered}
+    lassign $pair first peer
+    puts [list REPACK_ORDER $pair]
+    set extents [::util::place::besideDialogExtents $first]
+    set plan [::util::place::besideRequestedReserve $first [list $peer] \
+        [winfo reqwidth $first] [winfo reqheight $first] \
+        [::util::place::besideMainArea $first] $extents 12 1]
+    ::scidb::test::dlgplace::require [dict exists $plan geometry] {pair did not produce a scrolling placement}
+    lassign [dict get $plan geometry] x y w h
+    lassign $extents l r t b
+    set proposed [list $x $y [expr {$w+$l+$r}] [expr {$h+$t+$b}]]
+    update idletasks
+    set other [::scidb::test::dlgplace::outerRect $peer]
+    puts [list REPACK_RESULT first $first plan $plan peer $peer measured $other]
+    ::scidb::test::dlgplace::require \
+        [expr {[::scidb::test::dlgplace::overlapArea $proposed $other] == 0}] \
+        "first dialog received peer rectangle: proposed=$proposed peer=$other"
+    ::util::place::besideBoard $first .application
+    ::scidb::test::dlgplace::waitFor 1100
+    ::scidb::test::dlgplace::pairClearOf replan-first .application.playengine .application.enginematch 0
+    ::scidb::test::dlgplace::pairClearOf replan-peer .application.enginematch .application.playengine
+    return 1
+} -cleanup {
+    ::scidb::test::dlgplace::realCleanup
+} -result 1
+
 # W9h: the oracle uses the measured native frame's size and independently
 # clamps all three raw candidates. It never consumes the planner's candidates.
 proc ::scidb::test::dlgplace::nativeMinimum {dlg} {

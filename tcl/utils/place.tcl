@@ -2890,7 +2890,9 @@ proc besideRequestedReserve {dlg peers rw rh workarea extents gap {compact 0}} {
 			}
 			after idle [namespace code [list besideCapture $other]]
 		}
-		lassign [lindex $groupRects end] x y w h
+		# Packing preserves registration order; a re-plan may belong to any
+		# member, not just the last one. Return this dialog's own rectangle.
+		lassign [lindex $groupRects [lsearch -exact $group $dlg]] x y w h
 		if {$compact} {
 			lassign $extents l r t b
 			set rw [expr {$w-$l-$r}]; set rh [expr {$h-$t-$b}]

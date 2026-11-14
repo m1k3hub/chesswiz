@@ -120,7 +120,10 @@ test knowfix-2-menu-db-readonly {menu.db.readonly toggles readonly flag of curre
 # ----------------------------------------------------------------------
 # 3. menu.analysis.explain.comment
 # ----------------------------------------------------------------------
-test knowfix-3-menu-analysis-explain-comment {menu.analysis.explain.comment delegates to explainComment} -body {
+test knowfix-3-menu-analysis-explain-comment {menu.analysis.explain.comment delegates to explainComment} -setup {
+    set savedProvider $::application::ai::Config(provider)
+    set ::application::ai::Config(provider) stub
+} -body {
     set called 0
     proc ::application::ai::testExplainComment {parent pos} {
         set ::scidb::test::knowfix::explainPos $pos
@@ -139,6 +142,8 @@ test knowfix-3-menu-analysis-explain-comment {menu.analysis.explain.comment dele
     rename ::application::ai::explainComment ::application::ai::testExplainComment
     rename ::application::ai::savedExplainComment ::application::ai::explainComment
     list $::scidb::test::knowfix::explainCalled $::scidb::test::knowfix::explainPos
+} -cleanup {
+    set ::application::ai::Config(provider) $savedProvider
 } -result {1 after}
 
 # ----------------------------------------------------------------------

@@ -313,9 +313,15 @@ proc ::scidb::test::ctx::CheckFixture {cid object {section default}} {
 set ::scidb::test::ctx::objects [::scidb::test::ctx::Objects]
 
 foreach cid {C1 C2 C3 C4 C6 C7 C8 C10 C11 C12} {
-	tcltest::test context-fixture-$cid "C$cid menu equals the frozen list" -body {
+	tcltest::test context-fixture-$cid "C$cid menu equals the frozen list" -setup {
+		# The frozen full-feature menu includes the configured-model rows.
+		set savedProvider $::application::ai::Config(provider)
+		set ::application::ai::Config(provider) stub
+	} -body {
 		set object [dict get $::scidb::test::ctx::objects $cid]
 		::scidb::test::ctx::CheckFixture $cid $object
+	} -cleanup {
+		set ::application::ai::Config(provider) $savedProvider
 	} -result 1
 }
 

@@ -230,13 +230,18 @@ tcltest::test panel-suggestions-empty-profile {with no database and no game the 
 		[expr {[lsearch -exact $ids menu.analysis.game_review] < 0}]
 } -result {1 1 1}
 
-tcltest::test panel-suggestions-loaded-game {a game on the board gets review and explanation suggestions} -body {
+tcltest::test panel-suggestions-loaded-game {a game on the board gets review and explanation suggestions} -setup {
+	set savedProvider $::application::ai::Config(provider)
+	set ::application::ai::Config(provider) stub
+} -body {
 	::scidb::test::panel::withState 0 1 {
 		set ids [::application::assistant::panel::SuggestIds]
 	}
 	list [expr {[lsearch -exact $ids menu.analysis.game_review] >= 0}] \
 		[expr {[lsearch -exact $ids menu.analysis.explain.position] >= 0}] \
 		[expr {[lsearch -glob $ids menu.training.*] >= 0}]
+} -cleanup {
+	set ::application::ai::Config(provider) $savedProvider
 } -result {1 1 1}
 
 tcltest::test panel-game-detected {a loaded game is seen without the gamebar} -setup {

@@ -70,7 +70,7 @@ namespace eval ::scidb::test::reachability {
             foreach suffix {board editor games players events sites annotators positions tree analysis media report assistant explorer} {
                 catch {lappend out [list pane $suffix [::menu::PaneChecked $suffix]]}
             }
-            foreach name {::font::Options ::board::layout ::board::hilite ::tablebase::Options ::application::board::Options ::application::focuszoom::enabled} {
+            foreach name {::font::Options ::board::layout ::board::hilite ::tablebase::Options ::application::board::Options ::application::focuszoom::enabled ::application::focuszoom::followsSize} {
                 if {[array exists $name]} { lappend out [list $name [lsort -stride 2 -index 0 [array get $name]]] }
             }
             foreach name {::application::focuszoom::ratio ::application::focuszoom::pinBoard} {
@@ -348,7 +348,7 @@ namespace eval ::scidb::test::reachability {
         foreach path $files {
             set f [open $path]; set source [read $f]; close $f
             regsub -all -line {^\s*#.*$} $source {} source
-            foreach {all id} [regexp -all -inline {::(?:action::(?:run|get|invoke)|application::assistant::runTool)\s+([a-z][a-z0-9_.-]*)} $source] {
+            foreach {all id} [regexp -all -inline {::(?:action::(?:run|get|invoke)|application::assistant::runTool)\s+([a-zA-Z][a-zA-Z0-9_.-]*)} $source] {
                 # Tests deliberately create unknown/test ids to test errors.
                 if {[file dirname $path] eq "$root/tests" && ![regexp {^(menu\.|view\.|c[0-9]+\.)} $id]} { continue }
                 if {[string index $id end] ne {.}} { lappend ids $id }
@@ -357,7 +357,7 @@ namespace eval ::scidb::test::reachability {
         foreach path $files {
             set f [open $path]; set source [read $f]; close $f
             regsub -all -line {^\s*#.*$} $source {} source
-            foreach {all id} [regexp -all -inline {(?:^|[\s{\["])((?:menu|view|c[0-9]+)\.[a-z0-9_]+(?:\.[a-z0-9_]+)*)(?=[\s}\]"])} $source] {
+            foreach {all id} [regexp -all -inline {(?:^|[\s{\["])((?:menu|view|c[0-9]+)\.[a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)*)(?=[\s}\]"])} $source] {
                 lappend ids $id
             }
         }

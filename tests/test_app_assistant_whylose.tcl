@@ -250,6 +250,8 @@ tcltest::test whylose-annotation-provider {annotation restores chat settings bef
 
 tcltest::test whylose-empty-after-annotation {a long asynchronous annotation cannot end with no answer} -setup {
 	::scidb::test::whylose::setup
+	set savedAppProvider $::application::ai::Config(provider)
+	set ::application::ai::Config(provider) stub
 	::scidb::test::whylose::stub ::ai::annotate::running? {} {return 0}
 	::scidb::test::whylose::stub ::ai::annotate::annotate {parent args} {
 		array set opts $args
@@ -263,7 +265,10 @@ tcltest::test whylose-empty-after-annotation {a long asynchronous annotation can
 	::scidb::test::whylose::waitFor ::application::assistant::Priv(busy)
 	set text [dict get [lindex $::application::assistant::Priv(messages) end] content]
 	list [string match {*Annotated 6 moves*save it*} $text] [string match {*(no answer)*} $text]
-} -cleanup {::scidb::test::whylose::cleanup} -result {1 0}
+} -cleanup {
+	set ::application::ai::Config(provider) $savedAppProvider
+	::scidb::test::whylose::cleanup
+} -result {1 0}
 
 tcltest::test whylose-model-failure {failed prose request still gives the engine facts and resets timeout} -setup {
 	::scidb::test::whylose::setup

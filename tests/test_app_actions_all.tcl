@@ -13,7 +13,12 @@ package require tcltest 2.5
 
 namespace eval ::scidb::test::actions_all {
 	variable HandlerCalls {}
+	variable savedProvider $::application::ai::Config(provider)
 }
+
+# Handler dispatch needs an available provider even when the surrounding app
+# starts with no model configured. The handlers below are transport-free stubs.
+set ::application::ai::Config(provider) stub
 
 source [file join [file dirname [info script]] app_actions_support.tcl]
 
@@ -278,4 +283,5 @@ tcltest::test all-actions-bulk-marked {bulk actions have bulk flag set} -body {
 } -result {}
 
 file delete -force $::scidb::test::actions::Dir
+set ::application::ai::Config(provider) $::scidb::test::actions_all::savedProvider
 ::tcltest::cleanupTests

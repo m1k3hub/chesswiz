@@ -64,6 +64,8 @@ tcltest::test dispatch-report-font {real HTML viewer size changes and native fam
 
 
 tcltest::test dispatch-draft {native draft callback writes model result into the comment editor for review} -setup {
+ set savedProvider $::application::ai::Config(provider)
+ set ::application::ai::Config(provider) stub
  set savedVars [array get ::comment::Vars]
  toplevel .dispatchComment
  frame .dispatchComment.editor
@@ -79,6 +81,7 @@ tcltest::test dispatch-draft {native draft callback writes model result into the
  set reply [::action::run c11.draft_comment [dict create object [dict create widget .dispatchComment.editor.text]]]
  list [string match error:* $reply] [.dispatchComment.editor.text get 1.0 end-1c]
 } -cleanup {
+ set ::application::ai::Config(provider) $savedProvider
  rename ::application::ai::generate {}
  rename ::dispatchTest::realGenerate ::application::ai::generate
  array unset ::comment::Vars
@@ -195,6 +198,8 @@ tcltest::test dispatch-repertoire-destinations {both native menus name an actual
 # The unposted pane-toggle aliases identify their target in the id; their
 # no-argument effects are covered by ask-scope-c9-pane-rows.
 tcltest::test dispatch-all-leaves-no-object {every posted context leaf refuses missing selection before dispatch} -setup {
+ set savedProvider $::application::ai::Config(provider)
+ set ::application::ai::Config(provider) stub
  set ::dispatchTest::calls 0
  proc ::dispatchTest::entered {args} {incr ::dispatchTest::calls}
  trace add execution ::context::Command enter ::dispatchTest::entered
@@ -215,6 +220,7 @@ tcltest::test dispatch-all-leaves-no-object {every posted context leaf refuses m
  puts "CONTEXT_NO_OBJECT_LEAVES $count"
  list [expr {$count > 200}] $bad $::dispatchTest::calls [expr {[catch {clipboard get} now] == $clipBefore && $now eq $clipValue}]
 } -cleanup {
+ set ::application::ai::Config(provider) $savedProvider
  trace remove execution ::context::Command enter ::dispatchTest::entered
  rename ::dispatchTest::entered {}
 } -result {1 {} 0 1}

@@ -13,13 +13,22 @@ tcltest::test donate-button-placed {Donate sits in the top strip, left of the Ma
 		[expr {[winfo y $d] == [winfo y $m]}]
 } -result {1 1 1 1}
 
-tcltest::test donate-menu-links {Donate offers PayPal and Ko-fi (read, never clicked)} -body {
+tcltest::test donate-menu-links {Donate dispatches the exact PayPal and Ko-fi destinations without opening a browser} -setup {
+	rename ::web::open ::web::donateTestOpen
+	proc ::web::open {parent url} {set ::donateTestURL $url}
+} -body {
 	set m [winfo parent $::application::Vars(donate)].donate_menu
 	set out {}
 	for {set i 0} {$i <= [$m index end]} {incr i} {
-		lappend out [$m entrycget $i -label] [lindex [$m entrycget $i -command] end]
+		set ::donateTestURL {}
+		$m invoke $i
+		lappend out [$m entrycget $i -label] $::donateTestURL
 	}
 	set out
+} -cleanup {
+	rename ::web::open {}
+	rename ::web::donateTestOpen ::web::open
+	unset -nocomplain ::donateTestURL
 } -result {PayPal https://paypal.me/MGThomas Ko-fi https://ko-fi.com/michaelthomas13477}
 
 if {[info exists ::env(DONATE_SHOT)]} {

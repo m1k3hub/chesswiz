@@ -44,7 +44,7 @@ namespace eval ::scidb::test::objects {
             game {c3.sort.column c3.sort.asc c3.sort.desc c3.paste_games c3.merge c3.load c3.browse c3.overview c3.tournament c3.games_like c3.edit_characteristics c3.delete c3.copy_game}
             database {c4.new.scid c4.new.pgn c4.close c4.open_new_tab c4.download_games c4.import.pgn c4.open_database c4.help c4.maintenance.compact c4.export.pgn c4.export.lichess c4.symbol.small c4.symbol.normal c4.symbol.large c4.properties c4.readonly c4.search.current c4.reports.opening}
             player {c5.player_card c5.prep_report}
-            site {c5.open_switcher c5.save_working_set}
+            site {c5.open_switcher c5.save_working_set c5.filtered.open_switcher c5.filtered.save_working_set}
             event {c5.event_table}
             engine {c6.add_move c6.add_line c6.add_all c6.add_merge c6.add_include c6.insert_comment c6.copy_line c6.copy_fen c6.pause_resume c6.close_engine c6.lock_engine c6.opponents_view c6.best_first c6.multi.1 c6.multi.2 c6.multi.3 c6.multi.4 c6.multi.5 c6.multi.6 c6.multi.7 c6.multi.8 c6.lines.1 c6.lines.2 c6.lines.3 c6.lines.4 c6.setup_engine c6.setup_eval_edges c9.analysis.setup c9.analysis.best c9.analysis.opponents}
             pane {c9.board_setup c9.not.configure c9.not.font_reset c9.stay_on_top c9.hide_leaving c9.maximise c9.fold c9.amalgamate c9.float c9.docking c9.close c9.flip_board c9.not.font_inc c9.not.font_dec c9.not.spacing c9.not.numbering c9.not.markers c9.not.diagrams c9.not.emoticons}
@@ -475,7 +475,7 @@ namespace eval ::scidb::test::objects {
             after 100 [list [namespace current]::chooseVariation]
         }
         if {$id in {c4.export.pgn c12.export}} { after 100 [namespace current]::exportFile }
-        if {$id in {c12.reload c4.close c4.save_changes c5.save_working_set c4.maintenance.compact c12.save.replace c12.save.replace_moves c12.save.new}} {
+        if {$id in {c12.reload c4.close c4.save_changes c5.save_working_set c5.filtered.save_working_set c4.maintenance.compact c12.save.replace c12.save.replace_moves c12.save.new}} {
             # Match this fixture's real Yes/OK driver at Aqua's OS boundary.
             set ::scidb::test::reachability::nativeAccept 1
             after 100 [list [namespace current]::acceptDialogs]
@@ -505,6 +505,22 @@ namespace eval ::scidb::test::objects {
             set manualSearchComplete 1
         }
         puts "OBJECT ACTION $id returned"; flush stdout
+        if {$id eq "c2.strip.comments"} {
+            # Comments is a cascade. Exercise its real language choice before
+            # checking removal and persistence in the generated scratch game.
+            if {[::scidb::game::count comments] != 1} { error {scratch comment is missing} }
+            set menu .contextChoices_paneCascade
+            if {[$menu index end] != 0 || [lindex [$menu entrycget 0 -command] 1] ne "c2.strip.language"} {
+                error {comment cascade lost its language choice}
+            }
+            $menu invoke 0
+            update
+            set menu .contextChoices_stripLanguage
+            if {[$menu index end] != 0} { error {scratch game must expose exactly one comment language} }
+            $menu invoke 0
+            update
+            if {[::scidb::game::count comments] != 0} { error {selected comment language was not removed} }
+        }
         if {$id eq "c8.move_actions"} {
             set menu .contextMoveActions
             set target [list ::application::tree::DoAction [dict get $object table] \
@@ -513,10 +529,15 @@ namespace eval ::scidb::test::objects {
             for {set i 0} {$i <= [$menu index end]} {incr i} {
                 if {[$menu type $i] ne "command"} { continue }
                 set command [$menu entrycget $i -command]
-                if {[lindex $command 0] ne "eval" || [lindex $command 1] ne $target} {
+                if {[lrange $command 0 1] ne {::action::run html.tree.choice}} {
+                    error {tree move menu bypassed its registered choice action}
+                }
+                set args [lindex $command 2]
+                if {[dict get $args target] ne [dict get $object table]
+                    || [dict get $args key] ne [list [dict get $object row] [dict get $object move]]} {
                     error {tree move menu lost its selected continuation}
                 }
-                lappend actions [lindex $command 2]
+                lappend actions [dict get $args value]
             }
             if {"load" ni $actions || ("replace" ni $actions && "append" ni $actions)} {
                 error {tree move menu omitted its load or move actions}
@@ -566,7 +587,7 @@ namespace eval ::scidb::test::objects {
             }
         }
         if {[string match c2.strip.* $id]} {
-            set gameAfter [::scidb::game::toPGN modified]
+            set gameAfter [::scidb::game::toPGN [expr {[::scidb::game::query modified?] ? "modified" : "original"}]]
             if {$gameBefore eq $gameAfter && $marksBefore eq [::scidb::game::query marks] && $infoBefore == [::scidb::game::count info]} { error "$id did not change the scratch game" }
             # Persist the modified scratch game; the protected control is never a sink.
             variable base

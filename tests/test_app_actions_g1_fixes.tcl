@@ -588,6 +588,9 @@ test g1-router-bulk-gate {
 # ----------------------------------------------------------------------
 test g1-ai-exposed-equals-toolsjson {
 	ai-exposed ids are exactly the toolsJson names in normal and debug mode
+} -setup {
+	set savedProvider $::application::ai::Config(provider)
+	set ::application::ai::Config(provider) stub
 } -body {
 	package require json
 	set savedDebug $::application::assistant::Priv(debug)
@@ -608,6 +611,8 @@ test g1-ai-exposed-equals-toolsjson {
 	set debugOk [expr {$debugJson eq [lsort $exposedDebug]}]
 	set ::application::assistant::Priv(debug) $savedDebug
 	list $normalOk $debugOk
+} -cleanup {
+	set ::application::ai::Config(provider) $savedProvider
 } -result {1 1}
 
 
