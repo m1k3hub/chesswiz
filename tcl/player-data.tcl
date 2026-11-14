@@ -674,6 +674,7 @@ proc ::playerdata::installList {kind source} {
 			if {$hadInfo} { file rename -force $metadata.backup $metadata } else { file delete -force $metadata }
 			return -options $options $message
 		}
+		InvalidateNames
 	} finally {
 		file delete -force $staged $stagedInfo $file.backup $metadata.backup
 	}
@@ -817,11 +818,32 @@ proc ::playerdata::Mark {tick} {
 }
 
 
-proc ::playerdata::fixNames {parent} {
+# Conservative invalidation: lifecycle, database edits and dictionary reloads
+# invalidate every outstanding preview/undo. Snapshot comparison also catches
+# changed player rows and game counts. No event loop runs between check/apply.
+namespace eval ::playerdata { variable NameEpoch 0 }
+proc ::playerdata::InvalidateNames {args} { incr ::playerdata::NameEpoch }
+foreach command {open close clear renamePlayers import save compact linkPlayers linkPlayer set update copy} {
+	set command ::scidb::db::$command
+	if {[llength [info commands $command]]} {
+		trace add execution $command enter ::playerdata::InvalidateNames
+	}
+}
+trace add execution ::scidb::app::load enter ::playerdata::InvalidateNames
+
+proc ::playerdata::NameState {base} {
+	set state [list $::playerdata::NameEpoch $base]
+	foreach variant [::scidb::db::get variants $base] {
+		lappend state $variant [::scidb::db::playerLinks $base $variant]
+	}
+	return $state
+}
+
+proc ::playerdata::fixNames {parent {base {}}} {
 	variable NameFix
 	variable mc
 
-	set base [::scidb::db::get name]
+	if {$base eq ""} { set base [::scidb::db::get name] }
 	if {![string length $base]} {
 		::dialog::info -parent $parent -message $mc::FixNamesNoBase
 		return
@@ -834,6 +856,7 @@ proc ::playerdata::fixNames {parent} {
 		return
 	}
 
+	set NameFix(state) [NameState $base]
 	set NameFix(base) $base
 	set NameFix(rows) $rows
 	set NameFix(tree) {}
@@ -868,10 +891,12 @@ proc ::playerdata::EmbedNameFixes {w infoFont alertFont} {
 	ttk::frame $w.box
 	set tree [ttk::treeview $w.box.tree -show headings -selectmode none \
 		-height [expr {min(12, max(3, [llength $rows]))}] \
-		-columns {pick old new games source}]
+		-columns {pick old new games source variant}]
 	::ttk::scrollbar $w.box.scroll -command [list $tree yview]
 	$tree configure -yscrollcommand [list $w.box.scroll set]
 
+	$tree heading variant -text "Variant"
+	$tree column variant -width 90
 	$tree heading pick -text ""
 	$tree heading old -text $mc::FixNamesColOld -anchor w
 	$tree heading new -text $mc::FixNamesColNew -anchor w
@@ -886,7 +911,7 @@ proc ::playerdata::EmbedNameFixes {w infoFont alertFont} {
 	set i 0
 	foreach row $rows {
 		lassign $row variant index old new games source tick
-		$tree insert {} end -id $i -values [list [Mark $tick] $old $new $games $source]
+		$tree insert {} end -id $i -values [list [Mark $tick] $old $new $games $source $variant]
 		incr i
 	}
 
@@ -949,6 +974,11 @@ proc ::playerdata::ApplyNameFixes {parent base} {
 	variable NameFix
 	variable mc
 
+	if {![info exists NameFix(state)] || [catch {NameState $base} state]
+		|| $state ne $NameFix(state)} {
+		::dialog::info -parent $parent -message "The database or reference data changed. Open a fresh preview."
+		return 0
+	}
 	set byVariant {}
 	set undo {}
 	set picked 0
@@ -958,8 +988,7 @@ proc ::playerdata::ApplyNameFixes {parent base} {
 		lassign $row variant index old new games source tick
 		if {$NameFix(tick,$i)} {
 			incr picked
-			dict lappend byVariant $variant $index $new
-			lappend undo [list $variant $new $old]
+			dict lappend byVariant $variant $index $old $new
 		}
 		incr i
 	}
@@ -977,6 +1006,10 @@ proc ::playerdata::ApplyNameFixes {parent base} {
 			continue
 		}
 		incr renamed [dict get $result renamed]
+		foreach operation [dict get $result applied] {
+			lassign $operation index old new
+			lappend undo [list $variant $new $old]
+		}
 		foreach row [dict get $result skipped] {
 			lassign $row index name reason
 			if {[lsearch -exact $reasons $reason] < 0} { lappend reasons $reason }
@@ -985,6 +1018,7 @@ proc ::playerdata::ApplyNameFixes {parent base} {
 
 	if {$renamed} {
 		set NameFix(undo,$base) $undo
+		set NameFix(undoState,$base) [NameState $base]
 		if {$base eq [::scidb::db::get name]} {
 			catch { ::application::database::refreshBase $base }
 		}
@@ -995,7 +1029,7 @@ proc ::playerdata::ApplyNameFixes {parent base} {
 
 	set text [format $mc::FixNamesDone [::locale::formatNumber $renamed]]
 	if {[llength $reasons]} {
-		append text "\n" [format $mc::FixNamesSkipped [::locale::formatNumber $picked] [join $reasons "; "]]
+		append text "\n" [format $mc::FixNamesSkipped [::locale::formatNumber [expr {$picked - $renamed}]] [join $reasons "; "]]
 	}
 	::dialog::info -parent $parent -message $text
 	return $renamed
@@ -1013,6 +1047,11 @@ proc ::playerdata::revertNames {parent base} {
 		return 0
 	}
 
+	if {![info exists NameFix(undoState,$base)] || [catch {NameState $base} state]
+		|| $state ne $NameFix(undoState,$base)} {
+		::dialog::info -parent $parent -message "Undo conflicts with a database or reference-data change. No names changed."
+		return 0
+	}
 	set byVariant {}
 	foreach item $NameFix(undo,$base) {
 		lassign $item variant new old
@@ -1026,7 +1065,7 @@ proc ::playerdata::revertNames {parent base} {
 			lassign $pair new old
 			set index [NameIndex $base $variant $new]
 			if {$index < 0} { continue }
-			lappend renames $index $old
+			lappend renames $index $new $old
 		}
 		if {![llength $renames]} { continue }
 		if {[catch { ::scidb::db::renamePlayers $base $variant $renames } result]} { continue }

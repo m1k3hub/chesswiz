@@ -6426,7 +6426,7 @@ appendSkipped(Tcl_Interp* ti, Tcl_Obj* skipped, Tcl_Obj* index, Tcl_Obj* name, c
 static int
 cmdRenamePlayers(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
-	// Usage: ::scidb::db::renamePlayers <database> <variant> {<index> <name> ...}
+	// Usage: ::scidb::db::renamePlayers <database> <variant> {<index> <expected-name> <name> ...}
 	// Rename players of a database, all of them in one step: renaming sorts the
 	// namebase, so an index is only valid until then. The games keep pointing at
 	// their entry, so every game of a renamed player shows the new name; nothing
@@ -6450,14 +6450,14 @@ cmdRenamePlayers(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	if (Tcl_ListObjGetElements(ti, objv[3], &count, &pairs) != TCL_OK)
 		return TCL_ERROR;
 
-	if (count%2)
+	if (count%3)
 		return error(	CmdRenamePlayers, nullptr, nullptr,
-						"<renames> needs an <index> and a <name> for each player");
+						"<renames> needs <index> <expected-name> <name> for each player");
 
 	Database&	db		= const_cast<Cursor&>(Scidb->cursor(database, variant)).getDatabase();
 	Namebase&	base	= db.namebases()(Namebase::Player);
 
-	if (base.isReadonly())
+	if (base.isReadonly() || Scidb->cursor(database, variant).isReadonly() || !Scidb->isWritable(database))
 		return error(CmdRenamePlayers, nullptr, nullptr, "the database is read-only");
 
 	// The names are looked up before the first rename: a renamed entry is out
@@ -6470,7 +6470,7 @@ cmdRenamePlayers(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	Tcl_Obj*					skipped = Tcl_NewListObj(0, nullptr);
 	unsigned					limit = db.countPlayers();
 
-	for (int i = 0; i < count; i += 2)
+	for (int i = 0; i < count; i += 3)
 	{
 		int index = 0;
 
@@ -6478,12 +6478,21 @@ cmdRenamePlayers(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			|| index < 0
 			|| unsigned(index) >= limit)
 		{
-			appendSkipped(ti, skipped, pairs[i], pairs[i + 1], "no player of that index");
+			appendSkipped(ti, skipped, pairs[i], pairs[i + 2], "no player of that index");
 			continue;
 		}
 
+		for (int j = 0; j < i; j += 3)
+		{
+			int prior = -1;
+			if (Tcl_GetIntFromObj(ti, pairs[j], &prior) == TCL_OK && prior == index)
+				return error(CmdRenamePlayers, nullptr, nullptr, "duplicate source index");
+		}
+		if (base.player(unsigned(index))->name() != Tcl_GetString(pairs[i + 1]))
+			return error(CmdRenamePlayers, nullptr, nullptr, "stale preview: player name changed");
+
 		int length = 0;
-		char const* text = Tcl_GetStringFromObj(pairs[i + 1], &length);
+		char const* text = Tcl_GetStringFromObj(pairs[i + 2], &length);
 		mstl::string name(text, unsigned(length));
 
 		// the codec writes a name's length in one byte, and the namebase wants
@@ -6493,7 +6502,7 @@ cmdRenamePlayers(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			|| !sys::utf8::validate(name)
 			|| name.find_first_of("\r\n") != mstl::string::npos)
 		{
-			appendSkipped(ti, skipped, pairs[i], pairs[i + 1], "not a name a database can hold");
+			appendSkipped(ti, skipped, pairs[i], pairs[i + 2], "not a name a database can hold");
 			continue;
 		}
 
@@ -6501,7 +6510,7 @@ cmdRenamePlayers(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 		if (entry == nullptr)
 		{
-			appendSkipped(ti, skipped, pairs[i], pairs[i + 1], "no player of that index");
+			appendSkipped(ti, skipped, pairs[i], pairs[i + 2], "no player of that index");
 			continue;
 		}
 
@@ -6513,7 +6522,7 @@ cmdRenamePlayers(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 		if (k >= 0 && base.player(unsigned(k))->name() == name)
 		{
-			appendSkipped(ti, skipped, pairs[i], pairs[i + 1], "the database has a player of that name");
+			appendSkipped(ti, skipped, pairs[i], pairs[i + 2], "the database has a player of that name");
 			continue;
 		}
 
@@ -6524,7 +6533,7 @@ cmdRenamePlayers(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		{
 			if (planned[n] == name)
 			{
-				appendSkipped(	ti, skipped, pairs[i], pairs[i + 1],
+				appendSkipped(	ti, skipped, pairs[i], pairs[i + 2],
 								"another player of this database is renamed to it");
 				twice = true;
 				break;
@@ -6538,8 +6547,16 @@ cmdRenamePlayers(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		renames.push_back(Rename{ unsigned(index), name });
 	}
 
+	Tcl_Obj* applied = Tcl_NewListObj(0, nullptr);
 	for (unsigned i = 0; i < renames.size(); ++i)
-		base.rename(base.player(renames[i].index), renames[i].name);
+	{
+		NamebasePlayer* entry = base.player(renames[i].index);
+		Tcl_Obj* row[] = { Tcl_NewIntObj(renames[i].index),
+			Tcl_NewStringObj(entry->name().c_str(), -1),
+			Tcl_NewStringObj(renames[i].name.c_str(), -1) };
+		Tcl_ListObjAppendElement(ti, applied, Tcl_NewListObj(3, row));
+		base.rename(entry, renames[i].name);
+	}
 
 	if (!renames.empty())
 	{
@@ -6547,14 +6564,15 @@ cmdRenamePlayers(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		base.setModified(true);
 	}
 
-	Tcl_Obj* objs[4] =
+	Tcl_Obj* objs[6] =
 	{
 		Tcl_NewStringObj("renamed", -1),
 		Tcl_NewIntObj(int(renames.size())),
 		Tcl_NewStringObj("skipped", -1),
 		skipped,
+		Tcl_NewStringObj("applied", -1), applied,
 	};
-	setResult(Tcl_NewListObj(4, objs));
+	setResult(Tcl_NewListObj(6, objs));
 	return TCL_OK;
 }
 
