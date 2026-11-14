@@ -265,6 +265,7 @@ SOURCES = \
 	command-table.tcl \
 	command-line.tcl \
 	command-actions.tcl \
+	command-learning.tcl \
 	app-ask.tcl \
 	app-setup-scan.tcl \
 	app-error-triage.tcl \

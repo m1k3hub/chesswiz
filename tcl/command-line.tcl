@@ -132,7 +132,7 @@ proc ::commandline::Criteria {words arguments missing score} {
  }
  return [lrange $out 0 23]
 }
-proc ::commandline::Suggest {text} {
+proc ::commandline::Match {text} {
  variable Table; variable Cache
  set Cache {}; set words [Words $text]; set out {}; set seen {}
  if {![llength $words] || [llength $words] > 50} {return {}}
@@ -248,7 +248,9 @@ proc ::commandline::Run {row} {
   if {[dict get $candidate action] eq [dict get $row action] && [dict get $candidate args] eq [dict get $row args] && ![llength [dict get $candidate missing]]} {set valid 1; break}
  }
  if {!$valid} {return "declined: the command's values changed; choose again"}
- return [::action::run [dict get $row action] [dict get $row args]]
+ set result [::action::run [dict get $row action] [dict get $row args]]
+ if {![string match "error:*" $result] && ![string match "declined*" $result] && [llength [info commands ::commandline::RecordPick]]} {RecordPick $row}
+ return $result
 }
 namespace eval ::application::assistant {}
 # A separate, tools-free conversation path. Even unsolicited provider tool calls
@@ -277,3 +279,6 @@ proc ::application::assistant::QuestionReply {result} {
 proc ::commandline::ShortName {a b} {
  return [expr {[string length $a]-[string length $b]}]
 }
+
+# Plain Tcl consumers can use the matcher without loading persistence or Tk.
+proc ::commandline::Suggest {text} {return [Match $text]}
