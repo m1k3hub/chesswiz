@@ -194,6 +194,7 @@ SOURCES = \
 	lichess-puzzles.tcl \
 	stream-chat.tcl \
 	stream.tcl \
+	td-runner.tcl \
 	engine-match.tcl \
 	ai-claims.tcl \
 	ai-rhetoric.tcl \

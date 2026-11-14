@@ -720,6 +720,10 @@ proc ::enginematch::Fail {why} {
 proc ::enginematch::Finish {} {
 	variable Priv
 
+	if {[info exists Priv(runner)] && $Priv(runner) ne ""} {
+		::td::runner::Release $Priv(runner)
+		set Priv(runner) {}
+	}
 	if {$Priv(subscribed) && $Priv(pos) >= 0} {
 		catch { ::scidb::game::unsubscribe board $Priv(pos) [namespace current]::Update }
 		catch { ::scidb::db::unsubscribe gameClose [namespace current]::GameClosed }
@@ -833,6 +837,9 @@ proc ::enginematch::Pause {} {
 proc ::enginematch::NextGame {} {
 	variable Priv
 	variable mc
+	variable ResignPlies
+	variable DrawPlies
+	variable DrawMinMove
 
 	if {!$Priv(running)} { return }
 	set total [llength $Priv(schedule)]
@@ -844,9 +851,58 @@ proc ::enginematch::NextGame {} {
 		MatchDone
 		return
 	}
+	if {[info exists Priv(runner)] && $Priv(runner) ne ""} {
+		::td::runner::Release $Priv(runner)
+	}
 	lassign [lindex $Priv(schedule) $Priv(next)] white black opening
-	SetupGame $white $black $opening
+	set moves {}
+	if {$opening >= 0} { set moves [lindex $Priv(openings) $opening] }
+	set spec [list \
+		-white $white -black $black -opening $moves -pos $Priv(pos) \
+		-base $Priv(base) -event $mc::Event -round [expr {$Priv(next) + 1}] \
+		-base_ms [expr {$Priv(minutes) * 60000}] \
+		-increment_ms [expr {$Priv(increment) * 1000}] \
+		-noclock $Priv(noclock) -movetime $Priv(movetime) -overhead_ms 0 \
+		-tb $Priv(tb) -online $Priv(online) \
+		-resign_plies $ResignPlies -draw_plies $DrawPlies -draw_min_move $DrawMinMove \
+		-request ::enginematch::RequestMove -connect ::enginematch::Connect \
+		-onComplete ::enginematch::RunnerDone -onState ::enginematch::RunnerSync \
+		-manage_subscriptions 0]
+	set Priv(runner) [::td::runner::Start $spec]
 	Status [format $mc::Running [expr {$Priv(next) + 1}] $total $white $black]
+}
+
+# The generic runner writes per-game state. Mirror only the legacy fields the
+# dialog and the original test seam observe; the match's running/saved counts
+# remain conveyor-owned.
+proc ::enginematch::RunnerSync {id} {
+	variable Priv
+	set name ::td::runner::${id}::State
+	if {![array exists $name]} { return }
+	upvar 0 $name S
+	set Priv(runner) $id
+	foreach key {pos token phase white black side history tbLatch busy \
+		clock:w clock:b pending:w pending:b pipe:w pipe:b pipeState:w pipeState:b \
+		watchdog eval:w eval:b seg:w seg:b} {
+		if {[info exists S($key)]} { set Priv($key) $S($key) }
+	}
+}
+
+# A runner game is complete: save the conveyor's result and advance after the
+# callback has returned, so no namespace is deleted beneath its own callback.
+proc ::enginematch::RunnerDone {id outcome} {
+	variable Priv
+	variable mc
+	if {![info exists Priv(runner)] || $id ne $Priv(runner) || !$Priv(running)} { return }
+	set result [dict get $outcome result]
+	if {[dict get $outcome saved]} { incr Priv(saved) }
+	UpdateScores $result
+	incr Priv(next)
+	set total [llength $Priv(schedule)]
+	Status [format $mc::GameDone $Priv(next) $total $Priv(white) $Priv(black) \
+		$result [dict get $outcome reason]]
+	UpdateTable
+	after idle [namespace code NextGame]
 }
 
 
@@ -921,7 +977,10 @@ proc ::enginematch::StartTurn {side} {
 # implementation talks UCI over the engine pipes; a stub calls
 # [namespace code GotMove] with a uci move itself.
 proc ::enginematch::RequestMove {side} {
-	DriveMove $side
+	variable Priv
+	if {[info exists Priv(runner)] && $Priv(runner) ne ""} {
+		::td::runner::DriveMove $Priv(runner) $side
+	}
 }
 
 
@@ -959,33 +1018,27 @@ proc ::enginematch::DriveMove {side} {
 # The pipe handshake of <side>'s engine; returns 1 while the engine is
 # still starting (the move goes out when "readyok" arrives), 0 when the
 # engine is already up.
-proc ::enginematch::Connect {side} {
+proc ::enginematch::Connect {id side} {
 	variable Priv
 	variable mc
+	upvar 0 ::td::runner::${id}::State S
 
-	if {$Priv(pipe:$side) ne ""} { return 0 }
-	if {$Priv(pipeState:$side) eq "starting"} { return 1 }
+	if {$S(pipe:$side) ne ""} { return 0 }
+	if {$S(pipeState:$side) eq "starting"} { return 1 }
 
-	set name [EngineName $side]
+	set name [::td::runner::EngineName $id $side]
 	set index [::engine::FindIndex [EngineBase $name]]
 	set e [dict merge $::engine::EmptyEngine [lindex $::engine::Engines $index]]
 	set cmd [::engine::Command [dict get $e Command] [dict get $e Parameters]]
 	if {$cmd eq "" || $cmd eq "no-wine"} {
-		EngineDied $side [format $mc::EngineMissing $name [dict get $e Command]]
+		::td::runner::EngineDied $id $side [format $mc::EngineMissing $name [dict get $e Command]]
 		return 1
 	}
 	if {[catch { set pipe [::open "|[list {*}$cmd]" r+] } err]} {
-		EngineDied $side $err
+		::td::runner::EngineDied $id $side $err
 		return 1
 	}
-	fconfigure $pipe -blocking 0 -buffering line
-	set Priv(pipe:$side) $pipe
-	set Priv(pipeState:$side) starting
-	fileevent $pipe readable [namespace code [list OnReadable $side]]
-	Send $side uci
-	variable StartTimeout
-	after $StartTimeout [namespace code [list OnStartTimeout $side $pipe]]
-	return 1
+	return [::td::runner::AttachPipe $id $side $pipe]
 }
 
 
@@ -1055,53 +1108,10 @@ proc ::enginematch::OnEngineLine {side line} {
 # the move on the board, then the end checks and the next turn.
 proc ::enginematch::GotMove {side uci} {
 	variable Priv
-	variable mc
-
-	set Priv(pipeState:$side) ready
-	if {!$Priv(running) || $Priv(phase) ne "play" || $Priv(side) ne $side} {
-		return ;# a stale answer (flag fell, the game is over, ...); the watchdog stays
-	}
-	after cancel $Priv(watchdog)
-	set Priv(watchdog) {}
-	if {[::scidb::game::current] != $Priv(pos)} { return }
-
-	# a move that arrives after its clock ran out loses on time anyway
-	if {!$Priv(noclock) && [SettleClock $side [clock milliseconds]] <= 0} {
-		FlagFall $side
-		return
-	}
-
-	# the engine's latest score, in white's perspective, feeds the rules
-	lappend Priv(history) [NormScore $side $Priv(eval:$side)]
-
-	# no legal move reported: the board decides mate/stalemate, anything
-	# else is a forfeit
-	if {$uci eq "" || $uci eq "(none)"} {
-		set end [NaturalEnd]
-		if {[llength $end]} {
-			EndGame {*}$end
-		} else {
-			EndGame [expr {$side eq "w" ? "0-1" : "1-0"}] rulesinfraction \
-				[format $mc::NoMove [EngineName $side]]
-		}
-		return
-	}
-
-	set san [::playengine::uciToSan $uci]
-	if {$san eq ""} {
-		EndGame [expr {$side eq "w" ? "0-1" : "1-0"}] rulesinfraction \
-			[format $mc::IllegalMove [EngineName $side] $uci]
-		return
-	}
-	set Priv(busy) 1
-	catch { ::scidb::game::move $san; ::scidb::game::go 1 }
-	set Priv(busy) 0
-
-	set end [NaturalEnd]
-	if {[llength $end]} { EndGame {*}$end; return }
-	if {[TryAdjudicate]} { return }
-
-	StartTurn [expr {$side eq "w" ? "b" : "w"}]
+	if {![info exists Priv(runner)] || $Priv(runner) eq ""} { return }
+	upvar 0 ::td::runner::$Priv(runner)::State S
+	if {[info exists Priv(eval:$side)]} { set S(eval:$side) $Priv(eval:$side) }
+	::td::runner::GotMove $Priv(runner) $side $uci
 }
 
 
