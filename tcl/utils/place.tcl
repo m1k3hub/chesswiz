@@ -1414,6 +1414,12 @@ proc besideVideoSqueeze {dlg dw dh workarea extents gap requested minimum} {
 	if {[besideVideoRect] eq {}} { return {} }
 	lassign $workarea wx wy ww wh
 	lassign $extents el er et eb
+	lassign [winfo extents $dlg] wel wer wet web
+	set el [expr {max($el, $wel)}]
+	set er [expr {max($er, $wer)}]
+	set et [expr {max($et, $wet)}]
+	set eb [expr {max($eb, $web)}]
+	set extents [list $el $er $et $eb]
 	set fw [expr {$el+$er}]
 	set fh [expr {$et+$eb}]
 	set needW $dw
@@ -1469,6 +1475,12 @@ proc besideVideoDetach {dlg dw dh workarea extents gap requested minimum} {
 	if {[besideVideoRect] eq {}} { return {} }
 	lassign $workarea wx wy ww wh
 	lassign $extents el er et eb
+	lassign [winfo extents $dlg] wel wer wet web
+	set el [expr {max($el, $wel)}]
+	set er [expr {max($er, $wer)}]
+	set et [expr {max($et, $wet)}]
+	set eb [expr {max($eb, $web)}]
+	set extents [list $el $er $et $eb]
 	set fw [expr {$el+$er}]
 	set fh [expr {$et+$eb}]
 	set needW $dw
@@ -1731,6 +1743,11 @@ proc besideDialogExtents {dlg} {
 	if {[winfo ismapped $dlg] && [llength [info commands ::scidb::tk::wm]]
 		&& ![catch {::scidb::tk::wm frameextents $dlg} frame] && [llength $frame] == 4} {
 		lassign $frame left right top bottom
+		lassign [winfo extents $dlg] el er et eb
+		set left [expr {max($left, $el)}]
+		set right [expr {max($right, $er)}]
+		set top [expr {max($top, $et)}]
+		set bottom [expr {max($bottom, $eb)}]
 		if {min($left,$right,$top,$bottom) >= 0} {
 			set BesideState($dlg,extents) [list $left $right $top $bottom]
 			# The initial unmapped plan used estimates. Replace it promptly
@@ -1968,7 +1985,12 @@ proc besideMainArea {dlg {fresh 0} {parent ""}} {
 # used to hide a persistent one-pixel escape after a resize.
 proc besideContained {dlg} {
 	set frame [besideNativeFrame $dlg]
-	if {[llength $frame] != 4} { set frame [besideOuterRect $dlg] }
+	set outer [besideOuterRect $dlg]
+	if {[llength $frame] != 4} {
+		set frame $outer
+	} elseif {[llength $outer] == 4} {
+		set frame [besideUnionRect $frame $outer]
+	}
 	return [besideInside $frame [besideMainArea $dlg]]
 }
 
@@ -1988,7 +2010,12 @@ proc besideClampNative {dlg} {
 	if {$BesideMeasureDepth > 0 && [dict exists $BesideGuarded $dlg]
 		&& [dict get $BesideGuarded $dlg] eq $key} { return 0 }
 	set frame [besideNativeFrame $dlg 1]
-	if {[llength $frame] != 4} { set frame [besideOuterRect $dlg] }
+	set outer [besideOuterRect $dlg]
+	if {[llength $frame] != 4} {
+		set frame $outer
+	} elseif {[llength $outer] == 4} {
+		set frame [besideUnionRect $frame $outer]
+	}
 	if {![besideInside $frame $area]} { set area [besideMainArea $dlg 1] }
 	if {[besideInside $frame $area]} {
 		if {$BesideMeasureDepth > 0} { dict set BesideGuarded $dlg $key }
@@ -3537,6 +3564,12 @@ proc BesideBoardPlan {dlg parent {retry 0}} {
 	}
 	lassign $workarea wx wy ww wh
 	lassign $extents el er et eb
+	lassign [winfo extents $dlg] wel wer wet web
+	set el [expr {max($el, $wel)}]
+	set er [expr {max($er, $wer)}]
+	set et [expr {max($et, $wet)}]
+	set eb [expr {max($eb, $web)}]
+	set extents [list $el $er $et $eb]
 	set fw [expr {$el+$er}]
 	set fh [expr {$et+$eb}]
 	# VAL-DLG-016/VAL-DLG-004: a dialog that fits the work area at its
