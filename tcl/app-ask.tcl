@@ -181,6 +181,7 @@ proc ::application::ask::Build {notebook} {
 	SyncMic
 	PlaceholderState
 	RegisterAction
+ ::commandline::RegisterActions
 	catch { InstallShortcutTags $notebook }
 	return $frame
 }

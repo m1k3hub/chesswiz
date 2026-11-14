@@ -72,7 +72,7 @@ namespace eval ::commandline {
   dbformat dbformat training_source training_source time_control time_control system system
   pane_action pane_action
  }
- variable Keys {person name opponent name move_number move colour colour file files output filename dbformat format training_source source opening_move after}
+ variable Keys {person name opponent name move_number move colour colour file files output filename dbformat format training_source source opening_move after pane_action action}
  variable Enums {
   color {white black} result {win loss draw} scope {list database}
   format {pgn pdf html} dbformat {sci} training_source {{my games} {this database}}

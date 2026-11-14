@@ -141,11 +141,28 @@ proc ::commandline::Suggest {text} {
   foreach template $templates {
    foreach parsed [Parse $template $words $defaults] {
     lassign $parsed arguments missing score
+    if {$id == 28 && [dict exists $arguments colour]} {
+     dict set arguments colour [expr {[dict get $arguments colour] eq "white" ? "black" : "white"}]
+    }
+    if {$id in {32 33 44} && ($id != 44 || [dict get $arguments source] eq "my games")} {
+     if {[info exists ::application::ai::Settings(me)] && $::application::ai::Settings(me) ne ""} {
+      dict set arguments player $::application::ai::Settings(me)
+     }
+    }
+    if {$action eq "search_games" && [dict exists $arguments result] && ![dict exists $arguments player]} {
+     if {[dict get $arguments result] eq "draw"} {dict set arguments result 1/2-1/2} else {lappend missing player}
+    }
+    if {$id == 22 && ![llength $missing] && $::commandline::Source eq "::commandline::AppSource" && [llength [info commands ::commandline::OpeningMoves]]} {
+     if {[catch {OpeningMoves $arguments}]} {continue}
+    }
     set identity [list $id $action $arguments $missing]
     if {[dict exists $seen $identity]} {continue}
     dict set seen $identity 1
     set label [join [lmap word $template {if {[string index $word 0] eq "@" || [lindex $word 0] eq "?"} continue; set word}]]
-    dict for {key value} $arguments {append label "  $key=$value"}
+    dict for {key value} $arguments {
+     set displayKey [expr {$id == 28 && $key eq "colour" ? "opponent_colour" : $key}]
+     append label "  $displayKey=$value"
+    }
     foreach slot $missing {append label "  <$slot>"}
     lappend out [dict create id $id action $action args $arguments missing $missing score $score label $label input $text template $template]
    }
@@ -186,13 +203,15 @@ proc ::commandline::AppSource {type query} {
    return [lrange $values 0 7]
   }
   opening - eco {
-   foreach row [::scidb::ai::ecoLines [Words $query]] {
+   set lookup [expr {$query eq "" ? "a" : $query}]
+   foreach row [::scidb::ai::ecoLines [regexp -all -inline {[^\s,;:()]+} $lookup]] {
     lassign $row code label moves
     if {$type eq "eco"} {lappend values $code} else {lappend values $label}
    }
    if {$type eq "eco" && [regexp -nocase {^[A-E][0-9]{0,2}$} $query]} {
     if {![catch {::scidb::misc::lookup opening [string toupper $query] Normal} entry] && [llength $entry]} {lappend values [string toupper $query]}
    }
+   if {$type eq "opening"} {return [lrange [lsort -command ::commandline::ShortName [lsort -unique $values]] 0 7]}
    return [lrange [lsort -unique $values] 0 7]
   }
   move {
@@ -253,4 +272,8 @@ proc ::application::assistant::QuestionReply {result} {
   return
  }
  if {[dict exists $message content]} {Append assistant [dict get $message content]}
+}
+
+proc ::commandline::ShortName {a b} {
+ return [expr {[string length $a]-[string length $b]}]
 }
