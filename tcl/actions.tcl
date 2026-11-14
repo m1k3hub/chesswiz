@@ -1011,3 +1011,180 @@ proc ::action::invoke {id args} {
 	if {[catch {Dispatch $id $args {} 1} result]} {return "error: $result"}
 	return $result
 }
+
+# Typed operations for native HTML and drawable popups. Arguments contain
+# identities and values only; executable callbacks never cross the API.
+namespace eval ::action::html {}
+proc ::action::html::Developer {} {
+    if {$::action::DebugGate eq ""} {return 0}
+    if {[catch {uplevel #0 $::action::DebugGate} enabled]} {return 0}
+    return [expr {!!$enabled}]
+}
+proc ::action::html::Command {surface operation target {value {}} {key {}}} {
+    set operations [dict create playercard {web font_inc font_dec trace_html trace_log} \
+        crosstable {font_inc font_dec font_family font_select update save previous next close trace_html trace_log narrate player switcher workset browser overview pgn merge} \
+        help {font_inc font_dec font_family font_select expand collapse prev next back forward load align index close} \
+        tips {font_inc font_dec} info {font_inc font_dec recent_remove} merge {font_inc font_dec notation} report {font_family font_select size} overview {rotate load reload prev next first last} move {choice promotion} tree {choice} online {promotion}]
+    if {![dict exists $operations $surface] || $operation ni [dict get $operations $surface]} {
+        error "unknown HTML popup operation"
+    }
+    set id html.$surface.$operation
+    if {![dict exists $::action::Registry $id]} {
+        set ai [expr {[string match trace_* $operation] ? "debug" : "0"}]
+        ::action::register $id [dict create label "HTML $surface: $operation" \
+            handler [list ::action::html::Invoke $surface $operation] what $operation object {} \
+            args {{target {type string required 1}} {value {type string default {}}} {key {type string default {}}}} \
+            ai $ai doc "Apply $operation to an existing $surface window."]
+    }
+    return [list ::action::run $id [dict create target $target value $value key $key]]
+}
+proc ::action::html::Invoke {surface operation arguments} {
+    set target [dict get $arguments target]
+    set value [dict get $arguments value]
+    set key [dict get $arguments key]
+    if {![winfo exists $target]} {error "HTML popup window has closed"}
+    if {$surface eq "playercard"} {
+        if {![info exists ::playercard::Vars($key:arguments)]
+            || [lindex $::playercard::Vars($key:arguments) 0] ne $target} {error "player card has closed"}
+    }
+    switch -- $surface {
+        crosstable {if {![info exists ::crosstable::${target}::Vars(html)]} {error "tournament table has closed"}}
+        help {if {![info exists ::help::Priv(dlg)] || $target ne $::help::Priv(dlg)} {error "help window has closed"}}
+        tips - info - report {
+            switch -- $surface {
+                tips {set name ::tips::Priv(html)}
+                info {set name ::application::information::Priv(html)}
+                report {set name ::application::report::Priv(html)}
+            }
+            if {![info exists $name] || ![winfo exists [set $name]]
+                || $target ne [winfo toplevel [set $name]]} {error "$surface window has closed"}
+        }
+    }
+    if {[string match font_* $operation]} {
+        switch -- $surface {
+            playercard {set apply [list ::playercard::ChangeFontSize $target $key]}
+            crosstable {set apply [list ::crosstable::ChangeFontSize $target]}
+            help {set apply [list $::help::Priv(html) fontsize]}
+            tips {set apply ::tips::ChangeFontSize}
+            info {set apply ::application::information::Update}
+            merge {
+                ::font::ChangeFontSize merge {} [expr {$operation eq "font_inc" ? 1 : -1}]
+                return
+            }
+        }
+        switch -- $operation {
+            font_inc - font_dec {
+                set context [expr {$surface eq "info" ? "info" : $surface}]
+                set size [::font::html::fontSize $context]
+                if {($operation eq "font_inc" && $size >= [::html::maxFontSize])
+                    || ($operation eq "font_dec" && $size <= [::html::minFontSize])} {return}
+                ::font::html::ChangeFontSize $context $apply [expr {$operation eq "font_inc" ? 1 : -1}]
+            }
+            font_family - font_select {
+                if {$surface eq "help"} {set apply ::help::ApplyFont} elseif {$surface eq "report"} {set apply ::application::report::ApplyFont} else {set apply [list ::crosstable::ApplyFont $target]}
+                if {$operation eq "font_family"} {
+                    if {$value ni [::font::html::defaultFonts] && $value ne [::font::html::userTextFont $surface]} {error "unknown font family"}
+                    ::font::html::SetFont $surface $apply $value
+                } else {
+                    if {$value ni {0 1}} {error "unknown font selection"}
+                    ::font::html::SelectFont $surface $target $value $apply
+                }
+            }
+        }
+        return
+    }
+    switch -- $surface {
+        playercard {
+            switch -- $operation {
+                web {
+                    menu .htmlVerifyWeb -tearoff 0
+                    try {
+                        ::playercard::buildWebMenu $target .htmlVerifyWeb [::scidb::db::playerInfo {*}[lrange $::playercard::Vars($key:arguments) 3 4] {*}[lindex $::playercard::Vars($key:arguments) 6]]
+                        if {![::context::WebMenuHasUrl .htmlVerifyWeb $value]} {error "player link is unavailable"}
+                    } finally {destroy .htmlVerifyWeb}
+                    ::web::open $target $value
+                }
+                trace_html - trace_log {::playercard::ToggleTrace [string range $operation 6 end] $key}
+            }
+        }
+        online {
+            if {$value ni {q r b n} || ![::online::view::exists $target] || ![winfo ismapped $target.promo]} {error "no pending online promotion"}
+            set ::online::view::${target}::V(promo) $value
+        }
+        move {
+            set board $::application::board::board
+            set menu [expr {$operation eq "promotion" ? "$board.popup_promotion" : "$board.popup_confirm"}]
+            if {$target ne $menu} {error "unknown pending move menu"}
+            set found 0
+            for {set i 0} {$i <= [$menu index end]} {incr i} {
+                if {[$menu type $i] ne "command"} {continue}
+                set command [$menu entrycget $i -command]
+                if {[lindex $command 1] eq "html.move.$operation" && [dict get [lindex $command 2] value] eq $value} {set found 1;break}
+            }
+            if {!$found} {error "choice is not offered"}
+            if {$operation eq "promotion"} {set ::move::_promoted $value} else {::move::SetAction $value}
+        }
+        tree {
+            if {$value ni {replace variation mainline trial exchange append load}} {error "unknown tree choice"}
+            lassign $key row move
+            ::application::tree::DoAction $target $row $move $value
+        }
+        report {
+            if {$value ni {8 9 10 11 12 13 14}} {error "unknown report size"}
+            ::application::report::SetSize $value
+        }
+        overview {
+            if {![info exists ::overview::${target}::Vars(flip)]} {error "overview has closed"}
+            switch -- $operation {
+                rotate {::overview::RotateBoard $target}
+                load {::overview::LoadGame $target}
+                reload {::overview::NextGame $target 0}
+                prev - next - first - last {::overview::GotoGame($operation) $target}
+            }
+        }
+        info {::application::information::RemoveRecentFile $value}
+        merge {
+            if {$value ni $::notation::moveStyles} {error "unknown notation"}
+            set ::pgn::merge::Options(style:move) $value
+            ::merge::Refresh
+        }
+        help {
+            switch -- $operation {
+                expand {::help::ExpandAllItems}
+                collapse {::help::CollapseAllItems}
+                prev {::help::GotoTopic -1}
+                next {::help::GotoTopic +1}
+                back {::help::history::back}
+                forward {::help::history::forward}
+                load {
+                    if {$value ni $::help::Priv(recent)} {error "unknown recent topic"}
+                    ::help::Load [::help::FullPath $value]
+                }
+                align {
+                    if {$value ni {left justify}} {error "unknown alignment"}
+                    set ::help::Options(textalign) $value
+                    $::help::Priv(html) configure -textalign $value -showhyphens [expr {$value eq "justify"}]
+                }
+                index {::help::ToggleIndex}
+                close {::help::Destroy}
+            }
+        }
+        crosstable {
+            switch -- $operation {
+                update {::crosstable::UpdateContent $target}
+                save {::crosstable::SaveAsHTML $target}
+                previous - next - close { $target.$operation invoke }
+                trace_html - trace_log {::crosstable::ToggleTrace $target [string range $operation 6 end]}
+                narrate {::crosstable::NarrateEvent $target}
+                player {::crosstable::ShowPlayerCard $target $value}
+                switcher {::crosstable::OpenPlayerGamesInSwitcher $target $value}
+                workset {::crosstable::SavePlayerGamesWorkingSet $target $value}
+                browser - overview - pgn {::crosstable::Open $target $operation $value}
+                merge {
+                    upvar #0 ::crosstable::${target}::Vars vars
+                    ::gamebar::mergeGame $target [list $vars(base) $vars(variant) $vars(viewId) $value]
+                }
+            }
+        }
+    }
+}

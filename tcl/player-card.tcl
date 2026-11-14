@@ -997,8 +997,9 @@ proc FontSizeChanged {w dlg key} {
 proc ChangeFontSize {w key size} {
 	variable Vars
 
+	::font::html::setupFontSize playercard $size
 	$w css [DefaultCSS]
-	$w fontsize [::font::html::fontSize playercard]
+	$w fontsize $size
 	UpdateContent {*}$Vars($key:arguments)
 	return $size
 }
@@ -1194,6 +1195,21 @@ proc MouseLeave {w nodes {stimulate 0}} {
 }
 
 
+proc RouteWebMenu {menu target key} {
+    if {[$menu index end] in {{} none}} {return}
+    for {set i 0} {$i <= [$menu index end]} {incr i} {
+        if {[$menu type $i] eq "cascade"} {
+            RouteWebMenu [$menu entrycget $i -menu] $target $key
+        } elseif {[$menu type $i] eq "command"} {
+            set call [$menu entrycget $i -command]
+            if {[lindex $call 0] eq "::web::open"} {
+                $menu entryconfigure $i -command [::action::html::Command playercard web $target [lindex $call 2] $key]
+            }
+        }
+    }
+}
+
+
 proc Mouse3Down {w key info nodes} {
 	variable ::table::options
 	variable Vars
@@ -1216,22 +1232,25 @@ proc Mouse3Down {w key info nodes} {
 		;
 	$m add separator
 	buildWebMenu $w $m $info
+    RouteWebMenu $m $w $key
 	$m add separator
 
 	::font::html::addChangeFontSizeToMenu playercard $m \
-		[namespace code [list ChangeFontSize $w $key]] [::html::minFontSize] [::html::maxFontSize] no
+		[namespace code [list ChangeFontSize $w $key]] [::html::minFontSize] [::html::maxFontSize] no $w $key
 	$m add separator
 
-	set sub [menu $m.debugging]
-	foreach opt {html log} {
-		$sub add checkbutton \
-			-label [set ::crosstable::mc::Show[string toupper $opt 0 0]] \
-			-command [namespace code [list ToggleTrace $opt $key]] \
-			-variable [namespace current]::Options(debug:$opt) \
-			;
-		::theme::configureCheckEntry $sub
+	if {[::action::html::Developer]} {
+		set sub [menu $m.debugging]
+		foreach opt {html log} {
+			$sub add checkbutton \
+				-label [set ::crosstable::mc::Show[string toupper $opt 0 0]] \
+				-command [::action::html::Command playercard trace_$opt $Vars($key).content {} $key] \
+				-variable [namespace current]::Options(debug:$opt) \
+				;
+			::theme::configureCheckEntry $sub
+		}
+		$m add cascade -label $::crosstable::mc::Debugging -menu $sub
 	}
-	$m add cascade -label $::crosstable::mc::Debugging -menu $sub
 
 	set Vars(lock) 1
 	bind $m <<MenuUnpost>> [list set [namespace current]::Vars(lock) 0]
@@ -1324,16 +1343,18 @@ proc PopupMenu {key} {
 		$m add separator
 	}
 
-	set sub [menu $m.debugging]
-	foreach opt {html log} {
-		$sub add checkbutton \
-			-label [set ::crosstable::mc::Show[string toupper $opt 0 0]] \
-			-command [namespace code [list ToggleTrace $opt $key]] \
-			-variable [namespace current]::Options(debug:$opt) \
-			;
-		::theme::configureCheckEntry $sub
+	if {[::action::html::Developer]} {
+		set sub [menu $m.debugging]
+		foreach opt {html log} {
+			$sub add checkbutton \
+				-label [set ::crosstable::mc::Show[string toupper $opt 0 0]] \
+				-command [::action::html::Command playercard trace_$opt $Vars($key).content {} $key] \
+				-variable [namespace current]::Options(debug:$opt) \
+				;
+			::theme::configureCheckEntry $sub
+		}
+		$m add cascade -label $::crosstable::mc::Debugging -menu $sub
 	}
-	$m add cascade -label $::crosstable::mc::Debugging -menu $sub
 
 	bind $m <<MenuUnpost>> [list $Vars($key).content stimulate]
 	bind $m <<MenuUnpost>> +::tooltip::hide

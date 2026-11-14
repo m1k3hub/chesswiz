@@ -1330,7 +1330,7 @@ proc addPrepReportMenuEntry {menu parent base variant playerIndex} {
 
 	$menu add command \
 		-label " $::playertable::mc::ShowPrepReport" \
-		-command [list [namespace current]::OpenPrepReport $parent $base $variant $playerIndex] \
+		-command [list ::action::run c5.player.prep [dict create object [dict create kind player parent $parent base $base variant $variant index $playerIndex]]] \
 		;
 }
 
@@ -1344,7 +1344,7 @@ proc addInsightsMenuEntry {menu parent base variant playerIndex} {
 
 	$menu add command \
 		-label " $::insights::mc::Show" \
-		-command [list ::insights::show $parent $base $variant $playerIndex] \
+		-command [list ::action::run c5.player.insights [dict create object [dict create kind player parent $parent base $base variant $variant index $playerIndex]]] \
 		;
 }
 

@@ -171,17 +171,14 @@ proc ::inventorycontrol::Choose {menu command} {
 proc ::inventorycontrol::MoveChoice {arguments} {
     set menu $::application::board::board.popup_confirm
     set action [dict get $arguments action]
-    if {$action eq "cancel"} {
-        set command [namespace eval ::move [list namespace code [list set action_ cancel]]]
-    } else {
-        set command [list eval ::move::SetAction $action]
-    }
+    set command [::action::html::Command move choice $menu $action]
     Choose $menu $command
     return $action
 }
 proc ::inventorycontrol::Promotion {arguments} {
     set piece [dict get $arguments piece]
-    Choose $::application::board::board.popup_promotion [namespace eval ::move [list namespace code [list set _promoted $piece]]]
+    set menu $::application::board::board.popup_promotion
+    Choose $menu [::action::html::Command move promotion $menu $piece]
     return $piece
 }
 proc ::inventorycontrol::CopyChoice {arguments} {

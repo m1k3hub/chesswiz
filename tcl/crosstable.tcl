@@ -1280,7 +1280,7 @@ proc Mouse3Down {dlg nodes} {
 				-compound left \
 				-image $::icon::16x16::playercard \
 				-label " $::playertable::mc::ShowPlayerCard" \
-				-command [namespace code [list ShowPlayerCard $dlg $rank]] \
+				-command [::action::html::Command crosstable player $dlg $rank] \
 				;
 			if {[llength [info commands ::application::database::player::addPrepReportMenuEntry]]} {
 				set playerIndex [SelectedPlayerIndex $dlg $rank]
@@ -1295,30 +1295,30 @@ proc Mouse3Down {dlg nodes} {
 			}
 			$m add command \
 				-label " $::application::database::mc::RepertoireOpenInSwitcher" \
-				-command [namespace code [list OpenPlayerGamesInSwitcher $dlg $rank]] \
+				-command [::action::html::Command crosstable switcher $dlg $rank] \
 				;
 			$m add command \
 				-label " $::application::database::mc::SaveWorkingSet" \
-				-command [namespace code [list SavePlayerGamesWorkingSet $dlg $rank]] \
+				-command [::action::html::Command crosstable workset $dlg $rank] \
 				;
 		} else {
 			$m add command \
 				-compound left \
 				-image $::icon::16x16::browse \
 				-label " $::browser::mc::BrowseGame" \
-				-command [namespace code [list Open $dlg browser $gameIndex]] \
+				-command [::action::html::Command crosstable browser $dlg $gameIndex] \
 				;
 			$m add command \
 				-compound left \
 				-image $::icon::16x16::overview \
 				-label " $::overview::mc::Overview" \
-				-command [namespace code [list Open $dlg overview $gameIndex]] \
+				-command [::action::html::Command crosstable overview $dlg $gameIndex] \
 				;
 			$m add command \
 				-compound left \
 				-image $::icon::16x16::document \
 				-label " $::browser::mc::LoadGame" \
-				-command [namespace code [list Open $dlg pgn $gameIndex]] \
+				-command [::action::html::Command crosstable pgn $dlg $gameIndex] \
 				;
 			if {[::scidb::game::current] < 9} { set state normal } else { set state disabled }
 			variable ${dlg}::Vars
@@ -1327,7 +1327,7 @@ proc Mouse3Down {dlg nodes} {
 				-compound left \
 				-image $::icon::16x16::merge \
 				-label " $::browser::mc::MergeGame..." \
-				-command [list gamebar::mergeGame $dlg $secondary] \
+				-command [::action::html::Command crosstable merge $dlg $gameIndex] \
 				-state $state \
 			;
 		}
@@ -1361,7 +1361,7 @@ proc BuildMenu {dlg m} {
 		foreach opt {rating performance tiebreak winDrawLoss} {
 			$sub add checkbutton \
 				-label [set mc::Show[string toupper $opt 0 0]] \
-				-command [namespace code [list UpdateContent $dlg]] \
+				-command [::action::html::Command crosstable update $dlg] \
 				-variable [namespace current]::Options(show:$opt) \
 				-state $state \
 				;
@@ -1372,13 +1372,14 @@ proc BuildMenu {dlg m} {
 		$sub add checkbutton \
 			-label $mc::ShowOpponent \
 			-variable [namespace current]::Options(show:opponent) \
+            -command [::action::html::Command crosstable update $dlg] \
 			-state $state
 			;
 		::theme::configureCheckEntry $sub
 
 		$m add command \
 			-label " $mc::SaveAsHTML..." \
-			-command [namespace code [list SaveAsHTML $dlg]] \
+			-command [::action::html::Command crosstable save $dlg] \
 			-image $::icon::16x16::save \
 			-compound left \
 			;
@@ -1390,7 +1391,7 @@ proc BuildMenu {dlg m} {
 		set state [expr {$isOpen ? "normal" : "disabled"}]
 		$m add command \
 			-label " [::mc::stripAmpersand $::widget::mc::Label(previous)]" \
-			-command [$dlg.previous cget -command] \
+			-command [::action::html::Command crosstable previous $dlg] \
 			-image $::icon::16x16::previous \
 			-compound left \
 			-accelerator "$::mc::Key(Alt)-[::mc::extractAccelerator $::widget::mc::Label(previous)]" \
@@ -1398,7 +1399,7 @@ proc BuildMenu {dlg m} {
 			;
 		$m add command \
 			-label " [::mc::stripAmpersand $::widget::mc::Label(next)]" \
-			-command [$dlg.next cget -command] \
+			-command [::action::html::Command crosstable next $dlg] \
 			-image $::icon::16x16::next \
 			-compound left \
 			-accelerator "$::mc::Key(Alt)-[::mc::extractAccelerator $::widget::mc::Label(next)]" \
@@ -1407,7 +1408,7 @@ proc BuildMenu {dlg m} {
 	}
 	$m add command \
 		-label " [::mc::stripAmpersand $::widget::mc::Label(close)]" \
-		-command [$dlg.close cget -command] \
+		-command [::action::html::Command crosstable close $dlg] \
 		-image $::icon::16x16::close \
 		-compound left \
 		-accelerator "$::mc::Key(Alt)-[::mc::extractAccelerator $::widget::mc::Label(close)]" \
@@ -1417,8 +1418,8 @@ proc BuildMenu {dlg m} {
 		$m add separator
 
 		::font::html::addChangeFontSizeToMenu crosstable $m \
-			[list [namespace current]::ChangeFontSize $dlg] [::html::minFontSize] [::html::maxFontSize]
-		::font::html::addChangeFontToMenu crosstable $m [list [namespace current]::ApplyFont $dlg] yes
+			[list [namespace current]::ChangeFontSize $dlg] [::html::minFontSize] [::html::maxFontSize] yes $dlg
+		::font::html::addChangeFontToMenu crosstable $m [list [namespace current]::ApplyFont $dlg] yes $dlg
 		$m add separator
 
 		$m add cascade -label $mc::Display -menu $sub
@@ -1431,7 +1432,7 @@ proc BuildMenu {dlg m} {
 		foreach pad {1 2 3 4 5 6} {
 			$sub.padding add radiobutton \
 				-label $pad \
-				-command [namespace code [list UpdateContent $dlg]] \
+				-command [::action::html::Command crosstable update $dlg] \
 				-variable [namespace current]::Options(fmt:padding) \
 				-value $pad \
 				;
@@ -1440,7 +1441,7 @@ proc BuildMenu {dlg m} {
 		foreach spc {0 1} {
 			$sub.spacing add radiobutton \
 				-label $spc \
-				-command [namespace code [list UpdateContent $dlg]] \
+				-command [::action::html::Command crosstable update $dlg] \
 				-variable [namespace current]::Options(fmt:spacing) \
 				-value $spc \
 				;
@@ -1456,7 +1457,7 @@ proc BuildMenu {dlg m} {
 		set text $mc::Triangle
 		$sub.knockout add radiobutton \
 			-label $text \
-			-command [namespace code [list UpdateContent $dlg]] \
+			-command [::action::html::Command crosstable update $dlg] \
 			-variable [namespace current]::Options(fmt:pyramid) \
 			-value 0 \
 			;
@@ -1464,7 +1465,7 @@ proc BuildMenu {dlg m} {
 		set text $mc::Pyramid
 		$sub.knockout add radiobutton \
 			-label $text \
-			-command [namespace code [list UpdateContent $dlg]] \
+			-command [::action::html::Command crosstable update $dlg] \
 			-variable [namespace current]::Options(fmt:pyramid) \
 			-value 1 \
 			;
@@ -1473,27 +1474,30 @@ proc BuildMenu {dlg m} {
 		$m add cascade -label $mc::Style -menu $sub
 	}
 
-	set sub [menu $m.debugging]
-
-	foreach opt {html log} {
-		$sub add checkbutton \
-			-label [set mc::Show[string toupper $opt 0 0]] \
-			-command [namespace code [list ToggleTrace $dlg $opt]] \
-			-variable [namespace current]::Options(debug:$opt) \
-			;
-		::theme::configureCheckEntry $sub
-	}
 
 	if {[llength [info commands ::ai::eventreport::report]]} {
 		$m add separator
 		$m add command \
 			-label $mc::NarrateEvent \
-			-command [namespace code [list NarrateEvent $dlg]] \
+			-command [::action::html::Command crosstable narrate $dlg] \
 			;
 	}
 
-	$m add separator
-	$m add cascade -label $mc::Debugging -menu $sub
+	if {[::action::html::Developer]} {
+		set sub [menu $m.debugging]
+
+		foreach opt {html log} {
+			$sub add checkbutton \
+				-label [set mc::Show[string toupper $opt 0 0]] \
+				-command [::action::html::Command crosstable trace_$opt $dlg] \
+				-variable [namespace current]::Options(debug:$opt) \
+				;
+			::theme::configureCheckEntry $sub
+		}
+
+		$m add separator
+		$m add cascade -label $mc::Debugging -menu $sub
+	}
 }
 
 

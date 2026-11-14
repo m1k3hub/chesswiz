@@ -2158,16 +2158,23 @@ proc addChangeFontSizeBindings {context w {cmd {}}} {
 }
 
 
-proc addChangeFontSizeToMenu {context m cmd {min 1} {max 64} {useAccels yes}} {
+proc addChangeFontSizeToMenu {context m cmd {min 1} {max 64} {useAccels yes} {target {}} {key {}}} {
 	set cmd [list [namespace current]::ChangeFontSize $context $cmd]
 	set size [fontSize $context]
 	set stateIncr [expr {$size < $max ? "normal" : "disabled"}]
 	set stateDecr [expr {$size > $min ? "normal" : "disabled"}]
 	[namespace parent]::addChangeFontSizeToMenu __HTML__ $m $cmd $stateIncr $stateDecr $useAccels
+    if {$context in {playercard crosstable help tips info}} {
+        if {$target eq {}} {set target [winfo toplevel [winfo parent $m]]}
+        set last [$m index end]
+        $m entryconfigure [expr {$last-1}] -command [::action::html::Command $context font_inc $target {} $key]
+        $m entryconfigure $last -command [::action::html::Command $context font_dec $target {} $key]
+    }
 }
 
 
-proc addChangeFontToMenu {context m applycmd {textFontOnly no}} {
+proc addChangeFontToMenu {context m applycmd {textFontOnly no} {target {}}} {
+    if {$target eq {}} {set target [winfo toplevel [winfo parent $m]]}
 	set menu $m
 	set defaultFonts [defaultFonts]
 	set userFont [userTextFont $context]
@@ -2187,7 +2194,7 @@ proc addChangeFontToMenu {context m applycmd {textFontOnly no}} {
 				-label $fam \
 				-variable [namespace current]::Family_ \
 				-value $fam \
-				-command [namespace code [list SetFont $context $applycmd $fam]] \
+				-command [::action::html::Command $context font_family $target $fam] \
 				;
 			::theme::configureRadioEntry $menu
 		}
@@ -2198,7 +2205,7 @@ proc addChangeFontToMenu {context m applycmd {textFontOnly no}} {
 				-label $userFont \
 				-variable [namespace current]::Family_ \
 				-value $userFont \
-				-command [namespace code [list SetFont $context $applycmd $userFont]] \
+				-command [::action::html::Command $context font_family $target $userFont] \
 				;
 			::theme::configureRadioEntry $menu
 		}
@@ -2211,10 +2218,10 @@ proc addChangeFontToMenu {context m applycmd {textFontOnly no}} {
 	}
 	if {$userFont ne [textFont $context]} { set textFontOnly 1 }
 	if {$textFontOnly} {
-		set dlg [winfo toplevel $m]
+		set dlg $target
 		$menu add command \
 			-label "$space$::dialog::choosefont::mc::FontSelection..." \
-			-command [namespace code [list SelectFont $context $dlg 0 $applycmd]] \
+			-command [::action::html::Command $context font_select $dlg 0] \
 			{*}$options \
 			;
 	} else {
@@ -2223,14 +2230,14 @@ proc addChangeFontToMenu {context m applycmd {textFontOnly no}} {
 			-label "$space$::dialog::choosefont::mc::FontSelection..." \
 			{*}$options \
 			;
-		set dlg [winfo toplevel $m]
+		set dlg $target
 		$menu.sub add command \
 			-label $::mc::Normal \
-			-command [namespace code [list SelectFont $context $dlg 0 $applycmd]] \
+			-command [::action::html::Command $context font_select $dlg 0] \
 			;
 		$menu.sub add command \
 			-label $::mc::Monospaced \
-			-command [namespace code [list SelectFont $context $dlg 1 $applycmd]] \
+			-command [::action::html::Command $context font_select $dlg 1] \
 			;
 	}
 }

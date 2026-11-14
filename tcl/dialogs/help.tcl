@@ -1253,15 +1253,16 @@ proc PopupMenu {dlg tab} {
 	set cursor [winfo pointerxy $dlg]
 
 	switch -glob -- [winfo containing {*}$cursor] {
-		*.contents.tree {
+		*.contents.tree -
+		*.contents.f.t {
 			$m add command \
-				-command [namespace code ExpandAllItems] \
+				-command [::action::html::Command help expand $dlg] \
 				-label " $mc::ExpandAllItems" \
 				-image $::treetable::icon::16x16::collapse \
 				-compound left \
 				;
 			$m add command \
-				-command [namespace code CollapseAllItems] \
+				-command [::action::html::Command help collapse $dlg] \
 				-label " $mc::CollapseAllItems" \
 				-image $::treetable::icon::16x16::expand \
 				-compound left \
@@ -1273,7 +1274,7 @@ proc PopupMenu {dlg tab} {
 			set prev [$Priv(button:prev) cget -state]
 			set next [$Priv(button:next) cget -state]
 			$m add command \
-				-command [namespace code [list GotoTopic -1]] \
+				-command [::action::html::Command help prev $dlg] \
 				-label " $mc::PrevTopic" \
 				-accel "$::mc::Key(Ctrl)-$::mc::Key(Up)" \
 				-image $::icon::16x16::previous \
@@ -1281,7 +1282,7 @@ proc PopupMenu {dlg tab} {
 				-state $prev \
 				;
 			$m add command \
-				-command [namespace code [list GotoTopic +1]] \
+				-command [::action::html::Command help next $dlg] \
 				-label " $mc::NextTopic" \
 				-accel "$::mc::Key(Ctrl)-$::mc::Key(Down)" \
 				-image $::icon::16x16::next \
@@ -1290,7 +1291,7 @@ proc PopupMenu {dlg tab} {
 				;
 			$m add separator
 			$m add command \
-				-command [namespace code history::back] \
+				-command [::action::html::Command help back $dlg] \
 				-label " $mc::GoBack" \
 				-accel "$::mc::Key(Alt)-$::mc::Key(Left)" \
 				-image $::icon::16x16::backward \
@@ -1298,7 +1299,7 @@ proc PopupMenu {dlg tab} {
 				-state [$Priv(button:back) cget -state] \
 				;
 			$m add command \
-				-command [namespace code history::forward] \
+				-command [::action::html::Command help forward $dlg] \
 				-label " $mc::GoForward" \
 				-accel "$::mc::Key(Alt)-$::mc::Key(Right)" \
 				-image $::icon::16x16::forward \
@@ -1314,7 +1315,7 @@ proc PopupMenu {dlg tab} {
 					set path [FullPath $file]
 					if {$Priv(current:file) ne $path} {
 						$m add command \
-							-command [namespace code [list Load $path]] \
+							-command [::action::html::Command help load $dlg $file] \
 							-label " [format $mc::GotoPage $title]" \
 							-image $icon::16x16::document \
 							-compound left \
@@ -1340,7 +1341,7 @@ proc PopupMenu {dlg tab} {
 				-compound left \
 				-variable [namespace current]::Options(textalign) \
 				-value justify \
-				-command [list $Priv(html) configure -textalign justify -showhyphens 1] \
+				-command [::action::html::Command help align $dlg justify] \
 				;
 			::theme::configureRadioEntry $m.textalign
 			$m.textalign add radiobutton \
@@ -1349,13 +1350,14 @@ proc PopupMenu {dlg tab} {
 				-compound left \
 				-variable [namespace current]::Options(textalign) \
 				-value left \
-				-command [list $Priv(html) configure -textalign left -showhyphens 0] \
+				-command [::action::html::Command help align $dlg left] \
 				;
 			::theme::configureRadioEntry $m.textalign
 			$m add separator
 		}
 
-		*.tree	{}
+		*.tree -
+		*.f.t	{}
 		default	{ return }
 	}
 
@@ -1370,13 +1372,13 @@ proc PopupMenu {dlg tab} {
 		-label " $text" \
 		-image $icon \
 		-compound left \
-		-command [namespace code ToggleIndex] \
+		-command [::action::html::Command help index $dlg] \
 		;
 	$m add command \
 		-image $::icon::16x16::close \
 		-label " $::mc::Close" \
 		-compound left \
-		-command [namespace code Destroy] \
+		-command [::action::html::Command help close $dlg] \
 		;
 
 	bind $m <<MenuUnpost>> +::tooltip::hide

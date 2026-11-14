@@ -505,7 +505,7 @@ proc Mouse3Down {{nodes {}}} {
 				-compound left \
 				-image $::icon::16x16::remove \
 				-label " $mc::RemoveSelectedDatabase" \
-				-command [namespace code [list RemoveRecentFile $id]] \
+				-command [::action::html::Command info recent_remove [winfo toplevel $Priv(html)] $id] \
 				;
 			$menu add separator
 			break

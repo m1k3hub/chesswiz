@@ -715,7 +715,7 @@ proc AskPromotion {w} {
 	foreach p {q r b n} {
 		set g $Glyph([expr {$V(side) eq "w" ? [string toupper $p] : $p}])
 		$m add command -label "$g  [string toupper $p]" -font OnlineMaterial \
-			-command [list set [namespace current]::${w}::V(promo) $p]
+			-command [::action::html::Command online promotion $w $p]
 	}
 	tk_popup $m [winfo pointerx $w] [winfo pointery $w]
 	# tk_popup returns at once on X11; wait for a choice or the menu closing.

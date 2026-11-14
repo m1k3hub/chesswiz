@@ -604,6 +604,9 @@ proc PopupMenu {parent} {
 	catch { wm attributes $menu -type popup_menu }
 
 	::font::addChangeFontSizeToMenu merge $menu
+    set last [$menu index end]
+    $menu entryconfigure [expr {$last-1}] -command [::action::html::Command merge font_inc $parent]
+    $menu entryconfigure $last -command [::action::html::Command merge font_dec $parent]
 
 	menu $menu.moveStyles -tearoff no
 	$menu add cascade \
@@ -618,7 +621,7 @@ proc PopupMenu {parent} {
 			-label $::notation::mc::MoveForm($style) \
 			-variable ::pgn::merge::Options(style:move) \
 			-value $style \
-			-command [namespace code Refresh] \
+			-command [::action::html::Command merge notation $parent $style] \
 			;
 		::theme::configureRadioEntry $menu.moveStyles
 	}

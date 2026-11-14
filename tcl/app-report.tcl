@@ -420,10 +420,10 @@ proc ::application::report::FontMenu {id} {
 	::font::html::setupFonts report
 	set m [::context::PopupMenu reportFont]
 	if {$id eq "c9.report.family"} {
-		::font::html::addChangeFontToMenu report $m ::application::report::ApplyFont yes
+		::font::html::addChangeFontToMenu report $m ::application::report::ApplyFont yes [winfo toplevel $Priv(html)]
 	} else {
 		foreach size {8 9 10 11 12 13 14} {
-			$m add command -label "$size pt" -command [list ::application::report::SetSize $size]
+			$m add command -label "$size pt" -command [::action::html::Command report size [winfo toplevel $Priv(html)] $size]
 		}
 	}
 	return [::context::PostChoices $m]

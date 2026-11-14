@@ -12,6 +12,14 @@ package require tcltest 2.5
 
 namespace eval ::scidb::test::rgw {}
 
+# Walk the actual populated state, including a loaded generated game, rather
+# than relying on an empty startup menu to expose all command surfaces.
+source tests/app_actions_support.tcl
+::scidb::test::actions::ready
+set ::scidb::test::rgw::base [::scidb::test::actions::fixture]
+::action::run open_database [dict create path $::scidb::test::rgw::base]
+::action::run open_game {number 1}
+
 # Ordinary posting includes lazy dynamic cascades, unlike Dump mode.
 proc ::scidb::test::rgw::PostTree {menu} {
     $menu post 20 20
@@ -336,5 +344,36 @@ tcltest::test registry-walk-native-named-tables {completed player/event popups, 
 	}
 	list $bad $unresolved $sorts
 } -cleanup {catch {destroy .rgwnative}} -result {{} {} 30}
+
+
+tcltest::test registry-walk-html-drawable {native player-card HTML and drawable registrations are in the global census} -body {
+    source tests/app_actions_support.tcl
+    source tests/app_html_popup_support.tcl
+    ::scidb::test::actions::ready
+    set base [::scidb::test::actions::fixture]
+    ::action::run open_database [dict create path $base]
+    set counts {}
+    foreach developer {0 1} {
+        lassign [::scidb::test::htmlpop::cardRows $base $developer] dlg html drawable key
+        lappend counts [list [llength $html] [llength $drawable]]
+        destroy $dlg
+    }
+    set counts
+} -result {{10 2} {12 4}}
+
+
+tcltest::test registry-walk-html-secondary {all other HTML/drawable branches enter the global popup census} -body {
+    source tests/app_actions_support.tcl
+    source tests/app_html_popup_support.tcl
+    ::scidb::test::actions::ready
+    set base [::scidb::test::actions::fixture]
+    ::action::run open_database [dict create path $base]
+    set rows [::scidb::test::htmlpop::secondaryRows $base]
+    set surfaces {}
+    foreach row $rows {lappend surfaces [lindex $row 0]}
+    set actual [lsort -unique $surfaces]
+    puts [list REG-002_HTML_DRAWABLE surfaces $actual rows [llength $rows] exemptions 0]
+    list [expr {[llength $rows] > 50}] [::scidb::test::rgw::BadCommands $rows]
+} -result {1 {}}
 
 tcltest::cleanupTests

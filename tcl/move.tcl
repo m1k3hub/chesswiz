@@ -578,6 +578,16 @@ proc IsCorrespondenceGame {{tags {}}} {
 }
 
 
+# These are the two native move-choice consumers; no script is carried in
+# registry arguments. Keyboard selection invokes the same registered row.
+proc PopupActionCommand {menu command action} {
+    if {$command eq "::move::SetAction"} {return [::action::html::Command move choice $menu $action]}
+    if {[lindex $command 0] eq "::application::tree::DoAction"} {
+        return [::action::html::Command tree choice [lindex $command 1] $action [lrange $command 2 3]]
+    }
+    error "unknown move-choice consumer"
+}
+
 proc addActionsToMenu {m command {extraActions {}}} {
 	set i 0
 	set atEnd [::scidb::game::position atEnd?]
@@ -610,7 +620,7 @@ proc addActionsToMenu {m command {extraActions {}}} {
 			bind $m <Key-[string tolower $key]> $cmd
 		}
 		$m add command \
-			-command [list eval $command $action] \
+			-command [PopupActionCommand $m $command $action] \
 			-image $icon::16x16::Action($action) \
 			-compound left \
 			{*}$accel \
@@ -791,7 +801,7 @@ proc DoAddMove {sq1 sq2 allowIllegalMove} {
 		foreach p $pieces {
 			$m add command \
 				-image photo_Piece(figurine,1,$color$p,$Options(figurineSize)) \
-				-command [namespace code [list set _promoted $p]] \
+				-command [::action::html::Command move promotion $m $p] \
 				;
 		}
 		set Leave 0
@@ -814,7 +824,7 @@ proc DoAddMove {sq1 sq2 allowIllegalMove} {
 #			if {$n} {
 #				$m add command \
 #					-image photo_Piece(figurine,1,$color$p,$Options(figurineSize)) \
-#					-command [namespace code [list set _promoted $p]] \
+#					-command [::action::html::Command move promotion $m $p] \
 #					;
 #				incr havePieces 1
 #				set piece $p
@@ -864,7 +874,7 @@ proc AfterAddMove {} {
 
 proc InvokeAction {m command action} {
 	::tk::MenuUnpost $m
-	eval $command $action
+	{*}[PopupActionCommand $m $command $action]
 }
 
 
@@ -894,7 +904,7 @@ proc ConfirmReplaceMove {confirmWindowType extraActions} {
 	$m add command \
 		-image $::icon::16x16::crossHand \
 		-compound left \
-		-command [namespace code [list set action_ cancel]] \
+		-command [::action::html::Command move choice $m cancel] \
 		-accelerator $::mc::Key(Esc) \
 		;
 	::widget::menuTextvarHook $m $i ::mc::Cancel

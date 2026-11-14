@@ -566,13 +566,13 @@ proc PopupMenu {nb} {
 		-image $::icon::16x16::rotateBoard \
 		-label " $mc::RotateBoard" \
 		-accelerator [string toupper $mc::AcceleratorRotate] \
-		-command [namespace code [list RotateBoard $nb]] \
+		-command [::action::html::Command overview rotate $nb] \
 		;
 	$menu add command \
 		-compound left \
 		-image $::icon::16x16::document \
 		-label " $::browser::mc::LoadGame" \
-		-command [namespace code [list LoadGame $nb]] \
+		-command [::action::html::Command overview load $nb] \
 		-state $state \
 		;
 if {0} { ;# TODO not working because we did not load this game, we've used ::scidb::game::dump instead
@@ -592,7 +592,7 @@ if {0} { ;# TODO not working because we did not load this game, we've used ::sci
 		-label " $::browser::mc::ReloadGame" \
 		-image $::icon::16x16::refresh \
 		-compound left \
-		-command [namespace code [list NextGame $nb 0]] \
+		-command [::action::html::Command overview reload $nb] \
 		-state $state \
 		;
 	if {$Vars(index) >= 0} {
@@ -603,7 +603,7 @@ if {0} { ;# TODO not working because we did not load this game, we've used ::sci
 			-label " $::browser::mc::GotoGame(prev)" \
 			-image $::icon::16x16::backward \
 			-compound left \
-			-command [namespace code [list GotoGame(prev) $nb]] \
+			-command [::action::html::Command overview prev $nb] \
 			-accel "$::mc::Key(Ctrl)-$::mc::Key(Up)" \
 			-state $state \
 			;
@@ -612,7 +612,7 @@ if {0} { ;# TODO not working because we did not load this game, we've used ::sci
 			-label " $::browser::mc::GotoGame(next)" \
 			-image $::icon::16x16::forward \
 			-compound left \
-			-command [namespace code [list GotoGame(next) $nb]] \
+			-command [::action::html::Command overview next $nb] \
 			-accel "$::mc::Key(Ctrl)-$::mc::Key(Down)" \
 			-state $state \
 			;
@@ -621,7 +621,7 @@ if {0} { ;# TODO not working because we did not load this game, we've used ::sci
 			-compound left \
 			-image $::icon::16x16::first \
 			-label " $::browser::mc::GotoGame(first)" \
-			-command [namespace code [list GotoGame(first) $nb]] \
+			-command [::action::html::Command overview first $nb] \
 			-accel "$::mc::Key(Ctrl)-$::mc::Key(Home)" \
 			-state $state \
 			;
@@ -630,7 +630,7 @@ if {0} { ;# TODO not working because we did not load this game, we've used ::sci
 			-compound left \
 			-image $::icon::16x16::last \
 			-label " $::browser::mc::GotoGame(last)" \
-			-command [namespace code [list GotoGame(last) $nb]] \
+			-command [::action::html::Command overview last $nb] \
 			-accel "$::mc::Key(Ctrl)-$::mc::Key(End)" \
 			-state $state \
 			;
