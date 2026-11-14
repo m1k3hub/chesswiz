@@ -99,8 +99,8 @@ set SpellDone		"%s player name(s) linked."
 set NationalLists	"&National Rating Lists..."
 set ListsTitle		"National Rating Lists"
 set ListsIntro		"Chesswiz can keep the rating lists of three federations beside FIDE's. A list is fetched only when you ask for it, is kept in your own directory, and is never written into a database."
-set ListsFooter		"A fetched list is read at once, and replaces the shipped list at every start."
-set ListInstalled	"installed %s: %s players"
+set ListsFooter		"Installed lists take effect after restarting Chesswiz. This safely replaces the previous list without changing open databases."
+set ListInstalled	"installed %s: %s players (next start)"
 set ListNotInstalled	"not installed"
 set ListDownloading	"fetching..."
 set ListDownload	"&Fetch"
@@ -109,7 +109,7 @@ set ListChooseTitle	"The ICCF rating list (a CSV file)"
 set ListCsvFiles	"Rating lists"
 set ListAllFiles	"All files"
 set ListFailed		"The %s rating list could not be updated: %s"
-set ListDone		"The %s rating list of %s is installed: %s player(s) kept of %s."
+set ListDone		"The %s rating list acquired %s is installed for next start: %s player(s) kept of %s. Restart Chesswiz to use it."
 set ListFetching	"Fetching the %s rating list..."
 set Close			"&Close"
 
@@ -646,22 +646,43 @@ proc ::playerdata::ChooseList {kind w} {
 # user directory, and read it into the running dictionary; startup reads the
 # same file instead of the shipped list.
 proc ::playerdata::installList {kind source} {
+	set catalog [ListSource $kind]
 	file mkdir [Dir]
 	set file [listFile $kind]
-	lassign [::scidb::app::filterRatingList $kind $source $file.new] read kept
-	file rename -force $file.new $file
-	::scidb::app::load installed $file
-	::scidb::app::load done
-	# the new entries may fit names the dictionary did not have
-	linkOpen
-	set info [dict create date [clock format [clock seconds] -format %Y-%m-%d] \
-		players $kept read $read source [file tail $source]]
-	set chan [open [listInfoFile $kind] w]
-	puts -nonewline $chan $info
-	close $chan
+	set staged $file.[pid].new
+	set metadata [listInfoFile $kind]
+	set stagedInfo $metadata.[pid].new
+	set hadFile [file exists $file]
+	set hadInfo [file exists $metadata]
+	try {
+		lassign [::scidb::app::filterRatingList $kind $source $staged] read kept
+		set now [clock seconds]
+		set info [dict create date [clock format $now -format %Y-%m-%d] \
+			players $kept read $read source $kind url [dict get $catalog url] \
+			schema chesswiz-rating-list-v1 bytes [file size $source] \
+			downloadedAt [clock format $now -gmt 1 -format %Y-%m-%dT%H:%M:%SZ] \
+			effectivePeriod unknown activation next-start]
+		set chan [open $stagedInfo w]
+		try { puts -nonewline $chan $info } finally { close $chan }
+		if {$hadFile} { file copy -force $file $file.backup }
+		if {$hadInfo} { file copy -force $metadata $metadata.backup }
+		try {
+			file rename -force $staged $file
+			file rename -force $stagedInfo $metadata
+		} on error {message options} {
+			if {$hadFile} { file rename -force $file.backup $file } else { file delete -force $file }
+			if {$hadInfo} { file rename -force $metadata.backup $metadata } else { file delete -force $metadata }
+			return -options $options $message
+		}
+	} finally {
+		file delete -force $staged $stagedInfo $file.backup $metadata.backup
+	}
+	# The native dictionary is additive and owns pointers used by open databases.
+	# Activate a replacement only at startup, before databases are opened. This
+	# keeps the active dictionary intact on failure and removes stale records
+	# without invalidating live pointers or allocating a personal-data snapshot.
 	return [dict create ok 1 players $kept read $read]
 }
-
 
 proc ::playerdata::ReportList {kind parent answer} {
 	variable mc

@@ -86,3 +86,18 @@ Reference-list linking must not change stored database names. Name fixes belong
 only to explicitly invoked maintenance with a confirmed preview and ordinary
 explicit Save. Exact parsing, identities, stale-preview checks and execution
 are deterministic code; no Jev or other model is appropriate for them.
+
+### Installation and replacement policy
+
+Conversion completes before either cache file is replaced. Cache and provenance
+files are backed up for rollback on a filesystem failure. Activation is at the
+next application start, before database pointers exist; there is deliberately
+no live additive reload. The active dictionary stays unchanged on successful
+staging as well as failures. Startup uses the replacement instead of the shipped
+national list, so stale records from the previous installed version are absent.
+No database names or dirty flags change during install. Restart is stated in the UI.
+Metadata records source URL, schema, input bytes, acquisition time and an explicit
+unknown effective period; acquisition date must never masquerade as rating date.
+Malformed CSV/ICCF rows reject the whole import. A complete-record truncation is
+not detectable without a source-supplied count/checksum; no completeness guarantee
+is made. RD and unsupported CCM/CCE title bits are not retained in the dictionary.
