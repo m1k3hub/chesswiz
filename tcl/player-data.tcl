@@ -146,9 +146,8 @@ variable SpellThreshold 0.9
 
 # The national rating lists: whose list it is, where it comes from, and how.
 # "download": the federation publishes the list for anyone to fetch; "file":
-# the user has to fetch it (ICCF's download is a postback of its web
-# application, which no HTTP client can repeat -- see
-# docs/PLAYER_DATA_SOURCES.md). The notes are what the federations ask of us.
+# the user saves the official ICCF export and chooses it locally.
+# See docs/PLAYER_DATA_SOURCES.md for access restrictions and provenance.
 variable ListKinds {dwz ecf iccf}
 variable ListSource
 array set ListSource {
@@ -157,21 +156,21 @@ array set ListSource {
 		how		download
 		url		{https://www.schachbund.de/download-dwz-daten.html?file=files/wertungsportal/downloads/export/csv/LV-0-csv.zip}
 		saved		LV-0-csv.zip
-		note		"The DSB asks that its data not be published: Chesswiz fetches it only on your click, and keeps it in your own directory."
+		note		"Private, noncommercial use only. Publication requires prior agreement with the DWZ officer. Terms: https://www.schachbund.de/impressum.html and archive README.txt."
 	}
 	ecf {
 		name		"English Chess Federation (ECF)"
 		how		download
 		url		{https://rating.englishchess.org.uk/api/rating-list/csv}
 		saved		ecf-rating-list.csv
-		note		"The ECF's rating API is public, and asks that one address not take more than ten minutes of processing a day."
+		note		"Revised OTB standard ratings, with original fallback. Ten minutes of server processing daily per class-C network; resets at midnight GMT. Redistribution rights unresolved. Terms: https://rating.englishchess.org.uk/help/api"
 	}
 	iccf {
 		name		"International Correspondence Chess Federation (ICCF)"
 		how		file
 		url		{https://www.iccf.com/ratings}
 		saved		iccf-rating-list.csv
-		note		"ICCF's list is a button of its web application, which no client can press for you: save the rating list as a CSV file and choose it here."
+		note		"Save Download as CSV from https://www.iccf.com/ratings, then choose it here. Correspondence ratings. Third-party rating-list publication is discussed at https://iccf.com/message?message=1490; this is not an unlimited licence."
 	}
 }
 
@@ -624,8 +623,7 @@ proc ::playerdata::ListFetched {kind w result} {
 }
 
 
-# ICCF's list is fetched by hand: its download is a postback of its web
-# application, which no HTTP client can repeat.
+# Explicit local import of an export saved from the official ICCF page.
 proc ::playerdata::ChooseList {kind w} {
 	variable Busy
 	variable mc
