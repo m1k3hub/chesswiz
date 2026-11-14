@@ -267,12 +267,19 @@ proc ::td::score::Compute {state} {
 			progressive [Value [Mul [dict get $row progressive] {1 2}] {}] aro $aroValue tpr $tprValue]
 		dict set rows $id $row
 	}
-	set order [RankGroup $state $rows [dict keys $rows] [dg $state tiebreaks {directEncounter sonnebornBerger koya gamesWon gamesWonWithBlack progressive}]]
-	foreach id $order {
-		set group {}
-		foreach other $order { if {[dict get $rows $other score2] eq [dict get $rows $id score2]} { lappend group $other } }
-		set direct [DirectValues $state $rows $group]
-		if {[dict exists $direct $id]} { dict set rows $id tiebreaks directEncounter [dict get $direct $id] }
+	set order {}
+	foreach scoreGroup [RankByScore $rows [dict keys $rows]] {
+		set groupIds [lindex $scoreGroup 1]
+		if {[llength $groupIds] > 1} {
+			set direct [DirectValues $state $rows $groupIds]
+			foreach id $groupIds {
+				if {[dict exists $direct $id]} { dict set rows $id tiebreaks directEncounter [dict get $direct $id] }
+			}
+		} else {
+			set id [lindex $groupIds 0]
+			dict set rows $id tiebreaks directEncounter [Value {0 1} {}]
+		}
+		lappend order {*}[RankGroup $state $rows $groupIds [dg $state tiebreaks {directEncounter sonnebornBerger koya gamesWon gamesWonWithBlack progressive}]]
 	}
 	set result {}
 	set rank 0
@@ -283,6 +290,34 @@ proc ::td::score::Compute {state} {
 		lappend result $row
 	}
 	return $result
+}
+
+proc ::td::score::RankByScore {rows ids} {
+	set groups {}
+	foreach id $ids {
+		set score [dict get $rows $id score2]
+		set found 0
+		for {set i 0} {$i < [llength $groups]} {incr i} {
+			if {[Cmp $score [lindex $groups $i 0]] == 0} {
+				set members [lindex $groups $i 1]
+				lappend members $id
+				lset groups $i 1 $members
+				set found 1
+				break
+			}
+		}
+		if {!$found} { lappend groups [list $score [list $id]] }
+	}
+	for {set i 0} {$i < [llength $groups]} {incr i} {
+		for {set j [expr {$i+1}]} {$j < [llength $groups]} {incr j} {
+			if {[Cmp [lindex $groups $i 0] [lindex $groups $j 0]] < 0} {
+				set tmp [lindex $groups $i]
+				lset groups $i [lindex $groups $j]
+				lset groups $j $tmp
+			}
+		}
+	}
+	return $groups
 }
 
 proc ::td::score::DirectValues {state rows ids} {

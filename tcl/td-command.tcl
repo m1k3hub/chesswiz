@@ -52,7 +52,7 @@ proc ::td::command::Execute {command arguments} {
 		return $replay
 	}
 	set before [dict get $info state]
-	set revision [dict get $info revision]
+	set revision [llength [dict get $info records]]
 	if {$command ne "create" && $before eq ""} { error "no tournament exists at $path" }
 	if {$command eq "create" && $before ne ""} { error "a tournament already exists at $path" }
 	if {$expected != $revision} {

@@ -63,7 +63,7 @@ proc ::td::store::Encode {record} {
 
 proc ::td::store::Decode {line} {
 	lassign $line seq revision crc encoded
-	if {![string is integer -strict $seq] || ![string is integer -strict $revision] || ![string is integer -strict $crc]} { error "bad journal framing" }
+	if {![string is integer -strict $seq] || ![string is integer -strict $revision] || ![string is integer -strict $crc] || $encoded eq ""} { error "bad journal framing" }
 	set bytes [binary decode base64 $encoded]
 	if {[zlib crc32 $bytes] != $crc} { error "journal checksum mismatch" }
 	set record [encoding convertfrom utf-8 $bytes]
@@ -105,13 +105,18 @@ proc ::td::store::Read {path} {
 			if {$hasNewline || $index != $last} { error "$path contains an empty journal record" }
 			continue
 		}
+		if {!$hasNewline} {
+			set repair 1
+			break
+		}
 		if {[catch {Decode $line} record]} {
-			if {$index == $last} { set repair 1; break }
 			error "$path is corrupt before the journal tail: $record"
 		}
 		set seq [llength $records]
 		incr seq
-		if {[dict get $record seq] != $seq} { error "$path has a non-contiguous journal sequence" }
+		if {[dict get $record seq] != $seq} {
+			error "$path has a non-contiguous journal sequence"
+		}
 		lappend records $record
 		set state [dict get $record after]
 		set command [dict get $record command]
@@ -136,7 +141,7 @@ proc ::td::store::Read {path} {
 	}
 	if {$state ne {} && (![dict exists $state revision] || ![dict exists $state id])} { error "$path has no valid event state" }
 	return [dict create path $path state $state records $records undo $undo redo $redo \
-		revision [expr {$state eq {} ? 0 : [dict get $state revision]}] valid_bytes $validBytes repair $repair]
+		revision [llength $records] valid_bytes $validBytes repair $repair]
 }
 
 proc ::td::store::Repair {path info} {
@@ -164,7 +169,7 @@ proc ::td::store::Append {path command key args before after result target histo
 			if {[dict get $record key] eq $key && $key ne ""} { error "idempotency key '$key' already has a journal record" }
 		}
 		set seq [expr {[llength $records] + 1}]
-		set revision [expr {[dict get $info revision] + 1}]
+		set revision $seq
 		dict set after revision $revision
 		set record [dict create version 1 seq $seq revision $revision command $command key $key \
 			args $args before $before after $after result $result target $target history $history \

@@ -65,7 +65,8 @@ proc ::td::model::NewPlayers {domain} {
 	set names [dg $domain players {}]
 	if {$kind eq "engine" && [dict exists $domain engines] && [llength [dict get $domain engines]]} { set names [dict get $domain engines] }
 	set count [dg $domain engine_count 0]
-	if {$kind eq "engine" && $count > 0} {
+	if {$kind eq "engine" && ($count > 0 || ![llength $names])} {
+		if {$count <= 0} { set count 4 }
 		set configured [EngineNames]
 		set names {}
 		set supplied [dg $domain engines {}]
