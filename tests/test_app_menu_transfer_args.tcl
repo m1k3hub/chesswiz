@@ -119,6 +119,8 @@ tcltest::test transfer-args-training {typed options reach real native candidate 
     ::application::assistant::runTool open_database [list path [::scidb::test::actions::fixture]]
     set config [array get ::ai::engine::Config]
     ::ai::engine::configure -engine [::scidb::test::actions::engineProgram]
+    set savedProvider $::application::ai::Config(provider)
+    set ::application::ai::Config(provider) stub
     set file [file join $::env(HOME) training.pgn]
 } -body {
     set reply [::scidb::test::transferargs::call menu.training.training_set operation start max 1 scan 1 depth 1 filename $file]
@@ -129,6 +131,7 @@ tcltest::test transfer-args-training {typed options reach real native candidate 
 } -cleanup {
     ::ai::engine::shutdown
     array set ::ai::engine::Config $config
+    set ::application::ai::Config(provider) $savedProvider
 } -result {1 {1 1} 1 0}
 
 tcltest::test transfer-args-all-download-modes {local HTTP transport runs every native source builder, fetch, archive and import; broadcast timer cancels} -setup {

@@ -26,6 +26,9 @@ proc ::scidb::test::toolset::Canonical {schema} {
 }
 
 tcltest::test menu-toolset-exact-effective-schemas {AI ids, generated tools and frozen approved names agree, with canonical metadata} -setup {
+    # Compare the complete model-capable inventory, independent of startup.
+    set savedProvider $::application::ai::Config(provider)
+    set ::application::ai::Config(provider) stub
     set savedDebug $::application::assistant::Priv(debug)
     set ::application::assistant::Priv(debug) 1
 } -body {
@@ -110,6 +113,7 @@ tcltest::test menu-toolset-exact-effective-schemas {AI ids, generated tools and 
     set bad
 } -cleanup {
     set ::application::assistant::Priv(debug) $savedDebug
+    set ::application::ai::Config(provider) $savedProvider
 } -result {}
 # Exercise the normal assistant through its production confirmation gate.
 # Only the dialog response and final shutdown leaf are replaced.
