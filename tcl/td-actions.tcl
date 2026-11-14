@@ -85,8 +85,8 @@ proc ::td::actions::Register {} {
 	set controls [Controls]
 	set query [QuerySpec]
 	set createSpec [MutationSpec [list \
-		{name {type string default Tournament}} {system {type enum default double-round-robin enum {round-robin double-round-robin}}} \
-		{players {type array default {}}} {engines {type array default {}}} {kind {type enum default engine enum {human engine}}} \
+		{name {type string default Tournament}} {system {type enum default double-round-robin enum {round-robin double-round-robin swiss}}} \
+		{rounds {type integer default 5 range {1 99}}} {players {type array default {}}} {engines {type array default {}}} {kind {type enum default engine enum {human engine}}} \
 		{engine_count {type integer default 0 range {0 64}}} {time_control {type string default 3+2}} \
 		{opening {type string default {}}} {eco {type string default {}}} {moves {type array default {}}} {suite {type string default {}}} \
 		{opening_plies {type integer default 10 range {1 40}}} {overhead_ms {type integer default 100 range {0 10000}}} \

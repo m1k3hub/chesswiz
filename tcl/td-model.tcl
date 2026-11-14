@@ -220,11 +220,17 @@ proc ::td::model::Apply {command info domain} {
 			set name [string trim [dg $domain name Tournament]]
 			if {$name eq ""} { error "event name cannot be empty" }
 			set system [dg $domain system round-robin]
-			if {$system ni {round-robin double-round-robin}} { error "P1 supports round-robin or double-round-robin events" }
+			if {$system ni {round-robin double-round-robin swiss}} { error "unsupported tournament system" }
+			if {$system eq "swiss"} { ::td::swiss::Executable }
 			set players [NewPlayers $domain]
 			if {[llength $players] < 2 && [dg $domain start 0]} { error "a tournament needs at least two players before it starts" }
 			set double [Double $system]
 			set rounds [expr {[llength $players] < 2 ? 0 : [Rounds [llength $players] $double]}]
+			if {$system eq "swiss"} {
+				set rounds [dg $domain rounds 5]
+				if {![string is integer -strict $rounds] || $rounds < 1 || $rounds > 99} { error "Swiss rounds must be 1..99" }
+				foreach p $players { if {[dict get $p kind] eq "engine"} { error "P2 Swiss requires human players" } }
+			}
 			set tc [TimeControl [dg $domain time_control 3+2]]
 			set path [dict get $info path]
 			set id [format "evt-%08x" [zlib crc32 $path]]
@@ -236,9 +242,14 @@ proc ::td::model::Apply {command info domain} {
 				colour_lot [dg $domain colour_lot white] tiebreaks {directEncounter sonnebornBerger koya gamesWon gamesWonWithBlack progressive} \
 				unrated_policy [dg $domain unrated_policy drop] publication_revision 0 published 0 publications {} withdrawals {} \
 				games {} created [clock seconds] updated [clock seconds]]
+			if {$system eq "swiss"} { dict set state tiebreaks {buchholzCut1 buchholz sonnebornBerger wins} }
 			set start [dg $domain start 0]
 			if {$start} {
-				dict set state pairings [::td::pair::RoundRobin $players $double [dict get $state colour_lot] $opening [dg $domain opening {}]]
+				if {$system eq "swiss"} {
+					dict set state pairings [::td::swiss::Pair $state 1]
+				} else {
+					dict set state pairings [::td::pair::RoundRobin $players $double [dict get $state colour_lot] $opening [dg $domain opening {}]]
+				}
 				dict set state status active
 			}
 			return [list $state [dict create created 1 start $start] $target $history]
@@ -251,6 +262,7 @@ proc ::td::model::Apply {command info domain} {
 			return [list $state [dict create registered [llength $players]] $target $history]
 		}
 		pair_round {
+			if {[dict get $state system] eq "swiss"} { return [::td::swiss::PairRound $state $domain] }
 			set wanted [dg $domain round 0]
 			if {[llength [Pairings $state $wanted]]} { return [list $state [dict create paired 0] $target $history] }
 			set opening [dg $state opening {}]
@@ -260,6 +272,7 @@ proc ::td::model::Apply {command info domain} {
 			return [list $state [dict create paired [llength $all]] $target $history]
 		}
 		start {
+			if {[dict get $state system] eq "swiss"} { return [::td::swiss::PairRound $state $domain] }
 			if {[dg $state status setup] eq "active"} { return [list $state [dict create start 0] $target $history] }
 			if {![llength [dg $state pairings {}]]} {
 				dict set state pairings [::td::pair::RoundRobin [dict get $state players] [Double [dict get $state system]] [dg $state colour_lot white] [dg $state opening {}] [dg $state opening_name {}]]

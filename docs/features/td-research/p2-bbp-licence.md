@@ -23,3 +23,8 @@ toolchains: Zig builds require explicit runtime notice packaging. No binary
 redistribution is certified merely by this source-licence verdict.
 
 This qualifies the shorter compatibility statement in regulations.md.
+
+Build evidence: native Linux (GCC), x86_64 Windows GNU (Zig), and aarch64
+macOS (Zig) compile successfully. Cross binaries are build artifacts, not yet
+runtime-tested on their target OS. Upstream's OMIT_BURSTEIN option fails to
+compile v6.0.0; its source is unchanged, and the application invokes only Dutch.
