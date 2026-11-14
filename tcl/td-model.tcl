@@ -254,13 +254,8 @@ proc ::td::model::Apply {command info domain} {
 			}
 			return [list $state [dict create created 1 start $start] $target $history]
 		}
-		register {
-			if {[dg $state status setup] ne "setup" || [llength [dg $state pairings {}]]} { error "registration is closed after pairing starts" }
-			set players [MakePlayers [dg $domain players {}] [dg $domain kind human] [expr {[llength [dg $state players {}]]+1}]]
-			dict lappend state players {*}$players
-			dict set state rounds [Rounds [llength [dict get $state players]] [Double [dict get $state system]]]
-			return [list $state [dict create registered [llength $players]] $target $history]
-		}
+		register { return [::td::registration::Add $state $domain] }
+        register_fide { return [::td::registration::Add $state $domain 1] }
 		pair_round {
 			if {[dict get $state system] eq "swiss"} { return [::td::swiss::PairRound $state $domain] }
 			set wanted [dg $domain round 0]

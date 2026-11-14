@@ -27,6 +27,8 @@ proc ::td::actions::Run {command arguments} {
 proc ::td::actions::Undo {arguments} { return [Run undo $arguments] }
 proc ::td::actions::Redo {arguments} { return [Run redo $arguments] }
 
+proc ::td::actions::LookupPlayer {arguments} { return [::td::registration::Lookup $arguments] }
+
 proc ::td::actions::Status {arguments} {
 	set path [::td::store::Resolve $arguments]
 	set state [dict get [::td::store::Read $path] state]
@@ -100,6 +102,8 @@ proc ::td::actions::Register {} {
 		{category {type enum default played enum {played forfeit forfeit-loss double-forfeit}}}]]
 	foreach {id label doc spec handler effect} [list \
 		td.create {Create tournament} {Create a C.05 round robin for humans or engines. Preview with commit false, then commit at the supplied revision. For an engine event it can also pair and play every round from a named opening, an opening code range or a list of moves.} $createSpec Create change \
+        td.lookup_player {Find FIDE player} {Find a player by exact name or FIDE number in the installed rating list.} {{fide_id {type string default {}}} {name {type string default {}}}} LookupPlayer query \
+        td.register_fide {Register FIDE player} {Copy a player's identity and rating into this event, keeping a dated record for later review.} [MutationSpec {{fide_id {type string required 1}}}] [list Run register_fide] change \
 		td.register {Register players} {Register human or configured engine players before pairings are published.} $registerSpec [list Run register] change \
 		td.pair_round {Pair round} {Preview or commit Berger pairings for one round, or all rounds when round is zero.} $pairSpec [list Run pair_round] change \
 		td.start {Start tournament} {Start or resume an event and schedule engine games with bounded concurrency.} $pairSpec [list Run start] change \

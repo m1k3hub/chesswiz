@@ -109,7 +109,7 @@ proc ::td::ui::BuildEvent {f} {
 	grid $f.new.label_opening -row 2 -column 0 -sticky w; grid $f.new.opening -row 2 -column 1 -sticky ew
 	ttk::label $f.new.kindlabel -text "Seat kind"; ttk::combobox $f.new.kind -state readonly -values {engine human} -textvariable ::td::ui::Fields(kind); set Fields(kind) engine
 	ttk::label $f.new.countlabel -text "Engines"; ttk::spinbox $f.new.count -from 2 -to 16 -textvariable ::td::ui::Fields(engine_count); set Fields(engine_count) 4
-	ttk::label $f.new.systemlabel -text "System"; ttk::combobox $f.new.system -state readonly -values {round-robin double-round-robin} -textvariable ::td::ui::Fields(system); set Fields(system) double-round-robin
+	ttk::label $f.new.systemlabel -text "System"; ttk::combobox $f.new.system -state readonly -values {round-robin double-round-robin swiss} -textvariable ::td::ui::Fields(system); set Fields(system) double-round-robin
 	ttk::checkbutton $f.new.start -text "Start immediately" -variable ::td::ui::Fields(start); set Fields(start) 1
 	grid $f.new.kindlabel -row 3 -column 0 -sticky w; grid $f.new.kind -row 3 -column 1 -sticky w
 	grid $f.new.countlabel -row 4 -column 0 -sticky w; grid $f.new.count -row 4 -column 1 -sticky w
@@ -158,6 +158,12 @@ proc ::td::ui::BuildPlayers {f} {
 	ttk::entry $f.add.name -textvariable ::td::ui::Fields(player_name)
 	ttk::combobox $f.add.kind -state readonly -values {human engine} -textvariable ::td::ui::Fields(player_kind)
 	set Fields(player_name) {}; set Fields(player_kind) human
+    ttk::frame $f.fide; pack $f.fide -fill x
+    ttk::label $f.fide.label -text "FIDE ID"
+    ttk::entry $f.fide.id -textvariable ::td::ui::Fields(fide_id)
+    set Fields(fide_id) {}
+    ttk::button $f.fide.add -text "Register from FIDE list" -command ::td::ui::RegisterFide
+    pack $f.fide.label $f.fide.id $f.fide.add -side left
 	ttk::button $f.add.button -text "Register" -command ::td::ui::Register
 	pack $f.add.name -side left -fill x -expand yes; pack $f.add.kind -side left; pack $f.add.button -side left
 }
@@ -270,3 +276,5 @@ proc ::td::ui::Refresh {} {
 }
 
 # vi:set ts=3 sw=3:
+
+proc ::td::ui::RegisterFide {} { variable Fields; Mutate td.register_fide [dict create fide_id $Fields(fide_id)] }
