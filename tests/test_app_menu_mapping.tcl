@@ -174,7 +174,12 @@ proc ::scidb::test::map::Resolve {actions tree top leaf} {
 	return [list gap "" $leaf]
 }
 
-tcltest::test mapping-dropdown-old-to-new {every moved drop-down entry has a reachable, invokable new home} -body {
+tcltest::test mapping-dropdown-old-to-new {every moved drop-down entry has a reachable, invokable new home} -setup {
+    # The complete mapping includes model-dependent commands; their handlers
+    # are already recorded locally by this test, with no model transport.
+    set savedProvider $::application::ai::Config(provider)
+    set ::application::ai::Config(provider) stub
+} -body {
 	catch { destroy .mapmenu }
 	menu .mapmenu -tearoff 0
 	::menu::BuildDropdown .mapmenu
@@ -195,6 +200,8 @@ tcltest::test mapping-dropdown-old-to-new {every moved drop-down entry has a rea
 	if {$::scidb::test::map::lastError ne ""} { puts "  FIRST ERROR $::scidb::test::map::lastError" }
 	list [dict get $counts action] [dict get $counts cascade] [llength $gaps] \
 		[dict get $counts invoke-failed]
+} -cleanup {
+    set ::application::ai::Config(provider) $savedProvider
 } -result {70 5 0 0}
 
 tcltest::test mapping-section6-removals {only PROPOSAL section 6 rows are gone, each replacement is present} -body {

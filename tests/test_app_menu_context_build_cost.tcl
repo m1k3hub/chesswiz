@@ -9,7 +9,11 @@ foreach {cid object expected} {
     C9 {paneUid editor frame .application} {c9.not.display c9.not.font c9.not.move_notation c9.not.move_info c9.not.language c9.layout}
     C11 {base generated index 0 ply 1 widget .buildcosttext} {c11.insert_symbol c11.insert_emoticon c11.format c11.copy_text c11.translate_comment c11.switch_language c11.add_language}
 } {
-    tcltest::test menu-context-build-once-$cid {a real post constructs each dynamic prefix once; full state still checks children} -body {
+    tcltest::test menu-context-build-once-$cid {a real post constructs each dynamic prefix once; full state still checks children} -setup {
+        # Include the translation cascade without enabling network transport.
+        set savedProvider $::application::ai::Config(provider)
+        set ::application::ai::Config(provider) stub
+    } -body {
         catch {destroy .buildcosttext}; text .buildcosttext
         menu .buildcost -tearoff 0
         set ::scidb::test::buildcost::prefixes {}
@@ -30,6 +34,7 @@ foreach {cid object expected} {
         }
         list [dict size $counts] [llength $expected]
     } -cleanup {
+        set ::application::ai::Config(provider) $savedProvider
         catch {trace remove execution ::context::CascadePrefix enter ::scidb::test::buildcost::count}
         catch {grab release .buildcost};catch {destroy .buildcost};catch {destroy .buildcosttext}
     } -result [list [llength $expected] [llength $expected]]

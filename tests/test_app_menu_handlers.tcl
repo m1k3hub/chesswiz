@@ -25,6 +25,8 @@ foreach {id target} {
     menu.game.copy ::gamebar::CopyThisGameToClipbase
 } {
     tcltest::test menu-handler-target-$id {action reaches the intended feature with its real signature} -setup {
+        set savedProvider $::application::ai::Config(provider)
+        set ::application::ai::Config(provider) stub
         ::scidb::test::handlers::stub $target
         set ::scidb::test::handlers::called {}
     } -body {
@@ -32,6 +34,7 @@ foreach {id target} {
         set ::scidb::test::handlers::called
     } -cleanup {
         ::scidb::test::handlers::unstub $target
+        set ::application::ai::Config(provider) $savedProvider
     } -result $target
 }
 
@@ -146,6 +149,8 @@ foreach {id target object} {
     c8.save_line ::context::SaveTreeLine {parent .application variant Normal move e4}
 } {
     tcltest::test menu-handler-context-$id {context action reaches a real feature with valid arguments} -setup {
+        set savedProvider $::application::ai::Config(provider)
+        set ::application::ai::Config(provider) stub
         ::scidb::test::handlers::stub $target
         set ::scidb::test::handlers::called {}
     } -body {
@@ -153,6 +158,7 @@ foreach {id target object} {
         set ::scidb::test::handlers::called
     } -cleanup {
         ::scidb::test::handlers::unstub $target
+        set ::application::ai::Config(provider) $savedProvider
     } -result $target
 }
 

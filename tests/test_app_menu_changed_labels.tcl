@@ -294,10 +294,14 @@ foreach kind {player event} {
 foreach lang {de es it hu sv} {
     tcltest::test changed-labels-$lang {all changed native mc, registry and typed Ask labels agree} -setup {
         set savedLanguage $::mc::langID
+        # This inventory deliberately covers model-dependent labels too.
+        set savedProvider $::application::ai::Config(provider)
+        set ::application::ai::Config(provider) stub
     } -body [list ::scidb::test::changedLabels::check $lang] -cleanup {
         ::application::ask::HideList
         catch {destroy .entrynative}
         ::menu::SwitchLanguage $savedLanguage
+        set ::application::ai::Config(provider) $savedProvider
     } -result 142
 }
 if {[info exists ::scidb::test::changedLabels::base]} {
