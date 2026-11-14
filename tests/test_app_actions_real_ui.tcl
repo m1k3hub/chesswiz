@@ -107,7 +107,13 @@ tcltest::test real-start-engine-changes-state {start_engine starts a real UCI pr
     ::scidb::test::actions_real::tool start_engine [list engine $name lines 1 threads 1 hash 16]
     set running [::application::analysis::Running]
     set number [lindex $running end]
-    ::scidb::test::actions::waitUntil {[llength [::application::analysis::lines $number]] > 0} 10000
+    # UCI replies can arrive before Tk maps the newly selected pane. Wait
+    # for both asynchronous effects; the assertions below still require
+    # the live engine, its analysis and its visible widget.
+    ::scidb::test::actions::waitUntil {
+        [llength [::application::analysis::lines $number]] > 0
+        && [winfo viewable $::application::analysis::NumberToTree($number)]
+    } 10000
     list [expr {[llength $running] == [llength $runningBefore] + 1}] \
         [::engine::active? $number] \
         [expr {[llength [::application::analysis::lines $number]] > 0}] \
