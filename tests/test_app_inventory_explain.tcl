@@ -4,7 +4,8 @@ namespace eval ::scidb::test::gameexplain {
     variable messages {}
     proc wait {} {
         set deadline [expr {[clock milliseconds]+10000}]
-        while {[::application::ai::busy?]} {
+        update
+        while {[::application::ai::busy?] || $::application::assistant::Priv(busy)} {
             update
             if {[clock milliseconds]>$deadline} {error {explanation did not finish}}
             after 10
@@ -13,7 +14,7 @@ namespace eval ::scidb::test::gameexplain {
     }
 }
 
-tcltest::test inventory-game-explain {typed and native menu actions explain the real loaded PGN through checked generation into the report} -setup {
+tcltest::test inventory-game-explain {typed action and native game-tab Ask submission explain the real loaded PGN through checked generation into the report} -setup {
     ::scidb::test::actions::ready
     ::knowledge::Ensure
     set pgn [::scidb::test::actions::fixture]
@@ -24,15 +25,35 @@ tcltest::test inventory-game-explain {typed and native menu actions explain the 
     set oldConfig [array get ::application::ai::Config]
     set notice $::application::ai::Settings(cloudNotice)
     set ::application::ai::Settings(cloudNotice) 1
+    set oldProvider [array get ::ai::provider::Config]
+    set oldRoute $::application::assistant::RouteMode
+    set ::application::assistant::RouteMode off
     set ::application::ai::Config(provider) ollama
+    ::ai::provider::configure -name ollama
+    rename ::ai::decide ::ai::decide_gameexplain_saved
+    proc ::ai::decide {feature state question callback args} {
+        after 0 [list {*}$callback {ok 1 label public confidence 1 source classifier}]
+    }
     set ::application::ai::Config(model) deepseek-v4.1-flash:cloud
     rename ::ai::provider::chatAsync ::ai::provider::chatAsync_gameexplain_saved
     proc ::ai::provider::chatAsync {messages tools callback} {
-        lappend ::scidb::test::gameexplain::messages $messages
-        after 0 [list {*}$callback [dict create ok 1 message [dict create role assistant content {A generated game explanation for practice.}]]]
+        if {[lrange $callback 0 2] eq {::namespace inscope ::application::assistant}} {
+            incr ::scidb::test::gameexplain::plannerCalls
+            if {$::scidb::test::gameexplain::plannerCalls == 1} {
+                set message [dict create role assistant content {} tool_calls [list \
+                    [dict create function [dict create name run_action arguments {id game.explain}]]]]
+            } else {
+                set message [dict create role assistant content {}]
+            }
+        } else {
+            lappend ::scidb::test::gameexplain::messages $messages
+            set message [dict create role assistant content {A generated game explanation for practice.}]
+        }
+        after 0 [list {*}$callback [dict create ok 1 message $message]]
         return generated-test-response
     }
     set ::scidb::test::gameexplain::messages {}
+    set ::scidb::test::gameexplain::plannerCalls 0
 } -body {
     set reply [::knowledge::RunAction game.explain {}]
     ::scidb::test::gameexplain::wait
@@ -42,12 +63,36 @@ tcltest::test inventory-game-explain {typed and native menu actions explain the 
     menu .explainprobe -tearoff 0
     set id [expr {$::gamebar::Specs(size:$bar) == 1 ? $::gamebar::Specs(selected:$bar) : -1}]
     ::gamebar::BuildMenu $bar $id {} .explainprobe
+    # The approved C12 menu replaced the old direct explanation row with
+    # context.ask. Exercise that real route, then submit an explicit request.
     set found -1
     for {set i 0} {$i <= [.explainprobe index end]} {incr i} {
-        if {[.explainprobe type $i] eq "command" && [.explainprobe entrycget $i -command] eq {::action::run game.explain}} {set found $i; break}
+        if {[.explainprobe type $i] ne "command"} {continue}
+        set command [.explainprobe entrycget $i -command]
+        if {[lrange $command 0 1] eq {::action::run context.ask}} {
+            set args [lindex $command 2]
+            if {[dict get $args cid] ne "C12" || [dict get $args object gameSlot] != [::scidb::game::current]} {
+                error {native game-bar Ask has the wrong game context}
+            }
+            set found $i
+            break
+        }
     }
-    if {$found < 0} {error {native game-bar menu did not expose game.explain}}
+    if {$found < 0} {error {native game-bar menu did not expose context.ask}}
     .explainprobe invoke $found
+    .explainprobe unpost
+    ::scidb::test::gameexplain::wait
+    set entry $::application::assistant::Priv(entry)
+    if {[string first "gameSlot=[::scidb::game::current]" [$entry get]] < 0} {
+        error {native game-bar Ask did not populate the selected game context}
+    }
+    if {[llength $::scidb::test::gameexplain::messages] != 1} {
+        error "opening Ask explanation count=[llength $::scidb::test::gameexplain::messages] plannerCalls=$::scidb::test::gameexplain::plannerCalls; expected one typed explanation before Enter"
+    }
+    $entry delete 0 end
+    $entry insert 0 {Explain this game.}
+    focus -force $entry
+    event generate $entry <Return>
     ::scidb::test::gameexplain::wait
     set sameContext 1
     foreach messages $::scidb::test::gameexplain::messages {
@@ -65,6 +110,10 @@ tcltest::test inventory-game-explain {typed and native menu actions explain the 
     catch {destroy .explainprobe}
     rename ::ai::provider::chatAsync {}
     rename ::ai::provider::chatAsync_gameexplain_saved ::ai::provider::chatAsync
+    rename ::ai::decide {}
+    rename ::ai::decide_gameexplain_saved ::ai::decide
+    array set ::ai::provider::Config $oldProvider
+    set ::application::assistant::RouteMode $oldRoute
     array set ::application::ai::Config $oldConfig
     set ::application::ai::Settings(cloudNotice) $notice
 } -result {1 2 1 1 1 1 1 1 1 1}
