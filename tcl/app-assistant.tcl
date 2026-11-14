@@ -867,6 +867,9 @@ proc ::application::assistant::show {} {
 #   -confirm CMD    asks the user instead of the dialog (CMD WHAT -> 0|1)
 # Returns 0 when the request was not started (empty, or another is running).
 proc ::application::assistant::ask {request args} {
+ if {[info exists ::application::assistant::QuestionMode] && $::application::assistant::QuestionMode} {
+  return [::application::assistant::Question $request]
+ }
 	variable Priv
 	variable System
 

@@ -4,14 +4,10 @@
 # Decision 003 / D-7: the Ask field in the top strip *is* the palette.
 # There is no separate palette window.
 #
-#   Typing filters the action registry on every keystroke into a result
-#   list under the field. Only runnable actions are listed (the same
-#   enabled/visible predicates as the main drop-down, VAL-RULE-004).
-#   Up/Down select, Enter runs the selection through ::action::run (so
-#   the registry confirm gate applies). The last row is always "Ask the
-#   assistant": selecting it, or a query with no matching action, sends
-#   the text to the assistant as plain language. Esc closes the list and
-#   restores the focus that was there before.
+#   Typing matches the fixed command table against application slot sources.
+#   Up/Down and clicks select; Enter runs the displayed action and arguments.
+#   Missing slots focus their placeholder and offer state-owned candidates.
+#   Questions are an explicit read-only mode, never an unmatched-text fallback.
 #
 #   Ctrl+K focuses the field and selects its text. D-2 is kept: in a
 #   multi-line text editor (comment editor, PGN text, engine console /
@@ -51,8 +47,8 @@ namespace eval application {
 namespace eval ask {
 
 namespace eval mc {
-set Placeholder		"Ask or tell Chesswiz what to do (Ctrl+K)"
-set AskAssistant		"Ask the assistant"
+set Placeholder		"Type a command (Ctrl+K)"
+set AskAssistant		"Ask a question"
 set Send				"Send to the assistant"
 set Mic				"Speak"
 set Recording		"Recording… click to stop"
@@ -93,6 +89,7 @@ foreach _name [lsort [info vars ::application::ask::mc::*]] {
 unset _name
 }
 
+variable Mode command
 variable Query ""
 variable Priv
 array set Priv {
@@ -146,6 +143,8 @@ proc ::application::ask::Build {notebook} {
 		-textvariable ::application::ask::Query]
 	set mic [ttk::button $frame.mic -text $::application::ask::mc::Mic \
 		-takefocus 0 -command ::application::speech::toggle]
+	ttk::button $frame.mode -text "Ask a question" -takefocus 0 -command ::application::ask::ToggleMode
+	pack $frame.mode -side right
 	pack $mic -side right -padx {2 2} -pady 1
 	pack $entry -side left -fill x -expand yes -padx {2 2} -pady 1
 
@@ -471,7 +470,13 @@ proc ::application::ask::Typed {{key ""}} {
 		HideList
 		return
 	}
-	set Priv(rows) [::action::labels asklist $text]
+	set Priv(commands) [::commandline::Suggest $text]
+ set Priv(rows) {}
+ if {$::application::ask::Mode eq "question"} {set Priv(commands) {}}
+ foreach row $Priv(commands) {
+  lappend Priv(rows) [list [dict get $row action] [dict get $row label] Enter 1 1]
+ }
+ set Priv(context) [CommandContext]
 	set Priv(index) 0
 	ShowList
 }
@@ -491,7 +496,9 @@ proc ::application::ask::ShowList {} {
 		lappend items [list $text $id]
 		incr i
 	}
-	lappend items [list " $mc::AskAssistant" ""]
+	if {$::application::ask::Mode eq "question"} {
+  lappend items [list " Ask a question (read-only) — Enter" ""]
+ } elseif {![llength $items]} {lappend items [list " No matching command" ""]}
 
 	set w $Priv(list)
 	set opening 0
@@ -569,7 +576,7 @@ proc ::application::ask::Move {direction} {
 		if {$direction < 0} { return [HistoryStep -1] }
 		return [HistoryStep 1]
 	}
-	set count [expr {[llength $Priv(rows)] + 1}]
+	set count [expr {max(1, [llength $Priv(rows)])}]
 	set index [expr {$Priv(index) + $direction}]
 	if {$index < 0} { set index 0 }
 	if {$index >= $count} { set index [expr {$count - 1}] }
@@ -582,34 +589,70 @@ proc ::application::ask::Click {y} {
 	set list .application.askList.list
 	set index [$list nearest $y]
 	set ::application::ask::Priv(index) $index
-	Choose
+	ShowList
 	return "break"
 }
 
+proc ::application::ask::CommandContext {} {
+ set context {}
+ catch {lappend context [::scidb::db::get name] [::application::database::currentVariant] [::scidb::pos::fen]}
+ return $context
+}
+proc ::application::ask::ToggleMode {} {
+ variable Mode
+ set Mode [expr {$Mode eq "command" ? "question" : "command"}]
+ [winfo parent [Entry]].mode configure -text [expr {$Mode eq "command" ? "Ask a question" : "Commands"}]
+ unset -nocomplain ::application::ask::Priv(filtered)
+ Typed
+}
 proc ::application::ask::Choose {} {
-	variable Priv
-	variable Query
-
-	if {![ListVisible] && [string trim $Query] eq ""} { return "break" }
-	if {![llength $Priv(rows)]} { return [SendToAssistant] }
-
-	set index $Priv(index)
-	if {$index < [llength $Priv(rows)]} {
-		lassign [lindex $Priv(rows) $index] id
-		HideList
-		catch { focus -force [Entry] }
-		set failed [catch { ::action::run $id } result]
-		if {$failed || [string match "error:*" $result] || [string match "declined*" $result]} {
-			# ::action::run reports errors as text; a raising handler is
-			# reported the same way, never as a Tk background error.
-			catch { ::ui::message $result }
-		} else {
-			set Query ""
-		}
-		PlaceholderState
-		return "break"
-	}
-	return [SendToAssistant]
+ variable Priv
+ variable Query
+ if {$::application::ask::Mode eq "question"} {return [SendToAssistant]}
+ if {![ListVisible] || ![info exists Priv(commands)] || ![llength $Priv(commands)]} {return "break"}
+ if {$Priv(filtered) ne [string trim $Query] || $Priv(context) ne [CommandContext]} {
+  unset -nocomplain Priv(filtered)
+  Typed
+  return "break"
+ }
+ set row [lindex $Priv(commands) $Priv(index)]
+ if {$row eq ""} {return "break"}
+ if {[llength [dict get $row missing]]} {MissingSlot $row; return "break"}
+ set failed [catch {::commandline::Run $row} result]
+ if {$failed || [string match "error:*" $result] || [string match "declined*" $result]} {
+  catch {::ui::message $result}
+ } else {
+  set Query ""
+  HideList
+  # Query actions return useful text too, without needing a model to narrate it.
+  if {$result ne ""} {catch {::ui::message $result}}
+ }
+ PlaceholderState
+ return "break"
+}
+proc ::application::ask::MissingSlot {row} {
+ variable Query
+ variable Priv
+ set slot [lindex [dict get $row missing] 0]
+ set Query [::commandline::CompleteText [dict get $row template] [dict get $row args]]
+ set marker <$slot>
+ set start [string first $marker $Query]
+ [Entry] selection range $start [expr {$start+[string length $marker]}]
+ [Entry] icursor $start
+ focus -force [Entry]
+ set Priv(filtered) [string trim $Query]
+ set Priv(commands) {}; set Priv(rows) {}
+ set ::commandline::Cache {}
+ foreach value [::commandline::Values $slot ""] {
+  set text [string replace $Query $start [expr {$start+[string length $marker]-1}] $value]
+  foreach candidate [::commandline::Suggest $text] {
+   if {[dict get $candidate id] ne [dict get $row id]} {continue}
+   lappend Priv(commands) $candidate
+   lappend Priv(rows) [list [dict get $candidate action] [dict get $candidate label] Enter 1 1]
+  }
+ }
+ set Priv(index) 0
+ ShowList
 }
 
 proc ::application::ask::SendToAssistant {} {
@@ -628,7 +671,10 @@ proc ::application::ask::SendToAssistant {} {
 	if {[llength [info commands ::application::assistant::show]]} {
 		catch { ::application::assistant::show }
 	}
-	if {[catch {::application::assistant::ask $text} accepted]} {
+	set ::application::assistant::QuestionMode 1
+ set failed [catch {::application::assistant::ask $text} accepted]
+ set ::application::assistant::QuestionMode 0
+ if {$failed} {
 		catch {::ui::message [format $mc::Failed $accepted]}
 		return "break"
 	}
@@ -1217,8 +1263,12 @@ proc ::application::speech::FinishTranscribe {} {
 # Put a transcript at the cursor in the Ask field. Editable, never sent.
 proc ::application::speech::InsertTranscript {text} {
 	set text [string trim $text]
-	if {$text eq ""} { return 0 }
-	if {![winfo exists [::application::ask::Entry]]} { return 0 }
+ if {[string equal -nocase $text "go"] && [::application::ask::ListVisible]} {
+  ::application::ask::Choose
+  return 1
+ }
+ if {$text eq ""} { return 0 }
+ if {![winfo exists [::application::ask::Entry]]} { return 0 }
 	set entry [::application::ask::Entry]
 	$entry insert insert $text
 	focus -force $entry

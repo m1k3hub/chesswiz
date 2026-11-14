@@ -204,3 +204,53 @@ proc ::commandline::AppSource {type query} {
  foreach v $values {if {[NameMatch $query $v]} {lappend out $v}}
  return [lrange [lsort -unique $out] 0 7]
 }
+proc ::commandline::CompleteText {template arguments} {
+ set words {}
+ foreach word $template {
+  if {[lindex $word 0] eq "?"} {
+   set group [lrange $word 1 end]; set include 0
+   foreach item $group {if {[string index $item 0] eq "@" && [dict exists $arguments [Key [string range $item 1 end]]]} {set include 1}}
+   if {$include} {lappend words [CompleteText $group $arguments]}
+  } elseif {[string index $word 0] eq "@"} {
+   set slot [string range $word 1 end]; set key [Key $slot]
+   if {$slot eq "criteria"} {
+    dict for {k v} $arguments {lappend words $k $v}
+    if {![dict size $arguments]} {lappend words player <player>}
+   } elseif {[dict exists $arguments $key]} {lappend words [dict get $arguments $key]} else {lappend words <$slot>}
+  } else {lappend words $word}
+ }
+ return [join $words]
+}
+proc ::commandline::Run {row} {
+ if {[llength [dict get $row missing]]} {return "declined: complete the missing slot"}
+ # Re-resolve against current state; stale names, aliases and illegal moves never run.
+ set valid 0
+ foreach candidate [Suggest [dict get $row input]] {
+  if {[dict get $candidate action] eq [dict get $row action] && [dict get $candidate args] eq [dict get $row args] && ![llength [dict get $candidate missing]]} {set valid 1; break}
+ }
+ if {!$valid} {return "declined: the command's values changed; choose again"}
+ return [::action::run [dict get $row action] [dict get $row args]]
+}
+namespace eval ::application::assistant {}
+# A separate, tools-free conversation path. Even unsolicited provider tool calls
+# are ignored, so model output can never reach the action registry.
+proc ::application::assistant::Question {text} {
+ variable Priv
+ if {$Priv(busy)} {return 0}
+ ConfigureProvider
+ set facts ""
+ catch {set facts [DoCurrentGame]}
+ set messages [list [dict create role system content "Answer this question read-only. You cannot run commands or change data. Chess facts must come from the supplied board record; do not invent evaluations. Board record:\n$facts"] [dict create role user content $text]]
+ Append user $text
+ ::ai::provider::chatAsync $messages {} ::application::assistant::QuestionReply
+ return 1
+}
+proc ::application::assistant::QuestionReply {result} {
+ if {![dict get $result ok]} {Append info [dict get $result error]; return}
+ set message [dict get $result message]
+ if {[dict exists $message tool_calls] && [llength [dict get $message tool_calls]]} {
+  Append info "Questions cannot run commands. Use Commands to choose an action."
+  return
+ }
+ if {[dict exists $message content]} {Append assistant [dict get $message content]}
+}
