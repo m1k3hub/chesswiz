@@ -225,6 +225,7 @@ namespace eval menu::mc {
 	set LichessPuzzles			"Lichess Puzzles…"
 	set StreamOverlay			"Stream to Twitch / YouTube…"
 	set EngineMatch					"Engine Match…"
+	set TournamentDirector			"Tournament Director…"
 	set StudyPlan						"Study Plan…"
 	set OpponentBrief					"Opponent Brief…"
 	set TrainingSetFromGames			"Training Set from Games…"
@@ -526,6 +527,7 @@ proc ::menu::DefineTree {} {
 			[list cmd menu.training.stream StreamOverlay "" {::menu::ModulePresent stream_overlay}] \
 			]] \
 			[list cmd menu.training.engine_match EngineMatch "" {::menu::ModulePresent enginematch}] \
+			[list cmd menu.training.tournament_director TournamentDirector "" {::menu::ModulePresent td}] \
 			[list sep] \
 			[list cmd menu.training.studyplan StudyPlan "" {::menu::ModulePresent studyplan}] \
 			[list cmd menu.training.brief OpponentBrief "" {::menu::ModulePresent brief}] \
@@ -1900,6 +1902,7 @@ proc ::menu::DumpNodes {menu nodes indent topLevel} {
 proc ::menu::RegisterExtras {} {
 	if {[::capability::present online_actions]} { ::online::view::RegisterActions }
 	::inventoryaction::Register
+	::td::actions::Register
 	if {[dict exists $::action::Registry app-fullscreen]} {
 		dict set ::action::Registry app-fullscreen args {{state {type enum default toggle enum {toggle on off} description {Use off to exit fullscreen, on to enter, or toggle}}}}
 		dict set ::action::Registry app-fullscreen schema {}
@@ -2780,6 +2783,7 @@ proc ::menu::Do {id} {
 		menu.training.lichess_puzzles { return [::lichess::puzzles::open .application] }
 		menu.training.stream { return [::stream::open .application] }
 		menu.training.engine_match { return [::enginematch::open .application] }
+		menu.training.tournament_director { return [::td::ui::Open {} event] }
 		menu.training.studyplan { return [::ai::studyplan::run .application] }
 		menu.training.brief { return [::ai::brief::ask .application] }
 		menu.training.training_set { return [::ai::cql::training .application] }

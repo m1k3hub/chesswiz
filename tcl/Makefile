@@ -196,6 +196,15 @@ SOURCES = \
 	stream.tcl \
 	td-runner.tcl \
 	engine-match.tcl \
+	td-store.tcl \
+	td-command.tcl \
+	td-pair.tcl \
+	td-score.tcl \
+	td-openings.tcl \
+	td-model.tcl \
+	td-event.tcl \
+	td-ui.tcl \
+	td-actions.tcl \
 	ai-claims.tcl \
 	ai-rhetoric.tcl \
 	ai-annotate.tcl \

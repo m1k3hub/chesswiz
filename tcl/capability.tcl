@@ -49,6 +49,7 @@ proc ::capability::DefineAll {} {
 	Define lichess_puzzles {expr {[llength [info commands ::lichess::puzzles::open]] > 0}}
 	Define stream_overlay {expr {[llength [info commands ::stream::open]] > 0}}
 	Define enginematch {expr {[llength [info commands ::enginematch::open]] > 0}}
+	Define td         {expr {[llength [info commands ::td::ui::Open]] > 0 && [llength [info commands ::td::command::Execute]] > 0}}
 	Define guessmove   {expr {[llength [info commands ::guessmove::start]] > 0}}
 	Define endtrainer  {expr {[llength [info commands ::endtrainer::open]] > 0}}
 	Define reptrainer  {expr {[llength [info commands ::reptrainer::open]] > 0}}
@@ -105,6 +106,7 @@ namespace eval ::capability {
 		embed3d {view.board3d.embed}
 		endtrainer {menu.training.endgame}
 		enginematch {menu.training.engine_match}
+		td {menu.training.tournament_director}
 		event {event_types menu.db.reports.timecontrol}
 		explorer {c9.explorer.source c9.pane.explorer menu.analysis.explorer menu.view.panes.explorer}
 		factcheck {factcheck_annotations menu.analysis.factcheck}
@@ -177,6 +179,7 @@ proc ::capability::actionAvailable {id {arguments {}}} {
 	variable ArgumentModules
 	variable ArgumentCommands
 	variable ActionCommands
+	if {[string match "td.*" $id] && ![present td]} {return 0}
 	if {[dict exists $ActionCommands $id]
 	 && ![llength [info commands [dict get $ActionCommands $id]]]} {return 0}
 	dict for {module ids} $ActionModules {

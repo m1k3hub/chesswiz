@@ -465,6 +465,44 @@ proc open {parent base variant index view source} {
 }
 
 
+# Journal-backed Tournament Director crosstable. This deliberately bypasses
+# the native database calculator: td-score owns the pinned C.07 edition,
+# exact rational values and per-game breakdowns, including manual events.
+proc ::crosstable::OpenTD {parent path} {
+	variable Counter
+	set state [dict get [::td::store::Read $path] state]
+	if {$state eq ""} { error "no tournament exists at $path" }
+	set dlg .application.crosstable_td_[incr Counter]
+	tk::toplevel $dlg -class Scidb
+	wm title $dlg "Tournament Table — [dict get $state name]"
+	ttk::frame $dlg.top
+	ttk::frame $dlg.top.canv
+	pack $dlg.top -fill both -expand yes
+	pack $dlg.top.canv -fill both -expand yes
+	::font::html::setupFonts crosstable
+	set html $dlg.top.canv.html
+	::html $html -delay 10 -center yes -fittowidth no -css [DefaultCSS] \
+		-fontsize [::font::html::fontSize crosstable]
+	pack $html -fill both -expand yes
+	set buttons [ttk::frame $dlg.top.buttons]
+	pack $buttons -fill x
+	ttk::button $buttons.refresh -text "Refresh" -command [list ::crosstable::RefreshTD $html $path]
+	ttk::button $buttons.close -text "Close" -command [list destroy $dlg]
+	pack $buttons.close -side right
+	pack $buttons.refresh -side right
+	RefreshTD $html $path
+	wm geometry $dlg 1100x720
+	return $dlg
+}
+
+proc ::crosstable::RefreshTD {html path} {
+	if {![winfo exists $html]} { return }
+	set state [dict get [::td::store::Read $path] state]
+	set rows [::td::score::Compute $state]
+	$html parse [::td::score::CrosstableHTML $state $rows]
+}
+
+
 proc ConfigureToolbar {dlg state} {
 	variable ${dlg}::Vars
 
