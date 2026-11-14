@@ -2279,7 +2279,7 @@ proc ::menu::OperationSpec {id} {
 	}
 	if {$kind eq "endgame"} {
 		return {
-			{operation {type enum default {} enum {{} catalog status start move retry continue give_up next close} description {Endgame session operation; omit to open the ending chooser}}}
+			{operation {type enum default {} enum {{} open catalog status start move retry continue give_up next close} description {Endgame session operation; omit or open to show the ending chooser}}}
 			{ending {type string default {} description {Catalog ending id for start; use catalog to list ids}}}
 			{index {type integer default 0 range {0 10000} description {Zero-based position within the ending}}}
 			{move {type string default {} description {Legal SAN move for the user's turn}}}

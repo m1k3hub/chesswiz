@@ -1030,6 +1030,7 @@ proc ::endtrainer::runOperation {arguments} {
 	variable Priv
 	set operation [dict get $arguments operation]
 	switch -- $operation {
+		open { return [open .application] }
 		catalog {
 			variable Catalog
 			return $Catalog

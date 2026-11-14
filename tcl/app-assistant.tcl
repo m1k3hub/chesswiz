@@ -2383,7 +2383,7 @@ proc ::application::assistant::CheckArgs {name cargs} {
 			if {$id eq ""} { error "id is required" }
 			set arguments {}
 			if {[dict exists $cargs arguments]} { set arguments [dict get $cargs arguments] }
-			if {[catch { dict size $arguments }]} { error "arguments must be an object" }
+			if {[catch { dict size $arguments }]} { error "arguments must be an object (a Tcl dictionary like {operation catalog}), not a JSON string" }
 			return [dict create id $id arguments $arguments]
 		}
 		switch_tab {

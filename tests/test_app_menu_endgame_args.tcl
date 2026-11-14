@@ -24,6 +24,16 @@ tcltest::test endgame-args-validation {bad identifiers and indexes never silentl
         $::endtrainer::Priv(dialog)
 } -cleanup { ::scidb::test::endgameargs::cleanup } -result {1 1 1 1 10 {}}
 
+tcltest::test endgame-args-open-alias {operation open is accepted and shows the ending chooser} -setup {
+    ::scidb::test::actions::ready
+} -body {
+    set valid [lindex [::action::validateArgs menu.training.endgame {operation open}] 1]
+    ::knowledge::RunAction menu.training.endgame {operation open}
+    update
+    set dlg $::endtrainer::Priv(dialog)
+    list [dict get $valid operation] [expr {$dlg ne "" && [winfo exists $dlg]}] [expr {$dlg ne "" && [winfo viewable $dlg]}]
+} -cleanup { ::scidb::test::endgameargs::cleanup } -result {open 1 1}
+
 # The regular suite can run without downloaded tables. The assigned offline
 # evidence run supplies SCIDB_TEST_SYZYGY and requires this test to execute.
 set hasTables [expr {[info exists ::env(SCIDB_TEST_SYZYGY)] && [file isdirectory $::env(SCIDB_TEST_SYZYGY)]}]
