@@ -24,7 +24,9 @@
 #   user presses Enter. Nothing is linked into the app for audio or
 #   speech: recorders and recognisers are external subprocesses.
 #
-#   Linux: whisper.cpp's whisper-cli (CPU only; CUDA_VISIBLE_DEVICES="")
+#   Linux: sherpa-onnx's sherpa-onnx-offline with a transducer model
+#          (preferred when present; optional hotword list), else
+#          whisper.cpp's whisper-cli (CPU only; CUDA_VISIBLE_DEVICES="")
 #          plus arecord or ffmpeg. Windows: the operating system's Win+H
 #          dictation. macOS: the system dictation hint. With no path the
 #          microphone is hidden and Preferences > Assistant says what to
@@ -72,6 +74,9 @@ set SpeechReady		"A local speech path is configured."
 set PathWhisper		"whisper-cli path"
 set PathModel		"ggml model path"
 set PathRecorder	"Recorder (arecord/ffmpeg)"
+set PathSherpa		"sherpa-onnx-offline path"
+set PathSherpaModel	"sherpa-onnx model folder"
+set PathHotwords	"Hotwords file (optional)"
 set PathStub		"Test stub command (optional)"
 set Detect			"Detect"
 set Close			"Close"
@@ -683,7 +688,7 @@ namespace eval application {
 namespace eval speech {
 
 namespace eval mc {
-set Install		"Speech input needs whisper-cli (whisper.cpp), a ggml model and arecord or ffmpeg. Set them in Preferences > Assistant."
+set Install		"Speech input needs sherpa-onnx-offline and a sherpa-onnx model folder (or whisper-cli with a ggml model), and arecord or ffmpeg. Set them in Preferences > Assistant."
 set InstallMac	"macOS uses the system dictation: turn it on in System Settings > Keyboard > Dictation, then press the dictation key (or Fn Fn)."
 set InstallWin	"Windows uses the system dictation: press Win+H while the Ask field has focus."
 set Listening	"Recording… click to stop"
@@ -712,6 +717,9 @@ variable Settings
 array set Settings {
 	whisperCli	""
 	whisperModel	""
+	sherpaCli	""
+	sherpaModel	""
+	hotwords	""
 	recorder	""
 	stub		""
 	language	"en"
@@ -725,6 +733,7 @@ array set Priv {
 	transcribeFile	""
 	transcribePids	{}
 	transcribeOut	""
+	transcribeMode	""
 	transcribeStart	0
 	stable		0
 	lastSize	-1
@@ -748,6 +757,9 @@ if {[llength [info commands ::mc::addDefaultReset]]} {
 foreach {speechEnv speechKey} {
 	SCIDB_AI_WHISPER_CLI	whisperCli
 	SCIDB_AI_WHISPER_MODEL	whisperModel
+	SCIDB_AI_SHERPA_CLI	sherpaCli
+	SCIDB_AI_SHERPA_MODEL	sherpaModel
+	SCIDB_AI_SPEECH_HOTWORDS	hotwords
 	SCIDB_AI_RECORDER	recorder
 	SCIDB_AI_SPEECH_STUB	stub
 } {
@@ -848,9 +860,6 @@ proc ::application::speech::detect {} {
 		return [dict create mode mac available 1 reason "" cli "" model "" recorder "" stub ""]
 	}
 
-	set cliPath [which $cli]
-	set modelPath $model
-	if {![file exists $modelPath]} { set modelPath "" }
 	set recPath ""
 	if {$recorder ne "" && $recorder ne "auto"} {
 		set recPath [which $recorder]
@@ -861,6 +870,16 @@ proc ::application::speech::detect {} {
 		}
 	}
 
+	set sherpa [SherpaModel $Settings(sherpaModel)]
+	set sherpaCli [which $Settings(sherpaCli)]
+	if {$sherpaCli ne "" && [dict size $sherpa] && $recPath ne ""} {
+		return [dict create mode sherpa available 1 reason "" cli $sherpaCli \
+			model [dict get $sherpa dir] recorder $recPath stub "" sherpa $sherpa]
+	}
+
+	set cliPath [which $cli]
+	set modelPath $model
+	if {![file exists $modelPath]} { set modelPath "" }
 	set available [expr {$cliPath ne "" && $modelPath ne "" && $recPath ne ""}]
 	set reason ""
 	if {!$available} {
@@ -874,6 +893,57 @@ proc ::application::speech::detect {} {
 		cli $cliPath model $modelPath recorder $recPath stub ""]
 }
 
+# A sherpa-onnx offline transducer model folder: {dir encoder decoder joiner
+# tokens type ?bpevocab?}, or {} when <dir> is not one. int8 files are
+# preferred. NeMo (Parakeet) models are recognised by their folder name.
+proc ::application::speech::SherpaModel {dir} {
+	if {$dir eq "" || ![file isdirectory $dir]} { return {} }
+	set result [dict create dir [file normalize $dir]]
+	foreach part {encoder decoder joiner} {
+		set files [lsort [glob -nocomplain -types f -directory $dir $part*.onnx]]
+		if {![llength $files]} { return {} }
+		set int8 [lsearch -inline -glob $files *int8*]
+		dict set result $part [expr {$int8 ne "" ? $int8 : [lindex $files 0]}]
+	}
+	set tokens [file join $dir tokens.txt]
+	if {![file isfile $tokens]} { return {} }
+	dict set result tokens $tokens
+	set name [string tolower [file tail $dir]]
+	dict set result type [expr {[string match *nemo* $name] || [string match *parakeet* $name] ? "nemo_transducer" : "transducer"}]
+	set vocab [file join $dir bpe.vocab]
+	if {[file isfile $vocab]} { dict set result bpevocab $vocab }
+	return $result
+}
+
+# The sherpa-onnx-offline command line for one WAV.
+proc ::application::speech::SherpaArgv {d file} {
+	variable Settings
+	set m [dict get $d sherpa]
+	set argv [list [dict get $d cli] --provider=cpu --num-threads=4 \
+		--encoder=[dict get $m encoder] --decoder=[dict get $m decoder] \
+		--joiner=[dict get $m joiner] --tokens=[dict get $m tokens]]
+	if {[dict get $m type] eq "nemo_transducer"} { lappend argv --model-type=nemo_transducer }
+	set hot $Settings(hotwords)
+	if {$hot ne "" && [file isfile $hot] && [dict exists $m bpevocab]} {
+		lappend argv --decoding-method=modified_beam_search --hotwords-file=$hot \
+			--modeling-unit=bpe --bpe-vocab=[dict get $m bpevocab]
+	}
+	lappend argv $file
+	return $argv
+}
+
+# The transcript in sherpa-onnx-offline's output: the "text" of its JSON
+# result line (the tool prints one JSON object per input file).
+proc ::application::speech::SherpaText {output} {
+	set text ""
+	foreach line [split $output \n] {
+		if {[regexp {"text":\s*"((?:[^"\\]|\\.)*)"} $line -> raw]} {
+			set text [subst -nocommands -novariables $raw]
+		}
+	}
+	return [string trim $text]
+}
+
 # Look for whisper-cli and a ggml model where whisper.cpp installs them,
 # for each setting that is empty or points at nothing; set what is found.
 # Returns "name path" phrases for the report.
@@ -883,6 +953,39 @@ proc ::application::speech::search {} {
 	set home [file normalize ~]
 	set trees [list [file join $home whisper.cpp] [file join $home src whisper.cpp] \
 		/usr/local/share/whisper.cpp /usr/share/whisper.cpp /opt/homebrew/share/whisper-cpp]
+	set sherpaRoots [list [file join $home .local share sherpa-onnx] /usr/local/share/sherpa-onnx \
+		/opt/sherpa-onnx [file join [RepoRoot] tests tmp-app speech-tools]]
+	if {[which $Settings(sherpaCli)] eq ""} {
+		set path [which sherpa-onnx-offline]
+		foreach root $sherpaRoots {
+			if {$path ne ""} break
+			foreach cand [glob -nocomplain -types f [file join $root bin sherpa-onnx-offline] \
+					[file join $root bin linux-x64 sherpa-onnx * bin sherpa-onnx-offline]] {
+				if {[file executable $cand]} { set path $cand; break }
+			}
+		}
+		if {$path ne ""} {
+			set Settings(sherpaCli) $path
+			lappend found "sherpa-onnx-offline $path"
+		}
+	}
+	if {![dict size [SherpaModel $Settings(sherpaModel)]]} {
+		set cands {}
+		foreach root $sherpaRoots {
+			lappend cands {*}[glob -nocomplain -types d [file join $root models *] [file join $root models asr *]]
+		}
+		# Parakeet first: the most accurate on the smoke test; then the rest
+		set cands [lsort -command {apply {{a b} {
+			expr {[string match *parakeet* [file tail $b]] - [string match *parakeet* [file tail $a]]}
+		}}} $cands]
+		foreach dir $cands {
+			if {[dict size [SherpaModel $dir]]} {
+				set Settings(sherpaModel) $dir
+				lappend found "sherpa model $dir"
+				break
+			}
+		}
+	}
 	if {[which $Settings(whisperCli)] eq ""} {
 		set dirs [lmap t $trees {file join $t build bin}]
 		lappend dirs /usr/local/bin /opt/homebrew/bin
@@ -937,7 +1040,9 @@ proc ::application::speech::status {} {
 	variable Priv
 	set state $Priv(state)
 	set parts [list "mode [dict get $d mode]" "state $state"]
-	if {[dict get $d cli] ne ""} { lappend parts "whisper-cli [dict get $d cli]" }
+	if {[dict get $d cli] ne ""} {
+		lappend parts "[expr {[dict get $d mode] eq "sherpa" ? "sherpa-onnx-offline" : "whisper-cli"}] [dict get $d cli]"
+	}
 	if {[dict get $d model] ne ""} { lappend parts "model [dict get $d model]" }
 	if {[dict get $d recorder] ne ""} { lappend parts "recorder [dict get $d recorder]" }
 	if {![dict get $d available]} { lappend parts [hint] }
@@ -1098,7 +1203,7 @@ proc ::application::speech::StartTranscribe {file} {
 	variable Settings
 
 	set d [detect]
-	if {![dict get $d available] || [dict get $d mode] ni {whisper stub}} {
+	if {![dict get $d available] || [dict get $d mode] ni {whisper sherpa stub}} {
 		Cleanup
 		SetState idle
 		SetMicText $::application::ask::mc::Mic
@@ -1128,7 +1233,12 @@ proc ::application::speech::StartTranscribe {file} {
 	}
 	set cli [dict get $d cli]
 	set model [dict get $d model]
-	set argv [list $cli -m $model -f $file -nt -np]
+	if {[dict get $d mode] eq "sherpa"} {
+		set argv [SherpaArgv $d $file]
+	} else {
+		set argv [list $cli -m $model -f $file -nt -np]
+	}
+	set Priv(transcribeMode) [dict get $d mode]
 	set cmd [list env CUDA_VISIBLE_DEVICES= {*}$argv]
 	set pids {}
 	if {[catch { set pids [exec {*}$cmd >@ $output 2> /dev/null &] } err]} {
@@ -1203,6 +1313,7 @@ proc ::application::speech::FinishTranscribe {} {
 			close $chan
 		}
 	}
+	if {$Priv(transcribeMode) eq "sherpa"} { set text [SherpaText $text] }
 	set text [string trim $text]
 	Cleanup
 	SetState idle
@@ -1234,6 +1345,9 @@ proc ::application::speech::transcribeFile {file} {
 	if {![dict get $d available]} { error [hint] }
 	if {[dict get $d mode] eq "stub"} {
 		return [string trim [RunStub [dict get $d stub]]]
+	}
+	if {[dict get $d mode] eq "sherpa"} {
+		return [SherpaText [exec env CUDA_VISIBLE_DEVICES= {*}[SherpaArgv $d $file] 2> /dev/null]]
 	}
 	set cmd [list env CUDA_VISIBLE_DEVICES= [dict get $d cli] -m [dict get $d model] \
 		-f $file -nt -np]
@@ -1546,11 +1660,17 @@ proc ::application::ask::Preferences {args} {
 		whisperCli ::application::speech::Settings(whisperCli) \
 		whisperModel ::application::speech::Settings(whisperModel) \
 		recorder ::application::speech::Settings(recorder) \
+		sherpaCli ::application::speech::Settings(sherpaCli) \
+		sherpaModel ::application::speech::Settings(sherpaModel) \
+		hotwords ::application::speech::Settings(hotwords) \
 		stub ::application::speech::Settings(stub)]
 	# field name -> the mc string that labels it, so a language switch can
 	# relabel the open dialog in place
 	set fields {}
 	foreach {key name} {
+		sherpaCli	PathSherpa
+		sherpaModel	PathSherpaModel
+		hotwords	PathHotwords
 		whisperCli	PathWhisper
 		whisperModel	PathModel
 		recorder	PathRecorder

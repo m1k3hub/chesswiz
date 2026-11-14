@@ -371,6 +371,97 @@ tcltest::test speech-whisper-no-network {whisper-cli makes no network syscall on
 	list $rc $calls
 } -result {0 {}}
 
+# ----------------------------------------------------------------------
+# sherpa-onnx: preferred over whisper-cli when its tool and model are set.
+# ----------------------------------------------------------------------
+namespace eval ::scidb::test::speech {
+	variable SherpaTools [file join [file dirname [file normalize [info script]]] tmp-app speech-tools]
+}
+proc ::scidb::test::speech::SherpaCli {} {
+	return [lindex [glob -nocomplain [file join $::scidb::test::speech::SherpaTools bin linux-x64 sherpa-onnx * bin sherpa-onnx-offline]] 0]
+}
+proc ::scidb::test::speech::SherpaParakeet {} {
+	return [lindex [glob -nocomplain -types d [file join $::scidb::test::speech::SherpaTools models asr *parakeet*]] 0]
+}
+proc ::scidb::test::speech::FakeSherpa {} {
+	set dir [file join [::application::speech::TempDir] fake-sherpa-[pid]]
+	file mkdir [file join $dir model-nemo-parakeet]
+	foreach f {encoder.int8.onnx encoder.onnx decoder.int8.onnx joiner.int8.onnx tokens.txt} {
+		close [open [file join $dir model-nemo-parakeet $f] w]
+	}
+	set cli [file join $dir sherpa-onnx-offline]
+	set chan [open $cli w]
+	puts $chan "#!/bin/sh"
+	puts $chan {echo '{"lang": "", "text": "find games Kasparov wins with white", "tokens": [" find"]}'}
+	close $chan
+	file attributes $cli -permissions 0755
+	return [list $cli [file join $dir model-nemo-parakeet] $dir]
+}
+tcltest::testConstraint sherpaBuilt [expr {
+	$::tcl_platform(platform) eq "unix" && $::tcl_platform(os) ne "Darwin" &&
+	[::scidb::test::speech::SherpaCli] ne "" && [::scidb::test::speech::SherpaParakeet] ne ""
+}]
+tcltest::testConstraint linuxOnly [expr {$::tcl_platform(platform) eq "unix" && $::tcl_platform(os) ne "Darwin"}]
+
+tcltest::test speech-sherpa-text {the transcript is the text of the JSON result line, escapes decoded} -body {
+	list [::application::speech::SherpaText {{"lang": "", "text": "Open the Réti", "tokens": ["x"]}}] \
+		[::application::speech::SherpaText "noise\n{\"text\": \"say \\\"hi\\\"\"}\n"] \
+		[::application::speech::SherpaText "no json"]
+} -result [list "Open the Réti" {say "hi"} {}]
+
+tcltest::test speech-sherpa-model-folder {a model folder needs encoder, decoder, joiner and tokens; int8 and NeMo are recognised} -constraints linuxOnly -body {
+	lassign [::scidb::test::speech::FakeSherpa] cli model dir
+	set m [::application::speech::SherpaModel $model]
+	set incomplete [file join $dir incomplete]
+	file mkdir $incomplete
+	close [open [file join $incomplete encoder.onnx] w]
+	set r [list [file tail [dict get $m encoder]] [dict get $m type] \
+		[dict size [::application::speech::SherpaModel $incomplete]] \
+		[dict size [::application::speech::SherpaModel ""]]]
+	file delete -force $dir
+	set r
+} -result {encoder.int8.onnx nemo_transducer 0 0}
+
+tcltest::test speech-sherpa-preferred {with sherpa-onnx set, detect picks it over whisper and the flow inserts its transcript} -constraints linuxOnly -body {
+	::scidb::test::speech::isolated {
+		lassign [::scidb::test::speech::FakeSherpa] cli model dir
+		::application::speech::configure sherpaCli $cli sherpaModel $model \
+			whisperCli [::scidb::test::speech::WhisperCli] whisperModel [::scidb::test::speech::Model] \
+			recorder true stub ""
+		set mode [dict get [::application::speech::detect] mode]
+		set wav [file join $dir in.wav]
+		file copy [::scidb::test::speech::Wav] $wav
+		set ::application::speech::Priv(state) transcribing
+		::application::speech::StartTranscribe $wav
+		set idle [::scidb::test::speech::WaitIdle]
+		file delete -force $dir
+		list $mode $idle $::application::ask::Query [llength $::scidb::test::speech::Asked]
+	}
+} -result {sherpa 1 {find games Kasparov wins with white} 0}
+
+tcltest::test speech-sherpa-hotwords-argv {a hotwords file switches to beam search only when the model has a bpe vocabulary} -constraints linuxOnly -body {
+	::scidb::test::speech::isolated {
+		lassign [::scidb::test::speech::FakeSherpa] cli model dir
+		set hot [file join $dir hot.txt]
+		close [open $hot w]
+		::application::speech::configure sherpaCli $cli sherpaModel $model hotwords $hot recorder true stub ""
+		set a [::application::speech::SherpaArgv [::application::speech::detect] x.wav]
+		close [open [file join $model bpe.vocab] w]
+		set b [::application::speech::SherpaArgv [::application::speech::detect] x.wav]
+		file delete -force $dir
+		list [expr {[lsearch -glob $a --hotwords-file=*] >= 0}] [expr {[lsearch -glob $b --hotwords-file=*] >= 0}] \
+			[expr {"--model-type=nemo_transducer" in $a}] [lindex $a end]
+	}
+} -result {0 1 1 x.wav}
+
+tcltest::test speech-sherpa-real {the downloaded sherpa-onnx Parakeet model transcribes the recorded fixture} -constraints sherpaBuilt -body {
+	::scidb::test::speech::isolated {
+		::application::speech::configure sherpaCli [::scidb::test::speech::SherpaCli] \
+			sherpaModel [::scidb::test::speech::SherpaParakeet] recorder true stub ""
+		::scidb::test::speech::Words [::application::speech::transcribeFile [::scidb::test::speech::Wav]]
+	}
+} -result [::scidb::test::speech::Words "open the last game"]
+
 # Constraints: the git-ignored local build.
 tcltest::test speech-fixture-description {the speech fixture file names the model and its checksum} -body {
 	set f [open [file join $::scidb::test::speech::Dir speech-fixture.txt] r]
