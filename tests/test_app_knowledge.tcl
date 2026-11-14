@@ -348,6 +348,17 @@ tcltest::test knowledge-format-is-not-import {a portable game format does not im
     list [expr {"imports" in $format}] [expr {"pgns" in $import}] [expr {"pgns" in $format}]
 } -result {0 0 1}
 
+tcltest::test knowledge-switch-open-database {selecting an open database is discoverable separately from tabs and variants} -body {
+    ::scidb::test::knowledge::ready
+    set found {}
+    foreach request {{switch to the main database} {select another open database} {switch back to my database}} {
+        set ids [lmap cap [::knowledge::Search $request 3] {dict get $cap id}]
+        puts [list DATABASE_SWITCH_LOOKUP $request $ids]
+        lappend found [expr {"open_database" in $ids}]
+    }
+    set found
+} -result {1 1 1}
+
 tcltest::test knowledge-dev-corpus {an acceptable id in the top 3 for >= 90% of 40 questions} -body {
     ::scidb::test::knowledge::ready
     set aliases [::scidb::test::knowledge::readAliases]

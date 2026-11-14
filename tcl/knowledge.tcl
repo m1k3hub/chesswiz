@@ -126,15 +126,15 @@ set ::knowledge::Explicit [dict create \
 		examples [list "Show me the reports from the last freeze" "What was the program doing when it froze?"] \
 	] \
 	open_database [dict create \
-		purpose "Open a Chesswiz database file from your computer." \
-		when "Use this when you want to work with a database you downloaded or saved." \
-		examples [list "open a database file I downloaded" "open my chess database"] \
+		purpose "Open a Chesswiz database file, or switch to a database that is already open." \
+		when "Use this to load a saved collection or select another open database as the active database." \
+		examples [list "open a database file I downloaded" "switch back to my main database"] \
 		related [list import_games open_search export_database] \
-		keywords [list open database file load sci cbh pgn downloaded] \
+		keywords [list open database file load sci cbh pgn downloaded switch select back main active] \
 		i18n [dict create de [dict create \
-			purpose "Eine Chesswiz-Datenbankdatei von Ihrem Computer \u00f6ffnen." \
-			when "Verwenden Sie dies, um mit einer heruntergeladenen oder gespeicherten Datenbank zu arbeiten." \
-			examples [list "eine heruntergeladene Datenbank \u00f6ffnen" "meine Schachdatenbank \u00f6ffnen"] \
+			purpose "Eine Chesswiz-Datenbankdatei \u00f6ffnen oder zu einer bereits ge\u00f6ffneten Datenbank wechseln." \
+			when "Verwenden Sie dies, um eine gespeicherte Sammlung zu laden oder eine andere offene Datenbank auszuw\u00e4hlen." \
+			examples [list "eine heruntergeladene Datenbank \u00f6ffnen" "zur\u00fcck zu meiner Hauptdatenbank wechseln"] \
 		]] \
 	] \
 	import_games [dict create \

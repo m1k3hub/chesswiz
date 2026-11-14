@@ -70,6 +70,23 @@ tcltest::test real-open-database-changes-state {open_database adds a generated d
     ::scidb::test::actions_real::cleanup
 } -result {1 1 1}
 
+tcltest::test real-switch-open-database {open_database selects an already open collection without opening another copy} -setup {
+    ::scidb::test::actions_real::setup
+    ::scidb::test::actions_real::openBase
+    set base $::scidb::test::actions_real::Base
+    set switcher [::application::database::switcherWidget]
+    set before [$switcher bases]
+    ::application::database::switchToBase Clipbase
+    update
+} -body {
+    if {[::scidb::db::get name] eq $base} {error "setup did not switch away"}
+    ::scidb::test::actions_real::tool open_database [list path $base]
+    update
+    list [expr {[::scidb::db::get name] eq $base}] [expr {[$switcher bases] eq $before}]
+} -cleanup {
+    ::scidb::test::actions_real::cleanup
+} -result {1 1}
+
 tcltest::test real-game-list-row-selection {the generated database has a selectable real game-list row} -setup {
     ::scidb::test::actions_real::setup
     ::scidb::test::actions_real::openBase
