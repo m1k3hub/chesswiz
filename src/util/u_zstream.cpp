@@ -68,7 +68,7 @@ match(ZStream::Strings const& suffixes, char const* name)
 	{
 		unsigned n = suffixes[i].size();
 
-		if (n < len && strncasecmp(name + len - n, suffixes[i], n) == 0)
+		if (n <= len && strncasecmp(name + len - n, suffixes[i], n) == 0)
 			return true;
 	}
 
@@ -189,7 +189,7 @@ containsSuffix(char const* suffix, ZZIP_DIR* dir)
 	{
 		unsigned len = strlen(entry.d_name);
 
-		if (n < len && strncasecmp(entry.d_name + len - n, suffix, n) == 0)
+		if (n <= len && strncasecmp(entry.d_name + len - n, suffix, n) == 0)
 			result = true;
 	}
 
@@ -231,7 +231,7 @@ content(ZStream::Strings const& suffixes, ZZIP_DIR* dir, ZStream::Strings& resul
 		{
 			unsigned n = strlen(*i);
 
-			if (n < len && strncasecmp(entry.d_name + len - n, *i, n) == 0)
+			if (n <= len && strncasecmp(entry.d_name + len - n, *i, n) == 0)
 				result.push_back(entry.d_name);
 		}
 	}
@@ -454,7 +454,10 @@ ZStream::setZipFileSuffixes(Strings const& suffixes)
 	m_suffixes.reserve(suffixes.size());
 
 	for (unsigned i = 0; i < suffixes.size(); ++i)
-		m_suffixes.push_back(suffixes[i].front() == '.' ? suffixes[i] : '.' + suffixes[i]);
+	{
+		bool hasDot = suffixes[i].find('.') != mstl::string::npos;
+		m_suffixes.push_back(hasDot ? suffixes[i] : '.' + suffixes[i]);
+	}
 }
 
 

@@ -1,0 +1,130 @@
+package require tcltest 2.5
+namespace eval ::m4install {
+ variable dir [file join $::env(HOME) m4-install]
+ file mkdir $dir
+ variable requests 0
+ proc contents {path} {set f [open $path rb]; set s [read $f]; close $f; return $s}
+}
+set input $::m4install::dir/input.csv
+set f [open $input w]
+puts $f {ECF_code,full_name,revised_standard
+999800A,"Fixture, Install",2000}
+close $f
+rename ::application::download::Get ::m4install::realGet
+proc ::application::download::Get {args} {incr ::m4install::requests; error {Network forbidden in tests}}
+rename ::dialog::question ::m4install::realQuestion
+proc ::dialog::question {args} {return cancel}
+tcltest::test VAL-PD4-001 {Official source catalog and restrictions} -body {
+ expr {[dict get [::playerdata::ListSource ecf] url] eq "https://rating.englishchess.org.uk/api/rating-list/csv"
+ && [string match {*noncommercial*impressum*} [dict get [::playerdata::ListSource dwz] note]]
+ && [string match {*class-C*help/api*} [dict get [::playerdata::ListSource ecf] note]]
+ && [dict get [::playerdata::ListSource iccf] how] eq "file"}
+} -result 1
+tcltest::test VAL-PD4-002 {Opening list dialog makes no download request} -body {
+ ::playerdata::ratingLists .application
+ set ::m4install::requests
+} -result 0
+tcltest::test VAL-PD4-018 {USCF has no bulk source or fallback} -body {
+ list $::playerdata::ListKinds [catch {::playerdata::ListSource uscf}] $::m4install::requests
+} -result {{dwz ecf iccf} 1 0}
+tcltest::test VAL-PD4-019 {Provenance separates acquisition and unknown effective period} -body {
+ ::playerdata::installList ecf $input
+ set info [::playerdata::listInfo ecf]
+ list [dict get $info source] [dict get $info effectivePeriod] [dict get $info schema] [expr {[dict get $info bytes] == [file size $input]}] [dict get $info activation]
+} -result {ecf unknown chesswiz-rating-list-v1 1 next-start}
+tcltest::test VAL-PD4-012 {Conversion failure preserves prior cache and active dictionary} -body {
+ set before [::m4install::contents [::playerdata::listFile ecf]]
+ set f [open $input w]; puts $f {<html>403</html>}; close $f
+ set failed [catch {::playerdata::installList ecf $input}]
+ list $failed [expr {$before eq [::m4install::contents [::playerdata::listFile ecf]]}]
+} -result {1 1}
+tcltest::test VAL-PD4-010 {Cancelled ICCF chooser leaves cache absent} -setup {
+ rename ::tk_getOpenFile ::m4install::realChooser
+ proc ::tk_getOpenFile {args} {return {}}
+} -body {
+ ::playerdata::ChooseList iccf .application
+ list [file exists [::playerdata::listFile iccf]] $::m4install::requests
+} -cleanup {
+ rename ::tk_getOpenFile {}
+ rename ::m4install::realChooser ::tk_getOpenFile
+} -result {0 0}
+tcltest::test VAL-PD4-013-016 {Successful update is usable after isolated restart and refresh replaces stale records idempotently} -body {
+ set v1 $::m4install::dir/ecf-v1.csv
+ set f [open $v1 w]
+ puts $f {ECF_code,full_name,revised_standard
+499810A,"Staleplayer, One",2050
+499811B,"Keptplayer, Two",2100}
+ close $f
+ ::playerdata::installList ecf $v1
+ set firstFile [::m4install::contents [::playerdata::listFile ecf]]
+ ::playerdata::installList ecf $v1
+ set secondFile [::m4install::contents [::playerdata::listFile ecf]]
+ set idempotent [expr {$firstFile eq $secondFile}]
+ set v2 $::m4install::dir/ecf-v2.csv
+ set f [open $v2 w]
+ puts $f {ECF_code,full_name,revised_standard
+499811B,"Keptplayer, Two",2125
+499812C,"Freshplayer, Three",2150}
+ close $f
+ ::playerdata::installList ecf $v2
+ set probe $::m4install::dir/probe.tcl
+ set f [open $probe w]
+ puts $f {
+  set argv {--single-process}
+  set argc 1
+  set ::env(SCIDB_AI_TRIAGE) 0
+  set ::env(SCIDB_AI_CLASSIFIER) off
+  source -encoding utf-8 [file join [pwd] tcl chesswiz]
+  set ::scidb::dir::setup 0
+  set p1 [::scidb::player::lookup -name "Staleplayer, One"]
+  set p2 [::scidb::player::lookup -name "Keptplayer, Two"]
+  set p3 [::scidb::player::lookup -name "Freshplayer, Three"]
+  puts "PROBE_RESULT:[expr {$p1 ne ""}]:[dict get $p2 ecf]:[dict get $p3 ecf]"
+  catch { destroy .application }
+  catch { destroy . }
+  exit 0
+ }
+ close $f
+ set out [exec src/tkchesswiz $probe]
+ regexp {PROBE_RESULT:([^\r\n]+)} $out -> res
+ file delete -force $probe [file join $::scidb::dir::user cache]
+ list $idempotent $res
+} -result {1 0:499811B:499812C}
+tcltest::test VAL-PD4-017 {Downloading/importing/linking never changes database stored names or dirty state} -body {
+ set f [open $input w]
+ puts $f {ECF_code,full_name,revised_standard
+999800A,"Fixture, Install",2000}
+ close $f
+ set pgn $::m4install::dir/imm.pgn
+ set f [open $pgn w]
+ puts $f {[Event "Synthetic"]
+[Site "Fixture"]
+[Date "2026.01.01"]
+[Round "1"]
+[White "Keptplayer, T"]
+[Black "Opponent, Plain"]
+[WhiteElo "2125"]
+[Result "1-0"]
+
+1. e4 e5 1-0}
+ close $f
+ proc ::m4install::nop {args} {return 0}
+ ::scidb::db::open $pgn ::m4install::nop {} ::m4install::nop {}
+ set beforeNames [lmap r [::scidb::db::playerLinks $pgn Normal] {lindex $r 0}]
+ set beforeDisk [::m4install::contents $pgn]
+ ::scidb::app::load installed [::playerdata::listFile ecf]
+ ::scidb::app::load done
+ ::scidb::db::linkPlayers $pgn Normal
+ ::playerdata::installList ecf $input
+ set afterNames [lmap r [::scidb::db::playerLinks $pgn Normal] {lindex $r 0}]
+ set unsaved [::scidb::db::get unsaved? $pgn]
+ set afterDisk [::m4install::contents $pgn]
+ ::scidb::db::close $pgn
+ list [expr {$beforeNames eq $afterNames}] $unsaved [expr {$beforeDisk eq $afterDisk}]
+} -result {1 0 1}
+rename ::application::download::Get {}
+rename ::m4install::realGet ::application::download::Get
+rename ::dialog::question {}
+rename ::m4install::realQuestion ::dialog::question
+file delete -force $::m4install::dir [::playerdata::Dir] [file join $::scidb::dir::user cache]
+tcltest::cleanupTests

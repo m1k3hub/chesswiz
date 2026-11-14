@@ -41,7 +41,7 @@ inline bool Database::encodingFailed() const					{ return m_encodingFailed; }
 inline bool Database::hasTemporaryStorage() const			{ return m_temporary; }
 inline bool Database::descriptionHasChanged() const		{ return m_descriptionHasChanged; }
 inline bool Database::isAdded(unsigned index) const		{ return index >= m_initialSize; }
-inline bool Database::isUnsaved() const						{ return m_size < m_gameInfoList.size(); }
+inline bool Database::isUnsaved() const						{ return m_size < m_gameInfoList.size() || m_namebases.isModified(); }
 inline bool Database::usingAsyncTreeSearchReader() const	{ return m_asyncReader; }
 
 inline unsigned Database::id() const							{ return m_id; }

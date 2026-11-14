@@ -57,9 +57,9 @@ tcltest::test rlists-dwz-convert {DWZ CSV download is converted to installed for
 	puts -nonewline $chan [encoding convertto cp1252 \
 		"NU4073762,10614,1081,P,\"Müller,Hans\",M,,1990,202517,2400,12,2500,GM,1503014,NOR,Hans,Müller,,,\n"]
 	puts -nonewline $chan [encoding convertto cp1252 \
-		"NU4073763,10614,1082,A,\"Schmidt,Peter\",M,,1985,202517,1900,8,,,,Peter,Schmidt,,,\n"]
+		"NU4073763,10614,1082,A,\"Schmidt,Peter\",M,,1985,202517,1900,8,,,,,Peter,Schmidt,,,\n"]
 	puts -nonewline $chan [encoding convertto cp1252 \
-		"NU4073764,10614,1083,A,\"Weiß,Anna\",W,,2000,202517,1700,5,,,,Anna,Weiß,,,\n"]
+		"NU4073764,10614,1083,A,\"Weiß,Anna\",W,,2000,202517,1700,5,,,,,Anna,Weiß,,,\n"]
 	close $chan
 
 	set result [::scidb::app::filterRatingList dwz $dwzCsv $out 1800]

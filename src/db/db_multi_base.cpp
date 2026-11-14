@@ -183,19 +183,18 @@ MultiBase::descriptionHasChanged() const
 bool
 MultiBase::isUnsaved(unsigned variantIndex) const
 {
-	if (type() != type::PGNFile)
-		return false;
-
 	Database const* base = m_bases[variantIndex];
-	return base && base->hasChanged();
+	if (!base)
+		return false;
+	if (type() == type::PGNFile)
+		return base->hasChanged();
+	return base->isUnsaved();
 }
 
 
 bool
 MultiBase::isUnsaved() const
 {
-	if (type() != type::PGNFile)
-		return false;
 	if (descriptionHasChanged())
 		return true;
 

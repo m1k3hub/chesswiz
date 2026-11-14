@@ -143,7 +143,7 @@ tcltest::test nfix-rename-cmd {renamePlayers renames and reports skipped} -setup
 	if {$idx < 0} { return "not-found" }
 
 	# Rename it
-	set result [::scidb::db::renamePlayers $copy Normal [list $idx {Correctname, Alpha}]]
+	set result [::scidb::db::renamePlayers $copy Normal [list $idx {Correctname, A} {Correctname, Alpha}]]
 
 	# Check the new name is there
 	set afterLinks [::scidb::db::playerLinks $copy Normal]
@@ -171,7 +171,7 @@ tcltest::test nfix-rename-skip-duplicate {renamePlayers skips when target name a
 	}
 	if {$idx < 0} { return "not-found" }
 
-	set result [::scidb::db::renamePlayers $copy Normal [list $idx {Opponent, Plain}]]
+	set result [::scidb::db::renamePlayers $copy Normal [list $idx {Alreadyok, Gamma} {Opponent, Plain}]]
 
 	list [dict get $result renamed] [llength [dict get $result skipped]] \
 		[lindex [lindex [dict get $result skipped] 0] 2]
@@ -231,7 +231,7 @@ tcltest::test nfix-revert {undo restores the original names} -setup {
 	foreach row $rows {
 		lassign $row variant index old new games source tick
 		if {$::playerdata::NameFix(tick,$i)} {
-			dict lappend byVariant $variant $index $new
+			dict lappend byVariant $variant $index $old $new
 			lappend undo [list $variant $new $old]
 		}
 		incr i
@@ -251,7 +251,7 @@ tcltest::test nfix-revert {undo restores the original names} -setup {
 		set j 0
 		foreach link $afterLinks {
 			if {[lindex $link 0] eq $new} {
-				set r [::scidb::db::renamePlayers $copy $variant [list $j $old]]
+				set r [::scidb::db::renamePlayers $copy $variant [list $j $new $old]]
 				incr undos [dict get $r renamed]
 				break
 			}
