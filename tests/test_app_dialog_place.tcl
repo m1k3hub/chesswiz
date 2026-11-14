@@ -3078,46 +3078,59 @@ tcltest::test dlg-w9j-native-guard-edges {native containment guard corrects a on
 foreach event {close stop hide} {
     tcltest::test dlg-w9d-lifecycle-$event {real playback releases dialog/inset layout within 500 ms} -setup {
         ::scidb::test::dlgplace::setupBoard
-        ::scidb::test::dlgplace::loweredMinimum
+        ::scidb::test::dlgplace::realMinimum
     } -body [string map [list @EVENT@ $event] {
-        wm geometry .application [::scidb::test::dlgplace::fitGeometry 1.0 1.0]
-        ::scidb::test::dlgplace::waitFor 700
-        ::scidb::test::dlgplace::zoomBoard 1
-        set normalSquare $::application::board::Dim(squaresize:Normal)
-        ::scidb::test::dlgplace::realVideo
-        set inset [::scidb::test::dlgplace::widgetRect [::mediainset::Pane].mediainset]
-        set before [::scidb::test::dlgplace::reserveState]
-        ::enginematch::open .application
-        ::scidb::test::dlgplace::waitFor 700
-        set during [::scidb::test::dlgplace::reserveState]
-        set seq $::util::place::BesideRecordSeq
-        set ::scidb::test::dlgplace::calls {}
-        set start [clock milliseconds]
-        switch @EVENT@ {
-            close {destroy .application.enginematch}
-            stop {::application::media::Stop}
-            hide {::mediainset::hide}
-        }
-        puts "DLG-019A-EVENT @EVENT@ returnedMs=[expr {[clock milliseconds]-$start}] pending=$::util::place::BesideTimer state=[array get ::util::place::BesideState .application.enginematch,*]"
-        ::scidb::test::dlgplace::waitFor [expr {max(1,500-([clock milliseconds]-$start))}]
-        set after [::scidb::test::dlgplace::reserveState]
-        set records [::util::place::besidePlacementLog $seq]
-        puts "DLG-019A @EVENT@ workarea=[winfo workarea .application] before=$before during=$during after=$after elapsed=[expr {[clock milliseconds]-$start}] normalSquare=$normalSquare square=$::application::board::Dim(squaresize:Normal) records=$records"
-        if {"@EVENT@" eq "close"} {
-            ::scidb::test::dlgplace::require [expr {[::scidb::test::dlgplace::widgetRect [::mediainset::Pane].mediainset] eq $inset}] "inset failed to restore by 500ms"
-            ::scidb::test::dlgplace::require [expr {$after eq $before}] "close left a reserve: $before -> $after"
-        } else {
-            ::scidb::test::dlgplace::require [expr {$::application::board::ReserveKind ne "squeeze" && !$::mediainset::Shown && $::application::board::Dim(squaresize:Normal) == $normalSquare}] "video strip not released/board not regrown"
-            ::scidb::test::dlgplace::require [dict exists $::scidb::test::dlgplace::calls .application.enginematch] "stop/hide did not call the placement helper"
-            set replanned 0
-            foreach r $records {
-                if {[dict get $r dialog] eq ".application.enginematch" && [dict get $r time]-$start <= 500} {set replanned 1}
+        foreach mode {real lowered} {
+            if {$mode eq "real"} {
+                set min [::scidb::test::dlgplace::realMinimum]
+                wm geometry .application "1274x1002+0+0"
+            } else {
+                set min [::scidb::test::dlgplace::loweredMinimum]
+                wm geometry .application [::scidb::test::dlgplace::fitGeometry 1.0 1.0]
             }
-            ::scidb::test::dlgplace::require $replanned "dialog not replanned by 500ms"
+            ::scidb::test::dlgplace::waitFor 700
+            ::scidb::test::dlgplace::zoomBoard 1
+            set normalSquare $::application::board::Dim(squaresize:Normal)
+            ::scidb::test::dlgplace::realVideo
+            set inset [::scidb::test::dlgplace::widgetRect [::mediainset::Pane].mediainset]
+            set before [::scidb::test::dlgplace::reserveState]
+            ::enginematch::open .application
+            ::scidb::test::dlgplace::waitFor 700
+            set during [::scidb::test::dlgplace::reserveState]
+            set seq $::util::place::BesideRecordSeq
+            set ::scidb::test::dlgplace::calls {}
+            set start [clock milliseconds]
+            switch @EVENT@ {
+                close {destroy .application.enginematch}
+                stop {::application::media::Stop}
+                hide {::mediainset::hide}
+            }
+            puts "DLG-019A-EVENT @EVENT@ mode=$mode min=[wm minsize .application] main=[wm geometry .application] returnedMs=[expr {[clock milliseconds]-$start}] pending=$::util::place::BesideTimer state=[array get ::util::place::BesideState .application.enginematch,*]"
+            ::scidb::test::dlgplace::waitFor [expr {max(1,500-([clock milliseconds]-$start))}]
+            set after [::scidb::test::dlgplace::reserveState]
+            set records [::util::place::besidePlacementLog $seq]
+            puts "DLG-019A @EVENT@ mode=$mode min=[wm minsize .application] main=[wm geometry .application] workarea=[winfo workarea .application] before=$before during=$during after=$after elapsed=[expr {[clock milliseconds]-$start}] normalSquare=$normalSquare square=$::application::board::Dim(squaresize:Normal) records=$records"
+            if {"@EVENT@" eq "close"} {
+                ::scidb::test::dlgplace::require [expr {[::scidb::test::dlgplace::widgetRect [::mediainset::Pane].mediainset] eq $inset}] "inset failed to restore by 500ms ($mode)"
+                ::scidb::test::dlgplace::require [expr {$after eq $before}] "close left a reserve ($mode): $before -> $after"
+            } else {
+                ::scidb::test::dlgplace::require [expr {$::application::board::ReserveKind ne "squeeze" && !$::mediainset::Shown && $::application::board::Dim(squaresize:Normal) == $normalSquare}] "video strip not released/board not regrown ($mode)"
+                ::scidb::test::dlgplace::require [dict exists $::scidb::test::dlgplace::calls .application.enginematch] "stop/hide did not call the placement helper ($mode)"
+                set replanned 0
+                foreach r $records {
+                    if {[dict get $r dialog] eq ".application.enginematch" && [dict get $r time]-$start <= 500} {set replanned 1}
+                }
+                ::scidb::test::dlgplace::require $replanned "dialog not replanned by 500ms ($mode)"
+            }
+            catch {destroy .application.enginematch}
+            catch {::application::media::Stop}
+            ::scidb::test::dlgplace::zoomBoard 0
+            ::scidb::test::dlgplace::waitFor 400
         }
         return 1
     }] -cleanup {
         catch {destroy .application.enginematch}
+        ::scidb::test::dlgplace::restoreMainMinimum
         ::scidb::test::dlgplace::realCleanup
     } -result 1
 }

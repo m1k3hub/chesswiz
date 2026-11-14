@@ -1714,12 +1714,17 @@ proc besidePeerRect {dlg} {
 }
 
 proc besideOuterRect {dlg} {
+	set frame [besideNativeFrame $dlg]
 	lassign [besideRect $dlg] x y w h
 	set extents {0 0 0 0}
 	if {[winfo class $dlg] ni {Menu OptionMenu} && ![wm overrideredirect $dlg]} {
 		set extents [besideDialogExtents $dlg]
 	}
 	lassign $extents l r t b
+	if {[llength $frame] == 4} {
+		lassign $frame fx fy fw fh
+		return [list $fx $fy [expr {max($fw, $w+$l+$r)}] [expr {max($fh, $h+$t+$b)}]]
+	}
 	return [list [expr {$x-$l}] [expr {$y-$t}] [expr {$w+$l+$r}] [expr {$h+$t+$b}]]
 }
 proc besideInside {rect area} {
@@ -1985,11 +1990,13 @@ proc besideMainArea {dlg {fresh 0} {parent ""}} {
 # used to hide a persistent one-pixel escape after a resize.
 proc besideContained {dlg} {
 	set frame [besideNativeFrame $dlg]
-	set outer [besideOuterRect $dlg]
 	if {[llength $frame] != 4} {
-		set frame $outer
-	} elseif {[llength $outer] == 4} {
-		set frame [besideUnionRect $frame $outer]
+		set frame [besideOuterRect $dlg]
+	} else {
+		lassign $frame fx fy fw fh
+		lassign [besideDialogExtents $dlg] el er et eb
+		set frame [list $fx $fy [expr {max($fw,[winfo width $dlg]+$el+$er)}] \
+			[expr {max($fh,[winfo height $dlg]+$et+$eb)}]]
 	}
 	return [besideInside $frame [besideMainArea $dlg]]
 }
@@ -2010,11 +2017,13 @@ proc besideClampNative {dlg} {
 	if {$BesideMeasureDepth > 0 && [dict exists $BesideGuarded $dlg]
 		&& [dict get $BesideGuarded $dlg] eq $key} { return 0 }
 	set frame [besideNativeFrame $dlg 1]
-	set outer [besideOuterRect $dlg]
 	if {[llength $frame] != 4} {
-		set frame $outer
-	} elseif {[llength $outer] == 4} {
-		set frame [besideUnionRect $frame $outer]
+		set frame [besideOuterRect $dlg]
+	} else {
+		lassign $frame fx fy fw fh
+		lassign [besideDialogExtents $dlg] el er et eb
+		set frame [list $fx $fy [expr {max($fw,[winfo width $dlg]+$el+$er)}] \
+			[expr {max($fh,[winfo height $dlg]+$et+$eb)}]]
 	}
 	if {![besideInside $frame $area]} { set area [besideMainArea $dlg 1] }
 	if {[besideInside $frame $area]} {
@@ -2463,10 +2472,18 @@ proc besideReserve {dlg bx by bw bh dw dh workarea extents gap {minimum {}}} {
 	}
 	if {$targetW + $fw > $ww || $targetH + $fh > $wh} { return {} }
 	set rootFloor $::application::board::MinimumReserveSquare
-	# Reflowable reports explicitly declare their own usable minimum; keep
-	# that existing policy separate from playing dialogs' 32px floor.
+	variable BesideTrigger
 	variable BesideMinimums
-	set reserveFloor [expr {[info exists BesideMinimums($dlg)] ? 1 : max(32,$rootFloor)}]
+	if {$BesideTrigger in {video clamp} && [winfo exists $dlg.__viewport]} {
+		# A video stop/hide just released the inset's strip. Keep the
+		# regrown board when the scrolling viewport path can place the
+		# remaining dialog without shrinking the board again.
+		set reserveFloor [expr {max(32,$rootFloor,[::application::board::reserveSquare right 0 $fullWidth $fullHeight])}]
+	} else {
+		# Reflowable reports explicitly declare their own usable minimum; keep
+		# that existing policy separate from playing dialogs' 32px floor.
+		set reserveFloor [expr {[info exists BesideMinimums($dlg)] ? 1 : max(32,$rootFloor)}]
+	}
 	set ::application::board::MinimumReserveSquare [expr {min($rootFloor,$reserveFloor)}]
 	set choices {}
 	set sides {right left below}
@@ -2764,6 +2781,17 @@ proc besideRequestedReserve {dlg peers rw rh workarea extents gap {compact 0}} {
 		}
 	}
 	set best {}
+	variable BesideTrigger
+	set minSquare 32
+	if {!$compact && $BesideTrigger in {video clamp}} {
+		set viewportGroup 1
+		foreach other $group {
+			if {![winfo exists $other.__viewport]} { set viewportGroup 0; break }
+		}
+		if {$viewportGroup} {
+			set minSquare [expr {max(32,[::application::board::reserveSquare right 0 $width $height])}]
+		}
+	}
 	if {$compact} {
 		set packed [besidePack [besideBoardRect] $sizes $workarea $gap]
 		if {[llength $packed]} { set best [list $previousSide $previousPixels 100000 $packed] }
@@ -2776,7 +2804,7 @@ proc besideRequestedReserve {dlg peers rw rh workarea extents gap {compact 0}} {
 		while {$lo <= $hi} {
 			set mid [expr {($lo+$hi)/2}]
 			set sq [::application::board::reserveSquare $side $mid $width $height dialog]
-			if {$sq >= 32} { set limit $mid; set lo [expr {$mid+1}] } else { set hi [expr {$mid-1}] }
+			if {$sq >= $minSquare} { set limit $mid; set lo [expr {$mid+1}] } else { set hi [expr {$mid-1}] }
 		}
 		if {!$limit} { continue }
 		set lo 1; set hi $limit
@@ -3278,6 +3306,22 @@ proc besideSavedPosition {dlg parent offset} {
 		wm geometry $dlg "${w}x${h}+${x}+${y}"
 	} else {
 		wm geometry $dlg "+${x}+${y}"
+	}
+	update idletasks
+	if {[winfo ismapped $dlg]} {
+		set dx [expr {[winfo rootx $parent] + [lindex $offset 0] - [winfo rootx $dlg]}]
+		set dy [expr {[winfo rooty $parent] + [lindex $offset 1] - [winfo rooty $dlg]}]
+		if {$dx != 0 || $dy != 0} {
+			incr x $dx
+			incr y $dy
+			if {$w < [winfo reqwidth $dlg] || $h < [winfo reqheight $dlg]} {
+				wm geometry $dlg "${w}x${h}+${x}+${y}"
+			} else {
+				wm geometry $dlg "+${x}+${y}"
+			}
+			update idletasks
+			set outer [list $x $y [expr {$w+$el+$er}] [expr {$h+$et+$eb}]]
+		}
 	}
 	dict set plan geometry [list $x $y $w $h]
 	dict set plan rule position
