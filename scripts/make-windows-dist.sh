@@ -50,6 +50,11 @@ make -s -C "$BUILD/tcl" \
 # player cards) inputs first
 make -s -C "$BUILD/src" install-data install-hyphen install-scripts SHAREDIR="$DIST"
 
+# The generated registry pack ships with the selected source tree. A cross
+# build cannot run install-knowledge's target executable on the build host.
+mkdir -p "$DIST/knowledge"
+cp "$BUILD"/share/knowledge/* "$DIST/knowledge/"
+
 # install-scripts puts the bundle under the program's name; Windows would
 # take a file named .exe for a program.
 rm -f "$DIST/chesswiz.exe"

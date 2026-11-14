@@ -18,6 +18,8 @@ make -C "$BUILD/tcl" install-scripts install-sample install-pieces install-curso
     BINDIR="$RES" SHAREDIR="$RES" DATADIR="$RES"
 # install-scripts: plain.eXt, which every TeXt script (tournament tables) inputs
 make -C "$BUILD/src" install-data install-hyphen install-scripts SHAREDIR="$RES"
+mkdir -p "$RES/knowledge"
+cp "$BUILD"/share/knowledge/* "$RES/knowledge/"
 mv "$RES/chesswiz" "$RES/chesswiz.tcl"
 cp "$BUILD/src/tkchesswiz" "$APP/Contents/MacOS/"
 for library in tcl8.6 tk8.6 tcl8; do

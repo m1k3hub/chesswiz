@@ -147,6 +147,26 @@ tcltest::test speech-stub-transcript-is-editable {the inserted transcript stays 
 	}
 } -result {{open the last game now} 0}
 
+tcltest::test speech-transcript-enter-sends-once {only Enter submits the editable transcript to the assistant} -body {
+	::scidb::test::speech::isolated {
+		::application::speech::configure stub {return "open the last game"}
+		::application::speech::toggle
+		::application::speech::toggle
+		::scidb::test::speech::WaitIdle
+		set before $::scidb::test::speech::Asked
+		set entry [::application::ask::Entry]
+		$entry insert end " please"
+		::application::ask::Typed
+		# Select the assistant row, below the local action suggestions.
+		set ::application::ask::Priv(index) [llength $::application::ask::Priv(rows)]
+		focus -force $entry
+		update
+		event generate $entry <Return>
+		update
+		list $before $::scidb::test::speech::Asked $::application::ask::Query
+	}
+} -result {{} {{open the last game please}} {}}
+
 tcltest::test speech-cancel-inserts-nothing {cancelling a transcription inserts nothing} -body {
 	::scidb::test::speech::isolated {
 		::application::speech::configure stub {return "open the last game"}
@@ -185,7 +205,10 @@ tcltest::test speech-session-directory-isolated {each session has its own subdir
 		# Simulate a concurrent session belonging to the same user
 		set randTag [format %06x [expr {int(rand() * 0xffffff)}]]
 		set otherDir [file join $userDir "session-[pid]-sim-${randTag}"]
-		catch { exec mkdir -m 0700 -- $otherDir }
+		file mkdir $otherDir
+		if {$::tcl_platform(platform) ne "windows"} {
+			file attributes $otherDir -permissions 0700
+		}
 		set otherFile [file join $otherDir "ask-other.wav"]
 		set f [open $otherFile w]; puts $f "concurrent-recording"; close $f
 
@@ -213,7 +236,7 @@ tcltest::test speech-session-directory-isolated {each session has its own subdir
 
 # ----------------------------------------------------------------------
 # Without Whisper, Linux hides the microphone and shows installation help.
-# Aqua keeps its native speech path available without a Whisper installation.
+# Windows and Aqua keep native speech available without Whisper.
 # ----------------------------------------------------------------------
 tcltest::test speech-absent-hides-mic {with no speech path the microphone button is not shown} -body {
 	::scidb::test::speech::isolated {
@@ -230,7 +253,7 @@ tcltest::test speech-absent-hides-mic {with no speech path the microphone button
 			[expr {[string match {*ggml*} $hint]}] \
 			[expr {[string match {*arecord*} $hint]}]
 	}
-} -result [expr {[tk windowingsystem] eq "aqua" ? {1 1 0 0 0} : {0 0 1 1 1}}]
+} -result [expr {[tk windowingsystem] in {aqua win32} ? {1 1 0 0 0} : {0 0 1 1 1}}]
 
 tcltest::test speech-preferences-says-what-to-install {Preferences > Assistant shows the speech hint and fields} -body {
 	::scidb::test::speech::isolated {
@@ -250,7 +273,7 @@ tcltest::test speech-preferences-says-what-to-install {Preferences > Assistant s
 		destroy $dlg
 		list $title [expr {[string match {*whisper-cli*} $hint]}] $hasCli $hasModel
 	}
-} -result [expr {[tk windowingsystem] eq "aqua" ? {{Speech input} 0 1 1} : {{Speech input} 1 1 1}}]
+} -result [expr {[tk windowingsystem] in {aqua win32} ? {{Speech input} 0 1 1} : {{Speech input} 1 1 1}}]
 
 tcltest::test speech-present-shows-mic {a working path puts the microphone back in the field} -body {
 	::scidb::test::speech::isolated {
@@ -275,6 +298,11 @@ tcltest::test speech-no-linked-audio {the app binary links no audio or speech li
 		set linked [exec otool -L $binary]
 		# This build links Tk statically; AppKit is its native GUI dependency.
 		set guiLibrary *AppKit.framework*
+	} elseif {$::tcl_platform(platform) eq "windows"} {
+		# Inspect this app's loaded native modules; Tcl/Tk is linked statically.
+		set tasklist [file join $::env(SystemRoot) System32 tasklist.exe]
+		set linked [exec $tasklist /m /fi "PID eq [pid]" /fo csv /nh]
+		set guiLibrary *user32.dll*
 	} else {
 		set linked [exec ldd $binary]
 		set guiLibrary *libtk*

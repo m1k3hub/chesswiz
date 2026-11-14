@@ -1246,13 +1246,27 @@ proc ::application::speech::transcribeFile {file} {
 # so concurrent instances never collide or clean each other's files.
 proc ::application::speech::TempDir {} {
 	variable Priv
-	set base /tmp
-	if {[info exists ::env(TMPDIR)] && $::env(TMPDIR) ne ""} { set base $::env(TMPDIR) }
-	set userDir [file join [file normalize $base] chesswiz-ask-[exec id -u]]
-	catch {exec mkdir -m 0700 -- $userDir}
-	if {[file type $userDir] ne "directory" || ![file owned $userDir]
-		|| ([file attributes $userDir -permissions] & 0077) != 0} {
-		error "speech temporary directory is not private"
+	if {$::tcl_platform(platform) eq "windows"} {
+		# Use the per-user profile directory, inheriting its Windows ACLs.
+		# POSIX ownership/mode bits and the id/mkdir utilities do not exist
+		# on a native Windows installation. Do not fall back to shared /tmp.
+		if {![info exists ::env(LOCALAPPDATA)] || $::env(LOCALAPPDATA) eq ""} {
+			error "speech temporary directory requires LOCALAPPDATA"
+		}
+		set userDir [file join [file normalize $::env(LOCALAPPDATA)] Chesswiz Speech]
+		file mkdir $userDir
+		if {[file type $userDir] ne "directory"} {
+			error "speech temporary directory is not a directory"
+		}
+	} else {
+		set base /tmp
+		if {[info exists ::env(TMPDIR)] && $::env(TMPDIR) ne ""} { set base $::env(TMPDIR) }
+		set userDir [file join [file normalize $base] chesswiz-ask-[exec id -u]]
+		catch {exec mkdir -m 0700 -- $userDir}
+		if {[file type $userDir] ne "directory" || ![file owned $userDir]
+			|| ([file attributes $userDir -permissions] & 0077) != 0} {
+			error "speech temporary directory is not private"
+		}
 	}
 	if {![info exists Priv(sessionDir)] || $Priv(sessionDir) eq ""
 		|| [file dirname $Priv(sessionDir)] ne $userDir
@@ -1261,11 +1275,16 @@ proc ::application::speech::TempDir {} {
 			set rand [format %06x [expr {int(rand() * 0xffffff)}]]
 			set sdir [file join $userDir "session-[pid]-$rand"]
 			if {[file exists $sdir]} { continue }
-			catch {exec mkdir -m 0700 -- $sdir}
+			if {$::tcl_platform(platform) eq "windows"} {
+				file mkdir $sdir
+			} else {
+				catch {exec mkdir -m 0700 -- $sdir}
+			}
 			if {[file exists $sdir]} { break }
 		}
-		if {![file exists $sdir] || [file type $sdir] ne "directory" || ![file owned $sdir]
-			|| ([file attributes $sdir -permissions] & 0077) != 0} {
+		if {![file exists $sdir] || [file type $sdir] ne "directory"
+			|| ($::tcl_platform(platform) ne "windows" && (![file owned $sdir]
+			|| ([file attributes $sdir -permissions] & 0077) != 0))} {
 			error "speech session directory is not private"
 		}
 		set Priv(sessionDir) $sdir
