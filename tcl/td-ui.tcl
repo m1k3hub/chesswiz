@@ -270,7 +270,9 @@ proc ::td::ui::BuildStandings {f} {
 	ttk::button $f.btns.cross -text "Crosstable" -command ::td::ui::OpenCrosstable
 	ttk::button $f.btns.print_s -text "Print standings" -command [list ::td::ui::PrintView standings]
 	ttk::button $f.btns.print_c -text "Print crosstable" -command [list ::td::ui::PrintView crosstable]
-	pack $f.btns.cross $f.btns.print_s $f.btns.print_c -side right -padx 2
+	ttk::button $f.btns.trf16 -text "Export TRF16" -command [list ::td::ui::ExportTrf trf16]
+	ttk::button $f.btns.trf26 -text "Export TRF26" -command [list ::td::ui::ExportTrf trf26]
+	pack $f.btns.cross $f.btns.print_s $f.btns.print_c $f.btns.trf16 $f.btns.trf26 -side right -padx 2
 	ttk::label $f.breakdown -justify left -wraplength 1000
 	pack $f.breakdown -fill x
 }
@@ -278,6 +280,11 @@ proc ::td::ui::PrintView {view} {
 	variable Path
 	if {$Path eq ""} { error "no tournament selected" }
 	return [::action::run td.print [dict create path $Path view $view format html]]
+}
+proc ::td::ui::ExportTrf {format} {
+	variable Path
+	if {$Path eq ""} { error "no tournament selected" }
+	return [::action::run td.export [dict create path $Path format $format overwrite 1]]
 }
 proc ::td::ui::OpenCrosstable {} { variable Path; ::crosstable::OpenTD .application $Path }
 proc ::td::ui::Breakdown {} {

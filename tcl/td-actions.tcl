@@ -96,6 +96,12 @@ proc ::td::actions::Print {arguments} {
 	}
 	return [dict create event [dict get $state id] revision [dict get $state revision] view $view format $format filename $filename text $text content $content]
 }
+proc ::td::actions::ImportTrf {arguments} {
+	if {[dict get $arguments path] eq ""} {
+		dict set arguments path [::td::store::DefaultPath "imported-trf" [dict get $arguments idempotency]]
+	}
+	return [::td::event::Execute import_trf $arguments]
+}
 proc ::td::actions::Export {arguments} {
 	set path [::td::store::Resolve $arguments]
 	set filename [dict get $arguments filename]
@@ -104,6 +110,20 @@ proc ::td::actions::Export {arguments} {
 	set format [dict get $arguments format]
 	if {$format eq "pgn"} { return [::td::event::ExportPGN $path $filename] }
 	set state [dict get [::td::store::Read $path] state]
+	if {$format in {trf16 trf26}} {
+		set elig [::td::trf::ValidateEligibility $state]
+		if {![dict get $elig fide_eligible]} {
+			error "event is not eligible for FIDE rating report: [join [dict get $elig reasons] {; }]"
+		}
+		set trf [::td::trf::Write $state $format]
+		set temp "$filename.[pid].tmp"
+		set out [open $temp w]
+		fconfigure $out -encoding utf-8 -translation lf
+		puts -nonewline $out $trf
+		close $out
+		file rename -force $temp $filename
+		return [dict create filename $filename format $format fide_eligible 1 text $trf]
+	}
 	set rows [::td::score::Compute $state]
 	set html [::td::score::CrosstableHTML $state $rows]
 	set temp "$filename.[pid].tmp"
@@ -167,7 +187,8 @@ proc ::td::actions::Register {} {
 		td.crosstable {Tournament crosstable} {Return the event crosstable as text, or open its journal-backed HTML view.} [concat $query {{open {type boolean default 0}}}] Crosstable change \
 		td.print {Print tournament sheet} {Format or save the tournament pairings, standings or crosstable for printing as a web page, plain text or a printable document.} [concat $query {{view {type enum default standings enum {pairings standings crosstable}}} {format {type enum default html enum {html text pdf}}} {round {type integer default 0 range {0 1000}}} {filename {type string default {}}} {overwrite {type boolean default 0}}}] Print change \
 		td.audit {Tournament audit} {Return immutable journal records, including commands, revisions, idempotency keys and before/after state.} $query Audit query \
-		td.export {Export tournament} {Save the tournament's games, or its crosstable as a web page, to a file you name.} [concat $query {{filename {type string required 1}} {format {type enum default pgn enum {pgn html}}} {overwrite {type boolean default 0}}}] Export change \
+		td.import_trf {Import tournament report} {Create a tournament journal from a FIDE TRF16 or TRF26 report file.} [MutationSpec {{filename {type string default {}}} {trf_text {type string default {}}} {through {type integer default 0 range {0 100}}} {system {type enum default swiss enum {swiss round-robin double-round-robin}}} {time_control {type string default 90+30}}}] ImportTrf change \
+		td.export {Export tournament} {Save the tournament's games, its crosstable as a web page, or a FIDE TRF16/TRF26 rating report to a file you name.} [concat $query {{filename {type string required 1}} {format {type enum default pgn enum {pgn html trf16 trf26}}} {overwrite {type boolean default 0}}}] Export change \
 		td.workspace {Tournament Director workspace} {Open the Event, Players, Pairings, Results and Standings workspace, close it, or select a tab.} [concat $query {{operation {type enum default open enum {open close select}}} {tab {type enum default event enum {event players pairings results standings}}}}] Workspace change \
 	] {
 		if {[dict exists $::action::Registry $id]} { continue }

@@ -73,3 +73,134 @@ proc ::td::trf::Write {state {format trf26} {through 0} {pairingRound 0} {checkP
     }
     return "[join $lines \n]\n"
 }
+
+proc ::td::trf::Read {text {through 0}} {
+    set name "Imported Tournament"
+    set site {}
+    set federation {}
+    set start_date {}
+    set end_date {}
+    set chief_arbiter {}
+    set rounds 0
+    set colour_lot white
+    set format trf16
+    set playerLines {}
+    foreach raw [split $text \n] {
+        set line [string trimright $raw \r]
+        if {$line eq "" || [string match "###*" $line]} { continue }
+        set tag [string range $line 0 2]
+        set rest [string trim [string range $line 3 end]]
+        switch -- $tag {
+            012 { if {$rest ne ""} { set name $rest } }
+            022 { set site $rest }
+            032 { set federation $rest }
+            042 { set start_date $rest }
+            052 { set end_date $rest }
+            102 { set chief_arbiter $rest }
+            142 { set format trf26; if {[string is integer -strict $rest]} { set rounds $rest } }
+            152 { set format trf26; set colour_lot [expr {[string toupper [string index $rest 0]] eq "B" ? "black" : "white"}] }
+            XXR { if {[string is integer -strict $rest]} { set rounds $rest } }
+            XXC { set colour_lot [expr {[string match -nocase "black*" $rest] ? "black" : "white"}] }
+            001 { lappend playerLines $line }
+        }
+    }
+    if {![llength $playerLines]} { error "TRF contains no 001 player records" }
+    set players {}
+    set matchTable [dict create]
+    set maxRound 0
+    foreach line $playerLines {
+        set n [scan [string trim [string range $line 4 7]] %d]
+        if {$n eq "" || $n < 1} { error "invalid TRF player number in '$line'" }
+        set sex [string trim [string index $line 9]]
+        set titleRaw [string tolower [string trim [string range $line 10 12]]]
+        set title [dict get [dict merge [dict create $titleRaw [string toupper $titleRaw]] {g GM m IM f FM c CM wg WGM wi WIM wf WFM wc WCM {} {}}] $titleRaw]
+        set pname [string trim [string range $line 14 46]]
+        if {$pname eq ""} { set pname "Player $n" }
+        set ratingRaw [string trim [string range $line 48 51]]
+        set rating [expr {[string is integer -strict $ratingRaw] && $ratingRaw > 0 ? $ratingRaw : ""}]
+        set fed [string trim [string range $line 53 55]]
+        set fideId [string trim [string range $line 57 67]]
+        set born [string trim [string range $line 69 78]]
+        set pid p$n
+        lappend players [dict create id $pid number $n name $pname kind human engine {} rating $rating \
+            fide_id $fideId federation $fed title $title sex $sex born $born withdrawn 0 entry_round 1]
+        set tail [string range $line 89 end]
+        set r 0
+        for {set pos 0} {$pos + 10 <= [string length $tail]} {incr pos 10} {
+            incr r
+            set token [string range $tail $pos [expr {$pos + 9}]]
+            dict set matchTable $n $r $token
+        }
+        if {$r > $maxRound} { set maxRound $r }
+    }
+    set players [lmap item [lsort -integer -index 0 [lmap p $players {list [dict get $p number] $p}]] {lindex $item 1}]
+    if {$rounds <= 0} { set rounds $maxRound }
+    set limit [expr {$through > 0 ? min($through, $maxRound) : $maxRound}]
+    set pairings {}
+    for {set r 1} {$r <= $limit} {incr r} {
+        set seen [dict create]
+        set board 0
+        foreach p $players {
+            set n [dict get $p number]
+            set pid [dict get $p id]
+            if {[dict exists $seen $n]} { continue }
+            set token [dg [dg $matchTable $n {}] $r "          "]
+            if {[string trim $token] eq ""} { continue }
+            set oppRaw [string trim [string range $token 0 5]]
+            set colRaw [string trim [string index $token 7]]
+            set resRaw [string trim [string index $token 9]]
+            if {$oppRaw eq "" || $oppRaw eq "0000" || $oppRaw eq "0"} {
+                if {$resRaw in {H F U Z -}} {
+                    set cat [expr {$resRaw eq "U" ? "pairing-bye" : $resRaw eq "F" ? "full-point-bye" : $resRaw eq "H" ? "requested-bye" : "zero-point-bye"}]
+                    set pts [expr {$resRaw in {F U} ? 2 : $resRaw eq "H" ? 1 : 0}]
+                    set bId [expr {$cat eq "pairing-bye" ? "r${r}b${board}" : "bye-$pid-r$r-[llength $pairings]"}]
+                    lappend pairings [dict create id $bId round $r board [expr {$cat eq "pairing-bye" ? $board : 0}] \
+                        white $pid black {} result * status complete category $cat played 0 count_standings 1 rating 0 points $pts attempt 0 game_id {} pgn {} result_history {}]
+                    if {$cat eq "pairing-bye"} { incr board }
+                }
+                dict set seen $n 1
+                continue
+            }
+            if {![string is integer -strict $oppRaw]} { continue }
+            set opp [scan $oppRaw %d]
+            if {$opp == $n} { continue }
+            dict set seen $n 1
+            dict set seen $opp 1
+            set white [expr {$colRaw eq "b" ? "p$opp" : $pid}]
+            set black [expr {$colRaw eq "b" ? $pid : "p$opp"}]
+            set played [expr {$resRaw ni {+ -}}]
+            set category [expr {$played ? "played" : "forfeit"}]
+            if {$colRaw eq "b"} {
+                set result [expr {$resRaw in {1 +} ? "0-1" : $resRaw in {0 -} ? "1-0" : $resRaw eq "=" ? "1/2-1/2" : "*"}]
+            } else {
+                set result [expr {$resRaw in {1 +} ? "1-0" : $resRaw in {0 -} ? "0-1" : $resRaw eq "=" ? "1/2-1/2" : "*"}]
+            }
+            set oppToken [dg [dg $matchTable $opp {}] $r "          "]
+            set oppRes [string trim [string index $oppToken 9]]
+            if {$resRaw eq "-" && $oppRes eq "-"} {
+                set result 0-0
+                set category double-forfeit
+                set played 0
+            }
+            lappend pairings [dict create id r${r}b${board} round $r board $board white $white black $black \
+                result $result status [expr {$result eq "*" && $category ne "double-forfeit" ? "pending" : "complete"}] \
+                category $category played $played termination [expr {$played ? "normal" : "abandoned"}] \
+                count_standings 1 rating $played attempt 0 game_id {} pgn {} result_history {}]
+            incr board
+        }
+    }
+    return [dict create name $name site $site federation $federation start_date $start_date end_date $end_date \
+        chief_arbiter $chief_arbiter rounds $rounds current_round [expr {max(1, $limit)}] colour_lot $colour_lot \
+        trf_format $format players $players pairings $pairings]
+}
+
+proc ::td::trf::ValidateEligibility {state} {
+    set reasons {}
+    foreach p [dg $state players {}] {
+        if {[dg $p kind human] ne "human"} {
+            lappend reasons "non-human seat '[dict get $p name]' ([dg $p kind human]); mixed or engine events are never FIDE-rated"
+        }
+    }
+    if {[dg $state rounds 0] < 1} { lappend reasons "tournament has no scheduled rounds" }
+    return [dict create fide_eligible [expr {[llength $reasons] == 0}] reasons $reasons]
+}

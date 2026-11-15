@@ -291,7 +291,7 @@ proc ::td::model::Apply {command info domain} {
 				time_control $tc opening $opening opening_name [dg $domain opening {}] overhead_ms [dg $domain overhead_ms 100] concurrency [dg $domain concurrency 2] \
 				threads 1 max_plies [dg $domain max_plies 0] tablebase [dg $domain tablebase 1] online 0 \
 				colour_lot [dg $domain colour_lot white] tiebreaks {directEncounter sonnebornBerger koya gamesWon gamesWonWithBlack progressive} \
-				unrated_policy [dg $domain unrated_policy drop] publication_revision 0 published 0 publications {} withdrawals {} \
+				unrated_policy [dg $domain unrated_policy drop] publication_revision 0 published 0 publications {} withdrawals {} rulings {} \
 				games {} created [clock seconds] updated [clock seconds]]
 			if {$system eq "swiss"} { dict set state tiebreaks {buchholzCut1 buchholz sonnebornBerger wins} }
 			set start [dg $domain start 0]
@@ -304,6 +304,33 @@ proc ::td::model::Apply {command info domain} {
 				dict set state status active
 			}
 			return [list $state [dict create created 1 start $start] $target $history]
+		}
+		import_trf {
+			set filename [dg $domain filename {}]
+			set content [dg $domain trf_text {}]
+			if {$content eq ""} {
+				if {$filename eq "" || ![file exists $filename]} { error "supply an existing TRF filename or trf_text" }
+				set f [open $filename r]
+				fconfigure $f -encoding utf-8
+				set content [read $f]
+				close $f
+			}
+			set parsed [::td::trf::Read $content [dg $domain through 0]]
+			set system [dg $domain system swiss]
+			set tc [TimeControl [dg $domain time_control 90+30]]
+			set path [dict get $info path]
+			set id [format "evt-%08x" [zlib crc32 $path]]
+			set state [dict create schema 1 id $id name [dict get $parsed name] site [dict get $parsed site] \
+				federation [dict get $parsed federation] start_date [dict get $parsed start_date] end_date [dict get $parsed end_date] \
+				chief_arbiter [dict get $parsed chief_arbiter] system $system status active \
+				players [dict get $parsed players] pairings [dict get $parsed pairings] \
+				rounds [dict get $parsed rounds] current_round [dict get $parsed current_round] revision 0 \
+				regulations [dict create laws 2023 C05 current C07 2026 C04.3 2026] time_control $tc opening {} opening_name {} \
+				overhead_ms 100 concurrency 2 threads 1 max_plies 0 tablebase 1 online 0 \
+				colour_lot [dict get $parsed colour_lot] tiebreaks {buchholzCut1 buchholz sonnebornBerger wins} \
+				unrated_policy drop publication_revision 0 published 0 publications {} withdrawals {} rulings {} \
+				games {} created [clock seconds] updated [clock seconds]]
+			return [list $state [dict create imported [llength [dict get $parsed players]] rounds [dict get $parsed rounds] trf_format [dict get $parsed trf_format]] $target $history]
 		}
 		register { return [::td::registration::Add $state $domain] }
         register_fide { return [::td::registration::Add $state $domain 1] }
@@ -487,7 +514,7 @@ proc ::td::model::Apply {command info domain} {
 			if {![llength $stack]} { error "nothing to $command" }
 			set target [lindex $stack end]
 			set record [lindex [dict get $info records] [expr {$target-1}]]
-			if {[dict get $record command] eq "create"} { error "cannot undo event creation" }
+			if {[dict get $record command] in {create import_trf}} { error "cannot undo event creation" }
 			if {[HasRunning $state]} { error "stop active games before undo or redo" }
 			set state [dict get $record [expr {$command eq "undo" ? "before" : "after"}]]
 			set history 0
