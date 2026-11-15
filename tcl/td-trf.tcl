@@ -6,6 +6,12 @@ proc ::td::trf::Field {text width} {
     if {[regexp {[\r\n\t\x00]} $text] || [string length $text] > $width} { error "TRF field exceeds $width columns or contains control characters: $text" }
     return [format %-*s $width $text]
 }
+proc ::td::trf::NormalizeTitle {raw} {
+    set t [string tolower [string trim $raw]]
+    set map {g GM m IM f FM c CM wg WGM wi WIM wf WFM wc WCM wh WH {} {}}
+    if {[dict exists $map $t]} { return [dict get $map $t] }
+    return [string toupper $t]
+}
 proc ::td::trf::HeaderVal {text {maxLen 120}} {
     set trimmed [string trimright $text]
     if {[regexp {[\r\n\t\x00]} $trimmed] || [string length $trimmed] > $maxLen} {
@@ -198,8 +204,7 @@ proc ::td::trf::Write {state {format trf26} {through -1} {pairingRound 0} {check
             }
         }
         set rating [dg $player rating 0]; if {$rating eq ""} { set rating 0 }
-        set title [string tolower [dg $player title]]
-        set title [string map {wgm wg wim wi wfm wf wcm wc gm g im m fm f cm c} $title]
+        set title [NormalizeTitle [dg $player title]]
         set line "001 [format %4d $n] [Field [dg $player sex] 1][Field $title 3] [Field [dict get $player name] 33] [format %4d $rating] [Field [dg $player federation] 3] [format %11s [dg $player fide_id]] [Field [dg $player born] 10] [format %4.1f [expr {$score2/2.0}]] [format %4d [incr rank]]"
         if {[string length $line] != 89} { error "invalid TRF identity field width" }
         lappend lines "$line$matches"
@@ -275,8 +280,7 @@ proc ::td::trf::Read {text {through 0}} {
         set n [scan [string trim [string range $line 4 7]] %d]
         if {$n eq "" || $n < 1} { error "invalid TRF player number in '$line'" }
         set sex [string trim [string index $line 9]]
-        set titleRaw [string tolower [string trim [string range $line 10 12]]]
-        set title [dict get [dict merge [dict create $titleRaw [string toupper $titleRaw]] {g GM m IM f FM c CM wg WGM wi WIM wf WFM wc WCM {} {}}] $titleRaw]
+        set title [NormalizeTitle [string range $line 10 12]]
         set pname [string trim [string range $line 14 46]]
         if {$pname eq ""} { set pname "Player $n" }
         set ratingRaw [string trim [string range $line 48 51]]

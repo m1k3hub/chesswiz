@@ -118,4 +118,33 @@ tcltest::test td-trf-f1-mandatory-fide-headers {F1: TRF16 and TRF26 exports incl
         [expr {$crTrf26 eq $crRe26}]
 } -result {1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1}
 
+tcltest::test td-trf-f2-standard-fide-title-encoding {F2: TRF 001 columns 11..13 encode standard uppercase FIDE titles (GM , IM , WGM, FM , WIM, CM , WFM, WCM)} -body {
+    set fixPath [file normalize [file join [file dirname [info script]] fixtures td chessament-tournament-1.trf]]
+    set f [open $fixPath r]; fconfigure $f -encoding utf-8; set fixText [read $f]; close $f
+    set parsed [::td::trf::Read $fixText]
+    set out26 [::td::trf::Write $parsed trf26]
+    set out16 [::td::trf::Write $parsed trf16]
+
+    set pLines26 [lmap l [split [string trimright $out26 \n] \n] {expr {[string match "001*" $l] ? $l : [continue]}}]
+    set pLines16 [lmap l [split [string trimright $out16 \n] \n] {expr {[string match "001*" $l] ? $l : [continue]}}]
+    set got26 [lmap l [lrange $pLines26 0 8] {string range $l 10 12}]
+    set got16 [lmap l [lrange $pLines16 0 8] {string range $l 10 12}]
+    set expected [list "GM " "IM " "WGM" "FM " "WIM" "CM " "WFM" "WCM" "   "]
+
+    # Also verify legacy shorthand codes in player state normalize to uppercase FIDE titles on export
+    set shorthandPlayers {}
+    set idx 0
+    foreach sh {g m wg f wi c wf wc {}} {
+        incr idx
+        lappend shorthandPlayers [dict create id p$idx number $idx name "P$idx" kind human engine {} \
+            rating 2200 fide_id [expr {100000 + $idx}] federation FID title $sh sex m born 1990/01/01 withdrawn 0 entry_round 1]
+    }
+    set shState [dict create name {Title Norm Check} rounds 1 system swiss colour_lot white players $shorthandPlayers pairings {}]
+    set shOut [::td::trf::Write $shState trf26]
+    set shLines [lmap l [split [string trimright $shOut \n] \n] {expr {[string match "001*" $l] ? $l : [continue]}}]
+    set gotSh [lmap l $shLines {string range $l 10 12}]
+
+    list [expr {$got26 eq $expected}] [expr {$got16 eq $expected}] [expr {$gotSh eq $expected}]
+} -result {1 1 1}
+
 tcltest::cleanupTests
