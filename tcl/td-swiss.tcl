@@ -153,6 +153,17 @@ proc ::td::swiss::CheckRound {state {round 0}} {
             lappend seen $pid
         }
     }
+    set maxRounds [dict get $state rounds]
+    set scoreBefore [dict create]
+    foreach q [dict get $state pairings] {
+        if {[dict get $q round] >= $round || [::td::model::dg $q status pending] ne "complete"} { continue }
+        foreach side {white black} {
+            set spid [dict get $q $side]
+            if {$spid eq ""} { continue }
+            lassign [::td::score::Points $q $spid] pn pd
+            dict incr scoreBefore $spid $pn
+        }
+    }
     foreach p $roundPairings {
         set w [dict get $p white]
         set b [dict get $p black]
@@ -177,8 +188,11 @@ proc ::td::swiss::CheckRound {state {round 0}} {
                 lappend violations [dict create code C1-REMATCH pairing [dict get $p id] white $w black $b detail "rematch of played game [dict get $q id] (round [dict get $q round])"]
             }
         }
-        # C3: non-topscorers with the same absolute colour preference shall not meet (check three consecutive same colours or +/-2 colour difference).
-        if {$round < [dict get $state rounds]} {
+        # C3 (C.04.3 1.7.1, 1.8, 2.1.3 & Basic Rules 6-7): enforce absolute colour preferences in all rounds,
+        # including the final round unless a topscorer (score > 50% of maxRounds in final round) is involved.
+        set wTop [expr {$round == $maxRounds && [::td::model::dg $scoreBefore $w 0] > $maxRounds}]
+        set bTop [expr {$round == $maxRounds && [::td::model::dg $scoreBefore $b 0] > $maxRounds}]
+        if {!($wTop || $bTop)} {
             foreach {side pid req} [list white $w W black $b B] {
                 set hist {}
                 foreach q [dict get $state pairings] {
@@ -186,7 +200,6 @@ proc ::td::swiss::CheckRound {state {round 0}} {
                     if {[dict get $q white] eq $pid} { lappend hist W } elseif {[dict get $q black] eq $pid} { lappend hist B }
                 }
                 set wCount [llength [lsearch -all -exact $hist W]]
-                set bCount [llength [llength [lsearch -all -exact $hist B]]]
                 set bCount [llength [lsearch -all -exact $hist B]]
                 set diff [expr {$wCount - $bCount}]
                 set last2 [lrange $hist end-1 end]

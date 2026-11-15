@@ -68,4 +68,42 @@ tcltest::test td-override-f4-checker-fail-closed {F4: missing or broken bbpPairi
         $rejectWithoutRuling [dict get $chkBroken compliant] [expr {"C04-CHECKER-UNAVAILABLE" in $codesBroken}] [dict get $ruledOverride compliant]
 } -result {0 1 1 1 0 1 0}
 
+tcltest::test td-override-f6-final-round-c3-absolute-colour {F6: C3 absolute-colour violation is enforced in the final round for non-topscorers} -body {
+    set path [file join $::env(HOME) override_f6.tdj]
+    ::tdOverride::call $path create {name {Final Round C3} players {P1 P2 P3 P4 P5 P6} system swiss rounds 3 colour_lot white start 1}
+    # Round 1: all draws (every player has 0.5 <= 1.5; R1 colours: p1 W vs p4 B, p5 W vs p2 B, p3 W vs p6 B)
+    foreach p [::td::model::Pairings [dict get [::td::store::Read $path] state] 1] {
+        ::tdOverride::call $path enter_result [dict create pairing [dict get $p id] result 1/2-1/2 category played]
+    }
+    ::tdOverride::call $path pair_round {round 2}
+    # Force p1 to have White again in Round 2 (with ruling if needed) so p1 has {W W} entering final Round 3 with score <= 1.0 (non-topscorer: <= 50% of 3)
+    set st2 [dict get [::td::store::Read $path] state]
+    set r2b0 [lindex [::td::model::Pairings $st2 2] 0]
+    set opp2 [expr {[dict get $r2b0 white] eq "p1" ? [dict get $r2b0 black] : [dict get $r2b0 white]}]
+    if {[dict get $r2b0 white] ne "p1"} {
+        ::tdOverride::call $path override_pairing [dict create pairing [dict get $r2b0 id] white p1 black $opp2 reason {Setup WW history} ruling {Setup}]
+    }
+    foreach p [::td::model::Pairings [dict get [::td::store::Read $path] state] 2] {
+        ::tdOverride::call $path enter_result [dict create pairing [dict get $p id] result 1/2-1/2 category played]
+    }
+    # Pair final Round 3: all players have 1.0 / 3.0 (<= 50% max score -> NO topscorers per C.04.3 1.8)
+    ::tdOverride::call $path pair_round {round 3}
+    set st3 [dict get [::td::store::Read $path] state]
+    set p1Board {}
+    set p1Opp {}
+    foreach p [::td::model::Pairings $st3 3] {
+        if {[dict get $p white] eq "p1" || [dict get $p black] eq "p1"} {
+            set p1Board [dict get $p id]
+            set p1Opp [expr {[dict get $p white] eq "p1" ? [dict get $p black] : [dict get $p white]}]
+        }
+    }
+    # Override final-round board to give non-topscorer p1 a 3rd consecutive White without a TD ruling -> must fail C3
+    set rejectedNoRuling [catch {
+        ::tdOverride::call $path override_pairing [dict create pairing $p1Board white p1 black $p1Opp reason {Third White in final round}]
+    }]
+    set withRuling [::tdOverride::call $path override_pairing [dict create pairing $p1Board white p1 black $p1Opp reason {Third White in final round} ruling {CA exception}]]
+    set codes [lmap v [dict get $withRuling violations] {dict get $v code}]
+    list $rejectedNoRuling [dict get $withRuling compliant] [expr {"C3-ABSOLUTE-COLOUR" in $codes}]
+} -result {1 0 1}
+
 tcltest::cleanupTests
