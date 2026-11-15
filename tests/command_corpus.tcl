@@ -110,7 +110,7 @@ set InScopeCommandCorpus {
 	open-trend J4 {Which openings are getting more popular here?}
 		{opening trends} 26 open_view {kind trend}
 	open-rep-check J4 {Check my repertoire against my games.}
-		{repertoire check against my games} 27 repertoire_check {}
+		{repertoire check against my games} 27 command.repertoire_check {}
 	open-rep-add J4 {Add this line to my repertoire.}
 		{repertoire add this line} 27 add_to_repertoire {}
 

@@ -32,7 +32,7 @@ namespace eval ::commandline {
   {25 open_view {kind opening_report} {{opening report}}}
   {26 open_view {kind trend} {{opening trends}}}
   {27 add_to_repertoire {} {{repertoire add this line}}}
-  {27 repertoire_check {} {{repertoire check against my games}}}
+  {27 command.repertoire_check {} {{repertoire check against my games}}}
   {28 opponent_brief {prose 0 download 0} {{prepare against @opponent {? i have @colour}} {prepare against @opponent {? as @colour}}}}
   {29 open_view {kind player_card} {{player card @person}}}
   {30 command.player_stats {} {{player @person stats} {@person stats}}}

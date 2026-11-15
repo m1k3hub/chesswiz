@@ -414,12 +414,10 @@ proc ::commandline::Match {text} {
      dict set arguments colour [expr {[dict get $arguments colour] eq "white" ? "black" : "white"}]
     }
     set me [expr {[info exists ::application::ai::Settings(me)] ? $::application::ai::Settings(me) : ""}]
-    if {$id in {32 33} || ($id == 27 && $action eq "repertoire_check") \
+    if {$id in {32 33} || ($id == 27 && $action eq "command.repertoire_check") \
      || ($id == 44 && [dict exists $arguments source] && [dict get $arguments source] eq "my games")} {
      if {$me ne ""} {
       dict set arguments player $me
-     } elseif {$id == 27} {
-      lappend missing player
      }
     }
     if {$action in {search_games command.find} && ![dict exists $arguments player]} {

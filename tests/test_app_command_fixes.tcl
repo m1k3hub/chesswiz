@@ -200,24 +200,36 @@ close $f
 # ----------------------------------------------------------------------
 proc ::fix::repertoireRow {} {
  foreach row [::commandline::Match {repertoire check against my games}] {
-  if {[dict get $row id] == 27 && [dict get $row action] eq "repertoire_check"} {return $row}
+  if {[dict get $row id] == 27 && [dict get $row action] eq "command.repertoire_check"} {return $row}
  }
  return {}
 }
 ::tcltest::test F-08-repertoire-my-games {repertoire check injects the remembered player and refuses without one} -setup {
  set ::fix::SavedMe [expr {[info exists ::application::ai::Settings(me)] ? $::application::ai::Settings(me) : ""}]
+ set ::fix::RepertoireCalls {}
+ set ::fix::SavedRepertoire [::action::get repertoire_check]
+ proc ::fix::stubRepertoire {args} {lappend ::fix::RepertoireCalls $args; return checked}
+ dict set ::action::Registry repertoire_check handler ::fix::stubRepertoire
+ set ::fix::Notices {}
+ rename ::dialog::notice::post ::fix::realPost
+ proc ::dialog::notice::post {kind message args} {lappend ::fix::Notices [list $kind $message]}
 } -body {
  set ::application::ai::Settings(me) {Thomas, Michael}
- set row [::fix::repertoireRow]
- set args [dict get $row args]
- set withPlayer [list [dict exists $args player] [dict get $args player] [llength [dict get $row missing]]]
+ set withCalls [::fix::run {repertoire check against my games} 27]
  unset ::application::ai::Settings(me)
- set row [::fix::repertoireRow]
- set missing [dict get $row missing]
- list {*}$withPlayer [expr {"player" in $missing}] [dict exists [dict get $row args] player]
+ set withoutCalls [::fix::run {repertoire check against my games} 27]
+ set message [lindex $::fix::Notices end 1]
+ list \
+  [expr {[lsearch -exact $withCalls {command.repertoire_check {player {Thomas, Michael}}}] >= 0}] \
+  [expr {[lsearch -exact $withCalls {repertoire_check {player {Thomas, Michael}}}] >= 0}] \
+  [expr {[lsearch -exact $withoutCalls {repertoire_check {player {Thomas, Michael}}}] < 0}] \
+  [string match {*I am <player>*} $message]
 } -cleanup {
+ catch {rename ::dialog::notice::post {}}
+ rename ::fix::realPost ::dialog::notice::post
+ set ::action::Registry [dict replace $::action::Registry repertoire_check $::fix::SavedRepertoire]
  if {$::fix::SavedMe eq ""} {catch {unset ::application::ai::Settings(me)}} else {set ::application::ai::Settings(me) $::fix::SavedMe}
-} -result {1 {Thomas, Michael} 0 1 0}
+} -result {1 1 1 1}
 
 # ----------------------------------------------------------------------
 # F-11: question mode marks itself busy, scrubs the facts it sends, and

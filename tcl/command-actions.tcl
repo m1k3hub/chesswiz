@@ -27,6 +27,7 @@ proc ::commandline::RegisterActions {} {
   study {player} {Study plan}
   stop {engine} {Stop engine}
   set_threads {engine threads} {Set engine threads}
+  repertoire_check {player} {Check repertoire against my games}
   best {engine} {Best move}
   play {engine time_control color} {Play engine}
   training {source pattern player} {Create puzzles}
@@ -146,6 +147,9 @@ proc ::commandline::Action {name arguments} {
    if {[string match "error:*" $result]} {return $result}
    set shown [::application::assistant::DoShowSearch]
    return "$result\n$shown"
+  }
+  repertoire_check {
+   return [::action::run repertoire_check [dict create player [Me $arguments]]]
   }
   my_score {return [::action::run player_stats [dict create name [Me $arguments]]]}
   review - study {
