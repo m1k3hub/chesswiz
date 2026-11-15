@@ -53,4 +53,44 @@ tcltest::test td-byes-categories-and-swiss-withdrawals {distinct bye categories,
     list $r1Boards $dupBye [dict get $wBefore timing] $pabCount [dict get $wAfter timing] [dict get $wAfter changed] $hasH $hasZ $hasU [llength $rows]
 } -result {2 1 withdrawal-before-pairing 1 withdrawal-after-pairing 1 1 1 1 6}
 
+tcltest::test td-byes-f11-wins-tiebreak-excludes-pab-and-forfeit {F11: wins tiebreak excludes pairing-allocated byes, full-point byes and forfeit wins so a real OTB win outranks unplayed point awards} -body {
+    set path [file join $::env(HOME) byes_f11.tdj]
+    ::tdByes::call $path create {name {Wins Tiebreak Open} players {Opp1 Opp2 RealWin3 ForfeitWin4 Pab5} system swiss rounds 2 colour_lot white start 0}
+    # Pair Round 1 via bbpPairings:
+    # - Board 1: p1 vs p3 -> RealWin3 (p3) wins over the board (played)
+    # - Board 2: p2 vs p4 -> ForfeitWin4 (p4) wins by forfeit (unplayed)
+    # - Bye:     Pab5 (p5) receives the pairing-allocated bye (unplayed)
+    ::tdByes::call $path pair_round {round 1}
+    set st1 [dict get [::td::store::Read $path] state]
+    foreach p [::td::model::Pairings $st1 1] {
+        if {[dict get $p status] ne "pending"} { continue }
+        set w [dict get $p white]
+        set b [dict get $p black]
+        if {$w eq "p3" || $b eq "p3"} {
+            set res [expr {$w eq "p3" ? "1-0" : "0-1"}]
+            ::tdByes::call $path enter_result [dict create pairing [dict get $p id] result $res category played]
+        } elseif {$w eq "p4" || $b eq "p4"} {
+            set res [expr {$w eq "p4" ? "1-0" : "0-1"}]
+            ::tdByes::call $path enter_result [dict create pairing [dict get $p id] result $res category forfeit]
+        }
+    }
+    # Also give Opp1 (p1) a Round 2 full-point bye to verify full-point-bye also has wins=0
+    ::tdByes::call $path bye {player p1 round 2 category full-point-bye}
+
+    # With tiebreaks {wins buchholz}, RealWin3 (p3, 1.0, 1 OTB win) must outrank both
+    # ForfeitWin4 (p4, 1.0, forfeit win) and Pab5 (p5, 1.0, PAB), and p1/p4/p5 must all have wins=0.
+    set stFinal [dict get [::td::store::Read $path] state]
+    dict set stFinal tiebreaks {wins buchholz}
+    set rows [::td::score::Compute $stFinal]
+    set winsById [dict create]
+    foreach r $rows {
+        dict set winsById [dict get $r id] [dict get $r tiebreaks wins text]
+    }
+    list [dict get [lindex $rows 0] id] \
+        [dict get $winsById p3] \
+        [dict get $winsById p4] \
+        [dict get $winsById p5] \
+        [dict get $winsById p1]
+} -result {p3 1 0 0 0}
+
 tcltest::cleanupTests

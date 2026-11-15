@@ -65,13 +65,15 @@ proc ::td::score::BaseRows {state} {
 			set played [expr {[dg $p played 1] && ![IsBye $p] && [dg $p category {}] ni {forfeit forfeit-loss withdrawal withdrawal-annulled requested-bye full-point-bye pairing-bye double-forfeit}}]
 			if {$played} {
 				dict incr row games
-				if {$points eq "2 1"} { dict incr row won }
+				if {$points eq "2 1"} {
+					dict incr row won
+					dict incr row wins
+				}
 				if {$side eq "black"} {
 					dict incr row bpg
 					if {$points eq "2 1"} { dict incr row bwg }
 				}
 			}
-			if {$points eq "2 1"} { dict incr row wins }
 			set entry [dict create pairing [dict get $p id] round [dict get $p round] result [dg $p result *] points $points played $played category [dg $p category played]]
 			dict lappend row score_breakdown $entry
 			dict set rows $id $row
