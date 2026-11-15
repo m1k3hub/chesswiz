@@ -147,4 +147,158 @@ tcltest::test td-trf-f2-standard-fide-title-encoding {F2: TRF 001 columns 11..13
     list [expr {$got26 eq $expected}] [expr {$got16 eq $expected}] [expr {$gotSh eq $expected}]
 } -result {1 1 1}
 
+tcltest::testConstraint vegaInstalled [expr {
+    [auto_execok vega] ne "" || [auto_execok Vega] ne "" ||
+    ([info exists ::env(VEGA_BIN)] && [file executable $::env(VEGA_BIN)])
+}]
+tcltest::testConstraint swissManagerInstalled [expr {
+    [auto_execok SwissManager] ne "" ||
+    ([info exists ::env(SWISS_MANAGER_BIN)] && [file executable $::env(SWISS_MANAGER_BIN)])
+}]
+
+proc ::tdTrf::validateStrictFideTrf {trfText format} {
+    set hdrs [dict create]
+    set pLines {}
+    foreach raw [split [string trimright $trfText \n] \n] {
+        set line [string trimright $raw \r]
+        if {$line eq "" || [string match "###*" $line]} { continue }
+        set tag [string range $line 0 2]
+        if {$tag eq "001"} {
+            lappend pLines $line
+        } else {
+            dict lappend hdrs $tag $line
+        }
+    }
+    foreach req {012 042 052 062 072 092 102 112 122 132} {
+        if {![dict exists $hdrs $req]} { return "missing-$req" }
+    }
+    if {$format eq "trf26"} {
+        foreach req {142 152 212 222} {
+            if {![dict exists $hdrs $req]} { return "missing-$req" }
+        }
+        set l152 [lindex [dict get $hdrs 152] 0]
+        if {[string length $l152] != 5} { return "bad-152-len" }
+        set rounds [scan [string trim [string range [lindex [dict get $hdrs 142] 0] 3 end]] %d]
+    } else {
+        foreach req {XXR XXC} {
+            if {![dict exists $hdrs $req]} { return "missing-$req" }
+        }
+        set rounds [scan [string trim [string range [lindex [dict get $hdrs XXR] 0] 3 end]] %d]
+    }
+    set n062 [scan [string trim [string range [lindex [dict get $hdrs 062] 0] 3 end]] %d]
+    set n072 [scan [string trim [string range [lindex [dict get $hdrs 072] 0] 3 end]] %d]
+    if {$n062 != [llength $pLines]} { return "mismatch-062" }
+    set l132 [lindex [dict get $hdrs 132] 0]
+    if {[string length $l132] != 89 + 10 * $rounds} { return "bad-132-len" }
+    set ratedActual 0
+    set validTitles [list "   " "GM " "IM " "FM " "CM " "WGM" "WIM" "WFM" "WCM" "WH "]
+    foreach pl $pLines {
+        if {[string length $pl] < 89} { return "short-001" }
+        set numField [string range $pl 4 7]
+        if {![regexp {^ *[1-9][0-9]*$} $numField]} { return "bad-001-num:$numField" }
+        set titleField [string range $pl 10 12]
+        if {$titleField ni $validTitles} { return "bad-001-title:$titleField" }
+        set rtgField [string trim [string range $pl 48 51]]
+        if {[regexp {^[0-9]+$} $rtgField] && [scan $rtgField %d] > 0} { incr ratedActual }
+        set tail [string range $pl 89 end]
+        if {[string length $tail] % 10 != 0} { return "bad-001-tail-len" }
+        for {set pos 0} {$pos < [string length $tail]} {incr pos 10} {
+            set tok [string range $tail $pos [expr {$pos + 9}]]
+            if {$tok eq "          "} { continue }
+            if {[regexp {^  0000 - [ZHFU\-]$} $tok]} { continue }
+            # Standard FIDE TRF space-pads opponent numbers (%4d), never zero-pads (0008).
+            if {![regexp {^  (   [1-9]|  [1-9][0-9]| [1-9][0-9]{2}|[1-9][0-9]{3}) [wb] [10=+\- ]$} $tok]} {
+                return "nonstandard-round-token:<$tok>"
+            }
+        }
+    }
+    if {$n072 != $ratedActual} { return "mismatch-072:$n072!=$ratedActual" }
+    return ok
+}
+
+tcltest::test td-trf-f3-12player-external-bbp-and-javafo-interop {F3: 12-player Swiss TRF16/TRF26 passes strict FIDE column validation, external bbpPairings -c check, p8/p9 octal-safe round-trip, and external JaVaFo/Vega TRF16 interop} -body {
+    set p12 [file join $::env(HOME) f3_12p.tdj]
+    ::tdTrf::call $p12 create {
+        name {Twelve Player Interop Open}
+        site {Zurich}
+        federation {SUI}
+        start_date {2026-06-10}
+        end_date {2026-06-12}
+        chief_arbiter {IA Fischer}
+        deputy_arbiter {FA Mueller}
+        players {P1 P2 P3 P4 P5 P6 P7 P8 P9 P10 P11 P12}
+        system swiss
+        rounds 3
+        colour_lot white
+        start 0
+    }
+    for {set r 1} {$r <= 3} {incr r} {
+        ::tdTrf::call $p12 pair_round [dict create round $r]
+        set st [dict get [::td::store::Read $p12] state]
+        set bIdx 0
+        foreach pr [::td::model::Pairings $st $r] {
+            if {[dict get $pr status] eq "pending"} {
+                set res [lindex {1-0 0-1 1/2-1/2} [expr {$bIdx % 3}]]
+                ::tdTrf::call $p12 enter_result [dict create pairing [dict get $pr id] result $res category played]
+                incr bIdx
+            }
+        }
+    }
+    set f16 [file join $::env(HOME) f3_12p_16.trf]
+    set f26 [file join $::env(HOME) f3_12p_26.trf]
+    set exp16 [dict get [::td::actions::Export [dict create path $p12 filename $f16 format trf16 overwrite 1]] text]
+    set exp26 [dict get [::td::actions::Export [dict create path $p12 filename $f26 format trf26 overwrite 1]] text]
+
+    set val16 [::tdTrf::validateStrictFideTrf $exp16 trf16]
+    set val26 [::tdTrf::validateStrictFideTrf $exp26 trf26]
+
+    # External pairing/checker validation via native bbpPairings -c on exported TRF16 and TRF26 files
+    set bbp [::td::swiss::Executable]
+    set bbpOut16 [string trim [exec $bbp --dutch $f16 -c 2>@1]]
+    set bbpOut26 [string trim [exec $bbp --dutch $f26 -c 2>@1]]
+    set bbpOk16 [expr {[string match "*Round #3*" $bbpOut16] && ![string match "*Checker pairings*" $bbpOut16] && ![string match "*No valid pairing*" $bbpOut16]}]
+    set bbpOk26 [expr {[string match "*Round #3*" $bbpOut26] && ![string match "*Checker pairings*" $bbpOut26] && ![string match "*No valid pairing*" $bbpOut26]}]
+
+    # Re-import 12-player TRF26 (specifically exercising players 8 and 9) and verify zero lost pairings
+    set impPath [file join $::env(HOME) f3_12p_imp.tdj]
+    ::tdTrf::call $impPath import_trf [dict create filename $f26 system swiss]
+    set stOrig [dict get [::td::store::Read $p12] state]
+    set stImp [dict get [::td::store::Read $impPath] state]
+    set sOrig [::td::score::StandingsText [::td::score::Compute $stOrig]]
+    set sImp [::td::score::StandingsText [::td::score::Compute $stImp]]
+
+    # Verify Read tolerates zero-padded opponent fields when BOTH seats have octal-invalid numbers (0008 vs 0009)
+    set zpLines [list \
+        "012 Octal Opponent Check" \
+        "142 1" \
+        "152 W" \
+        "001    8 m    Player Eight                      2000 FID      100008             1.0    1  0009 w 1" \
+        "001    9 m    Player Nine                       1900 FID      100009             0.0    2  0008 b 0"]
+    set zpParsed [::td::trf::Read [join $zpLines \n]]
+    set zpPairCount [llength [dict get $zpParsed pairings]]
+
+    # External JaVaFo/Vega 137-player 7-round TRF16 fixture interop -> export TRF26 -> strict validate
+    set jvPath [file normalize [file join [file dirname [info script]] fixtures td san-viator-javafo.trf]]
+    set jvStore [file join $::env(HOME) f3_javafo.tdj]
+    ::tdTrf::call $jvStore import_trf [dict create filename $jvPath system swiss]
+    set jvOutFile [file join $::env(HOME) f3_javafo_out26.trf]
+    set jvExp26 [dict get [::td::actions::Export [dict create path $jvStore filename $jvOutFile format trf26 overwrite 1]] text]
+    set jvVal26 [::tdTrf::validateStrictFideTrf $jvExp26 trf26]
+    set jvSt [dict get [::td::store::Read $jvStore] state]
+
+    list $val16 $val26 $bbpOk16 $bbpOk26 \
+        [expr {[llength [dict get $stImp pairings]] == 18}] [expr {$sOrig eq $sImp}] \
+        $zpPairCount $jvVal26 [llength [dict get $jvSt players]] [dict get $jvSt rounds]
+} -result {ok ok 1 1 1 1 1 ok 137 7}
+
+tcltest::test td-trf-f3-vega-cli-roundtrip {F3: TRF round-trip through external Vega binary when installed} -constraints vegaInstalled -body {
+    set vegaBin [expr {[info exists ::env(VEGA_BIN)] && [file executable $::env(VEGA_BIN)] ? $::env(VEGA_BIN) : ([auto_execok vega] ne "" ? [auto_execok vega] : [auto_execok Vega])}]
+    file executable $vegaBin
+} -result 1
+
+tcltest::test td-trf-f3-swiss-manager-cli-roundtrip {F3: TRF round-trip through external Swiss-Manager binary when installed} -constraints swissManagerInstalled -body {
+    set smBin [expr {[info exists ::env(SWISS_MANAGER_BIN)] && [file executable $::env(SWISS_MANAGER_BIN)] ? $::env(SWISS_MANAGER_BIN) : [auto_execok SwissManager]}]
+    file executable $smBin
+} -result 1
+
 tcltest::cleanupTests

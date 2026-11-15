@@ -163,7 +163,7 @@ proc ::td::swiss::CheckRound {state {round 0}} {
                     if {[dict get $q white] eq $w && [dict get $q black] eq "" && [::td::model::dg $q category {}] in {pairing-bye full-point-bye}} {
                         lappend violations [dict create code C2-REPEAT-PAB pairing [dict get $p id] player $w detail "player $w already received a pairing-allocated or full-point bye before round $round"]
                     }
-                    if {([dict get $q white] eq $w || [dict get $q black] eq $w) && ![::td::model::dg $q played 0] && [::td::model::Points $q $w] eq "2 1"} {
+                    if {([dict get $q white] eq $w || [dict get $q black] eq $w) && ![::td::model::dg $q played 0] && [::td::score::Points $q $w] eq "2 1"} {
                         lappend violations [dict create code C2-FORFEIT-WIN-PAB pairing [dict get $p id] player $w detail "player $w already scored a forfeit win before round $round"]
                     }
                 }

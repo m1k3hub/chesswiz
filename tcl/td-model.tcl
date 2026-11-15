@@ -350,6 +350,9 @@ proc ::td::model::Apply {command info domain} {
 			}
 			set path [dict get $info path]
 			set id [format "evt-%08x" [zlib crc32 $path]]
+			set tbList {buchholzCut1 buchholz sonnebornBerger wins}
+			set parsedTb [::td::trf::ParseTrfTiebreaks [expr {[dg $parsed trf_tiebreaks {}] ne "" ? [dict get $parsed trf_tiebreaks] : [dg $parsed trf_tiebreaks_202 {}]}]]
+			if {[llength $parsedTb]} { set tbList $parsedTb }
 			set state [dict create schema 1 id $id name [dict get $parsed name] site [dict get $parsed site] \
 				federation [dict get $parsed federation] start_date [dict get $parsed start_date] end_date [dict get $parsed end_date] \
 				teams_count [dg $parsed teams_count {}] tournament_type [dg $parsed tournament_type {}] \
@@ -362,7 +365,7 @@ proc ::td::model::Apply {command info domain} {
 				rounds [dict get $parsed rounds] current_round [dict get $parsed current_round] revision 0 \
 				regulations [dict create laws 2023 C05 current C07 2026 C04.3 2026] time_control $tc opening {} opening_name {} \
 				overhead_ms 100 concurrency 2 threads 1 max_plies 0 tablebase 1 online 0 \
-				colour_lot [dict get $parsed colour_lot] tiebreaks {buchholzCut1 buchholz sonnebornBerger wins} \
+				colour_lot [dict get $parsed colour_lot] tiebreaks $tbList \
 				unrated_policy drop publication_revision 0 published 0 publications {} withdrawals {} rulings {} \
 				games {} created [clock seconds] updated [clock seconds]]
 			return [list $state [dict create imported [llength [dict get $parsed players]] rounds [dict get $parsed rounds] trf_format [dict get $parsed trf_format]] $target $history]

@@ -87,6 +87,91 @@ tcltest::test td-p2-published-swiss-2-bbp-60p-14r {Reproduce published 60-player
     list [llength [dict get $st players]] $mismatches [dict get $check14 bbp_discrepancy] [expr {$r15Raw eq $expR15}]
 } -result {60 0 0 1}
 
+tcltest::test td-p2-published-chess-results-1-singapore-9r {F3: Reproduce published chess-results.com Swiss #1 (tnr1518768, Intchess Asia Blitz 20p 9r) pairings, C.07 standings, and TRF26 round-trip} -body {
+    set trfPath [file normalize [file join [file dirname [info script]] fixtures td chess-results-tnr1518768.trf]]
+    set csvPath [file normalize [file join [file dirname [info script]] fixtures td chess-results-tnr1518768.standings.csv]]
+    set path [file join $::env(HOME) cr1518768.tdj]
+    ::tdP2Acc::call $path import_trf [dict create filename $trfPath system swiss]
+    set st [dict get [::td::store::Read $path] state]
+
+    set pairMismatches 0
+    for {set r 1} {$r <= 9} {incr r} {
+        set gen [::td::swiss::Pair $st $r]
+        if {[::tdP2Acc::pairMap $gen] ne [::tdP2Acc::pairMap [::td::model::Pairings $st $r]]} {
+            incr pairMismatches
+        }
+    }
+    set check9 [::td::swiss::CheckRound $st 9]
+
+    set rows [::td::score::Compute $st]
+    set byNum [dict create]
+    foreach row $rows { dict set byNum [dict get $row number] $row }
+
+    set f [open $csvPath r]; set csvLines [split [string trim [read $f]] \n]; close $f
+    set rankDiffs 0; set bhc1Diffs 0; set bhDiffs 0; set sbDiffs 0
+    foreach line $csvLines {
+        if {$line eq "" || [string match "#*" $line]} { continue }
+        lassign [split $line ,] expRank sNo expPts tb1 expBhc1 expBh expSb tb5
+        set row [dict get $byNum $sNo]
+        if {[dict get $row rank] != $expRank} { incr rankDiffs }
+        set gotBhc1 [expr {double([dict get $row tiebreaks buchholzCut1 n]) / [dict get $row tiebreaks buchholzCut1 d]}]
+        set gotBh [expr {double([dict get $row tiebreaks buchholz n]) / [dict get $row tiebreaks buchholz d]}]
+        set gotSb [expr {double([dict get $row tiebreaks sonnebornBerger n]) / [dict get $row tiebreaks sonnebornBerger d]}]
+        if {abs($gotBhc1 - $expBhc1) > 1e-6} { incr bhc1Diffs }
+        if {abs($gotBh - $expBh) > 1e-6} { incr bhDiffs }
+        if {abs($gotSb - $expSb) > 1e-6} { incr sbDiffs }
+    }
+
+    # Verify exported TRF26 round-trips all 20 players and all 90 board pairings
+    set rtState [::td::trf::Read [::td::trf::Write $st trf26]]
+    set rtOk [expr {[llength [dict get $rtState pairings]] == [llength [dict get $st pairings]]}]
+
+    list [llength [dict get $st players]] [dict get $st rounds] $pairMismatches [dict get $check9 compliant] \
+        $rankDiffs $bhc1Diffs $bhDiffs $sbDiffs $rtOk
+} -result {20 9 0 1 0 0 0 0 1}
+
+tcltest::test td-p2-published-chess-results-2-sivakasi-214p-8r {F3: Reproduce published chess-results.com Swiss #2 (tnr1498617, Sivakasi Open 214p 8r) pairings, C.07 2026 standings, and TRF26 round-trip} -body {
+    set trfPath [file normalize [file join [file dirname [info script]] fixtures td chess-results-tnr1498617.trf]]
+    set csvPath [file normalize [file join [file dirname [info script]] fixtures td chess-results-tnr1498617.standings.csv]]
+    set path [file join $::env(HOME) cr1498617.tdj]
+    ::tdP2Acc::call $path import_trf [dict create filename $trfPath system swiss]
+    set st [dict get [::td::store::Read $path] state]
+
+    set pairMismatches 0
+    for {set r 1} {$r <= 8} {incr r} {
+        set gen [::td::swiss::Pair $st $r]
+        if {[::tdP2Acc::pairMap $gen] ne [::tdP2Acc::pairMap [::td::model::Pairings $st $r]]} {
+            incr pairMismatches
+        }
+    }
+    set check8 [::td::swiss::CheckRound $st 8]
+
+    set rows [::td::score::Compute $st]
+    set byNum [dict create]
+    foreach row $rows { dict set byNum [dict get $row number] $row }
+
+    set f [open $csvPath r]; set csvLines [split [string trim [read $f]] \n]; close $f
+    set rankDiffs 0; set bhc1Diffs 0; set bhDiffs 0; set sbDiffs 0
+    foreach line $csvLines {
+        if {$line eq "" || [string match "#*" $line]} { continue }
+        lassign [split $line ,] expRank sNo expPts expBhc1 expBh expSb tb4 tb5 tb6
+        set row [dict get $byNum $sNo]
+        if {[dict get $row rank] != $expRank} { incr rankDiffs }
+        set gotBhc1 [expr {double([dict get $row tiebreaks buchholzCut1 n]) / [dict get $row tiebreaks buchholzCut1 d]}]
+        set gotBh [expr {double([dict get $row tiebreaks buchholz n]) / [dict get $row tiebreaks buchholz d]}]
+        set gotSb [expr {double([dict get $row tiebreaks sonnebornBerger n]) / [dict get $row tiebreaks sonnebornBerger d]}]
+        if {abs($gotBhc1 - $expBhc1) > 1e-6} { incr bhc1Diffs }
+        if {abs($gotBh - $expBh) > 1e-6} { incr bhDiffs }
+        if {abs($gotSb - $expSb) > 1e-6} { incr sbDiffs }
+    }
+
+    set rtState [::td::trf::Read [::td::trf::Write $st trf26]]
+    set rtOk [expr {[llength [dict get $rtState pairings]] == [llength [dict get $st pairings]]}]
+
+    list [llength [dict get $st players]] [dict get $st rounds] $pairMismatches [dict get $check8 compliant] \
+        $rankDiffs $bhc1Diffs $bhDiffs $sbDiffs $rtOk
+} -result {214 8 0 1 0 0 0 0 1}
+
 tcltest::test td-p2-torture-vectors-c04-c07 {FIDE C.04.3 and C.07 torture vectors: PAB, two requested half-point byes, withdrawal shifting Buchholz, bracket collapse with floats} -body {
     # 1. Pairing-allocated bye (PAB) + 2. Two requested half-point byes + 3. Withdrawal shifting Buchholz (C.07 16.2.5 / 16.3 / 16.4)
     set pTort [file join $::env(HOME) torture.tdj]

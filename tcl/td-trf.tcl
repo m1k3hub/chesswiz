@@ -73,6 +73,28 @@ proc ::td::trf::TrfTiebreaks {state} {
     }
     return [join $codes ,]
 }
+proc ::td::trf::ParseTrfTiebreaks {spec} {
+    set out {}
+    set map {
+        BH/C1 buchholzCut1
+        BH buchholz
+        BH/M1 buchholzMedian1
+        SB sonnebornBerger
+        DE directEncounter
+        KS koya
+        WON gamesWon
+        WIN wins
+        BWG gamesWonWithBlack
+        PS progressive
+        ARO aro
+    }
+    foreach raw [split [string toupper $spec] ,] {
+        set code [string trim $raw]
+        if {$code in {{} PTS}} { continue }
+        if {[dict exists $map $code]} { lappend out [dict get $map $code] }
+    }
+    return $out
+}
 proc ::td::trf::ToRoundDate {dateStr fallback} {
     set s [string trim $dateStr]
     if {[regexp {^([0-9]{4})[-/.]([0-9]{2})[-/.]([0-9]{2})$} $s -> yyyy mm dd]} {
@@ -197,7 +219,7 @@ proc ::td::trf::Write {state {format trf26} {through -1} {pairingRound 0} {check
             set other [expr {$id eq [dict get $found white] ? [dict get $found black] : [dict get $found white]}]
             set no [expr {$other eq "" ? 0 : [dict get $numbers $other]}]
             set c [expr {$other eq "" ? "-" : $id eq [dict get $found white] ? "w" : "b"}]
-            append matches [format "  %04d %s %s" $no $c $code]
+            append matches [expr {$other eq "" ? [format "  0000 %s %s" $c $code] : [format "  %4d %s %s" $no $c $code]}]
             # FIDE report preserves played results annulled only for RR standings.
             if {$r <= $last} {
                 if {$code in {1 + F U}} { incr score2 2 } elseif {$code in {= H}} { incr score2 }
@@ -262,12 +284,12 @@ proc ::td::trf::Read {text {through 0}} {
                     set round_dates [regexp -all -inline {\S+} $rest]
                 }
             }
-            142 { set format trf26; if {[string is integer -strict $rest]} { set rounds $rest } }
+            142 { set format trf26; if {[regexp {^[0-9]+$} $rest]} { set rounds [scan $rest %d] } }
             152 { set format trf26; set colour_lot [expr {[string toupper [string index $rest 0]] eq "B" ? "black" : "white"}] }
             202 { set format trf26; set trf_tiebreaks_202 $rest }
             212 { set format trf26; set trf_tiebreaks $rest }
             222 { set format trf26; set encoded_time_control $rest }
-            XXR { if {[string is integer -strict $rest]} { set rounds $rest } }
+            XXR { if {[regexp {^[0-9]+$} $rest]} { set rounds [scan $rest %d] } }
             XXC { set colour_lot [expr {[string match -nocase "black*" $rest] ? "black" : "white"}] }
             001 { lappend playerLines $line }
         }
@@ -284,7 +306,7 @@ proc ::td::trf::Read {text {through 0}} {
         set pname [string trim [string range $line 14 46]]
         if {$pname eq ""} { set pname "Player $n" }
         set ratingRaw [string trim [string range $line 48 51]]
-        set rating [expr {[string is integer -strict $ratingRaw] && $ratingRaw > 0 ? $ratingRaw : ""}]
+        set rating [expr {[regexp {^[0-9]+$} $ratingRaw] && [scan $ratingRaw %d] > 0 ? [scan $ratingRaw %d] : ""}]
         set fed [string trim [string range $line 53 55]]
         set fideId [string trim [string range $line 57 67]]
         set born [string trim [string range $line 69 78]]
@@ -328,7 +350,7 @@ proc ::td::trf::Read {text {through 0}} {
                 dict set seen $n 1
                 continue
             }
-            if {![string is integer -strict $oppRaw]} { continue }
+            if {![regexp {^[0-9]+$} $oppRaw]} { continue }
             set opp [scan $oppRaw %d]
             if {$opp == $n} { continue }
             dict set seen $n 1
