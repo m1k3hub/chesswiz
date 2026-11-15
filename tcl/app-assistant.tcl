@@ -5247,6 +5247,18 @@ proc ::application::assistant::DoSetEngineOption {engine option value profile} {
 }
 
 
+proc ::application::assistant::DoSetEngineThreads {engine threads} {
+	set value [::engine::SetThreads $engine $threads]
+	set restarted {}
+	foreach number [RunningPanes] {
+		if {[::engine::engineName $number] eq $engine} { lappend restarted [PaneLabel $number] }
+	}
+	set reply "Set $engine to use $value threads; saved."
+	if {[llength $restarted]} { append reply " Restarted it in analysis pane [join $restarted {, }]." }
+	return $reply
+}
+
+
 proc ::application::assistant::DoAddEngine {path} {
 	set name [::engine::install $path]
 	set e [EngineEntry $name]

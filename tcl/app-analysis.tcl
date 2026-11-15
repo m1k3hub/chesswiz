@@ -2172,7 +2172,11 @@ proc startEngine {name {number ""} {settings {}}} {
 	if {$Vars(current:profile) ni $profiles} {
 		set Vars(current:profile) [expr {"Default" in $profiles ? "Default" : [lindex $profiles 0]}]
 	}
-	if {$threads ne ""} { set Vars(current:cores) $threads }
+	if {$threads ne ""} {
+		set Vars(current:cores) $threads
+	} elseif {[set preferred [::engine::DefaultThreads $name]] ne ""} {
+		set Vars(current:cores) $preferred
+	}
 	if {$hash ne ""} { set Vars(current:memory) $hash }
 
 	if {![exists? $number]} {

@@ -4240,6 +4240,50 @@ proc setOption {name option value {profile Default}} {
 }
 
 
+# The thread count last chosen for engine <name>, or "" when none was set.
+proc DefaultThreads {name} {
+ variable Options
+ if {[info exists Options($name:cores)]} { return $Options($name:cores) }
+ return ""
+}
+
+
+# Validates and stores engine <name>'s thread count, and restarts any analysis
+# pane of that engine with it. Returns the value stored.
+proc SetThreads {name value} {
+ variable EmptyEngine
+ variable Engines
+ variable Options
+
+ set index [FindIndex $name]
+ if {$index == -1} { error "no engine named '$name'" }
+ array set engine $EmptyEngine
+ array set engine [lindex $Engines $index]
+ set protocol [expr {"UCI" in $engine(Protocol) ? "UCI" : [lindex $engine(Protocol) 0]}]
+ array set features $engine(Features:$protocol)
+ set range {}
+ if {[info exists features(threads)]} {
+  set range $features(threads)
+ } elseif {[info exists features(smp)]} {
+  set range $features(smp)
+ } else {
+  error "$name does not take a thread count"
+ }
+ lassign $range min max
+ if {![string is integer -strict $value] || $value < $min || ($max > 0 && $value > $max)} {
+  error "threads must be from $min to $max for $name"
+ }
+ set Options($name:cores) $value
+ foreach number [::application::analysis::Running] {
+  if {[catch { set running [set ::engine::${number}::Vars(current:name)] }]} { continue }
+  if {$running ne $name} { continue }
+  set ::engine::${number}::Vars(current:cores) $value
+  catch { ::application::analysis::restartAnalysis $number }
+ }
+ return $value
+}
+
+
 proc FindIndexInList {name} {
 	variable Engines
 

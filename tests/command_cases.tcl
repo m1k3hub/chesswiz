@@ -39,7 +39,7 @@ set CommandCases {
  37 {check move e4} engine_check_move {move e4}
  38 {analyse moves 20 to 30} annotate_game {prose 0 from_move 20 to_move 30}
  39 {tablebase} tablebase {}
- 40 {set Stockfish threads 8} start_engine {engine Stockfish threads 8}
+ 40 {set Stockfish threads 8} command.set_threads {engine Stockfish threads 8}
  41 {list engines} list_engines {}
  42 {play Stockfish 3+2 as black} command.play {engine Stockfish time_control 3+2 color black}
  43 {new game} new_game {}

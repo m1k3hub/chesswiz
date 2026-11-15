@@ -188,6 +188,30 @@ close $f
 } -result {0 1}
 
 # ----------------------------------------------------------------------
+# F-07: "set <engine> threads <n>" changes the saved engine option and does
+# not start analysis or a second engine process.
+# ----------------------------------------------------------------------
+::tcltest::test F-07-set-threads {set engine threads saves the count without starting analysis} -setup {
+ set ::fix::SavedEngines $::engine::Engines
+ set ::engine::Engines [list [dict merge $::engine::EmptyEngine {
+  Name {Stub Engine} Command /bin/true Protocol UCI
+  Features:UCI {analyze true threads {1 128}}
+  Profiles:UCI {Default {{Threads spin 4 4 1 128} {Hash spin 16 16 1 1024}}}
+ }]]
+} -body {
+ set before [::engine::DefaultThreads {Stub Engine}]
+ set panesBefore [llength [::application::assistant::RunningPanes]]
+ ::fix::run {set Stub Engine threads 8} 40
+ set after [::engine::DefaultThreads {Stub Engine}]
+ list $before $after $panesBefore [llength [::application::assistant::RunningPanes]]
+} -cleanup {
+ foreach number [::application::assistant::RunningPanes] {
+  catch {::application::analysis::stopEngine $number}
+ }
+ set ::engine::Engines $::fix::SavedEngines
+} -result {{} 8 0 0}
+
+# ----------------------------------------------------------------------
 # F-05: the registry palette stays reachable beside the typed commands.
 # ----------------------------------------------------------------------
 proc ::fix::noop {args} {return {}}

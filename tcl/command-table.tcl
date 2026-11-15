@@ -49,7 +49,7 @@ namespace eval ::commandline {
   {37 engine_check_move {} {{check move @move}}}
   {38 annotate_game {prose 0} {{analyse moves @from_move to @to_move} {analyze moves @from_move to @to_move} {annotate game}}}
   {39 tablebase {} {{tablebase}}}
-  {40 start_engine {} {{set @engine threads @threads}}}
+  {40 command.set_threads {} {{set @engine threads @threads}}}
   {41 list_engines {} {{list engines}}}
   {42 command.play {} {{play @engine {? @time_control} {? as @color}}}}
   {43 new_game {} {{new game}}}

@@ -193,7 +193,7 @@ set InScopeCommandCorpus {
 	eng-stop J7 {Stop the engine.}
 		{stop Stockfish} 35 command.stop {engine Stockfish}
 	eng-threads J7 {Let Stockfish use 8 threads.}
-		{set Stockfish threads 8} 40 start_engine {engine Stockfish threads 8}
+		{set Stockfish threads 8} 40 command.set_threads {engine Stockfish threads 8}
 	train-forks J8 {Give me knight fork puzzles.}
 		{puzzles from this database motif knight fork} 44 command.training {source {this database} pattern knight_fork}
 	play-trend J10 {What's trending in openings lately?}

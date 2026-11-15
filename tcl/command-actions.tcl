@@ -24,6 +24,7 @@ proc ::commandline::RegisterActions {} {
   my_score {player} {My score}
   study {player} {Study plan}
   stop {engine} {Stop engine}
+  set_threads {engine threads} {Set engine threads}
   best {engine} {Best move}
   play {engine time_control color} {Play engine}
   training {source pattern player} {Create puzzles}
@@ -94,6 +95,9 @@ proc ::commandline::Action {name arguments} {
   my_score {return [::action::run player_stats [dict create name [Me $arguments]]]}
   review - study {
    return [::action::run study_plan [dict create player [Me $arguments] games [expr {[Get $arguments games] eq "" ? 10 : [Get $arguments games]}]]]
+  }
+  set_threads {
+   return [::application::assistant::DoSetEngineThreads [Get $arguments engine] [Get $arguments threads]]
   }
   stop {
    set found 0
