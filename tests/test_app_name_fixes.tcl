@@ -98,7 +98,7 @@ tcltest::test nfix-proposals {proposals are generated for linked names that diff
 
 tcltest::test nfix-canonical-name {IsCanonicalName accepts valid names and rejects placeholders} -body {
 	list \
-		[::playerdata::IsCanonicalName {Carlsen, Magnus}] \
+		[::playerdata::IsCanonicalName {Validname, Example}] \
 		[::playerdata::IsCanonicalName {Short, N}] \
 		[::playerdata::IsCanonicalName {Unknown, Player}] \
 		[::playerdata::IsCanonicalName {N, N}] \
@@ -114,11 +114,11 @@ tcltest::test nfix-canonical-name {IsCanonicalName accepts valid names and rejec
 
 tcltest::test nfix-format-source {identity strings become readable labels} -body {
 	list \
-		[::playerdata::FormatSource {fide:1503014}] \
-		[::playerdata::FormatSource {dsb:10614-1081}] \
-		[::playerdata::FormatSource {ecf:100011B}] \
-		[::playerdata::FormatSource {iccf:241018}]
-} -result {{FIDE 1503014} {DWZ 10614-1081} {ECF 100011B} {ICCF 241018}}
+		[::playerdata::FormatSource {fide:999500001}] \
+		[::playerdata::FormatSource {dsb:99014-9001}] \
+		[::playerdata::FormatSource {ecf:990011B}] \
+		[::playerdata::FormatSource {iccf:991018}]
+} -result {{FIDE 999500001} {DWZ 99014-9001} {ECF 990011B} {ICCF 991018}}
 
 
 # ----------------------------------------------------------------------

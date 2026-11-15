@@ -398,8 +398,8 @@ proc ::playerdata::SpellReply {state item reply} {
 
 
 # <proposals> are the rows spellingCheck reported: the identity is the entry
-# of a rating list, "fide:1503014", "dsb:10614-1081", "ecf:100011B" or
-# "iccf:220015", not only a FIDE number.
+# of a rating list, "fide:999500001", "dsb:99014-9001", "ecf:990011B" or
+# "iccf:991018", not only a FIDE number.
 proc ::playerdata::applySpellings {base proposals} {
 	set linked 0
 	foreach prop $proposals {
@@ -768,7 +768,7 @@ proc ::playerdata::IsCanonicalName {new} {
 }
 
 
-# "fide:1503014" becomes "FIDE 1503014": the list a name comes from.
+# "fide:999500001" becomes "FIDE 999500001": the list a name comes from.
 proc ::playerdata::FormatSource {identity} {
 	set colon [string first : $identity]
 	if {$colon < 0} { return $identity }

@@ -399,17 +399,91 @@ tcltest::test VAL-PD5-016 {Startup, list updates, and linking never invoke renam
  set ::m4names::renameCalls
 } -result 0
 
-tcltest::test VAL-PD5-017 {Fixtures and test files contain no real player personal data or personal paths} -body {
- set clean 1
- set forbidden [list [string cat Carl sen] [string cat Firou zja] [string cat Arth urton] [string cat Ric cio] [string cat "Mega " Database]]
- foreach f [glob [file join [file dirname [info script]] test_app_player_*_m4.tcl]] {
-  set ch [open $f r]; set txt [read $ch]; close $ch
-  foreach pat $forbidden {
-   if {[string first [string tolower $pat] [string tolower $txt]] >= 0} { set clean 0 }
+proc ::m4names::privacyViolations {txt {stripPaths {}}} {
+ foreach p $stripPaths {
+  if {$p ne ""} {
+   set txt [string map [list $p <STRIPPED>] $txt]
   }
  }
- set clean
-} -result 1
+ set lower [string tolower $txt]
+ set hits {}
+ set forbidden [list \
+  [string cat Carl sen] \
+  [string cat Firou zja] \
+  [string cat Arth urton] \
+  [string cat Ric cio] \
+  [string cat 1503 014] \
+  [string cat 2806 60F] \
+  [string cat 241 018] \
+  [string cat "Mega " Database] \
+  [string cat lichess -token] \
+  [string cat /home/ michael]]
+ foreach pat $forbidden {
+  if {[string first [string tolower $pat] $lower] >= 0} {
+   lappend hits $pat
+  }
+ }
+ if {[regexp {(?i)/home/[a-z0-9_.-]+} $txt]} {
+  lappend hits /home/<user>
+ }
+ return $hits
+}
+
+tcltest::test VAL-PD5-017 {Fixtures, touched player-data test files, and logs contain no real player personal data or personal paths} -body {
+ set testDir [file normalize [file dirname [info script]]]
+ set repoRoot [file dirname $testDir]
+ set violations {}
+
+ # 1) Scan all player-data, rating-list, and name-fix test files
+ set testFiles [lsort -unique [concat \
+  [glob -nocomplain [file join $testDir test_app_player*.tcl]] \
+  [list [file join $testDir test_app_rating_lists.tcl] [file join $testDir test_app_name_fixes.tcl]]]]
+ foreach f $testFiles {
+  if {![file isfile $f] || ![file readable $f]} continue
+  set ch [open $f r]; set txt [read $ch]; close $ch
+  set hits [::m4names::privacyViolations $txt]
+  if {[llength $hits]} {
+   lappend violations [list [file tail $f] $hits]
+  }
+ }
+
+ # 2) Scan runtime reports, test logs, user-dir text/log artifacts, and in-memory log buffer
+ set logFiles [lsort -unique [concat \
+  [list [file join $testDir app_test_report.txt]] \
+  [expr {[info exists ::env(SCIDB_ERROR_LOG)] ? [list $::env(SCIDB_ERROR_LOG)] : {}}] \
+  [glob -nocomplain \
+   [file join $testDir tmp-app player-data *.log] \
+   [file join $testDir tmp-app player-data review test_*.log] \
+   [file join $testDir tmp-app player-data review probe_*.log] \
+   [file join $::scidb::dir::user *.log] \
+   [file join $::scidb::dir::user * *.log] \
+   [file join $::scidb::dir::user ratings *.txt] \
+   [file join $::scidb::dir::user ratings *.info]]]]
+ set strip [list $repoRoot]
+ if {[info exists ::env(HOME)] && [string match /tmp/* $::env(HOME)]} {
+  lappend strip $::env(HOME)
+ }
+ foreach f $logFiles {
+  if {![file isfile $f] || ![file readable $f]} continue
+  set ch [open $f r]; set txt [read $ch]; close $ch
+  set hits [::m4names::privacyViolations $txt $strip]
+  if {[llength $hits]} {
+   lappend violations [list [file tail $f] $hits]
+  }
+ }
+ if {[winfo exists .application.log.top.text]} {
+  set hits [::m4names::privacyViolations [.application.log.top.text get 1.0 end] $strip]
+  if {[llength $hits]} {
+   lappend violations [list app_log_widget $hits]
+  }
+ }
+
+ # 3) Canary check: prove the scanner rejects disallowed names, IDs, and home paths
+ set canary [::m4names::privacyViolations \
+  "[string cat Arth urton] [string cat 1503 014] [string cat /home/ sampleuser/.chesswiz]"]
+
+ list [expr {[llength $testFiles] >= 8}] [expr {[llength $canary] >= 3}] $violations
+} -result {1 1 {}}
 
 ::scidb::db::close $base
 file delete -force $::m4names::dir [::playerdata::Dir]
