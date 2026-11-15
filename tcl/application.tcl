@@ -729,6 +729,9 @@ proc FloatingWindows {} {
 	if {[winfo exists .online] && [wm state .online] eq "normal"} {
 		lappend windows .online
 	}
+	if {[winfo exists .mediaPicture] && [wm state .mediaPicture] eq "normal"} {
+		lappend windows .mediaPicture
+	}
 	if {[info exists Vars(twm)]} {
 		foreach twm $Vars(twm) {
 			if {![winfo exists $twm]} { continue }

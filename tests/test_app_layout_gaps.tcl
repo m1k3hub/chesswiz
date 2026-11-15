@@ -476,4 +476,129 @@ tcltest::test review4-gap002-monitor-unplug {a secondary monitor unplug is detec
 	::layoutGaps::settle 500
 } -result {1 1}
 
+# REVIEW4 GAP-003: every board-companion window in the Training and Media
+# menus must use the shared beside-board rule and the shared viewport.
+proc ::layoutGaps::companionState {dlg} {
+	if {![winfo exists $dlg]} { return {0 0 0} }
+	set area [winfo workarea $dlg]
+	if {![llength $area]} { set area {0 0 [winfo screenwidth $dlg] [winfo screenheight $dlg]} }
+	list [expr {[::layoutGaps::overlap [::layoutGaps::frame $dlg] [::layoutGaps::boardRect]] == 0} ] \
+		[::layoutGaps::inside [::layoutGaps::frame $dlg] $area] \
+		[winfo exists $dlg.__viewport.canvas.body]
+}
+
+tcltest::test review4-gap003-stream-beside-board {Training Live Broadcast stays clear of the board} -setup {
+	set saved [wm geometry .application]
+	wm geometry .application 1000x700+20+20
+	catch { destroy .stream }
+	::layoutGaps::settle 400
+} -body {
+	::stream::open .application
+	::scidb::test::wait::until {[winfo exists .stream] && [winfo ismapped .stream]}
+	::layoutGaps::settle 900
+	::layoutGaps::companionState .stream
+} -cleanup {
+	catch { destroy .stream }
+	wm geometry .application $saved
+	::layoutGaps::settle 400
+} -result {1 1 1}
+
+tcltest::test review4-gap003-td-beside-board {Tournament Director stays clear of the board and work area} -setup {
+	set saved [wm geometry .application]
+	wm geometry .application 1000x700+20+20
+	catch { ::td::ui::Close }
+	::layoutGaps::settle 400
+} -body {
+	::td::ui::Open {}
+	::scidb::test::wait::until {[winfo exists .application.tournamentDirector] \
+		&& [winfo ismapped .application.tournamentDirector]}
+	::layoutGaps::settle 900
+	::layoutGaps::companionState .application.tournamentDirector
+} -cleanup {
+	catch { ::td::ui::Close }
+	wm geometry .application $saved
+	::layoutGaps::settle 400
+} -result {1 1 1}
+
+tcltest::test review4-gap003-board3d-beside-board {the 3D viewer stays clear of the board and work area} -setup {
+	set saved [wm geometry .application]
+	wm geometry .application 1000x700+20+20
+	catch { ::board3d::closeViewer }
+	::layoutGaps::settle 400
+} -body {
+	set dlg [::board3d::openViewer .application]
+	::scidb::test::wait::until {[winfo exists $dlg] && [winfo ismapped $dlg]}
+	::layoutGaps::settle 900
+	list [expr {[::layoutGaps::overlap [::layoutGaps::frame $dlg] [::layoutGaps::boardRect]] == 0}] \
+		[::layoutGaps::inside [::layoutGaps::frame $dlg] [winfo workarea $dlg]]
+} -cleanup {
+	catch { ::board3d::closeViewer }
+	wm geometry .application $saved
+	::layoutGaps::settle 400
+} -result {1 1}
+
+tcltest::test review4-gap003-open-stream-beside-board {the Media menu Open stream dialog stays clear of the board} -setup {
+	set saved [wm geometry .application]
+	wm geometry .application 1000x700+20+20
+	catch { destroy .application.__mediastream__ }
+	::layoutGaps::settle 400
+} -body {
+	::application::media::OpenStream .application
+	set dlg .application.__mediastream__
+	::scidb::test::wait::until {[winfo exists $dlg] && [winfo ismapped $dlg]}
+	::layoutGaps::settle 900
+	lassign [::layoutGaps::companionState $dlg] clear inside
+	list $clear $inside
+} -cleanup {
+	catch { destroy .application.__mediastream__ }
+	wm geometry .application $saved
+	::layoutGaps::settle 400
+} -result {1 1}
+
+tcltest::test review4-gap003-picture-beside-board {the Media picture viewer stays clear of the board and is floating} -setup {
+	set saved [wm geometry .application]
+	wm geometry .application 1000x700+20+20
+	catch { destroy .mediaPicture }
+	catch { destroy .layoutGapsPicTree }
+	set img [file join [tcltest::temporaryDirectory] layout-gap003.png]
+	set photo [image create photo -width 8 -height 8]
+	$photo write $img -format png
+	image delete $photo
+	set tree .layoutGapsPicTree
+	ttk::treeview $tree
+	$tree insert {} end -id row1 -values [list Pictures Picture $img 0]
+	set ::layoutGaps::savedTree $::application::media::Priv(tree)
+	set ::application::media::Priv(tree) $tree
+	::layoutGaps::settle 400
+} -body {
+	::mediainset::Choose row1
+	::scidb::test::wait::until {[winfo exists .mediaPicture] && [winfo ismapped .mediaPicture]}
+	::layoutGaps::settle 900
+	lassign [::layoutGaps::companionState .mediaPicture] clear inside viewport
+	list $clear $inside [expr {".mediaPicture" in [::application::FloatingWindows]}]
+} -cleanup {
+	catch { destroy .mediaPicture }
+	catch { destroy .layoutGapsPicTree }
+	catch { set ::application::media::Priv(tree) $::layoutGaps::savedTree }
+	catch { file delete $img }
+	wm geometry .application $saved
+	::layoutGaps::settle 400
+} -result {1 1 1}
+
+tcltest::test review4-gap003-book-beside-board {the Opening Book editor has a viewport and stays clear of the board} -setup {
+	set saved [wm geometry .application]
+	wm geometry .application 1000x700+20+20
+	catch { ::book::Close }
+	::layoutGaps::settle 400
+} -body {
+	set dlg [::book::openEditor .application]
+	::scidb::test::wait::until {[winfo exists $dlg] && [winfo ismapped $dlg]}
+	::layoutGaps::settle 900
+	::layoutGaps::companionState $dlg
+} -cleanup {
+	catch { ::book::Close }
+	wm geometry .application $saved
+	::layoutGaps::settle 400
+} -result {1 1 1}
+
 tcltest::cleanupTests

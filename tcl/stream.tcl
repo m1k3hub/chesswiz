@@ -611,6 +611,7 @@ proc open {parent} {
 	toplevel $top -class ChesswizStream
 	wm title $top $mc::Title
 	wm transient $top [winfo toplevel $parent]
+	wm withdraw $top
 	set f [ttk::frame $top.f -padding 12]
 	pack $f -fill both -expand yes
 	ttk::label $f.explain -text $mc::Explain -wraplength 560 -justify left
@@ -670,6 +671,11 @@ proc open {parent} {
 	set Priv(window) $top
 	Refresh
 	ChatShow
+	set body [::util::place::playingBody $top]
+	pack forget $f
+	pack $f -in $body -fill both -expand yes
+	::util::place::besideBoard $top [winfo toplevel $parent]
+	wm deiconify $top
 	return $top
 }
 

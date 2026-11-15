@@ -1841,11 +1841,11 @@ proc ::board3d::openViewer {parent} {
 	}
 	::bind $dlg  <Escape>         [namespace code closeViewer]
 
-	# ::util::place only sets the position; force a size too.
-	lassign [::util::place $dlg -parent $parent -position center] px py
-	set sx [format "%+d" [expr {int($px)}]]
-	set sy [format "%+d" [expr {int($py)}]]
-	wm geometry $dlg "720x560${sx}${sy}"
+	# Keep the viewer's size, but let the shared helper place it clear of the
+	# board and clamp it into the work area (GAP-003).
+	wm geometry $dlg 720x560
+	::util::place::besideBoard $dlg [winfo toplevel $parent]
+	::util::place::fitWindow $dlg
 	wm deiconify $dlg
 	focus $dlg
 	after idle [namespace code [list InitialDraw $canv]]

@@ -53,6 +53,7 @@ proc ::td::ui::Open {path {tab event}} {
 	toplevel $Dialog -class Scidb
 	wm title $Dialog "Tournament Director"
 	wm transient $Dialog .application
+	wm withdraw $Dialog
 	wm protocol $Dialog WM_DELETE_WINDOW ::td::ui::Close
 	set Notebook [ttk::notebook $Dialog.tabs]
 	pack $Notebook -fill both -expand yes -padx 6 -pady 6
@@ -68,6 +69,11 @@ proc ::td::ui::Open {path {tab event}} {
 	Select $tab
 	Refresh
 	wm geometry $Dialog 1100x720
+	set body [::util::place::playingBody $Dialog]
+	pack forget $Notebook
+	pack $Notebook -in $body -fill both -expand yes -padx 6 -pady 6
+	::util::place::besideBoard $Dialog .application
+	::util::place::fitWindow $Dialog
 	wm deiconify $Dialog
 	return $Dialog
 }
