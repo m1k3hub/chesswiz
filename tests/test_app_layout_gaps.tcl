@@ -421,4 +421,28 @@ tcltest::test review4-gap004-online-reopen-clamped {reopening online fits a shru
 	::layoutGaps::settle 500
 } -result {1}
 
+# REVIEW4 GAP-003: the Opening Preparation trainer is a playing dialog: it
+# must share the board-avoiding helper and the scroll fallback, not open a
+# 1,937 px unwrapping control row over the board.
+tcltest::test review4-gap003-openingprep-beside-board {the Opening Preparation trainer stays clear of the board} -setup {
+	set saved [wm geometry .application]
+	set dlg [::application::database::OpeningPrepDialogName test.pgn Normal]
+	catch { destroy $dlg }
+	.application.nb select .application.nb.board
+	wm geometry .application 1000x700+20+20
+	::layoutGaps::settle 500
+} -body {
+	catch { ::application::database::OpenOpeningPrepReport .application test.pgn Normal }
+	::scidb::test::wait::until {[winfo exists $dlg] && [winfo ismapped $dlg]} 3000
+	::layoutGaps::settle 900
+	set overlap [::layoutGaps::overlap [::layoutGaps::frame $dlg] [::layoutGaps::boardRect]]
+	set viewport [expr {[winfo exists $dlg.__viewport] && [winfo ismapped $dlg.__viewport]}]
+	set width [::layoutGaps::frame $dlg]
+	list [expr {$overlap == 0}] $viewport [expr {[lindex $width 2] <= 1000}]
+} -cleanup {
+	catch { destroy $dlg }
+	wm geometry .application $saved
+	::layoutGaps::settle 400
+} -result {1 1 1}
+
 tcltest::cleanupTests
