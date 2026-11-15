@@ -576,6 +576,11 @@ proc ::fix::noop {args} {return {}}
  update idletasks
  set back [list [set ::application::ask::mc::Placeholder] \
   [$frame.mode cget -text] [$frame.alias cget -text]]
+ set savedAssistant [set ::application::ask::mc::AskAssistant]
+ unset ::application::ask::mc::AskAssistant
+ ::application::ask::ResetMC
+ set fallback [set ::application::ask::mc::AskAssistant]
+ set ::application::ask::mc::AskAssistant $savedAssistant
  list \
   [expr {[lindex $en 0] eq {Type a command (Ctrl+K)}}] \
   [expr {[lindex $en 1] eq {Ask a question}}] \
@@ -586,7 +591,8 @@ proc ::fix::noop {args} {return {}}
   [expr {[lindex $dlg 1] eq [lindex $dlgDe 1]}] \
   [expr {[lindex $dlg 2] eq [lindex $dlgDe 2]}] \
   [expr {[lindex $dlg 3] eq [lindex $dlgDe 3]}] \
-  [expr {$back eq $en}]
+  [expr {$back eq $en}] \
+  [expr {$fallback eq {Ask the assistant}}]
 } -cleanup {
  catch { destroy .application.commandAliases }
  catch { ::menu::SwitchLanguage English }
@@ -596,7 +602,31 @@ proc ::fix::noop {args} {return {}}
  }
  set ::application::ask::Query {}
  ::application::ask::HideList
-} -result {1 1 1 1 1 1 1 1 1 1}
+} -result {1 1 1 1 1 1 1 1 1 1 1}
+
+::tcltest::test F-13-placeholder-languages {every language placeholder invites a command, not prose} -body {
+ set ::fix::savedShare2 $::scidb::dir::share
+ set wt [file normalize [file join [file dirname [file normalize [info script]]] .. tcl]]
+ if {[file isdirectory [file join $wt lang]]} { set ::scidb::dir::share $wt }
+ set bad {}
+ foreach lang {Español Italiano Magyar Svenska} {
+  ::menu::SwitchLanguage $lang
+  update idletasks
+  set text [set ::application::ask::mc::Placeholder]
+  if {[string first {Ctrl+K} $text] < 0 || [string match {*Chesswiz*} $text]} {
+   lappend bad $lang
+  }
+ }
+ ::menu::SwitchLanguage English
+ update idletasks
+ list $bad
+} -cleanup {
+ catch { ::menu::SwitchLanguage English }
+ if {[info exists ::fix::savedShare2]} {
+  set ::scidb::dir::share $::fix::savedShare2
+  unset ::fix::savedShare2
+ }
+} -result {{}}
 
 
 # ----------------------------------------------------------------------

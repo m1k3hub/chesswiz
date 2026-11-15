@@ -1061,7 +1061,7 @@
 ::application::tree::mc::T_FrequentPlayer					"Mest frekvent spelare"
 
 ### application::ask ###################################################
-::application::ask::mc::Placeholder		"Fråga eller säg åt Chesswiz vad som ska göras (Ctrl+K)"
+::application::ask::mc::Placeholder		"Skriv ett kommando (Ctrl+K)"
 ::application::ask::mc::AskAssistant		"Fråga assistenten"
 ::application::ask::mc::Send				"Skicka till assistenten"
 ::application::ask::mc::Mic				"Tala"

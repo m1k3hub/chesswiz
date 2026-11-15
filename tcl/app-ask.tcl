@@ -48,7 +48,7 @@ namespace eval ask {
 
 namespace eval mc {
 set Placeholder		"Type a command (Ctrl+K)"
-set AskAssistant		"Ask a question"
+set AskAssistant		"Ask the assistant"
 set AskQuestion		"Ask a question"
 set Commands		"Commands"
 set Aliases			"Aliases"
