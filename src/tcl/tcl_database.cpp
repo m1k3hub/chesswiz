@@ -6556,6 +6556,7 @@ cmdRenamePlayers(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			Tcl_NewStringObj(renames[i].name.c_str(), -1) };
 		Tcl_ListObjAppendElement(ti, applied, Tcl_NewListObj(3, row));
 		base.rename(entry, renames[i].name);
+		db.markPlayerGamesChanged(entry);
 	}
 
 	if (!renames.empty())

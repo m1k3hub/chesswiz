@@ -846,7 +846,7 @@ proc ::playerdata::Mark {tick} {
 # changed player rows and game counts. No event loop runs between check/apply.
 namespace eval ::playerdata { variable NameEpoch 0 }
 proc ::playerdata::InvalidateNames {args} { incr ::playerdata::NameEpoch }
-foreach command {open close clear renamePlayers import save compact linkPlayers linkPlayer set update copy} {
+foreach command {open close clear renamePlayers import save savePGN compact linkPlayers linkPlayer set update copy} {
 	set command ::scidb::db::$command
 	if {[llength [info commands $command]]} {
 		trace add execution $command enter ::playerdata::InvalidateNames

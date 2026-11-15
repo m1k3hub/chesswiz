@@ -28,7 +28,7 @@ namespace eval ::m4names {
   ::scidb::db::close $pgn
   return $base
  }
- proc names {base} {lmap row [::scidb::db::playerLinks $base Normal] {lindex $row 0}}
+ proc names {base {variant Normal}} {lmap row [::scidb::db::playerLinks $base $variant] {lindex $row 0}}
  proc rename {base old new} {
   ::scidb::db::renamePlayers $base Normal [list [::playerdata::NameIndex $base Normal $old] $old $new]
  }
@@ -382,10 +382,119 @@ tcltest::test VAL-PD5-009-010-ui {Partial failure reports applied and skipped ac
   [expr {{Alpha, C} in $finalNames && {Beta, C} in $finalNames && {Beta, Canonical} in $finalNames}]
 } -result {1 {{Normal {Alpha, Canonical} {Alpha, C}}} 1 1}
 
+tcltest::test VAL-PD5-multi-variant {Menu command menu.db.maintenance.fix_names previews, applies, reverts, and saves across multiple variants} -body {
+ set mvPgn [file join $::m4names::dir multivar.pgn]
+ set f [open $mvPgn w]
+ puts $f {[Event "NormalFixture"]
+[Site "Fixture"]
+[Date "2026.02.01"]
+[Round "1"]
+[White "Alpha, C"]
+[Black "Unlinked, Mystery"]
+[WhiteElo "2510"]
+[Result "1-0"]
+
+1. e4 e5 1-0
+
+[Event "ThreeCheckFixture"]
+[Site "Fixture"]
+[Date "2026.02.02"]
+[Round "1"]
+[Variant "ThreeCheck"]
+[White "Beta, C"]
+[Black "Unlinked, Mystery"]
+[WhiteElo "2410"]
+[Result "1-0"]
+
+1. e4 e5 2. Qh5 Nc6 3. Qxf7+ Kd8 1-0}
+ close $f
+
+ set opened [::application::database::openBase .application $mvPgn 0 -readonly 0]
+ update
+ ::playerdata::link $mvPgn
+
+ rename ::dialog::question ::m4names::realQuestion
+ rename ::dialog::info ::m4names::realInfo
+ proc ::dialog::info {args} {}
+
+ # 1) Trigger menu.db.maintenance.fix_names directly and apply across Normal + ThreeCheck
+ set ::m4names::mvVariants {}
+ proc ::dialog::question {args} {
+  if {[dict exists $args -embed]} {
+   set w [toplevel .m4_mv_preview]
+   uplevel #0 [dict get $args -embed] [list $w TkDefaultFont TkDefaultFont]
+   foreach item [$w.box.tree children {}] {
+    lappend ::m4names::mvVariants [lindex [$w.box.tree item $item -values] 5]
+   }
+   destroy $w
+  }
+  return yes
+ }
+ ::action::run menu.db.maintenance.fix_names
+ set afterApplyNormal [::m4names::names $mvPgn Normal]
+ set afterApplyThree [::m4names::names $mvPgn ThreeCheck]
+ set dirtyAfterApply [::scidb::db::get unsaved? $mvPgn]
+
+ # 2) Trigger menu.db.maintenance.fix_names again and click Undo button to revert both variants
+ proc ::dialog::question {args} {
+  if {[dict exists $args -addbuttons]} {
+   set dlg [toplevel .m4_mv_undo]
+   ttk::frame $dlg.top
+   ttk::frame $dlg.top.btns
+   uplevel #0 [dict get $args -addbuttons] [list $dlg.top.btns]
+   $dlg.top.btns.undo invoke
+   set reply $::dialog::Reply($dlg)
+   unset -nocomplain ::dialog::Reply($dlg)
+   destroy $dlg
+   return $reply
+  }
+  return no
+ }
+ ::action::run menu.db.maintenance.fix_names
+ set afterUndoNormal [::m4names::names $mvPgn Normal]
+ set afterUndoThree [::m4names::names $mvPgn ThreeCheck]
+
+ # 3) Re-apply via menu command, save multi-variant PGN, close, and reopen to verify persistence
+ proc ::dialog::question {args} { return yes }
+ ::action::run menu.db.maintenance.fix_names
+ set saveState [::scidb::db::savePGN $mvPgn utf-8 [::export::getPgnFlags] ::m4names::nop {}]
+ set dirtyAfterSave [::scidb::db::get unsaved? $mvPgn]
+
+ catch { $::application::database::Vars(switcher) remove $mvPgn }
+ ::scidb::db::close $mvPgn
+ ::scidb::db::open $mvPgn ::m4names::nop {} ::m4names::nop {}
+ set reopenedNormal [::m4names::names $mvPgn Normal]
+ set reopenedThree [::m4names::names $mvPgn ThreeCheck]
+ ::scidb::db::close $mvPgn
+
+ list \
+  $opened \
+  [lsort $::m4names::mvVariants] \
+  [expr {{Alpha, Canonical} in $afterApplyNormal && {Beta, Canonical} in $afterApplyThree}] \
+  $dirtyAfterApply \
+  [expr {{Alpha, C} in $afterUndoNormal && {Beta, C} in $afterUndoThree}] \
+  $saveState \
+  $dirtyAfterSave \
+  [expr {{Alpha, Canonical} in $reopenedNormal}] \
+  [expr {{Beta, Canonical} in $reopenedThree}]
+} -cleanup {
+ if {[llength [info commands ::m4names::realQuestion]]} {
+  catch { rename ::dialog::question {} }
+  rename ::m4names::realQuestion ::dialog::question
+ }
+ if {[llength [info commands ::m4names::realInfo]]} {
+  catch { rename ::dialog::info {} }
+  rename ::m4names::realInfo ::dialog::info
+ }
+ catch { $::application::database::Vars(switcher) remove $mvPgn }
+ catch { ::scidb::db::close $mvPgn }
+} -result {1 {Normal ThreeCheck} 1 1 1 Updated 0 1 1}
+
 tcltest::test VAL-PD5-016 {Startup, list updates, and linking never invoke renamePlayers automatically} -body {
  set uibase [::m4names::openUiBase p16]
  set ::m4names::renameCalls 0
- trace add execution ::scidb::db::renamePlayers enter {apply {args {incr ::m4names::renameCalls}}}
+ set traceCb {apply {args {incr ::m4names::renameCalls}}}
+ trace add execution ::scidb::db::renamePlayers enter $traceCb
  ::scidb::db::linkPlayers $uibase Normal
  ::playerdata::linkOpen
  set ecfIn $::m4names::dir/ecf-p16.csv
@@ -394,10 +503,64 @@ tcltest::test VAL-PD5-016 {Startup, list updates, and linking never invoke renam
 499820A,"Fixture, NoAutoRename",2000}
  close $f
  ::playerdata::installList ecf $ecfIn
- file delete -force [::playerdata::Dir]
  ::scidb::db::close $uibase
- set ::m4names::renameCalls
-} -result 0
+
+ # Real isolated application startup with installed rating list + startup database
+ set startupPgn $::m4names::dir/startup-p16.pgn
+ set f [open $startupPgn w]
+ puts $f {[Event "StartupCheck"]
+[Site "Fixture"]
+[Date "2026.02.03"]
+[Round "1"]
+[White "Fixture, N"]
+[Black "Opponent, Plain"]
+[WhiteElo "2000"]
+[Result "1-0"]
+
+1. d4 d5 1-0}
+ close $f
+ set ch [open $startupPgn rb]; set rawBefore [read $ch]; close $ch
+
+ set probe $::m4names::dir/startup-probe.tcl
+ set f [open $probe w]
+ puts $f [format {
+  set pgn %s
+  set argv [list --single-process $pgn]
+  set argc 2
+  set ::env(SCIDB_AI_TRIAGE) 0
+  set ::env(SCIDB_AI_CLASSIFIER) off
+  set ::probeRenameCalls 0
+  source -encoding utf-8 [file join [pwd] tcl chesswiz]
+  set ::scidb::dir::setup 0
+  trace add execution ::scidb::db::renamePlayers enter {apply {args {incr ::probeRenameCalls}}}
+  source [file join [pwd] tests app_wait.tcl]
+  ::scidb::test::wait::ready
+  if {![::scidb::db::get open? $pgn]} {
+   ::application::database::openBase .application $pgn 0 -readonly 0
+  }
+  update
+  ::playerdata::link $pgn
+  set links [::scidb::db::playerLinks $pgn Normal]
+  set row [lsearch -inline -index 0 $links {Fixture, N}]
+  set unsaved [::scidb::db::get unsaved? $pgn]
+  catch { $::application::database::Vars(switcher) remove $pgn }
+  catch { ::scidb::db::close $pgn }
+  puts "STARTUP_PROBE:$::probeRenameCalls:[expr {$row ne ""}]:[lindex $row 2]:$unsaved"
+  catch { destroy .application }
+  catch { destroy . }
+  exit 0
+ } [list $startupPgn]]
+ close $f
+
+ set out [exec src/tkchesswiz $probe]
+ set startupRes "missing"
+ regexp {STARTUP_PROBE:([^\r\n]+)} $out -> startupRes
+ set ch [open $startupPgn rb]; set rawAfter [read $ch]; close $ch
+
+ trace remove execution ::scidb::db::renamePlayers enter $traceCb
+ file delete -force $probe $startupPgn [::playerdata::Dir] [file join $::scidb::dir::user cache]
+ list $::m4names::renameCalls $startupRes [expr {$rawBefore eq $rawAfter}]
+} -result {0 0:1:1:0 1}
 
 proc ::m4names::privacyViolations {txt {stripPaths {}}} {
  foreach p $stripPaths {

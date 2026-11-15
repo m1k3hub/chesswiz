@@ -512,6 +512,28 @@ Database::resetChangedStatus()
 
 
 void
+Database::markPlayerGamesChanged(NamebasePlayer const* player)
+{
+	if (!m_memoryOnly || !player)
+		return;
+
+	M_ASSERT(m_statistic);
+
+	for (unsigned i = 0; i < m_initialSize; ++i)
+	{
+		GameInfo& info = m_gameInfoList[i];
+
+		if (	!info.isChanged()
+			&& (info.playerEntry(color::White) == player || info.playerEntry(color::Black) == player))
+		{
+			++m_statistic->counter.changed;
+			info.setChanged(true);
+		}
+	}
+}
+
+
+void
 Database::resetInitialSize(unsigned size)
 {
 	M_REQUIRE(size <= countGames());

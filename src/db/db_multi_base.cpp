@@ -363,8 +363,14 @@ MultiBase::setup(FileOffsets* fileOffsets)
 		m_fileOffsets = fileOffsets;
 	}
 
-	m_leader->setReadonly(isReadonly);
-	m_leader->setWritable(m_fileOffsets);
+	for (unsigned v = 0; v < variant::NumberOfVariants; ++v)
+	{
+		if (m_bases[v])
+		{
+			m_bases[v]->setWritable(m_fileOffsets);
+			m_bases[v]->setReadonly(isReadonly);
+		}
+	}
 }
 
 
@@ -516,11 +522,18 @@ MultiBase::setReadonly(bool flag)
 		{
 			for (unsigned v = 0; v < variant::NumberOfVariants; ++v)
 			{
-				if (m_leader != m_bases[v] && m_bases[v] && m_bases[v]->isEmpty())
+				if (m_leader != m_bases[v] && m_bases[v])
 				{
-					m_bases[v]->close();
-					delete m_bases[v];
-					m_bases[v] = nullptr;
+					if (m_bases[v]->isEmpty())
+					{
+						m_bases[v]->close();
+						delete m_bases[v];
+						m_bases[v] = nullptr;
+					}
+					else
+					{
+						m_bases[v]->setReadonly(true);
+					}
 				}
 			}
 		}
@@ -536,6 +549,9 @@ MultiBase::setReadonly(bool flag)
 			{
 				if (!m_bases[v])
 					m_bases[v] = new Database(name, encoding, storage, variant::fromIndex(v), type);
+
+				m_bases[v]->setWritable(m_fileOffsets);
+				m_bases[v]->setReadonly(false);
 			}
 		}
 	}
