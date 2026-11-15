@@ -462,6 +462,27 @@ proc ::td::model::Apply {command info domain} {
 		}
 		withdraw { return [Withdraw $state $domain] }
 		ruling { return [::td::arbiter::Record $state $domain] }
+		prizes {
+			set rows [::td::score::Compute $state]
+			set payouts [::td::score::ComputePrizes $state $rows $domain]
+			set paidPlayer [dg $domain pay_player {}]
+			if {$paidPlayer ne ""} {
+				set pid [FindPlayer $state $paidPlayer]
+				set updated {}
+				foreach entry $payouts {
+					if {[dict get $entry player] eq $pid} {
+						dict set entry paid 1
+						dict set entry paid_at [clock seconds]
+						dict set entry receipt [dg $domain receipt "rcpt-$pid-[clock seconds]"]
+					}
+					lappend updated $entry
+				}
+				set payouts $updated
+			}
+			dict set state prizes [dict create system [dg $domain system hort] rounding [dg $domain rounding cent] \
+				one_prize_per_player [dg $domain one_prize_per_player 1] payouts $payouts updated [clock seconds]]
+			return [list $state [dict create payouts $payouts] $target $history]
+		}
 		bye {
 			set id [FindPlayer $state [dg $domain player {}]]
 			set category [dg $domain category requested-bye]

@@ -73,7 +73,9 @@ proc ::td::swiss::Parse {text eligible} {
     if {![string is integer -strict $count] || $count < 1 || [llength $lines] != $count+1} { error "invalid bbpPairings output: $text" }
     set seen {}; set pairs {}
     foreach line [lrange $lines 1 end] {
-        if {![regexp {^\s*([0-9]+)\s+([0-9]+)\s*$} $line -> w b]} { error "invalid helper pairing" }
+        if {![regexp {^\s*([0-9]+)\s+([0-9]+)\s*$} $line -> wRaw bRaw]} { error "invalid helper pairing" }
+        set w [scan $wRaw %d]
+        set b [scan $bRaw %d]
         foreach n [list $w $b] {
             if {$n == 0} { continue }
             if {$n ni $eligible || $n in $seen} { error "helper returned an unknown or duplicate player" }
@@ -90,13 +92,19 @@ proc ::td::swiss::Pair {state round} {
     foreach player [dict get $state players] {
         set id [dict get $player id]; set no [dict get $player number]
         dict set ids $no $id
-        if {[::td::model::dg $player withdrawn 0]} { continue }
+        set wRound [::td::model::dg $player withdrawn 0]
+        if {$wRound && $round >= $wRound} { continue }
+        if {$round < [::td::model::dg $player entry_round 1]} { continue }
         set excluded 0
-        foreach p [::td::model::Pairings $state $round] { if {[dict get $p white] eq $id || [dict get $p black] eq $id} { set excluded 1 } }
+        foreach p [::td::model::Pairings $state $round] {
+            if {([dict get $p white] eq $id || [dict get $p black] eq $id) && [dict get $p black] eq "" && [::td::model::dg $p category {}] ne "pairing-bye"} {
+                set excluded 1
+            }
+        }
         if {!$excluded} { lappend eligible $no }
     }
     if {![llength $eligible]} { return {} }
-    set text [::td::trf::Write $state trf26 [expr {$round-1}] $round]
+    set text [::td::trf::Write $state trf16 [expr {$round-1}] $round]
     set pairs [Parse [Run $text] $eligible]
     set out {}; set board 0
     foreach pair $pairs {
@@ -194,7 +202,7 @@ proc ::td::swiss::CheckRound {state {round 0}} {
     set bbpReport {}
     set bbpDiscrepancy 0
     if {[dict get $state system] eq "swiss" && ![llength [lsearch -all -inline -glob [lmap v $violations {dict get $v code}] C4-*]]} {
-        if {![catch {::td::trf::Write $state trf26 $round 0 1} trf] && ![catch {Run $trf -c} out]} {
+        if {![catch {::td::trf::Write $state trf16 $round 0 1} trf] && ![catch {Run $trf -c} out]} {
             set bbpReport $out
             if {[string match "*Checker pairings*" $out] || [string match "*No valid pairing exists*" $out]} {
                 set bbpDiscrepancy 1

@@ -21,7 +21,7 @@ proc ::td::trf::Code {p id} {
 }
 # through=0 exports all entered rounds; pairingRound adds exclusions for that round.
 # checkPending=1 encodes pending non-bye games as '=' so bbpPairings -c can check the round.
-proc ::td::trf::Write {state {format trf26} {through 0} {pairingRound 0} {checkPending 0}} {
+proc ::td::trf::Write {state {format trf26} {through -1} {pairingRound 0} {checkPending 0}} {
     if {$format ni {trf16 trf26}} { error "expected trf16 or trf26" }
     set lines [list "012 [Field [dict get $state name] 80]"]
     foreach {code key} {022 site 032 federation 042 start_date 052 end_date 102 chief_arbiter} {
@@ -32,16 +32,17 @@ proc ::td::trf::Write {state {format trf26} {through 0} {pairingRound 0} {checkP
     if {$format eq "trf26"} { lappend lines "142 $rounds" "152 [string toupper [string index $colour 0]]" } else { lappend lines "XXR $rounds" "XXC ${colour}1" }
     set last 0
     foreach p [dict get $state pairings] { set last [expr {max($last,[dict get $p round])}] }
-    if {$through} { set last $through }
+    if {$through >= 0} { set last $through }
     set numbers {}
     foreach player [dict get $state players] { dict set numbers [dict get $player id] [dict get $player number] }
     set rank 0
+    set limit [expr {$pairingRound > 0 ? $pairingRound : $last}]
     foreach player [dict get $state players] {
         set id [dict get $player id]
         set n [dict get $player number]
         if {$n < 1 || $n > 9999} { error "TRF pairing number out of range" }
         set matches {}; set score2 0
-        for {set r 1} {$r <= max($last,$pairingRound)} {incr r} {
+        for {set r 1} {$r <= $limit} {incr r} {
             set found {}
             foreach p [dict get $state pairings] {
                 if {[dict get $p round] == $r && ($id eq [dict get $p white] || $id eq [dict get $p black])} {
@@ -52,7 +53,14 @@ proc ::td::trf::Write {state {format trf26} {through 0} {pairingRound 0} {checkP
             if {$found eq ""} {
                 set excluded [expr {[dg $player withdrawn 0] && $r >= [dg $player withdrawn 0]}]
                 set late [expr {$r < [dg $player entry_round 1]}]
-                if {$excluded || $late} { append matches "  0000 - Z" } else { append matches "          " }
+                if {$excluded || $late} {
+                    append matches "  0000 - Z"
+                } elseif {$r <= $last} {
+                    append matches "          "
+                }
+                continue
+            }
+            if {$r > $last && ([dict get $found black] ne "" || [dg $found category {}] eq "pairing-bye")} {
                 continue
             }
             set code [Code $found $id]
@@ -62,7 +70,9 @@ proc ::td::trf::Write {state {format trf26} {through 0} {pairingRound 0} {checkP
             set c [expr {$other eq "" ? "-" : $id eq [dict get $found white] ? "w" : "b"}]
             append matches [format "  %04d %s %s" $no $c $code]
             # FIDE report preserves played results annulled only for RR standings.
-            if {$code in {1 + F U}} { incr score2 2 } elseif {$code in {= H}} { incr score2 }
+            if {$r <= $last} {
+                if {$code in {1 + F U}} { incr score2 2 } elseif {$code in {= H}} { incr score2 }
+            }
         }
         set rating [dg $player rating 0]; if {$rating eq ""} { set rating 0 }
         set title [string tolower [dg $player title]]

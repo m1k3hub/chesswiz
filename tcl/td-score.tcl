@@ -176,10 +176,20 @@ proc ::td::score::CutLeast {entries field {vurException 0}} {
 		incr i
 	}
 	if {$vurException} {
+		set vurIndex -1
+		set vurChosen {}
 		set i 0
 		foreach entry $entries {
-			if {[dict get $entry vur] && [Cmp [dict get $entry $field] [dict get $chosen $field]] < 0} { set chosen $entry; set index $i }
+			if {[dict get $entry vur]} {
+				if {$vurIndex < 0 || [Cmp [dict get $entry $field] [dict get $vurChosen $field]] < 0} {
+					set vurChosen $entry
+					set vurIndex $i
+				}
+			}
 			incr i
+		}
+		if {$vurIndex >= 0} {
+			set index $vurIndex
 		}
 	}
 	return [lreplace $entries $index $index]
@@ -536,6 +546,77 @@ proc ::td::score::CrosstableHTML {state rows} {
 		append html "<h3>[Escape [dict get $row name]]</h3><pre>[Escape [StandingsText [list $row]]]</pre>"
 	}
 	return $html
+}
+
+proc ::td::score::ComputePrizes {state rows domain} {
+	set prizes [dg $domain prizes {1000 500 250}]
+	set system [dg $domain system hort]
+	set rounding [dg $domain rounding cent]
+	set onePerPlayer [dg $domain one_prize_per_player 1]
+	if {$system ni {hort split indivisible}} { error "prize system must be hort, split or indivisible" }
+	if {$rounding ni {exact cent integer}} { error "prize rounding must be exact, cent or integer" }
+	set eligibleRows {}
+	foreach row $rows {
+		set p [::td::model::Player $state [dict get $row id]]
+		if {[dg $p withdrawn 0]} { continue }
+		lappend eligibleRows $row
+	}
+	set groups {}
+	foreach row $eligibleRows {
+		set s [list [dict get $row score n] [dict get $row score d]]
+		set found 0
+		for {set i 0} {$i < [llength $groups]} {incr i} {
+			if {[Cmp $s [lindex $groups $i 0]] == 0} {
+				set g [lindex $groups $i 1]
+				lappend g $row
+				lset groups $i 1 $g
+				set found 1
+				break
+			}
+		}
+		if {!$found} { lappend groups [list $s [list $row]] }
+	}
+	set payouts {}
+	set awarded [dict create]
+	set pIdx 0
+	foreach group $groups {
+		if {$pIdx >= [llength $prizes]} { break }
+		set gRows [lindex $group 1]
+		set k [llength $gRows]
+		set slice [lrange $prizes $pIdx [expr {$pIdx + $k - 1}]]
+		while {[llength $slice] < $k} { lappend slice 0 }
+		incr pIdx $k
+		set pool {0 1}
+		foreach amt $slice { set pool [Add $pool [Rat [expr {int(round(double($amt)*100))}] 100]] }
+		for {set j 0} {$j < $k} {incr j} {
+			set row [lindex $gRows $j]
+			set pid [dict get $row id]
+			if {$onePerPlayer && [dict exists $awarded $pid]} { continue }
+			set rankPrize [Rat [expr {int(round(double([lindex $slice $j])*100))}] 100]
+			if {$k == 1 || $system eq "indivisible"} {
+				set share $rankPrize
+			} elseif {$system eq "split"} {
+				set share [Div $pool [Rat $k 1]]
+			} else {
+				# Hort system: 50% by tiebreak rank + 50% shared equally among tied group
+				set halfRank [Mul $rankPrize {1 2}]
+				set halfPool [Div [Mul $pool {1 2}] [Rat $k 1]]
+				set share [Add $halfRank $halfPool]
+			}
+			lassign $share sn sd
+			if {$rounding eq "integer"} {
+				set amountText [format "%d" [expr {int(round(double($sn)/$sd))}]]
+			} elseif {$rounding eq "cent"} {
+				set amountText [format "%.2f" [expr {round(double($sn)*100.0/$sd)/100.0}]]
+			} else {
+				set amountText [Text $share]
+			}
+			dict set awarded $pid 1
+			lappend payouts [dict create player $pid name [dict get $row name] rank [dict get $row rank] score [dict get $row score text] \
+				tied_count $k system $system rounding $rounding exact_n $sn exact_d $sd amount $amountText paid 0]
+		}
+	}
+	return $payouts
 }
 
 # vi:set ts=3 sw=3:
