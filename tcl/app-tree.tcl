@@ -1917,7 +1917,7 @@ proc ToggleNoveltyHighlighting {table} {
 
 namespace eval openingreport {
 namespace eval mc {
-set Title								"Opening Report"
+set Title								"Opening Preparation Report"
 set Generating							"Generating opening report..."
 set NoTreeData							"No tree data available. Ensure a reference database is set."
 set SummaryTotal						"Total Games"

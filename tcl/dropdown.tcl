@@ -2935,11 +2935,12 @@ proc ::menu::Do {id} {
 proc ::menu::DbProperties {} {
 	set base [CurrentBase]
 	if {$base eq ""} { return }
-	catch {
-		set switcher $::application::database::Vars(switcher)
-		$switcher show $base
+	set switcher $::application::database::Vars(switcher)
+	set dlg [$switcher show $base]
+	if {![winfo exists $dlg] || ![winfo ismapped $dlg]} {
+		return -code error "the properties window did not open"
 	}
-	return
+	return "the properties window of [::util::databaseName $base no] is open"
 }
 
 # The board header uses checkbuttons, which change the variable before

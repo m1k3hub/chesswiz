@@ -1588,7 +1588,10 @@ proc Properties {w id popup} {
 		set dlg $canv.properties
 	} else {
 		set dlg $canv.prop_[regsub -all {[^[:alnum:]]} $file _]
-		if {[winfo exists $dlg]} { return [::widget::dialogRaise $dlg] }
+		if {[winfo exists $dlg]} {
+			::widget::dialogRaise $dlg
+			return $dlg
+		}
 	}
 
 	if {$popup} {
@@ -1757,9 +1760,12 @@ proc Properties {w id popup} {
 		$dlg.close configure -command [list destroy $dlg]
 		wm protocol $dlg WM_DELETE_WINDOW [list destroy $dlg]
 		wm withdraw $dlg
-		::util::place $dlg -parent $canv -position center
+		# The switcher's content is a canvas, not a window manager toplevel;
+		# place needs the enclosing toplevel for the work area and centring.
+		::util::place $dlg -parent [winfo toplevel $canv] -position center
 		wm deiconify $dlg
 	}
+	return $dlg
 }
 
 
