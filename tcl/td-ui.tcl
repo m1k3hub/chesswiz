@@ -194,8 +194,14 @@ proc ::td::ui::BuildResults {f} {
 	variable Fields
 	MakeTree $f {id round white black result category}
 	ttk::frame $f.edit; pack $f.edit -fill x
-	ttk::combobox $f.edit.result -state readonly -values {1-0 0-1 1/2-1/2 0-0} -textvariable ::td::ui::Fields(result); set Fields(result) 1/2-1/2
-	ttk::combobox $f.edit.category -state readonly -values {played forfeit double-forfeit} -textvariable ::td::ui::Fields(category); set Fields(category) played
+	ttk::combobox $f.edit.result -state readonly -values {1-0 0-1 1/2-1/2 0-0 *} -textvariable ::td::ui::Fields(result); set Fields(result) 1/2-1/2
+	ttk::combobox $f.edit.category -state readonly -values {played forfeit double-forfeit adjourned} -textvariable ::td::ui::Fields(category); set Fields(category) played
+	ttk::entry $f.edit.signed -textvariable ::td::ui::Fields(signed_by)
+    ttk::entry $f.edit.reason -textvariable ::td::ui::Fields(result_reason)
+    set Fields(signed_by) {}; set Fields(result_reason) {}
+    ttk::label $f.edit.signedlabel -text "Signed by"
+    ttk::label $f.edit.reasonlabel -text "Correction reason"
+    pack $f.edit.signedlabel $f.edit.signed $f.edit.reasonlabel $f.edit.reason -side left
 	ttk::button $f.edit.enter -text "Enter result" -command ::td::ui::EnterResult
 	ttk::button $f.edit.correct -text "Correct result" -command ::td::ui::CorrectResult
 	pack $f.edit.result -side left; pack $f.edit.category -side left; pack $f.edit.enter -side left; pack $f.edit.correct -side left
@@ -206,7 +212,7 @@ proc ::td::ui::ResultCommand {id} {
 	set pairing [Selected $Notebook.results.tree]
 	set result $Fields(result)
 	if {$Fields(category) eq "double-forfeit"} { set result 0-0 }
-	Mutate $id [dict create pairing $pairing result $result category $Fields(category)]
+	Mutate $id [dict create pairing $pairing result $result category $Fields(category) signed_by $Fields(signed_by) reason $Fields(result_reason)]
 }
 proc ::td::ui::EnterResult {} { ResultCommand td.enter_result }
 proc ::td::ui::CorrectResult {} { ResultCommand td.correct_result }

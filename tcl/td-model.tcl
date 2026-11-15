@@ -120,20 +120,32 @@ proc ::td::model::Enter {state domain correct} {
 	if {!$correct && [dg $p status pending] eq "complete"} { error "result already exists; use correct_result" }
 	if {$correct && [dg $p status pending] ne "complete"} { error "only a completed result can be corrected" }
 	set result [dg $domain result *]
-	if {$result ni {1-0 0-1 1/2-1/2 0-0}} { error "invalid result '$result'" }
+	if {$result ni {1-0 0-1 1/2-1/2 0-0 *}} { error "invalid result '$result'" }
 	set category [dg $domain category played]
-	if {$category ni {played forfeit forfeit-loss double-forfeit}} { error "invalid manual result category '$category'" }
-	if {$category eq "double-forfeit"} { set result 0-0 }
+	if {$category ni {played forfeit forfeit-loss double-forfeit adjourned}} { error "invalid manual result category '$category'" }
+	if {[dict get $p black] eq ""} { error "use the bye command for an unpaired player" }
+    foreach side {white black} {
+        if {[dict get [Player $state [dict get $p $side]] kind] eq "engine"} { error "manual OTB results require human seats" }
+    }
+    if {($result eq "*") != ($category eq "adjourned")} { error "only an adjourned game has an unknown result" }
+    set reason [dg $domain reason {}]
+    if {$correct && [dg $p signed_by {}] ne "" && [string trim $reason] eq ""} { error "correcting a signed result requires a reason" }
+    set deadline [dg $state correction_deadline 0]
+    if {$correct && $deadline && [clock seconds] > $deadline} { error "correction deadline passed; a human TD ruling is required" }
+    dict set p signed_by [dg $domain signed_by {}]
+    dict set p result_reason $reason
+    dict set p entered_at [clock seconds]
+    if {$category eq "double-forfeit"} { set result 0-0 }
 	if {$category in {forfeit forfeit-loss double-forfeit}} { dict set p played 0 } else { dict set p played 1 }
 	if {[dg $p result *] ni {* {}}} {
 		dict lappend p result_history [dict create result [dict get $p result] category [dg $p category played] corrected [clock seconds]]
 	}
 	dict set p result $result
 	dict set p category $category
-	dict set p status complete
+	dict set p status [expr {$category eq "adjourned" ? "adjourned" : "complete"}]
 	dict set p termination [expr {$category eq "played" ? "normal" : "abandoned"}]
-	dict set p count_standings 1
-	dict set p rating [dict get $p played]
+	dict set p count_standings [expr {$category ne "adjourned"}]
+	dict set p rating [expr {[dict get $p played] && $category ne "adjourned"}]
 	lset pairings $index $p
 	dict set state pairings $pairings
 	set state [PublishCorrection $state]

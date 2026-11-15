@@ -98,8 +98,8 @@ proc ::td::actions::Register {} {
 	set registerSpec [MutationSpec {{players {type array required 1}} {kind {type enum default human enum {human engine}}}}]
 	set pairSpec [MutationSpec {{round {type integer default 0 range {0 1000}}}}]
 	set resultSpec [MutationSpec [list {pairing {type string default {}}} {round {type integer default 0 range {0 1000}}} \
-		{board {type integer default -1 range {-1 10000}}} {result {type enum required 1 enum {1-0 0-1 1/2-1/2 0-0}}} \
-		{category {type enum default played enum {played forfeit forfeit-loss double-forfeit}}}]]
+		{board {type integer default -1 range {-1 10000}}} {result {type enum required 1 enum {1-0 0-1 1/2-1/2 0-0 *}}} \
+		{category {type enum default played enum {played forfeit forfeit-loss double-forfeit adjourned}}} {signed_by {type string default {}}} {reason {type string default {}}}]]
 	foreach {id label doc spec handler effect} [list \
 		td.create {Create tournament} {Create a C.05 round robin for humans or engines. Preview with commit false, then commit at the supplied revision. For an engine event it can also pair and play every round from a named opening, an opening code range or a list of moves.} $createSpec Create change \
         td.lookup_player {Find FIDE player} {Find a player by exact name or FIDE number in the installed rating list.} {{fide_id {type string default {}}} {name {type string default {}}}} LookupPlayer query \
