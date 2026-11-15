@@ -71,6 +71,7 @@ variable BesideDialogs		{}
 variable BesideState
 variable BesideReplacements	0
 variable BesideBoardBound	{}
+variable BesideBoard3dBound	{}
 # Per-dialog usable minimum {width height}. Dialogs whose content can reflow or
 # scroll may declare a smaller minimum than their natural request; when it fits
 # a free strip besideBoard shrinks instead of reserving board room.
@@ -1148,7 +1149,22 @@ proc besideCanvasUnionRect {tags} {
 
 # Root rectangle {x y width height} of a mapped board, or {} when the board
 # cannot be placed against yet.
+proc besideBoard3DRect {} {
+	if {![info exists ::application::board::Vars(3d)]
+		|| !$::application::board::Vars(3d)
+		|| ![info exists ::application::board::Vars(3dwin)]} { return {} }
+	set view $::application::board::Vars(3dwin)
+	if {$view eq "" || ![winfo exists $view] || ![winfo ismapped $view]} { return {} }
+	if {[winfo width $view] < 2 || [winfo height $view] < 2} { return {} }
+	return [list [winfo rootx $view] [winfo rooty $view] \
+		[winfo width $view] [winfo height $view]]
+}
+
 proc besideBoardRect {} {
+	# In 3D mode the 2D canvas is unmapped and stale; the embedded view is
+	# the whole paintable board surface (GAP-003).
+	set rect [besideBoard3DRect]
+	if {[llength $rect]} { return $rect }
 	# The side-to-move/material/holding bars are drawn as part of the board.
 	# A dialog must clear the full drawing, not only the 8x8 squares
 	# (VAL-DLG-014f).
@@ -1857,6 +1873,7 @@ proc besideRegistryAdd {dlg parent} {
 	variable BesideDialogs
 	variable BesideState
 	variable BesideBoardBound
+	variable BesideBoard3dBound
 
 	set BesideState($dlg,parent) $parent
 	if {$dlg ni $BesideDialogs} { lappend BesideDialogs $dlg }
@@ -1870,6 +1887,16 @@ proc besideRegistryAdd {dlg parent} {
 		bind $board <Configure> +[namespace code besideSchedule]
 		bind $board <Map> +[namespace code besideSchedule]
 		set BesideBoardBound $board
+	}
+	if {[info exists ::application::board::Vars(3d)]
+		&& $::application::board::Vars(3d)
+		&& [info exists ::application::board::Vars(3dwin)]} {
+		set view $::application::board::Vars(3dwin)
+		if {$view ne "" && [winfo exists $view] && $BesideBoard3dBound ne $view} {
+			bind $view <Configure> +[namespace code besideSchedule]
+			bind $view <Map> +[namespace code besideSchedule]
+			set BesideBoard3dBound $view
+		}
 	}
 
 	# The WM applies wm geometry asynchronously (and callers deiconify after
