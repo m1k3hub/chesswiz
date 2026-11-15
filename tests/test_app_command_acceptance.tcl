@@ -249,7 +249,7 @@ proc ::commandAccept::validSlotValues {row} {
 	list [llength $failures] $failures [llength $slotErrors] $slotErrors [llength $::commandAccept::Calls] $::commandAccept::ProviderCalls
 } -result {0 {} 0 {} 0 0}
 
-::tcltest::test command-accept-full-sentences-never-run {typed full sentences from the entire 111-request corpus never run anything} -body {
+::tcltest::test command-accept-full-sentences-never-run {typed full sentences from the entire 111-request corpus never run a command} -body {
 	set ::commandAccept::Calls {}
 	set ::commandAccept::ProviderCalls 0
 	foreach {id job sentence expect} $Corpus {
@@ -261,11 +261,12 @@ proc ::commandAccept::validSlotValues {row} {
 			}
 		}
 	}
-	# Also verify pressing Enter on an unmatched full prose sentence runs nothing
+	# Pressing Enter on an unmatched full prose sentence runs no command; it is
+	# handed to the assistant as a question (one provider request).
 	::commandAccept::typeInAsk {Please explain the pawn structure and tell me who stands better here.}
 	::application::ask::Choose
 	list [llength $::commandAccept::Calls] $::commandAccept::ProviderCalls [llength $::application::ask::Priv(commands)]
-} -result {0 0 0}
+} -result {0 1 0}
 
 ::tcltest::test command-accept-offline-execution {commands suggest and execute with network off and no model or classifier configured} -body {
 	set ::commandAccept::Calls {}
@@ -275,7 +276,7 @@ proc ::commandAccept::validSlotValues {row} {
 	list [llength $::commandAccept::Calls] [lindex [lindex $::commandAccept::Calls 0] 0] $::commandAccept::ProviderCalls [::ai::systemone::enabled]
 } -result {1 command.find 0 0}
 
-::tcltest::test command-accept-jev-rerank-stubbed {optional System One reorder only permutes existing low-score suggestions, never adds commands or runs actions} -setup {
+::tcltest::test command-accept-no-sync-rerank {suggestions and keystrokes never call the classifier synchronously} -setup {
 	set ::commandAccept::Calls {}
 	set ::commandAccept::ClassifierCalls 0
 	rename ::ai::systemone::enabled ::commandAccept::realEnabled
@@ -283,33 +284,19 @@ proc ::commandAccept::validSlotValues {row} {
 	rename ::ai::systemone::chooseSync ::commandAccept::realChooseSync
 	proc ::ai::systemone::enabled {} { return 1 }
 	proc ::ai::systemone::qualified {feature} { return [expr {$feature eq "command_rerank"}] }
-} -body {
-	# 1. High-score exact command (>= RerankThreshold 40) does NOT consult classifier
 	proc ::ai::systemone::chooseSync {feature state question args} {
 		incr ::commandAccept::ClassifierCalls
 		return "c1"
 	}
-	set exactRows [::commandline::Suggest {find games player Kasparov wins white}]
-	set callsOnExact $::commandAccept::ClassifierCalls
-
-	# 2. Low-score prefix (< 40) with multiple candidates consults stubbed classifier
-	#    and promotes c1 to index 0 without inventing any row or running any action.
-	set ::commandAccept::ClassifierCalls 0
+} -body {
 	set baseline [::commandline::Match {repertoire}]
-	set reranked [::commandline::Suggest {repertoire}]
-	set callsOnPrefix $::commandAccept::ClassifierCalls
-	set promotedMatch [expr {[dict get [lindex $reranked 0] action] eq [dict get [lindex $baseline 1] action] && [dict get [lindex $reranked 1] action] eq [dict get [lindex $baseline 0] action]}]
-	set sameSet [expr {[lsort [lmap r $reranked {dict get $r label}]] eq [lsort [lmap r $baseline {dict get $r label}]]}]
-
-	# 3. Attempting to return an invented label outside criteria is ignored (deterministic order kept)
-	proc ::ai::systemone::chooseSync {feature state question args} {
-		incr ::commandAccept::ClassifierCalls
-		return "invented_command_id"
-	}
-	set safeRows [::commandline::Suggest {repertoire}]
-	set safeOrder [expr {[lmap r $safeRows {dict get $r label}] eq [lmap r $baseline {dict get $r label}]}]
-
-	list $callsOnExact $callsOnPrefix $promotedMatch $sameSet $safeOrder [llength $::commandAccept::Calls]
+	set rows [::commandline::Suggest {repertoire}]
+	set sameOrder [expr {[lmap r $rows {dict get $r label}] eq [lmap r $baseline {dict get $r label}]}]
+	# The Ask keystroke path must stay deterministic and offline as well.
+	set ::application::ask::Query {repertoire}
+	unset -nocomplain ::application::ask::Priv(filtered)
+	::application::ask::Typed
+	list $::commandAccept::ClassifierCalls $sameOrder [llength $::commandAccept::Calls]
 } -cleanup {
 	rename ::ai::systemone::enabled {}
 	rename ::commandAccept::realEnabled ::ai::systemone::enabled
@@ -317,7 +304,7 @@ proc ::commandAccept::validSlotValues {row} {
 	rename ::commandAccept::realQualified ::ai::systemone::qualified
 	rename ::ai::systemone::chooseSync {}
 	rename ::commandAccept::realChooseSync ::ai::systemone::chooseSync
-} -result {0 1 1 1 1 0}
+} -result {0 1 0}
 
 # Locate the 4.8M-game reference database for the Section 4 p95 < 10 ms benchmark.
 proc ::commandAccept::findLargeDb {} {
