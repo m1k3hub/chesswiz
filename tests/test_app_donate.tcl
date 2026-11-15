@@ -2,6 +2,18 @@ package require tcltest 2.5
 source [file join [file dirname [info script]] app_actions_support.tcl]
 ::scidb::test::actions::ready
 
+# A scheduled popup runs native menu tracking when the event loop reaches it.
+# Cancel the pending idle instead of updating into it, so a suite run on
+# win32/aqua does not wait for a user to dismiss the Donate menu.
+proc donateTestCancelPost {} {
+	foreach id [after info] {
+		if {[string match *::menu::PostDonateMenu* [after info $id]]} {
+			after cancel $id
+		}
+	}
+	catch { ::tk::MenuUnpost [winfo parent $::application::Vars(donate)].donate_menu }
+}
+
 tcltest::test donate-button-placed {Donate sits in the top strip, left of the Main Menu, right of the Ask field} -body {
 	update idletasks
 	set d $::application::Vars(donate)
@@ -45,9 +57,7 @@ tcltest::test donate-action-returns {::action::run menu.help.donate returns befo
 	set posted [winfo ismapped $m]
 	list $result [expr {$elapsed < 1000}] $posted
 } -cleanup {
-	update idletasks
-	catch { ::tk::MenuUnpost [winfo parent $::application::Vars(donate)].donate_menu }
-	update
+	donateTestCancelPost
 } -result {{} 1 0}
 
 tcltest::test donate-knowledge-run-action-returns {assistant run_action menu.help.donate returns before its popup is posted} -body {
@@ -60,9 +70,7 @@ tcltest::test donate-knowledge-run-action-returns {assistant run_action menu.hel
 	set posted [winfo ismapped $m]
 	list [expr {![string match {error:*} $result]}] [expr {$elapsed < 1000}] $posted
 } -cleanup {
-	update idletasks
-	catch { ::tk::MenuUnpost [winfo parent $::application::Vars(donate)].donate_menu }
-	update
+	donateTestCancelPost
 } -result {1 1 0}
 
 if {[info exists ::env(DONATE_SHOT)]} {
