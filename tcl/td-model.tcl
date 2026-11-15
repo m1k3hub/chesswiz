@@ -263,6 +263,20 @@ proc ::td::model::Withdraw {state domain} {
 proc ::td::model::IsBye {p} { return [expr {[dg $p category {}] eq "pairing-bye" || [dict get $p black] eq ""}] }
 proc ::td::model::Player {state id} { foreach p [dg $state players {}] { if {[dict get $p id] eq $id} { return $p } }; error "unknown player '$id'" }
 
+proc ::td::model::FreezeEligibility {state {now 0}} {
+	if {$now <= 0} { set now [clock seconds] }
+	set elig [dg $state prize_eligibility {}]
+	foreach p [dg $state players {}] {
+		set pid [dict get $p id]
+		if {![dict exists $elig $pid]} {
+			dict set elig $pid [dict create rating [dg $p rating {}] sex [dg $p sex {}] \
+				born [dg $p born {}] federation [dg $p federation {}] title [dg $p title {}] frozen_at $now]
+		}
+	}
+	dict set state prize_eligibility $elig
+	return $state
+}
+
 proc ::td::model::Apply {command info domain} {
 	set state [dict get $info state]
 	set target {}
@@ -313,6 +327,7 @@ proc ::td::model::Apply {command info domain} {
 				unrated_policy [dg $domain unrated_policy drop] publication_revision 0 published 0 publications {} withdrawals {} rulings {} \
 				games {} created $now updated $now]
 			if {$system eq "swiss"} { dict set state tiebreaks {buchholzCut1 buchholz sonnebornBerger wins} }
+			set state [FreezeEligibility $state $now]
 			set start [dg $domain start 0]
 			if {$start} {
 				if {$system eq "swiss"} {
@@ -369,10 +384,19 @@ proc ::td::model::Apply {command info domain} {
 				colour_lot [dict get $parsed colour_lot] tiebreaks $tbList \
 				unrated_policy drop publication_revision 0 published 0 publications {} withdrawals {} rulings {} \
 				games {} created [dg $info now [clock seconds]] updated [dg $info now [clock seconds]]]
+			set state [FreezeEligibility $state [dg $info now [clock seconds]]]
 			return [list $state [dict create imported [llength [dict get $parsed players]] rounds [dict get $parsed rounds] trf_format [dict get $parsed trf_format]] $target $history]
 		}
-		register { return [::td::registration::Add $state $domain 0 $info] }
-        register_fide { return [::td::registration::Add $state $domain 1 $info] }
+		register {
+			lassign [::td::registration::Add $state $domain 0 $info] state res target history
+			set state [FreezeEligibility $state [dg $info now [clock seconds]]]
+			return [list $state $res $target $history]
+		}
+        register_fide {
+			lassign [::td::registration::Add $state $domain 1 $info] state res target history
+			set state [FreezeEligibility $state [dg $info now [clock seconds]]]
+			return [list $state $res $target $history]
+		}
 		pair_round {
 			if {[dict get $state system] eq "swiss"} { return [::td::swiss::PairRound $state $domain] }
 			set wanted [dg $domain round 0]
@@ -506,6 +530,8 @@ proc ::td::model::Apply {command info domain} {
 		withdraw { return [Withdraw $state $domain] }
 		ruling { return [::td::arbiter::Record $state $domain] }
 		prizes {
+			set now [dg $info now [clock seconds]]
+			set state [FreezeEligibility $state $now]
 			set rows [::td::score::Compute $state]
 			set payouts [::td::score::ComputePrizes $state $rows $domain]
 			set paidPlayer [dg $domain pay_player {}]
@@ -515,16 +541,17 @@ proc ::td::model::Apply {command info domain} {
 				foreach entry $payouts {
 					if {[dict get $entry player] eq $pid} {
 						dict set entry paid 1
-						dict set entry paid_at [clock seconds]
-						dict set entry receipt [dg $domain receipt "rcpt-$pid-[clock seconds]"]
+						dict set entry paid_at $now
+						dict set entry receipt [dg $domain receipt "rcpt-$pid-$now"]
 					}
 					lappend updated $entry
 				}
 				set payouts $updated
 			}
 			dict set state prizes [dict create system [dg $domain system hort] rounding [dg $domain rounding cent] \
-				one_prize_per_player [dg $domain one_prize_per_player 1] payouts $payouts updated [clock seconds]]
-			return [list $state [dict create payouts $payouts] $target $history]
+				one_prize_per_player [dg $domain one_prize_per_player 1] categories [dg $domain categories {}] \
+				eligibility_snapshots [dict get $state prize_eligibility] payouts $payouts updated $now]
+			return [list $state [dict create payouts $payouts eligibility_snapshots [dict get $state prize_eligibility]] $target $history]
 		}
 		bye {
 			set id [FindPlayer $state [dg $domain player {}]]

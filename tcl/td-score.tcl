@@ -594,21 +594,52 @@ proc ::td::score::CrosstableHTML {state rows} {
 	return $html
 }
 
-proc ::td::score::ComputePrizes {state rows domain} {
-	set prizes [dg $domain prizes {1000 500 250}]
-	set system [dg $domain system hort]
-	set rounding [dg $domain rounding cent]
-	set onePerPlayer [dg $domain one_prize_per_player 1]
-	if {$system ni {hort split indivisible}} { error "prize system must be hort, split or indivisible" }
-	if {$rounding ni {exact cent integer}} { error "prize rounding must be exact, cent or integer" }
-	set eligibleRows {}
-	foreach row $rows {
-		set p [::td::model::Player $state [dict get $row id]]
-		if {[dg $p withdrawn 0]} { continue }
-		lappend eligibleRows $row
+proc ::td::score::CategoryEligible {snap cat} {
+	set rating [dg $snap rating {}]
+	set hasRating [expr {[string is integer -strict $rating] && $rating > 0}]
+	if {[dg $cat unrated_only 0]} {
+		if {$hasRating} { return 0 }
 	}
+	if {[dg $cat max_rating {}] ne ""} {
+		set maxR [dict get $cat max_rating]
+		if {![string is integer -strict $maxR]} { error "category max_rating must be an integer" }
+		if {!$hasRating} {
+			if {![dg $cat include_unrated 0]} { return 0 }
+		} elseif {$rating > $maxR} {
+			return 0
+		}
+	}
+	if {[dg $cat min_rating {}] ne ""} {
+		set minR [dict get $cat min_rating]
+		if {![string is integer -strict $minR]} { error "category min_rating must be an integer" }
+		if {!$hasRating || $rating < $minR} { return 0 }
+	}
+	if {[dg $cat sex {}] ne ""} {
+		if {[string tolower [dg $snap sex {}]] ne [string tolower [dict get $cat sex]]} { return 0 }
+	}
+	if {[dg $cat min_born {}] ne ""} {
+		set born [dg $snap born {}]
+		if {![string is integer -strict $born] || $born < [dict get $cat min_born]} { return 0 }
+	}
+	if {[dg $cat max_born {}] ne ""} {
+		set born [dg $snap born {}]
+		if {![string is integer -strict $born] || $born > [dict get $cat max_born]} { return 0 }
+	}
+	if {[llength [dg $cat federation {}]]} {
+		set feds [lmap f [dict get $cat federation] {string toupper $f}]
+		if {[string toupper [dg $snap federation {}]] ni $feds} { return 0 }
+	}
+	if {[llength [dg $cat title {}]]} {
+		set titles [lmap t [dict get $cat title] {string toupper $t}]
+		if {[string toupper [dg $snap title {}]] ni $titles} { return 0 }
+	}
+	return 1
+}
+
+proc ::td::score::ComputePoolPrizes {poolName prizes poolRows system rounding} {
+	if {![llength $prizes] || ![llength $poolRows]} { return {} }
 	set groups {}
-	foreach row $eligibleRows {
+	foreach row $poolRows {
 		set s [list [dict get $row score n] [dict get $row score d]]
 		set found 0
 		for {set i 0} {$i < [llength $groups]} {incr i} {
@@ -623,8 +654,8 @@ proc ::td::score::ComputePrizes {state rows domain} {
 		if {!$found} { lappend groups [list $s [list $row]] }
 	}
 	set payouts {}
-	set awarded [dict create]
 	set pIdx 0
+	set poolRank 0
 	foreach group $groups {
 		if {$pIdx >= [llength $prizes]} { break }
 		set gRows [lindex $group 1]
@@ -635,9 +666,9 @@ proc ::td::score::ComputePrizes {state rows domain} {
 		set pool {0 1}
 		foreach amt $slice { set pool [Add $pool [Rat [expr {int(round(double($amt)*100))}] 100]] }
 		for {set j 0} {$j < $k} {incr j} {
+			incr poolRank
 			set row [lindex $gRows $j]
 			set pid [dict get $row id]
-			if {$onePerPlayer && [dict exists $awarded $pid]} { continue }
 			set rankPrize [Rat [expr {int(round(double([lindex $slice $j])*100))}] 100]
 			if {$k == 1 || $system eq "indivisible"} {
 				set share $rankPrize
@@ -649,6 +680,7 @@ proc ::td::score::ComputePrizes {state rows domain} {
 				set halfPool [Div [Mul $pool {1 2}] [Rat $k 1]]
 				set share [Add $halfRank $halfPool]
 			}
+			if {[Cmp $share {0 1}] <= 0} { continue }
 			lassign $share sn sd
 			if {$rounding eq "integer"} {
 				set amountText [format "%d" [expr {int(round(double($sn)/$sd))}]]
@@ -657,12 +689,109 @@ proc ::td::score::ComputePrizes {state rows domain} {
 			} else {
 				set amountText [Text $share]
 			}
-			dict set awarded $pid 1
-			lappend payouts [dict create player $pid name [dict get $row name] rank [dict get $row rank] score [dict get $row score text] \
+			lappend payouts [dict create category $poolName player $pid name [dict get $row name] \
+				rank [dict get $row rank] pool_rank $poolRank score [dict get $row score text] \
 				tied_count $k system $system rounding $rounding exact_n $sn exact_d $sd amount $amountText paid 0]
 		}
 	}
 	return $payouts
+}
+
+proc ::td::score::ComputePrizes {state rows domain} {
+	set prizes [dg $domain prizes {1000 500 250}]
+	set categories [dg $domain categories {}]
+	set system [dg $domain system hort]
+	set rounding [dg $domain rounding cent]
+	set onePerPlayer [expr {[dg $domain one_prize_per_player 1] ? 1 : 0}]
+	if {$system ni {hort split indivisible}} { error "prize system must be hort, split or indivisible" }
+	if {$rounding ni {exact cent integer}} { error "prize rounding must be exact, cent or integer" }
+
+	set eligMap [dg $state prize_eligibility {}]
+	set nonWithdrawn {}
+	foreach row $rows {
+		set pid [dict get $row id]
+		set p [::td::model::Player $state $pid]
+		if {[dg $p withdrawn 0]} { continue }
+		if {![dict exists $eligMap $pid]} {
+			dict set eligMap $pid [dict create rating [dg $p rating {}] sex [dg $p sex {}] \
+				born [dg $p born {}] federation [dg $p federation {}] title [dg $p title {}]]
+		}
+		lappend nonWithdrawn $row
+	}
+
+	set pools {}
+	set poolIdx 0
+	if {[llength $prizes]} {
+		lappend pools [dict create idx [incr poolIdx] name Open prizes $prizes system $system eligible $nonWithdrawn]
+	}
+	foreach cat $categories {
+		set catName [string trim [dg $cat name {}]]
+		if {$catName eq ""} { error "prize category requires a non-empty name" }
+		set catSys [dg $cat system $system]
+		if {$catSys ni {hort split indivisible}} { error "category '$catName' system must be hort, split or indivisible" }
+		set catRows {}
+		foreach row $nonWithdrawn {
+			set pid [dict get $row id]
+			if {[CategoryEligible [dict get $eligMap $pid] $cat]} { lappend catRows $row }
+		}
+		lappend pools [dict create idx [incr poolIdx] name $catName prizes [dg $cat prizes {}] system $catSys eligible $catRows]
+	}
+
+	if {!$onePerPlayer} {
+		set out {}
+		foreach pool $pools {
+			lappend out {*}[ComputePoolPrizes [dict get $pool name] [dict get $pool prizes] [dict get $pool eligible] [dict get $pool system] $rounding]
+		}
+		return $out
+	}
+
+	set excluded [dict create]
+	set maxIter [expr {[llength $nonWithdrawn] * [llength $pools] + 2}]
+	set tentative {}
+	for {set iter 0} {$iter < $maxIter} {incr iter} {
+		set tentative {}
+		set winsByPlayer [dict create]
+		foreach pool $pools {
+			set pIdx [dict get $pool idx]
+			set avail {}
+			foreach row [dict get $pool eligible] {
+				if {![dict exists $excluded "$pIdx:[dict get $row id]"]} { lappend avail $row }
+			}
+			set poolOut [ComputePoolPrizes [dict get $pool name] [dict get $pool prizes] $avail [dict get $pool system] $rounding]
+			foreach entry $poolOut {
+				dict lappend winsByPlayer [dict get $entry player] [list $pIdx $entry]
+				lappend tentative $entry
+			}
+		}
+		set conflictPid {}
+		foreach row $nonWithdrawn {
+			set pid [dict get $row id]
+			if {[dict exists $winsByPlayer $pid] && [llength [dict get $winsByPlayer $pid]] > 1} {
+				set conflictPid $pid
+				break
+			}
+		}
+		if {$conflictPid eq ""} { break }
+		set wins [dict get $winsByPlayer $conflictPid]
+		set bestPool [lindex $wins 0 0]
+		set bestEntry [lindex $wins 0 1]
+		set bestRat [list [dict get $bestEntry exact_n] [dict get $bestEntry exact_d]]
+		foreach item [lrange $wins 1 end] {
+			lassign $item candPool candEntry
+			set candRat [list [dict get $candEntry exact_n] [dict get $candEntry exact_d]]
+			if {[Cmp $candRat $bestRat] > 0} {
+				set bestPool $candPool
+				set bestRat $candRat
+			}
+		}
+		foreach item $wins {
+			set candPool [lindex $item 0]
+			if {$candPool != $bestPool} {
+				dict set excluded "$candPool:$conflictPid" 1
+			}
+		}
+	}
+	return $tentative
 }
 
 # vi:set ts=3 sw=3:

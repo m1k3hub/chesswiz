@@ -284,7 +284,7 @@ tcltest::test td-p2-torture-vectors-c04-c07 {FIDE C.04.3 and C.07 torture vector
         [expr {$oppBhWithdrawn eq $oppBhTrf}] $c5Ok
 } -result {1 0 withdrawal-before-pairing 1 1 1 1}
 
-tcltest::test td-p2-prizes-hort-and-payment {Prize calculation supports Hort system, equal split, one prize per player, withdrawal exclusion and payment receipts} -body {
+tcltest::test td-p2-prizes-hort-and-payment {Prize calculation supports Hort system, category eligibility snapshots, one prize per player, withdrawal exclusion and payment receipts} -body {
     set path [file join $::env(HOME) prizes.tdj]
     ::tdP2Acc::call $path create {name {Prize Open} players {A B C D} system swiss rounds 2 colour_lot white start 0}
     ::tdP2Acc::call $path pair_round {round 1}
@@ -303,8 +303,83 @@ tcltest::test td-p2-prizes-hort-and-payment {Prize calculation supports Hort sys
     set payouts [dict get $res payouts]
     set p0 [lindex $payouts 0]
     set p1 [lindex $payouts 1]
-    list [dict get $p0 amount] [dict get $p1 amount] [dict get $p0 paid] [dict get $p0 receipt]
-} -result {875.00 625.00 1 RCPT-001}
+
+    # Category prizes + frozen eligibility snapshots + withdrawal exclusion + one_prize_per_player cascade:
+    set pCat [file join $::env(HOME) prizes_cat.tdj]
+    ::tdP2Acc::call $pCat create {name {Category Prize Open} players {} kind human system swiss rounds 2 colour_lot white start 0}
+    ::tdP2Acc::call $pCat register {players {OpenTop} kind human rating 2150 born 1995}
+    ::tdP2Acc::call $pCat register {players {WithdrawnLeader} kind human rating 2100 born 1996}
+    ::tdP2Acc::call $pCat register {players {ClassStar} kind human rating 1750 born 2008}
+    ::tdP2Acc::call $pCat register {players {ClassNext} kind human rating 1700 born 1990}
+    ::tdP2Acc::call $pCat register {players {ClassThird} kind human rating 1650 born 1988}
+    ::tdP2Acc::call $pCat bye {player p5 round 1 category zero-point-bye}
+    ::tdP2Acc::call $pCat pair_round {round 1}
+    foreach p [::td::model::Pairings [dict get [::td::store::Read $pCat] state] 1] {
+        if {[dict get $p status] eq "pending"} {
+            set w [dict get $p white]
+            set r [expr {($w eq "p1" || $w eq "p2") ? "1-0" : "0-1"}]
+            ::tdP2Acc::call $pCat enter_result [dict create pairing [dict get $p id] result $r category played]
+        }
+    }
+    ::tdP2Acc::call $pCat bye {player p4 round 2 category requested-bye}
+    ::tdP2Acc::call $pCat pair_round {round 2}
+    foreach p [::td::model::Pairings [dict get [::td::store::Read $pCat] state] 2] {
+        if {[dict get $p status] eq "pending"} {
+            set w [dict get $p white]
+            set b [dict get $p black]
+            if {($w eq "p1" && $b eq "p2") || ($w eq "p2" && $b eq "p1")} {
+                ::tdP2Acc::call $pCat enter_result [dict create pairing [dict get $p id] result 1/2-1/2 category played]
+            } else {
+                set r [expr {$w eq "p3" ? "1-0" : "0-1"}]
+                ::tdP2Acc::call $pCat enter_result [dict create pairing [dict get $p id] result $r category played]
+            }
+        }
+    }
+    # Withdraw p2 (WithdrawnLeader, tied 1st at 1.5/2) so withdrawal exclusion is genuinely tested
+    ::tdP2Acc::call $pCat withdraw {player p2 round 2}
+
+    set cats [list [dict create name U1800 prizes {500 200} max_rating 1799]]
+    set resOne [::action::run td.prizes [dict create path $pCat prizes {1000 400} categories $cats system hort rounding cent one_prize_per_player 1 commit 1 expected_revision [dict get [::td::store::Read $pCat] revision] idempotency prz-cat-1]]
+    if {[string match "error:*" $resOne]} { error $resOne }
+    set byPlayerOne [dict create]
+    foreach entry [dict get $resOne payouts] {
+        dict lappend byPlayerOne [dict get $entry player] "[dict get $entry category]:[dict get $entry amount]"
+    }
+
+    # Verify frozen eligibility snapshot: even if p3's live rating in players is mutated to 1900 after registration,
+    # ComputePrizes uses the frozen prize_eligibility snapshot (1750 <= 1799).
+    set stMut [dict get [::td::store::Read $pCat] state]
+    set mutPlayers {}
+    foreach pl [dict get $stMut players] {
+        if {[dict get $pl id] eq "p3"} { dict set pl rating 1900 }
+        lappend mutPlayers $pl
+    }
+    dict set stMut players $mutPlayers
+    set mutPayouts [::td::score::ComputePrizes $stMut [::td::score::Compute $stMut] [dict create prizes {1000 400} categories $cats system hort rounding cent one_prize_per_player 1]]
+    set p3FrozenOk 0
+    foreach entry $mutPayouts {
+        if {[dict get $entry player] eq "p3" && [dict get $entry category] eq "U1800" && [dict get $entry amount] eq "500.00"} {
+            set p3FrozenOk 1
+        }
+    }
+
+    # With one_prize_per_player 0, p3 collects BOTH Open 2nd (400.00) and U1800 1st (500.00)
+    set resMulti [::action::run td.prizes [dict create path $pCat prizes {1000 400} categories $cats system hort rounding cent one_prize_per_player 0 commit 1 expected_revision [dict get [::td::store::Read $pCat] revision] idempotency prz-cat-0]]
+    if {[string match "error:*" $resMulti]} { error $resMulti }
+    set p3Multi {}
+    foreach entry [dict get $resMulti payouts] {
+        if {[dict get $entry player] eq "p3"} { lappend p3Multi "[dict get $entry category]:[dict get $entry amount]" }
+    }
+
+    list [dict get $p0 amount] [dict get $p1 amount] [dict get $p0 paid] [dict get $p0 receipt] \
+        [dict exists $byPlayerOne p2] \
+        [dict get $byPlayerOne p1] \
+        [dict get $byPlayerOne p3] \
+        [dict get $byPlayerOne p4] \
+        [dict get $byPlayerOne p5] \
+        $p3FrozenOk \
+        $p3Multi
+} -result {875.00 625.00 1 RCPT-001 0 Open:1000.00 U1800:500.00 Open:400.00 U1800:200.00 1 {Open:400.00 U1800:500.00}}
 
 tcltest::test td-p2-5round-swiss-replay-undo-redo {5-round Swiss via Ask actions with manual override, result correction and late entry gives byte-identical standings and TRF across undo/redo, fresh-process disk reopen and full journal command replay} -body {
     set path [file join $::env(HOME) replay5.tdj]
