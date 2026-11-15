@@ -197,9 +197,10 @@ proc ::td::ui::BuildPairings {f} {
 	ttk::button $f.buttons.pair -text "Pair round (0 = all)" -command ::td::ui::PairRound
 	ttk::button $f.buttons.swap -text "Swap colours (audited)" -command ::td::ui::Swap
 	ttk::button $f.buttons.check -text "Check pairings" -command ::td::ui::CheckPairings
+	ttk::button $f.buttons.print -text "Print pairings" -command [list ::td::ui::PrintView pairings]
 	ttk::label $f.buttons.rlabel -text "TD ruling"
 	ttk::entry $f.buttons.ruling -width 24 -textvariable ::td::ui::Fields(override_ruling); set Fields(override_ruling) {}
-	pack $f.buttons.round $f.buttons.pair $f.buttons.swap $f.buttons.check $f.buttons.rlabel $f.buttons.ruling -side left -padx 2
+	pack $f.buttons.round $f.buttons.pair $f.buttons.swap $f.buttons.check $f.buttons.print $f.buttons.rlabel $f.buttons.ruling -side left -padx 2
 	ttk::label $f.checker -justify left -wraplength 1000
 	pack $f.checker -fill x -pady 2
 }
@@ -265,10 +266,18 @@ proc ::td::ui::CorrectResult {} { ResultCommand td.correct_result }
 proc ::td::ui::BuildStandings {f} {
 	MakeTree $f {rank name score directEncounter sonnebornBerger koya gamesWon gamesWonWithBlack progressive aro tpr}
 	bind $f.tree <<TreeviewSelect>> ::td::ui::Breakdown
-	ttk::button $f.cross -text "Crosstable" -command ::td::ui::OpenCrosstable
-	pack $f.cross -anchor e
+	ttk::frame $f.btns; pack $f.btns -fill x
+	ttk::button $f.btns.cross -text "Crosstable" -command ::td::ui::OpenCrosstable
+	ttk::button $f.btns.print_s -text "Print standings" -command [list ::td::ui::PrintView standings]
+	ttk::button $f.btns.print_c -text "Print crosstable" -command [list ::td::ui::PrintView crosstable]
+	pack $f.btns.cross $f.btns.print_s $f.btns.print_c -side right -padx 2
 	ttk::label $f.breakdown -justify left -wraplength 1000
 	pack $f.breakdown -fill x
+}
+proc ::td::ui::PrintView {view} {
+	variable Path
+	if {$Path eq ""} { error "no tournament selected" }
+	return [::action::run td.print [dict create path $Path view $view format html]]
 }
 proc ::td::ui::OpenCrosstable {} { variable Path; ::crosstable::OpenTD .application $Path }
 proc ::td::ui::Breakdown {} {

@@ -58,6 +58,44 @@ proc ::td::actions::Audit {arguments} {
 	set path [::td::store::Resolve $arguments]
 	return [::td::store::Audit $path]
 }
+proc ::td::actions::Print {arguments} {
+	set path [::td::store::Resolve $arguments]
+	set state [dict get [::td::store::Read $path] state]
+	set view [dg $arguments view standings]
+	set format [dg $arguments format html]
+	set round [dg $arguments round 0]
+	set rows [::td::score::Compute $state]
+	switch -- $view {
+		pairings {
+			set text [::td::score::PairingsText $state $round]
+			set html [::td::score::PairingsHTML $state $round]
+			set title "[dict get $state name] - Pairings"
+		}
+		standings {
+			set text [::td::score::StandingsText $rows]
+			set html [::td::score::StandingsHTML $state $rows]
+			set title "[dict get $state name] - Standings"
+		}
+		crosstable {
+			set text [::td::score::CrosstableText $state $rows]
+			set html [::td::score::CrosstableHTML $state $rows]
+			set title "[dict get $state name] - Crosstable"
+		}
+		default { error "unsupported print view '$view'" }
+	}
+	set content [expr {$format eq "text" ? "$text\n" : $format eq "pdf" ? [::td::score::SimplePdf $title $text] : $html}]
+	set filename [dg $arguments filename {}]
+	if {$filename ne ""} {
+		if {[file exists $filename] && ![dg $arguments overwrite 0]} { error "file exists: $filename" }
+		file mkdir [file dirname $filename]
+		set temp "$filename.[pid].tmp"
+		set out [open $temp wb]
+		puts -nonewline $out [encoding convertto utf-8 $content]
+		close $out
+		file rename -force $temp $filename
+	}
+	return [dict create event [dict get $state id] revision [dict get $state revision] view $view format $format filename $filename text $text content $content]
+}
 proc ::td::actions::Export {arguments} {
 	set path [::td::store::Resolve $arguments]
 	set filename [dict get $arguments filename]
@@ -127,6 +165,7 @@ proc ::td::actions::Register {} {
 		td.status {Tournament status} {Show the event's revision, current round, how many players and pairings it has, how it is saved, and whether undo or redo is available.} $query Status query \
 		td.standings {Tournament standings} {Compute exact C.07 standings and every tiebreak breakdown.} $query Standings query \
 		td.crosstable {Tournament crosstable} {Return the event crosstable as text, or open its journal-backed HTML view.} [concat $query {{open {type boolean default 0}}}] Crosstable change \
+		td.print {Print tournament sheet} {Format or save the tournament pairings, standings or crosstable for printing as a web page, plain text or a printable document.} [concat $query {{view {type enum default standings enum {pairings standings crosstable}}} {format {type enum default html enum {html text pdf}}} {round {type integer default 0 range {0 1000}}} {filename {type string default {}}} {overwrite {type boolean default 0}}}] Print change \
 		td.audit {Tournament audit} {Return immutable journal records, including commands, revisions, idempotency keys and before/after state.} $query Audit query \
 		td.export {Export tournament} {Save the tournament's games, or its crosstable as a web page, to a file you name.} [concat $query {{filename {type string required 1}} {format {type enum default pgn enum {pgn html}}} {overwrite {type boolean default 0}}}] Export change \
 		td.workspace {Tournament Director workspace} {Open the Event, Players, Pairings, Results and Standings workspace, close it, or select a tab.} [concat $query {{operation {type enum default open enum {open close select}}} {tab {type enum default event enum {event players pairings results standings}}}}] Workspace change \

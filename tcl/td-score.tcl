@@ -416,6 +416,74 @@ proc ::td::score::StandingsText {rows} {
 	return [join $lines \n]
 }
 
+proc ::td::score::PairingsText {state {round 0}} {
+	if {!$round} { set round [dg $state current_round 1] }
+	set lines [list "Board White Black Result Status Category"]
+	foreach p [::td::model::Pairings $state $round] {
+		set w [PlayerName $state [dict get $p white]]
+		set b [expr {[dict get $p black] eq "" ? "BYE" : [PlayerName $state [dict get $p black]]}]
+		lappend lines [join [list [dict get $p board] $w $b [dg $p result *] [dg $p status pending] [dg $p category {}]] " | "]
+	}
+	return [join $lines \n]
+}
+
+proc ::td::score::PairingsHTML {state {round 0}} {
+	if {!$round} { set round [dg $state current_round 1] }
+	append html "<html><head><meta charset=\"utf-8\"><style>body{font-family:sans-serif}table{border-collapse:collapse}td,th{border:1px solid #999;padding:.3em;text-align:left}</style></head><body>"
+	append html "<h1>[Escape [dg $state name Tournament]] — Round $round Pairings</h1><table><tr><th>Board</th><th>White</th><th>Black</th><th>Result</th><th>Status</th><th>Category</th></tr>"
+	foreach p [::td::model::Pairings $state $round] {
+		set w [PlayerName $state [dict get $p white]]
+		set b [expr {[dict get $p black] eq "" ? "BYE" : [PlayerName $state [dict get $p black]]}]
+		append html "<tr><td>[dict get $p board]</td><td>[Escape $w]</td><td>[Escape $b]</td><td>[Escape [dg $p result *]]</td><td>[Escape [dg $p status pending]]</td><td>[Escape [dg $p category {}]]</td></tr>"
+	}
+	append html "</table></body></html>"
+	return $html
+}
+
+proc ::td::score::StandingsHTML {state rows} {
+	set rules [dg $state tiebreaks {directEncounter sonnebornBerger koya gamesWon gamesWonWithBlack progressive}]
+	append html "<html><head><meta charset=\"utf-8\"><style>body{font-family:sans-serif}table{border-collapse:collapse}td,th{border:1px solid #999;padding:.3em;text-align:center}td.player,th.player{text-align:left}.score{font-weight:bold}</style></head><body>"
+	append html "<h1>[Escape [dg $state name Tournament]] — Standings</h1><table><tr><th>Rank</th><th class=\"player\">Player</th><th>Score</th>"
+	foreach rule $rules { append html "<th>[Escape $rule]</th>" }
+	append html "</tr>"
+	foreach row $rows {
+		append html "<tr><td>[dict get $row rank]</td><td class=\"player\">[Escape [dict get $row name]]</td><td class=\"score\">[dict get $row score text]</td>"
+		foreach rule $rules {
+			set val [dg [dg $row tiebreaks {}] $rule {}]
+			append html "<td>[Escape [expr {$val eq "" ? "" : [dict get $val text]}]]</td>"
+		}
+		append html "</tr>"
+	}
+	append html "</table></body></html>"
+	return $html
+}
+
+proc ::td::score::SimplePdf {title bodyText} {
+	set lines [concat [list $title ""] [split $bodyText \n]]
+	set stream "BT\n/F1 10 Tf\n36 756 Td\n12 TL\n"
+	foreach line [lrange $lines 0 58] {
+		set safe [string map {\\ \\\\ ( \\( ) \\)} [regsub -all {[^\x20-\x7e]} $line ?]]
+		append stream "($safe) Tj T*\n"
+	}
+	append stream "ET\n"
+	set obj1 "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n"
+	set obj2 "2 0 obj\n<< /Type /Pages /Kids \[3 0 R\] /Count 1 >>\nendobj\n"
+	set obj3 "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox \[0 0 612 792\] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n"
+	set obj4 "4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>\nendobj\n"
+	set obj5 "5 0 obj\n<< /Length [string length $stream] >>\nstream\n${stream}endstream\nendobj\n"
+	set pdf "%PDF-1.4\n"
+	set offsets {}
+	foreach obj [list $obj1 $obj2 $obj3 $obj4 $obj5] {
+		lappend offsets [string length $pdf]
+		append pdf $obj
+	}
+	set xrefPos [string length $pdf]
+	append pdf "xref\n0 6\n0000000000 65535 f \n"
+	foreach off $offsets { append pdf [format "%010d 00000 n \n" $off] }
+	append pdf "trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n$xrefPos\n%%EOF\n"
+	return $pdf
+}
+
 proc ::td::score::Crosstable {state rows} {
 	set ids [lmap row $rows {dict get $row id}]
 	set matrix [dict create]
