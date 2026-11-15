@@ -473,12 +473,26 @@ proc ::application::ask::Typed {{key ""}} {
 		HideList
 		return
 	}
-	set Priv(commands) [::commandline::Suggest $text]
- set Priv(rows) {}
- if {$::application::ask::Mode eq "question"} {set Priv(commands) {}}
- foreach row $Priv(commands) {
-  lappend Priv(rows) [list [dict get $row action] [dict get $row label] Enter 1 1]
- }
+	set Priv(commands) {}
+	set Priv(rows) {}
+	if {$::application::ask::Mode ne "question"} {
+		# The typed command grammar first, then the registry palette: the
+		# 200+ menu actions must stay reachable exactly as before.
+		foreach row [::commandline::Suggest $text] {
+			lappend Priv(commands) $row
+			lappend Priv(rows) [list [dict get $row action] [dict get $row label] Enter 1 1]
+		}
+		set seen {}
+		foreach row $Priv(commands) { dict set seen [dict get $row action] 1 }
+		foreach paletteRow [::action::labels asklist $text] {
+			lassign $paletteRow id label accel enabled visible
+			if {[dict exists $seen $id]} { continue }
+			dict set seen $id 1
+			lappend Priv(commands) [dict create id $id action $id args {} missing {} \
+				template {} label $label input $text palette 1]
+			lappend Priv(rows) [list $id $label $accel $enabled $visible]
+		}
+	}
  set Priv(context) [CommandContext]
 	set Priv(index) 0
 	ShowList
@@ -499,9 +513,9 @@ proc ::application::ask::ShowList {} {
 		lappend items [list $text $id]
 		incr i
 	}
-	if {$::application::ask::Mode eq "question"} {
-  lappend items [list " Ask a question (read-only) — Enter" ""]
- } elseif {![llength $items]} {lappend items [list " No matching command" ""]}
+	# The last row always hands the text to the assistant; a no-match list
+	# is exactly that row, so prose can still be asked.
+	lappend items [list " $mc::AskAssistant" ""]
 
 	set w $Priv(list)
 	set opening 0
@@ -619,15 +633,28 @@ proc ::application::ask::Choose {} {
  variable Priv
  variable Query
  if {$::application::ask::Mode eq "question"} {return [SendToAssistant]}
- if {![ListVisible] || ![info exists Priv(commands)] || ![llength $Priv(commands)]} {return "break"}
- if {$Priv(filtered) ne [string trim $Query] || $Priv(context) ne [CommandContext]} {
-  unset -nocomplain Priv(filtered)
-  Typed
-  return "break"
+ if {![ListVisible] && [string trim $Query] eq ""} {return "break"}
+ set rows {}
+ if {[info exists Priv(rows)]} {set rows $Priv(rows)}
+ if {$Priv(index) < 0} {return "break"}
+ # Past the last row (or with no match at all) the text is a question.
+ if {![llength $rows] || $Priv(index) >= [llength $rows]} {return [SendToAssistant]}
+ lassign [lindex $rows $Priv(index)] id
+ # A row from the command grammar carries its resolved arguments; any
+ # other row is a plain registry palette action.
+ set row ""
+ if {[info exists Priv(commands)] && $Priv(index) < [llength $Priv(commands)]} {
+  set candidate [lindex $Priv(commands) $Priv(index)]
+  if {[dict exists $candidate action] && [dict get $candidate action] eq $id} {set row $candidate}
  }
- set row [lindex $Priv(commands) $Priv(index)]
- if {$row eq ""} {return "break"}
- if {[llength [dict get $row missing]]} {MissingSlot $row; return "break"}
+ if {$row ne "" && ![dict exists $row palette]} {
+  if {[info exists Priv(context)] && ($Priv(filtered) ne [string trim $Query] \
+   || $Priv(context) ne [CommandContext])} {
+   unset -nocomplain Priv(filtered)
+   Typed
+   return "break"
+  }
+  if {[llength [dict get $row missing]]} {MissingSlot $row; return "break"}
  set failed [catch {::commandline::Run $row} result]
  if {$failed || [string match "error:*" $result] || [string match "declined*" $result]} {
   catch {::ui::message $result error}
@@ -636,6 +663,18 @@ proc ::application::ask::Choose {} {
   HideList
   # Query actions return useful text too, without needing a model to narrate it.
   if {$result ne ""} {catch {::ui::message $result}}
+ }
+ PlaceholderState
+ return "break"
+ }
+ # Registry palette action: run it through the same gate as a menu click.
+ HideList
+ catch { focus -force [Entry] }
+ set failed [catch {::action::run $id} result]
+ if {$failed || [string match "error:*" $result] || [string match "declined*" $result]} {
+  catch {::ui::message $result error}
+ } else {
+  set Query ""
  }
  PlaceholderState
  return "break"

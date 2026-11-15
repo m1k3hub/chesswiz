@@ -161,6 +161,34 @@ close $f
  rename ::fix::realPost ::dialog::notice::post
 } -result {1 1}
 
+# ----------------------------------------------------------------------
+# F-05: the registry palette stays reachable beside the typed commands.
+# ----------------------------------------------------------------------
+proc ::fix::noop {args} {return {}}
+::tcltest::test F-05-palette {registry actions still appear in the Ask list} -setup {
+ ::action::register fix.palette [dict create label "Zebra Palette Action" object {} \
+  handler ::fix::noop what {} doc {}]
+} -body {
+ set ::application::ask::Mode command
+ set ::application::ask::Query {zebra palette}
+ unset -nocomplain ::application::ask::Priv(filtered)
+ ::application::ask::Typed
+ set palette 0
+ foreach row $::application::ask::Priv(rows) {
+  if {[lindex $row 1] eq "Zebra Palette Action"} {set palette 1}
+ }
+ set ::application::ask::Query {database summary}
+ unset -nocomplain ::application::ask::Priv(filtered)
+ ::application::ask::Typed
+ set grammar 0
+ foreach row $::application::ask::Priv(rows) {
+  if {[lindex $row 0] eq "database_summary"} {set grammar 1}
+ }
+ list $palette $grammar
+} -cleanup {
+ catch {dict unset ::action::Registry fix.palette}
+} -result {1 1}
+
 trace remove execution ::action::run enter ::fix::trace
 foreach position [::game::usedPositions?] {catch {::game::release $position}}
 catch {::application::database::closeBase .application $::fix::Base}
