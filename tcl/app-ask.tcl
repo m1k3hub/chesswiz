@@ -1364,14 +1364,34 @@ proc ::application::speech::FinishTranscribe {} {
 # Put a transcript at the cursor in the Ask field. Editable, never sent.
 proc ::application::speech::InsertTranscript {text} {
 	set text [string trim $text]
- if {[string equal -nocase $text "go"] && [::application::ask::ListVisible]} {
-  ::application::ask::Choose
-  return 1
- }
- if {$text eq ""} { return 0 }
- if {![winfo exists [::application::ask::Entry]]} { return 0 }
+	# whisper-cli ends sentences with punctuation ("Go."). Ignore it for the
+	# spoken confirmation, but leave the transcript itself untouched.
+	set spoken $text
+	regsub {[\s.!?,;:]+$} $spoken {} spoken
+	if {[string equal -nocase $spoken "go"] && [::application::ask::ListVisible]} {
+		::application::ask::Choose
+		return 1
+	}
+	if {$text eq ""} { return 0 }
+	if {![winfo exists [::application::ask::Entry]]} { return 0 }
 	set entry [::application::ask::Entry]
-	$entry insert insert $text
+	# Do not fuse a transcript with the word on either side of the cursor.
+	set insert $text
+	set current [$entry get]
+	set pos [$entry index insert]
+	if {$pos > 0} {
+		set before [string index $current [expr {$pos - 1}]]
+		if {$before ne "" && ![string is space $before]} {
+			set insert " $insert"
+		}
+	}
+	if {$pos < [string length $current]} {
+		set after [string index $current $pos]
+		if {$after ne "" && ![string is space $after]} {
+			append insert " "
+		}
+	}
+	$entry insert insert $insert
 	focus -force $entry
 	Schedule idle ::application::ask::Typed
 	SetHint [format $::application::ask::mc::Heard $text]
