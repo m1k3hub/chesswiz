@@ -202,7 +202,19 @@ proc ::td::swiss::CheckRound {state {round 0}} {
     set bbpReport {}
     set bbpDiscrepancy 0
     if {[dict get $state system] eq "swiss" && ![llength [lsearch -all -inline -glob [lmap v $violations {dict get $v code}] C4-*]]} {
-        if {![catch {::td::trf::Write $state trf16 $round 0 1} trf] && ![catch {Run $trf -c} out]} {
+        if {[catch {::td::trf::Write $state trf16 $round 0 1} trf]} {
+            set bbpDiscrepancy 1
+            set bbpReport $trf
+            lappend violations [dict create code C04-CHECKER-UNAVAILABLE round $round detail "Dutch pairing checker could not build TRF input: $trf"]
+        } elseif {[catch {Run $trf -c} out]} {
+            set bbpDiscrepancy 1
+            set bbpReport $out
+            if {[string match "*No valid pairing exists*" $out]} {
+                lappend violations [dict create code C04-QUALITY-DISCREPANCY round $round detail "bbpPairings -c reported that no valid Dutch pairing exists"]
+            } else {
+                lappend violations [dict create code C04-CHECKER-UNAVAILABLE round $round detail "Dutch pairing checker failed: $out"]
+            }
+        } else {
             set bbpReport $out
             if {[string match "*Checker pairings*" $out] || [string match "*No valid pairing exists*" $out]} {
                 set bbpDiscrepancy 1

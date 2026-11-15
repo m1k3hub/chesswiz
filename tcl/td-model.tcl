@@ -486,7 +486,7 @@ proc ::td::model::Apply {command info domain} {
 			dict set state pairings $pairings
 			set check [::td::swiss::CheckRound $state $round]
 			set ruling [string trim [dg $domain ruling {}]]
-			set absolute [lmap v [dict get $check violations] {expr {[string match C\[1234\]-* [dict get $v code]] ? $v : [continue]}}]
+			set absolute [lmap v [dict get $check violations] {expr {[string match C\[1234\]-* [dict get $v code]] || [dict get $v code] eq "C04-CHECKER-UNAVAILABLE" ? $v : [continue]}}]
 			if {[llength $absolute] && $ruling eq ""} {
 				error "prohibited pairing ([join [lmap v $absolute {dict get $v code}] {, }]) requires an explicit TD ruling"
 			}
