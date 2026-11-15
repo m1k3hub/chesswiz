@@ -27,7 +27,7 @@ proc ::td::score::PlayerName {state id} { if {$id eq ""} { return "BYE" }; retur
 proc ::td::score::IsBye {p} { return [expr {[dg $p category {}] eq "pairing-bye" || [dict get $p black] eq ""}] }
 proc ::td::score::Complete {p} { return [expr {[dg $p status pending] eq "complete" || [dg $p result *] ni {* {}}}] }
 proc ::td::score::Annulled {p} { return [expr {[dg $p category {}] eq "annulled" || ![dg $p count_standings 1]}] }
-proc ::td::score::ForfeitLoss {p player} { return [expr {[dg $p category {}] in {forfeit forfeit-loss withdrawal withdrawal-annulled} && ![dg $p played 1] && [Points $p $player] eq "0 1"}] }
+proc ::td::score::ForfeitLoss {p player} { return [expr {[dg $p category {}] in {forfeit forfeit-loss double-forfeit withdrawal withdrawal-annulled} && ![dg $p played 1] && [Points $p $player] eq "0 1"}] }
 
 proc ::td::score::Points {p player} {
 	if {[dg $p category {}] eq "annulled" || ![dg $p count_standings 1]} { return {0 1} }
@@ -104,13 +104,13 @@ proc ::td::score::AdjustedScores {state rows} {
 		foreach p [dg $state pairings {}] {
 			if {![Complete $p] || ([dict get $p white] ne $id && [dict get $p black] ne $id)} { continue }
 			set category [dg $p category {}]
-			if {$category ni {requested-bye trailing-bye}} { continue }
+			if {$category ni {requested-bye zero-point-bye trailing-bye}} { continue }
 			# C.07 16.2.5: a requested bye followed only by VURs, or in the
 			# last round, is a draw for opponents' tiebreak calculations.
 			set laterNonVur 0
 			foreach q [dg $state pairings {}] {
 				if {[dict get $q round] <= [dict get $p round] || ([dict get $q white] ne $id && [dict get $q black] ne $id)} { continue }
-				if {[dg $q category {}] ni {requested-bye forfeit forfeit-loss withdrawal trailing-bye}} { set laterNonVur 1 }
+				if {[dg $q category {}] ni {requested-bye zero-point-bye forfeit forfeit-loss double-forfeit withdrawal trailing-bye}} { set laterNonVur 1 }
 			}
 			if {[dict get $p round] == [dg $state rounds 0] || !$laterNonVur} {
 				set score [Add $score [Sub {1 1} [Points $p $id]]]
@@ -157,7 +157,7 @@ proc ::td::score::Contributions {state rows} {
 				set opponentName "dummy for round [dict get $p round]"
 				set dummy 1
 			}
-			set vur [expr {$category in {requested-bye trailing-bye} || [ForfeitLoss $p $id]}]
+			set vur [expr {$category in {requested-bye zero-point-bye trailing-bye} || [ForfeitLoss $p $id]}]
 			set entry [dict create pairing [dict get $p id] round [dict get $p round] opponent $opponent opponent_name $opponentName \
 				points $points opponent_score $score category $category played $played dummy $dummy vur $vur]
 			dict lappend out $id $entry

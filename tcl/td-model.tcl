@@ -156,6 +156,45 @@ proc ::td::model::Withdraw {state domain} {
 	set id [FindPlayer $state [dg $domain player {}]]
 	set round [dg $domain round [dg $state current_round 1]]
 	set pairings [dg $state pairings {}]
+	if {[dg $state system round-robin] eq "swiss"} {
+		set changed 0
+		set afterPairing 0
+		for {set i 0} {$i < [llength $pairings]} {incr i} {
+			set p [lindex $pairings $i]
+			if {[IsBye $p] || ([dict get $p white] ne $id && [dict get $p black] ne $id)} { continue }
+			if {[dg $p status pending] eq "complete"} { continue }
+			set afterPairing 1
+			dict lappend p result_history [dict create result [dg $p result *] category [dg $p category {}] withdrawn [clock seconds]]
+			set opponent [expr {[dict get $p white] eq $id ? [dict get $p black] : [dict get $p white]}]
+			set other [FindPlayer $state $opponent]
+			set otherWithdrawn [dg [Player $state $other] withdrawn 0]
+			dict set p played 0
+			dict set p status complete
+			dict set p termination abandoned
+			dict set p rating 0
+			dict set p count_standings 1
+			if {$otherWithdrawn || [dg $domain policy forfeit-win] eq "double-forfeit"} {
+				dict set p category double-forfeit
+				dict set p result 0-0
+			} else {
+				dict set p category forfeit
+				dict set p result [expr {[dict get $p white] eq $id ? "0-1" : "1-0"}]
+			}
+			lset pairings $i $p
+			incr changed
+		}
+		set players [dg $state players {}]
+		for {set i 0} {$i < [llength $players]} {incr i} {
+			set p [lindex $players $i]
+			if {[dict get $p id] eq $id} { dict set p withdrawn $round; lset players $i $p }
+		}
+		set timing [expr {$afterPairing ? "withdrawal-after-pairing" : "withdrawal-before-pairing"}]
+		dict set state players $players
+		dict set state pairings $pairings
+		dict lappend state withdrawals [dict create player $id round $round timing $timing policy [expr {$afterPairing ? "forfeits" : "before-pairing"}] changed $changed]
+		set state [PublishCorrection $state]
+		return [list $state [dict create withdrawn $id round $round timing $timing policy [expr {$afterPairing ? "forfeits" : "before-pairing"}] changed $changed] {} 1]
+	}
 	set total 0
 	set played 0
 	foreach p $pairings {
@@ -368,13 +407,25 @@ proc ::td::model::Apply {command info domain} {
 		bye {
 			set id [FindPlayer $state [dg $domain player {}]]
 			set category [dg $domain category requested-bye]
-			if {$category ni {requested-bye full-point-bye pairing-bye}} { error "invalid bye category" }
-			set points [dg $domain points [expr {$category eq "requested-bye" ? 1 : 2}]]
-			set round [dg $domain round [dg $state current_round 1]]
+			if {$category ni {requested-bye zero-point-bye full-point-bye pairing-bye}} { error "invalid bye category" }
+			set defaultPoints [dict get {requested-bye 1 zero-point-bye 0 full-point-bye 2 pairing-bye 2} $category]
+			set supplied [dg $domain points -1]
+			set points [expr {$supplied < 0 ? $defaultPoints : $supplied}]
+			if {$points ni {0 1 2}} { error "bye points must be 0, 1 or 2 half-points" }
+			if {$category eq "zero-point-bye"} { set points 0 }
+			set round [dg $domain round 0]
+			if {$round <= 0} { set round [dg $state current_round 1] }
+			if {$round < 1 || ([dg $state rounds 0] > 0 && $round > [dg $state rounds 0])} { error "bye round out of range" }
+			foreach q [Pairings $state $round] {
+				if {[dict get $q white] eq $id || [dict get $q black] eq $id} {
+					error "player already has a pairing or bye in round $round"
+				}
+			}
 			set p [dict create id "bye-$id-r$round-[llength [dg $state pairings {}]]" round $round board 0 white $id black {} result * status complete \
 				category $category played 0 count_standings 1 rating 0 points $points attempt 0 game_id {} pgn {}]
 			dict lappend state pairings $p
-			return [list $state [dict create bye $id round $round] $target $history]
+			set state [PublishCorrection $state]
+			return [list $state [dict create bye $id round $round category $category points $points] {} 1]
 		}
 		publish {
 			set publication [expr {[dg $state publication_revision 0]+1}]

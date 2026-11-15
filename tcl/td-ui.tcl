@@ -164,8 +164,25 @@ proc ::td::ui::BuildPlayers {f} {
     set Fields(fide_id) {}
     ttk::button $f.fide.add -text "Register from FIDE list" -command ::td::ui::RegisterFide
     pack $f.fide.label $f.fide.id $f.fide.add -side left
+	ttk::frame $f.bye; pack $f.bye -fill x
+	ttk::label $f.bye.rlabel -text "Round"
+	ttk::spinbox $f.bye.round -from 1 -to 99 -width 5 -textvariable ::td::ui::Fields(bye_round); set Fields(bye_round) 1
+	ttk::combobox $f.bye.cat -state readonly -values {requested-bye zero-point-bye full-point-bye pairing-bye} -textvariable ::td::ui::Fields(bye_category); set Fields(bye_category) requested-bye
+	ttk::button $f.bye.record -text "Record bye" -command ::td::ui::RecordBye
+	ttk::button $f.bye.withdraw -text "Withdraw selected" -command ::td::ui::WithdrawSelected
+	pack $f.bye.rlabel $f.bye.round $f.bye.cat $f.bye.record $f.bye.withdraw -side left -padx 2
 	ttk::button $f.add.button -text "Register" -command ::td::ui::Register
 	pack $f.add.name -side left -fill x -expand yes; pack $f.add.kind -side left; pack $f.add.button -side left
+}
+proc ::td::ui::RecordBye {} {
+	variable Fields; variable Notebook
+	set player [Selected $Notebook.players.tree]
+	Mutate td.bye [dict create player $player round $Fields(bye_round) category $Fields(bye_category) points -1]
+}
+proc ::td::ui::WithdrawSelected {} {
+	variable Fields; variable Notebook
+	set player [Selected $Notebook.players.tree]
+	Mutate td.withdraw [dict create player $player round $Fields(bye_round)]
 }
 proc ::td::ui::Register {} {
 	variable Fields
