@@ -213,6 +213,44 @@ proc ::fix::repertoireRow {} {
 } -result {1 {Thomas, Michael} 0 1 0}
 
 # ----------------------------------------------------------------------
+# F-11: question mode marks itself busy, scrubs the facts it sends, and
+# supplies the read-only annotation fact-check needed to answer.
+# ----------------------------------------------------------------------
+::tcltest::test F-11-question-busy-scrubbed-facts {a question is busy, scrubbed and grounded in the fact-check} -setup {
+ set ::fix::QuestionMessages {}
+ rename ::ai::provider::chatAsync ::fix::realChatAsync
+ proc ::ai::provider::chatAsync {messages observer done} {set ::fix::QuestionMessages $messages}
+ rename ::application::assistant::DoCurrentGame ::fix::realCurrentGame
+ proc ::application::assistant::DoCurrentGame {} {return "Game record from /home/user/game.pgn secret=$::env(SCIDB_TEST_SECRET)"}
+ rename ::ai::factcheck::game ::fix::realFactCheckGame
+ proc ::ai::factcheck::game {args} {
+  return {game 2 checked 1 flagged 1 findings {{move 5.Nf3 text {White is lost} problems {{the queen is still on d1}}}}}
+ }
+ set ::application::assistant::Priv(busy) 0
+} -body {
+ set ::env(SCIDB_TEST_SECRET) topsecret-value
+ set started [::application::assistant::Question {Please check the annotations of this game}]
+ set busyAfter $::application::assistant::Priv(busy)
+ set overlap [::application::assistant::Question {second question}]
+ set system [dict get [lindex $::fix::QuestionMessages 0] content]
+ set noSecret [expr {[string first {topsecret-value} $system] < 0}]
+ set redacted [string match {*<redacted:SCIDB_TEST_SECRET>*} $system]
+ set hasFact [string match {*Stored-annotation fact-check*} $system]
+ set hasFinding [string match {*the queen is still on d1*} $system]
+ ::application::assistant::QuestionReply [dict create ok 1 message [dict create content answer]]
+ list $started $busyAfter $overlap $noSecret $redacted $hasFact $hasFinding $::application::assistant::Priv(busy)
+} -cleanup {
+ unset -nocomplain ::env(SCIDB_TEST_SECRET)
+ catch {rename ::ai::provider::chatAsync {}}
+ rename ::fix::realChatAsync ::ai::provider::chatAsync
+ catch {rename ::application::assistant::DoCurrentGame {}}
+ rename ::fix::realCurrentGame ::application::assistant::DoCurrentGame
+ catch {rename ::ai::factcheck::game {}}
+ rename ::fix::realFactCheckGame ::ai::factcheck::game
+ set ::application::assistant::Priv(busy) 0
+} -result {1 1 0 1 1 1 1 0}
+
+# ----------------------------------------------------------------------
 # F-10: completing a missing free-form slot keeps the typed text and never
 # corrupts Query; the prepare-against colour is shown as the user's side.
 # ----------------------------------------------------------------------

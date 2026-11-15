@@ -504,18 +504,40 @@ proc ::commandline::ResolveLater {token reply} {
 namespace eval ::application::assistant {}
 # A separate, tools-free conversation path. Even unsolicited provider tool calls
 # are ignored, so model output can never reach the action registry.
+proc ::application::assistant::QuestionFacts {text} {
+ set facts ""
+ catch {set facts [DoCurrentGame]}
+ if {[regexp -nocase {annotat|comment|note} $text]
+  && [llength [info commands ::ai::factcheck::game]]} {
+  if {![catch {set checked [::ai::factcheck::game]}]} {
+   append facts "\n\nStored-annotation fact-check ([dict get $checked checked] annotation(s) checked, [dict get $checked flagged] contradicted):"
+   foreach finding [dict get $checked findings] {
+    append facts "\n- [dict get $finding move]: [dict get $finding text] -> [join [dict get $finding problems] {; }]"
+   }
+   if {![dict get $checked flagged]} {append facts " none."}
+  }
+ }
+ return $facts
+}
 proc ::application::assistant::Question {text} {
  variable Priv
  if {$Priv(busy)} {return 0}
- ConfigureProvider
- set facts ""
- catch {set facts [DoCurrentGame]}
- set messages [list [dict create role system content "Answer this question read-only. You cannot run commands or change data. Chess facts must come from the supplied board record; do not invent evaluations. Board record:\n$facts"] [dict create role user content $text]]
- Append user $text
- ::ai::provider::chatAsync $messages {} ::application::assistant::QuestionReply
+ if {[catch {
+  ConfigureProvider
+  set facts [QuestionFacts $text]
+  set messages [list [dict create role system content "Answer this question read-only. You cannot run commands or change data. Chess facts must come from the supplied board record; do not invent evaluations. Board record:\n[Scrub $facts]"] [dict create role user content $text]]
+  Append user $text
+  SetBusy 1
+  ::ai::provider::chatAsync $messages {} ::application::assistant::QuestionReply
+ } err]} {
+  SetBusy 0
+  catch {Append error $err}
+  return 0
+ }
  return 1
 }
 proc ::application::assistant::QuestionReply {result} {
+ SetBusy 0
  if {![dict get $result ok]} {Append info [dict get $result error]; return}
  set message [dict get $result message]
  if {[dict exists $message tool_calls] && [llength [dict get $message tool_calls]]} {
