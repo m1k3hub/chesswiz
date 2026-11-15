@@ -445,4 +445,35 @@ tcltest::test review4-gap003-openingprep-beside-board {the Opening Preparation t
 	::layoutGaps::settle 400
 } -result {1 1 1}
 
+# REVIEW4 GAP-002: unplugging a secondary monitor changes the display
+# signature even when .application stays on the primary, and the window that
+# was on it is re-clamped to an active work area.
+tcltest::test review4-gap002-monitor-unplug {a secondary monitor unplug is detected and its windows are relocated} 		-constraints dualmon -setup {
+	set saved [wm geometry .application]
+	::layoutGaps::setupMonitors
+	catch { destroy .online }
+	wm geometry .application 700x700+20+20
+	::layoutGaps::settle 400
+	set path [::online::window::open]
+	::scidb::test::wait::until {[winfo exists $path] && [winfo ismapped $path]}
+	::layoutGaps::settle 300
+	wm geometry $path 500x400+1040+100
+	::layoutGaps::settle 300
+	::application::displayWatch
+	set before [::application::displaySignature]
+	exec xrandr --delmonitor RIGHT
+	::layoutGaps::settle 300
+} -body {
+	::application::displayWatch
+	::layoutGaps::settle 1200
+	set after [::application::displaySignature]
+	list [expr {$before ne $after}] \
+		[::layoutGaps::inside [::layoutGaps::frame $path] {0 0 1000 1080}]
+} -cleanup {
+	catch { destroy .online }
+	::layoutGaps::clearMonitors
+	wm geometry .application $saved
+	::layoutGaps::settle 500
+} -result {1 1}
+
 tcltest::cleanupTests

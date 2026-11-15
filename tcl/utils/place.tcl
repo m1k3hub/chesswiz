@@ -363,6 +363,66 @@ proc clamp {pos size start length} {
 # Clamp client size and outer-frame position together. Pure arithmetic so this
 # also works before mapping, when winfo width/rootx still describe an old size.
 # Work area is {x y width height}; extents are {left right top bottom}.
+# Every active monitor's work area, with the host monitor first. On X11 a
+# removed monitor can leave the whole virtual framebuffer behind as a
+# synthetic monitor; when a smaller active monitor sits inside it, that
+# full-screen rectangle is stale and must not win placement (GAP-002).
+proc activeWorkAreasFor {w} {
+	# The native monitor query needs a realised window. An unmapped dialog
+	# asks from the main window; Tk's window id is still 0 before mapping
+	# and XQueryTree on 0 aborts the process.
+	set source $w
+	if {![winfo ismapped $source] && [winfo exists .application] && [winfo ismapped .application]} {
+		set source .application
+	}
+	set areas {}
+	catch { set areas [::scidb::tk::wm workareas $source] }
+	if {![llength $areas]} { return [list [winfo workarea $source]] }
+	if {[llength $areas] > 1 && [winfo exists $source]} {
+		set sw [winfo screenwidth $source]
+		set sh [winfo screenheight $source]
+		set filtered {}
+		foreach area $areas {
+			lassign $area ax ay aw ah
+			if {$ax <= 0 && $ay <= 0 && $ax + $aw >= $sw && $ay + $ah >= $sh} {
+				set covered 0
+				foreach other $areas {
+					if {$other eq $area} { continue }
+					lassign $other ox oy ow oh
+					if {$ow > 0 && $oh > 0 && $ow * $oh < $aw * $ah
+						&& $ox >= $ax && $oy >= $ay
+						&& $ox + $ow <= $ax + $aw
+						&& $oy + $oh <= $ay + $ah} { set covered 1; break }
+				}
+				if {$covered} { continue }
+			}
+			lappend filtered $area
+		}
+		if {[llength $filtered]} { set areas $filtered }
+	}
+	return $areas
+}
+
+# The work area that should hold <w>: the one with the largest overlap with
+# its current rectangle, otherwise the area hosting its monitor (first).
+proc placementAreaFor {w {geometry ""}} {
+	set areas [activeWorkAreasFor $w]
+	if {[llength $areas] <= 1} { return [lindex $areas 0] }
+	if {$geometry eq ""} { set geometry [wm geometry $w] }
+	if {![regexp {^[0-9]+x[0-9]+([+-])(-?[0-9]+)([+-])(-?[0-9]+)$} $geometry -> xs x ys y]} {
+		return [lindex $areas 0]
+	}
+	set best [lindex $areas 0]
+	set bestArea -1
+	foreach area $areas {
+		lassign $area ax ay aw ah
+		set int [expr {max(0, min($x+[winfo width $w], $ax+$aw) - max($x, $ax))
+			* max(0, min($y+[winfo height $w], $ay+$ah) - max($y, $ay))}]
+		if {$int > $bestArea} { set bestArea $int; set best $area }
+	}
+	return $best
+}
+
 # Clamp a root-coordinate rectangle (menus, popups) to a work area. Unlike
 # max(0, ...) this respects a negative-origin monitor and a top bar.
 proc clampRoot {x y w h area} {
@@ -390,7 +450,7 @@ proc clampGeometry {geometry workarea {extents {0 0 0 0}}} {
 # Translate the native frame into Tk geometry coordinates. Reported extents
 # can omit the WM's outer border; measure both size and position once mapped.
 proc fittedGeometry {path geometry} {
-	set area [winfo workarea $path]
+	set area [placementAreaFor $path $geometry]
 	set extents [winfo extents $path]
 	if {[winfo ismapped $path] && [wm state $path] eq "normal"
 		&& ![catch {::scidb::tk::wm frame $path} frame] && [llength $frame] == 4

@@ -863,11 +863,19 @@ proc NotifyScalingListener {listener} {
 # unchanged. A change runs the same relayout/re-clamp as the wrapper path.
 proc displaySignature {} {
 	if {![winfo exists .application]} { return {} }
+	set floating {}
+	foreach w [FloatingWindows] {
+		lappend floating $w [::util::place::activeWorkAreasFor $w] \
+			[catch {::scidb::tk::wm monitor $w} monitor] $monitor \
+			[expr {[catch {::scidb::tk::wm dpi $w} dpi] ? 0 : round($dpi)}]
+	}
 	return [list [tk scaling] \
 		[winfo screenwidth .application] [winfo screenheight .application] \
 		[winfo workarea .application] \
+		[::util::place::activeWorkAreasFor .application] \
 		[::scidb::tk::wm monitor .application] \
-		[expr {round([::scidb::tk::wm dpi .application])}]]
+		[expr {round([::scidb::tk::wm dpi .application])}] \
+		$floating]
 }
 
 
