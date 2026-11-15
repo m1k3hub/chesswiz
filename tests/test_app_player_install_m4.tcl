@@ -87,6 +87,68 @@ with zipfile.ZipFile(sys.argv[1], 'w') as z:
  rename ::dialog::info {}
  rename ::m4install::realInfo ::dialog::info
 } -result {2 0 1 0}
+tcltest::test VAL-PD4-012-pipe-ui {Real menu.db.player.lists Fetch and Choose File actions reject pipe-containing DWZ/ECF/ICCF records} -setup {
+ set ::m4install::errMsgs {}
+ set ::m4install::infoMsgs {}
+ rename ::dialog::error ::m4install::realError
+ rename ::dialog::info ::m4install::realInfo
+ rename ::tk_getOpenFile ::m4install::realChooser
+ proc ::dialog::error {args} { lappend ::m4install::errMsgs [dict get $args -message] }
+ proc ::dialog::info {args} { lappend ::m4install::infoMsgs [dict get $args -message] }
+ file delete -force [::playerdata::listFile dwz] [::playerdata::listInfoFile dwz] \
+  [::playerdata::listFile iccf] [::playerdata::listInfoFile iccf]
+ set ::m4install::pipeDwzZip [file join $::m4install::dir pipe-dwz.zip]
+ exec python3 -c {
+import sys, zipfile
+with zipfile.ZipFile(sys.argv[1], 'w') as z:
+    z.writestr('spieler.csv', 'ZPS,Mitgliedsnummer,"Name,Vorname",DWZ\n99999,1,"Fixture, Valid",1900\n"99|999",2,"Fixture, PipeZps",1900\n'.encode('cp1252'))
+} $::m4install::pipeDwzZip
+ set ::m4install::pipeIccfCsv [file join $::m4install::dir pipe-iccf.csv]
+ set ch [open $::m4install::pipeIccfCsv w]
+ puts $ch "990098;ENG;IM;Fixture, ValidIccf;20;2200;90;\n990099;ENG;IM;Fixture, Pipe|Name;20;2200;90;"
+ close $ch
+ proc ::tk_getOpenFile {args} { return $::m4install::pipeIccfCsv }
+} -body {
+ set beforeEcf [::m4install::contents [::playerdata::listFile ecf]]
+ proc ::application::download::Get {url done} {
+  if {[string match *englishchess* $url]} {
+   set payload "ECF_code,full_name,revised_standard\n999001A,\"Fixture, Valid\",1900\n\"99|002B\",\"Fixture, PipeEcf\",1900\n"
+  } else {
+   set payload [::m4install::contents $::m4install::pipeDwzZip]
+  }
+  uplevel #0 [list {*}$done [dict create ok 1 data $payload code 200]]
+ }
+ proc ::dialog::question {args} {
+  if {[dict exists $args -embed]} {
+   set w [toplevel .m4_lists_pipe]
+   uplevel #0 [dict get $args -embed] [list $w TkDefaultFont TkDefaultFont]
+   $w.buttonecf invoke
+   $w.buttondwz invoke
+   $w.buttoniccf invoke
+   destroy $w
+  }
+  return cancel
+ }
+ ::application::switchTab database
+ ::action::run menu.db.player.lists
+ list \
+  [llength $::m4install::errMsgs] \
+  [llength $::m4install::infoMsgs] \
+  [expr {$beforeEcf eq [::m4install::contents [::playerdata::listFile ecf]]}] \
+  [file exists [::playerdata::listFile dwz]] \
+  [file exists [::playerdata::listFile iccf]]
+} -cleanup {
+ proc ::application::download::Get {args} {incr ::m4install::requests; error {Network forbidden in tests}}
+ proc ::dialog::question {args} {return cancel}
+ rename ::tk_getOpenFile {}
+ rename ::m4install::realChooser ::tk_getOpenFile
+ rename ::dialog::error {}
+ rename ::m4install::realError ::dialog::error
+ rename ::dialog::info {}
+ rename ::m4install::realInfo ::dialog::info
+ file delete -force [::playerdata::listFile dwz] [::playerdata::listInfoFile dwz] \
+  [::playerdata::listFile iccf] [::playerdata::listInfoFile iccf]
+} -result {3 0 1 0 0}
 tcltest::test VAL-PD4-010 {Cancelled ICCF chooser leaves cache absent} -setup {
  rename ::tk_getOpenFile ::m4install::realChooser
  proc ::tk_getOpenFile {args} {return {}}

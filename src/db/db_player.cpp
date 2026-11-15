@@ -3558,6 +3558,66 @@ parseOptionalNumber(mstl::string const& field, unsigned& value)
 }
 
 
+// Installed lists store one record per line with '|' between its 8 fields.
+bool
+hasInstalledRecordSeparator(mstl::string const& s)
+{
+	for (unsigned i = 0; i < s.size(); ++i)
+	{
+		if (s[i] == '|' || s[i] == '\r' || s[i] == '\n')
+			return true;
+	}
+
+	return false;
+}
+
+
+// A DSB club ZPS is 5 ASCII alphanumeric characters (with digits in 1..3, e.g.
+// "10614" or "B000A"), never all zero and never containing '-' or '|'.
+bool
+isValidDwzZps(mstl::string const& s)
+{
+	if (s.size() != 5 || s == "00000" || hasInstalledRecordSeparator(s))
+		return false;
+
+	unsigned char c0 = static_cast<unsigned char>(s[0]);
+	unsigned char c1 = static_cast<unsigned char>(s[1]);
+	unsigned char c2 = static_cast<unsigned char>(s[2]);
+	unsigned char c3 = static_cast<unsigned char>(s[3]);
+	unsigned char c4 = static_cast<unsigned char>(s[4]);
+
+	return	c0 < 128 && ::isalnum(c0)
+			&& c1 < 128 && ::isdigit(c1)
+			&& c2 < 128 && ::isdigit(c2)
+			&& c3 < 128 && ::isdigit(c3)
+			&& c4 < 128 && ::isalnum(c4);
+}
+
+
+// An ECF player code is ASCII alphanumeric with at least one digit and no '|'.
+bool
+isValidEcfCode(mstl::string const& s)
+{
+	if (s.empty() || hasInstalledRecordSeparator(s))
+		return false;
+
+	bool hasDigit = false;
+
+	for (unsigned i = 0; i < s.size(); ++i)
+	{
+		unsigned char c = static_cast<unsigned char>(s[i]);
+
+		if (c >= 128 || !::isalnum(c))
+			return false;
+
+		if (::isdigit(c))
+			hasDigit = true;
+	}
+
+	return hasDigit;
+}
+
+
 // "m", "w" and "f" are the spellings of the three lists; "-" and "n" are none.
 sex::ID
 sexOf(mstl::string const& field)
@@ -3816,23 +3876,35 @@ readListRecord(mstl::string const& text, ListRecord& r)
 		b = i + 1;
 	}
 
-	if (f.size() < 8)
+	if (f.size() != 8)
 		return false;
 
 	r = ListRecord();
+	mstl::string idField(trimmed(f[0]));
 
-	if (trimmed(f[0]) != ListNone)
-		r.id = trimmed(f[0]);
+	if (idField.empty() || hasInstalledRecordSeparator(idField))
+		return false;
 
-	r.fideID		= numberOf(f[1]);
+	if (idField != ListNone)
+		r.id = idField;
+
+	if (	!parseOptionalNumber(f[1], r.fideID)
+		|| !parseOptionalNumber(f[3], r.birthYear)
+		|| !parseOptionalNumber(f[4], r.rating)
+		|| r.rating > rating::Max_Value
+		|| (r.birthYear != 0 && (r.birthYear < Date::MinYear || r.birthYear > 2047)))
+	{
+		return false;
+	}
+
 	r.sex			= sexOf(f[2]);
-	r.birthYear	= numberOf(f[3]);
-	r.rating		= numberOf(f[4]);
 	r.federation	= federationOf(f[5]);
 	r.titles		= titlesOf(f[6]);
 	r.name			= personName(f[7]);
 
-	return !r.name.empty() && sys::utf8::validate(r.name);
+	return	!r.name.empty()
+			&& sys::utf8::validate(r.name)
+			&& !hasInstalledRecordSeparator(r.name);
 }
 
 
@@ -3965,13 +4037,14 @@ convertDwzList(	mstl::istream& stream,
 		mstl::string memberNr(trimmed(fieldOf(f, nr)));
 		unsigned memberNum = 0;
 
-		if (	zpsCode.empty()
+		if (	!isValidDwzZps(zpsCode)
 			|| !isNumber(memberNr)
 			|| !parseOptionalNumber(memberNr, memberNum)
 			|| memberNum == 0
+			|| hasInstalledRecordSeparator(memberNr)
 			|| r.name.empty()
 			|| !sys::utf8::validate(r.name)
-			|| r.name.find('|') != mstl::string::npos
+			|| hasInstalledRecordSeparator(r.name)
 			|| !parseOptionalNumber(fieldOf(f, birth), r.birthYear)
 			|| !parseOptionalNumber(fieldOf(f, rating), r.rating)
 			|| !parseOptionalNumber(fieldOf(f, fideID), r.fideID)
@@ -4065,10 +4138,10 @@ convertEcfList(	mstl::istream& stream,
 		r.id			= trimmed(fieldOf(f, code));
 		r.name		= personName(fieldOf(f, name));
 
-		if (	r.id.empty()
+		if (	!isValidEcfCode(r.id)
 			|| r.name.empty()
 			|| !sys::utf8::validate(r.name)
-			|| r.name.find('|') != mstl::string::npos)
+			|| hasInstalledRecordSeparator(r.name))
 		{
 			return false;
 		}
@@ -4209,9 +4282,12 @@ convertIccfList(	mstl::istream& stream,
 		if (	o < 0
 			|| r.federation == country::Unknown
 			|| !isNumber(r.id)
+			|| numberOf(r.id) == 0
 			|| r.id.size() > 7
+			|| hasInstalledRecordSeparator(r.id)
 			|| r.name.size() < 3
 			|| !sys::utf8::validate(r.name)
+			|| hasInstalledRecordSeparator(r.name)
 			|| r.rating == 0
 			|| r.rating > rating::Max_Value)
 		{

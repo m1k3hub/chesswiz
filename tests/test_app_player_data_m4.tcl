@@ -125,6 +125,27 @@ tcltest::test VAL-PD4-011-required-fields {DWZ and ECF rows with empty or non-nu
   [catch {::scidb::app::filterRatingList ecf $ecfBadGrade $::m4::dir/ecf-bad-grade-out.txt 1800}] \
   [catch {::scidb::app::filterRatingList ecf $ecfBadFide $::m4::dir/ecf-bad-fide-out.txt 1800}]
 } -result {1 0 1 0 1 1 1 1 0 1 1 0 1 1 1 1 1 0 1 1 1}
+tcltest::test VAL-PD4-011-pipe-delimiters {Pipe and delimiter injection in DWZ/ECF/ICCF fields and extra pipe fields in installed lists are rejected} -body {
+ set dwzPipeZps  [::m4::write dwz-pipe-zps.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n\"99|999\",2,\"Fixture, PipeZps\",1900\n"]
+ set dwzDashZps  [::m4::write dwz-dash-zps.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n99-99,2,\"Fixture, DashZps\",1900\n"]
+ set dwzAlphaZps [::m4::write dwz-alpha-zps.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\nB000A,2,\"Fixture, AlphaZps\",1900\n"]
+ set ecfPipeId   [::m4::write ecf-pipe-id.csv "ECF_code,full_name,revised_standard\n999001A,\"Fixture, Valid\",1900\n\"99|002B\",\"Fixture, PipeEcf\",1900\n"]
+ set iccfPipeNm  [::m4::write iccf-pipe-name.csv "990098;ENG;IM;Fixture, ValidIccf;20;2200;90;\n990099;ENG;IM;Fixture, Pipe|Name;20;2200;90;\n"]
+ set dwzPipeOut  $::m4::dir/dwz-pipe-out.txt
+ set ecfPipeOut  $::m4::dir/ecf-pipe-out.txt
+ set iccfPipeOut $::m4::dir/iccf-pipe-out.txt
+ file delete -force $dwzPipeOut $ecfPipeOut $iccfPipeOut
+ set extraPipeInstalled [::m4::write extra-pipe.txt "#chesswiz-rating-list v1 kind=dwz date=2026-01-01 read=1 kept=1\n#source synthetic\n10614-799|0|M|1990|2100|GER|-|Pipeinj, Trailing|EXTRA\n"]
+ ::scidb::app::load installed $extraPipeInstalled
+ ::scidb::app::load done
+ list \
+  [catch {::scidb::app::filterRatingList dwz $dwzPipeZps $dwzPipeOut 1800}] [file exists $dwzPipeOut] \
+  [catch {::scidb::app::filterRatingList dwz $dwzDashZps $::m4::dir/dwz-dash-out.txt 1800}] \
+  [catch {::scidb::app::filterRatingList dwz $dwzAlphaZps $::m4::dir/dwz-alpha-out.txt 1800}] \
+  [catch {::scidb::app::filterRatingList ecf $ecfPipeId $ecfPipeOut 1800}] [file exists $ecfPipeOut] \
+  [catch {::scidb::app::filterRatingList iccf $iccfPipeNm $iccfPipeOut 1800}] [file exists $iccfPipeOut] \
+  [expr {[::scidb::player::lookup -name "Pipeinj, Trailing"] eq ""}]
+} -result {1 0 1 0 1 0 1 0 1}
 tcltest::test VAL-PD4-014 {Same FIDE identity joins without overwriting authoritative spelling; conflicting IDs remain distinct} -body {
  set fideHdr "ID Number      Name                                                         Fed Sex Tit  WTit OTit           FOA SRtng SGm SK RRtng RGm Rk BRtng BGm BK B-day Flag"
  set r1 [format "%-15s%-61s%-4s%-4s%-5s%-5s%-15s%-4s%-6s%-4s%-3s%-6s%-4s%-3s%-6s%-4s%-3s%-6s%-4s" 999700001 {Authoritative, One} GER M GM "" "" "" 2500 0 10 0 0 10 0 0 10 1985 ""]
