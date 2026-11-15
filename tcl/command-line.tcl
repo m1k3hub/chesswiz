@@ -204,21 +204,33 @@ proc ::commandline::FileSlot? {slot} {
  if {![dict exists $Types $slot]} {return 0}
  return [expr {[dict get $Types $slot] in {inputfile pgnfile outputfile filename}}]
 }
+# X11 file dialogs return {path encoding}; native dialogs return the path
+# alone. Never leak the encoding half into the command sentence.
+proc ::commandline::PickResult {result} {
+ if {[llength $result] == 2} {
+  lassign $result path encoding
+  if {$encoding eq "" || $encoding eq "AutoDetect" || $encoding in [encoding names]} {
+   return $path
+  }
+ }
+ return $result
+}
 # A file slot names its value with the platform's own picker; tests replace
-# this procedure so no modal dialog is ever opened off screen.
+# the dialog itself (never this procedure) so no window opens off screen.
 proc ::commandline::PickFile {slot} {
  variable Types
  set type [dict get $Types $slot]
  set pgn [list [list "PGN files" {.pgn .pgn.gz .zip}] [list "All files" *]]
+ set db [list [list "Chess databases" {.sci .si4 .si3 .cbh .scv .pgn .pgn.gz .zip}] [list "All files" *]]
  switch -- $type {
-  inputfile {return [dialog::openFile -parent .application -title "Open database" -filetypes $pgn]}
-  pgnfile {return [dialog::openFile -parent .application -title "Import games" -filetypes $pgn]}
+  inputfile {return [PickResult [dialog::openFile -parent .application -title "Open database" -filetypes $db]]}
+  pgnfile {return [PickResult [dialog::openFile -parent .application -title "Import games" -filetypes $pgn]]}
   outputfile {
    set types [list [list "PGN files" {.pgn}] [list "HTML files" {.html}] [list "PDF files" {.pdf}] [list "All files" *]]
-   return [dialog::saveFile -parent .application -title "Export games" -filetypes $types]
+   return [PickResult [dialog::saveFile -parent .application -title "Export games" -filetypes $types]]
   }
   filename {
-   return [dialog::saveFile -parent .application -title "Save database" -filetypes $pgn]
+   return [PickResult [dialog::saveFile -parent .application -title "Save database" -filetypes [list [list "Scidb databases" {.sci}] [list "All files" *]]]]
   }
  }
  return ""

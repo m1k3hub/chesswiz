@@ -412,31 +412,41 @@ proc ::fix::noop {args} {return {}}
   [expr {$row ne {} && [dict get $row args files] eq $path && ![llength [dict get $row missing]]}]
 } -result {1 1 1 1}
 
-::tcltest::test F-12-file-picker {Enter on a missing file slot opens the picker and completes the sentence} -setup {
- set ::fix::PickCalls {}
- rename ::commandline::PickFile ::fix::realPickFile
- proc ::commandline::PickFile {slot} {
-  lappend ::fix::PickCalls $slot
-  return [file join $::fix::Dir "picked database.pgn"]
- }
+::tcltest::test F-12-file-picker {Enter on a missing file slot unpacks the X11 picker pair and completes the sentence} -setup {
+ set ::fix::Picked [file join $::fix::Dir "picked database.pgn"]
+ set ::fix::DialogCalls {}
+ rename ::dialog::openFile ::fix::realOpenFile
+ rename ::dialog::saveFile ::fix::realSaveFile
+ proc ::dialog::openFile {args} {lappend ::fix::DialogCalls [list open $args]; return [list $::fix::Picked {}]}
+ proc ::dialog::saveFile {args} {lappend ::fix::DialogCalls [list save $args]; return [list [file join $::fix::Dir New.si4] {}]}
 } -body {
  set row [::fix::row {open database} 1]
  set ::application::ask::Query {open database}
  ::application::ask::MissingSlot $row
  set query $::application::ask::Query
- set picksAfterFile [llength $::fix::PickCalls]
+ set openTypes [lindex $::fix::DialogCalls 0 1]
+ set saveRow [::fix::row {save list as new database} 10]
+ set ::application::ask::Query {save list as new database}
+ ::application::ask::MissingSlot $saveRow
+ set saveQuery $::application::ask::Query
+ set saveTypes [lindex $::fix::DialogCalls 1 1]
  set playerRow [::fix::row {find games player} 15]
  set ::application::ask::Query {find games player}
  ::application::ask::MissingSlot $playerRow
- list $picksAfterFile [llength $::fix::PickCalls] \
+ list \
   [string match {open database "*} $query] [string match {*picked database.pgn*} $query] \
+  [expr {[string first "{}" $query] < 0}] \
+  [expr {[string first .sci $openTypes] >= 0}] [expr {[string first .sci $saveTypes] >= 0}] \
+  [string match {save list as new database *New.si4*} $saveQuery] \
   [expr {[::commandline::Values result_index 1] ne {}}]
 } -cleanup {
- catch {rename ::commandline::PickFile {}}
- rename ::fix::realPickFile ::commandline::PickFile
+ catch {rename ::dialog::openFile {}}
+ rename ::fix::realOpenFile ::dialog::openFile
+ catch {rename ::dialog::saveFile {}}
+ rename ::fix::realSaveFile ::dialog::saveFile
  set ::application::ask::Query {}
  ::application::ask::HideList
-} -result {1 1 1 1 1}
+} -result {1 1 1 1 1 1 1}
 
 # ----------------------------------------------------------------------
 # F-13: the field's own words, including the new buttons and the Aliases
