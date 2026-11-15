@@ -126,13 +126,35 @@ set FixNamesColOld	"Name in the database"
 set FixNamesColNew	"Name in the rating list"
 set FixNamesColGames	"Games"
 set FixNamesColSource	"Source"
+set FixNamesColVariant	"Variant"
 set FixNamesPickAll	"Tick &All"
 set FixNamesPickNone	"Tick &None"
 set FixNamesRevert	"&Undo Last Renaming"
 set FixNamesReverted	"%s player name(s) renamed back."
 set FixNamesNoUndo	"No renaming of this database to undo."
+set FixNamesApplyConfirm	"Apply %s selected name fixes (%s game references)?"
+set FixNamesApplyButton	"Apply selected name fixes"
+set FixNamesStale	"The database or reference data changed. Open a fresh preview."
+set FixNamesUndoConflict	"Undo conflicts with a database or reference-data change. No names changed."
+
+set ::playerdata::DefaultMC {}
+foreach _name [lsort [info vars ::playerdata::mc::*]] {
+	if {[array exists $_name] || [string index [namespace tail $_name] 0] eq "_"} { continue }
+	lappend ::playerdata::DefaultMC [namespace tail $_name] [set $_name]
+}
+unset _name
 
 } ;# namespace mc
+
+proc ::playerdata::ResetMC {} {
+	foreach {name value} $::playerdata::DefaultMC {
+		set ::playerdata::mc::$name $value
+	}
+	return
+}
+if {[llength [info commands ::mc::addDefaultReset]]} {
+	::mc::addDefaultReset ::playerdata::ResetMC
+}
 
 variable Url https://ratings.fide.com/download/players_list.zip
 variable Busy 0
@@ -888,8 +910,8 @@ proc ::playerdata::fixNames {parent {base {}}} {
 				}
 				if {$selected && [::dialog::question -parent $parent -default no \
 					-title $mc::FixNamesTitle \
-					-message "Apply $selected selected name fixes ($games game references)?" \
-					-buttons {{yes "Apply selected name fixes"} {no Cancel}}] eq "yes"} {
+					-message [format $mc::FixNamesApplyConfirm [::locale::formatNumber $selected] [::locale::formatNumber $games]] \
+					-buttons [list [list yes $mc::FixNamesApplyButton] [list no $::mc::Cancel]]] eq "yes"} {
 					ApplyNameFixes $sid $parent $base
 				}
 			}
@@ -916,7 +938,7 @@ proc ::playerdata::EmbedNameFixes {sid w infoFont alertFont} {
 	::ttk::scrollbar $w.box.scroll -command [list $tree yview]
 	$tree configure -yscrollcommand [list $w.box.scroll set]
 
-	$tree heading variant -text "Variant"
+	$tree heading variant -text $mc::FixNamesColVariant -anchor w
 	$tree column variant -width 90
 	$tree heading pick -text ""
 	$tree heading old -text $mc::FixNamesColOld -anchor w
@@ -998,7 +1020,7 @@ proc ::playerdata::ApplyNameFixes {sid parent base} {
 
 	if {![info exists NameFix($sid,state)] || [catch {NameState $base} state]
 		|| $state ne $NameFix($sid,state)} {
-		::dialog::info -parent $parent -message "The database or reference data changed. Open a fresh preview."
+		::dialog::info -parent $parent -message $mc::FixNamesStale
 		return 0
 	}
 	set byVariant {}
@@ -1071,7 +1093,7 @@ proc ::playerdata::revertNames {parent base} {
 
 	if {![info exists NameFix(undoState,$base)] || [catch {NameState $base} state]
 		|| $state ne $NameFix(undoState,$base)} {
-		::dialog::info -parent $parent -message "Undo conflicts with a database or reference-data change. No names changed."
+		::dialog::info -parent $parent -message $mc::FixNamesUndoConflict
 		return 0
 	}
 	set byVariant {}

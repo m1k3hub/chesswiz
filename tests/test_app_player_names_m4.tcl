@@ -485,6 +485,86 @@ tcltest::test VAL-PD5-017 {Fixtures, touched player-data test files, and logs co
  list [expr {[llength $testFiles] >= 8}] [expr {[llength $canary] >= 3}] $violations
 } -result {1 1 {}}
 
+tcltest::test VAL-PD5-i18n-de {German session localizes maintenance button, preview headings, apply confirmation, stale preview, and undo conflict} -setup {
+ set ::m4names::savedShare $::scidb::dir::share
+ set ::m4names::savedLang $::mc::langID
+ set ::scidb::dir::share [file normalize [file join [file dirname [file normalize [info script]]] .. tcl]]
+} -body {
+ set uibase [::m4names::openUiBase pi18n]
+ ::mc::setLang de
+
+ set menuFix $::menu::mc::MaintFixNames
+ set menuNat $::menu::mc::NationalLists
+
+ ::application::database::OpenMaintenanceReport .application $uibase Normal
+ set dlg [::application::database::MaintenanceDialogName $uibase]
+ set maintBtn [$dlg.actions.names cget -text]
+ set compactBtn [$dlg.actions.compact cget -text]
+
+ rename ::dialog::question ::m4names::realQuestion
+ rename ::dialog::info ::m4names::realInfo
+ set ::m4names::deInfos {}
+ proc ::dialog::info {args} { lappend ::m4names::deInfos [dict get $args -message] }
+ set ::m4names::deStep 0
+ set ::m4names::deVariantCol ""
+ set ::m4names::deOldCol ""
+ set ::m4names::deConfirmMsg ""
+ set ::m4names::deConfirmBtns {}
+ proc ::dialog::question {args} {
+  incr ::m4names::deStep
+  if {$::m4names::deStep == 1} {
+   set w [toplevel .m4_de_preview]
+   uplevel #0 [dict get $args -embed] [list $w TkDefaultFont TkDefaultFont]
+   set ::m4names::deVariantCol [$w.box.tree heading variant -text]
+   set ::m4names::deOldCol [$w.box.tree heading old -text]
+   destroy $w
+   return yes
+  }
+  set ::m4names::deConfirmMsg [dict get $args -message]
+  set ::m4names::deConfirmBtns [dict get $args -buttons]
+  ::playerdata::InvalidateNames
+  return yes
+ }
+ $dlg.actions.names invoke
+ destroy $dlg
+ set staleMsg [lindex $::m4names::deInfos end]
+
+ # Now apply cleanly, then trigger undo conflict in German
+ set ::m4names::deInfos {}
+ proc ::dialog::question {args} { return yes }
+ ::playerdata::fixNames .application $uibase
+ ::playerdata::InvalidateNames
+ ::playerdata::revertNames .application $uibase
+ set undoConflictMsg [lindex $::m4names::deInfos end]
+
+ rename ::dialog::question {}
+ rename ::m4names::realQuestion ::dialog::question
+ rename ::dialog::info {}
+ rename ::m4names::realInfo ::dialog::info
+ ::scidb::db::close $uibase
+
+ # Switch back to English and verify English defaults are restored
+ ::mc::setLang en
+ set enMaintBtn $::application::database::mc::Refresh
+
+ list \
+  [expr {$menuFix ne "Fix player names\u2026" && $menuFix ne ""}] \
+  [expr {$menuNat ne "National / correspondence lists\u2026" && $menuNat ne ""}] \
+  [expr {$maintBtn ne "Fix player names\u2026" && $maintBtn ne ""}] \
+  [expr {$compactBtn ne "Compact Now" && $compactBtn ne ""}] \
+  [expr {$::m4names::deVariantCol ne "Variant" && $::m4names::deVariantCol ne ""}] \
+  [expr {$::m4names::deOldCol ne "Name in the database" && $::m4names::deOldCol ne ""}] \
+  [expr {![string match "Apply * selected name fixes*" $::m4names::deConfirmMsg]}] \
+  [expr {[lindex $::m4names::deConfirmBtns 0 1] ne "Apply selected name fixes"}] \
+  [expr {[lindex $::m4names::deConfirmBtns 1 1] ne "Cancel"}] \
+  [expr {$staleMsg ne "The database or reference data changed. Open a fresh preview." && $staleMsg ne ""}] \
+  [expr {$undoConflictMsg ne "Undo conflicts with a database or reference-data change. No names changed." && $undoConflictMsg ne ""}] \
+  [expr {$enMaintBtn eq "Refresh"}]
+} -cleanup {
+ catch { ::mc::setLang $::m4names::savedLang }
+ set ::scidb::dir::share $::m4names::savedShare
+} -result {1 1 1 1 1 1 1 1 1 1 1 1}
+
 ::scidb::db::close $base
 file delete -force $::m4names::dir [::playerdata::Dir]
 tcltest::cleanupTests
