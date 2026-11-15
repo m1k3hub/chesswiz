@@ -289,8 +289,13 @@ proc ::fix::row {text id} {
 
 ::tcltest::test F-10-criteria-complete {a filled criteria tail is runnable and names its slot} -body {
  set row [::fix::row {find games min elo 2600 wins} 15]
- list [llength [dict get $row missing]] [dict get [dict get $row args] min_elo] [dict get [dict get $row args] result]
-} -result {0 2600 win}
+ set completed [::commandline::CompleteText [dict get $row template] [dict get $row args] [dict get $row missing]]
+ set calls [::fix::run {find games min elo 2600 wins Kasparov} 15]
+ list [expr {"player" in [dict get $row missing]}] \
+  [dict get [dict get $row args] min_elo] [dict get [dict get $row args] result] \
+  [string match {*min elo 2600*} $completed] [string match {*player <player>*} $completed] \
+  [expr {[lsearch -exact $calls {command.find {min_elo 2600 result win player {Kasparov, Garry}}}] >= 0}]
+} -result {1 2600 win 1 1 1}
 
 ::tcltest::test F-10-colour-completion {completed prepare-against text keeps the user's colour} -body {
  set row [::fix::row {prepare against Carlsen i have white} 28]

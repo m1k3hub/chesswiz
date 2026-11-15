@@ -504,7 +504,7 @@ proc ::commandline::CriteriaWord {slot} {
  switch -- $slot {
   min_elo {return {min elo}}
   both_min_elo {return {both elo}}
-  colour - color_ {return colour}
+  colour - color - color_ {return colour}
   default {return $slot}
  }
 }
@@ -518,13 +518,11 @@ proc ::commandline::CompleteText {template arguments {missing {}}} {
   } elseif {[string index $word 0] eq "@"} {
    set slot [string range $word 1 end]; set key [Key $slot]
    if {$slot eq "criteria"} {
-    dict for {k v} $arguments {lappend words $k $v}
-    if {[dict size $arguments]} {
-     # filled criteria already appear above
-    } elseif {[llength $missing]} {
+    dict for {k v} $arguments {lappend words [CriteriaWord $k] $v}
+    if {[llength $missing]} {
      set first [lindex $missing 0]
      lappend words [CriteriaWord $first] <$first>
-    } else {
+    } elseif {![dict size $arguments]} {
      lappend words player <player>
     }
    } elseif {[dict exists $arguments $key]} {
