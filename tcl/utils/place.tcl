@@ -1748,11 +1748,14 @@ proc besideDialogExtents {dlg} {
 	if {[winfo ismapped $dlg] && [llength [info commands ::scidb::tk::wm]]
 		&& ![catch {::scidb::tk::wm frameextents $dlg} frame] && [llength $frame] == 4} {
 		lassign $frame left right top bottom
-		lassign [winfo extents $dlg] el er et eb
-		set left [expr {max($left, $el)}]
-		set right [expr {max($right, $er)}]
-		set top [expr {max($top, $et)}]
-		set bottom [expr {max($bottom, $eb)}]
+		# A reparenting WM reports this window's real decoration. Only when
+		# that measurement is entirely zero (Xvfb without a reparenting WM)
+		# is the desktop-wide estimate the sole source, as GAP-001 requires.
+		# Taking the larger of the two otherwise misstates the frame: openbox
+		# reports 1 1 22 5 for a dialog while [winfo extents] says 3 3 16 6.
+		if {$left == 0 && $right == 0 && $top == 0 && $bottom == 0} {
+			lassign [winfo extents $dlg] left right top bottom
+		}
 		if {min($left,$right,$top,$bottom) >= 0} {
 			set BesideState($dlg,extents) [list $left $right $top $bottom]
 			# The initial unmapped plan used estimates. Replace it promptly
