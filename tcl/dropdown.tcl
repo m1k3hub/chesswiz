@@ -732,6 +732,9 @@ proc ::menu::CascadeAccel {labelName {fallback ""}} {
 # effect when it was filled. A rebind (or a scheme switch) calls this to
 # move the rows to the new keys without rebuilding the posted menu.
 proc ::menu::RefreshAccelerators {} {
+	if {[llength [info commands ::action::InvalidateAskRows]]} {
+		::action::InvalidateAskRows
+	}
 	variable DropdownWidget
 
 	::menu::MirrorCommandBindings
@@ -929,11 +932,17 @@ proc ::menu::RegisterNodes {node order top} {
 # ----------------------------------------------------------------------
 # Visibility-only callers do not need to construct dynamic cascades to
 # compute their enabled bit. Full state/Ask/dispatch keep the exact check.
-proc ::menu::state {id {object {}} {arguments {}} {visibilityOnly 0}} {
+proc ::menu::state {id {object {}} {arguments {}} {visibilityOnly 0} {pre {}}} {
 	set visible 1
 	set enabled 1
 
-	if {[catch { set rec [::action::get $id] }]} {
+	# The Ask field asks for every row on every keystroke. <pre> lets that
+	# caller pass the record and the row-invariant tab/game facts it already
+	# read, so this function stays the one state implementation without
+	# repeating the same lookups hundreds of times per keystroke.
+	if {[dict exists $pre record]} {
+		set rec [dict get $pre record]
+	} elseif {[catch { set rec [::action::get $id] }]} {
 		set rec ""
 	}
 	if {$rec ne ""} {
@@ -955,7 +964,9 @@ proc ::menu::state {id {object {}} {arguments {}} {visibilityOnly 0}} {
 		# explicit object (the Ask list, a direct ::menu::state call), use
 		# the current object the matching context menu would receive.
 		if {[llength [dict get $rec context]] && [dict get $rec dropdown] eq ""} {
-			if {![dict size $object] \
+			if {[dict exists $pre objectResolved]} {
+				if {![dict size $object]} { set visible 0 }
+			} elseif {![dict size $object] \
 			 && [llength [info commands ::context::CurrentObjectFor]]} {
 				set current [::context::CurrentObjectFor $id]
 				if {[llength $current]} {
@@ -970,7 +981,8 @@ proc ::menu::state {id {object {}} {arguments {}} {visibilityOnly 0}} {
 	# R1 applies to aliases as well as the posted dynamic rows.
 	if {[string match menu.game.paste_* $id] || [string match menu.game.merge_* $id]
 	 || [string match menu.game.history.* $id]} {
-		if {![GameLoaded]} { set visible 0 }
+		set gameLoaded [expr {[dict exists $pre gameLoaded] ? [dict get $pre gameLoaded] : [GameLoaded]}]
+		if {!$gameLoaded} { set visible 0 }
 	}
 
 	# Object-scoped rules (R10): strip/truncate/comment rows follow the
@@ -1008,16 +1020,33 @@ proc ::menu::state {id {object {}} {arguments {}} {visibilityOnly 0}} {
 	}
 
 	# R16: whole cascades greyed (never hidden) on the other tab.
-	set top [::menu::TopOf $id]
-	if {$top eq "Board" && [::menu::OnDatabaseTab]} { set enabled 0 }
-	if {$top eq "Database" && [::menu::BoardOnlyLayout]} { set enabled 0 }
+	set top [expr {[dict exists $pre top] ? [dict get $pre top] : [::menu::TopOf $id]}]
+	if {$top eq "Board"} {
+		set onDb [expr {[dict exists $pre onDb] ? [dict get $pre onDb] : [::menu::OnDatabaseTab]}]
+		if {$onDb} { set enabled 0 }
+	}
+	if {$top eq "Database"} {
+		set boardOnly [expr {[dict exists $pre boardOnly] ? [dict get $pre boardOnly] : [::menu::BoardOnlyLayout]}]
+		if {$boardOnly} { set enabled 0 }
+	}
 
 	if {![::capability::actionAvailable $id]} {set visible 0; set enabled 0}
+	# A full state read from a menu build is live; if it disagrees with the
+	# Ask snapshot, the snapshot is stale even though its stamp matched.
+	if {!$visibilityOnly && ![dict exists $pre record] \
+	 && [llength [info commands ::action::_ObserveState]]} {
+		::action::_ObserveState $id $visible $enabled
+	}
 	return [dict create visible $visible enabled $enabled]
 }
 
 proc ::menu::TopOf {id} {
 	if {[catch { set rec [::action::get $id] }]} { return "" }
+	return [::menu::TopOfRecord $rec]
+}
+
+proc ::menu::TopOfRecord {rec} {
+	if {$rec eq ""} { return "" }
 	set order [dict get $rec dropdown]
 	if {$order eq ""} { return "" }
 	switch -- [lindex [split $order .] 0] {
@@ -1744,6 +1773,9 @@ proc ::menu::FillLanguage {menu} {
 # registry labels are refreshed from the newly loaded mc strings, then the
 # menu widget is rebuilt so the top cascades and their leaves show them.
 proc ::menu::SwitchLanguage {lang} {
+	if {[llength [info commands ::action::InvalidateAskRows]]} {
+		::action::InvalidateAskRows
+	}
 	# the View > Language rows pass the language's name (Deutsch); setLang wants its id (de)
 	set n [lsearch -exact -index 0 $::i18n::languages $lang]
 	if {$n >= 0} { set lang [lindex $::i18n::languages $n 1] }

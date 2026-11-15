@@ -30,6 +30,19 @@ namespace eval ::action {
 	variable DebugGate {}
 	# Compatibility state for plan observers; never grants dispatch approval.
 	variable PlanGate 0
+	# Bare-call validity is a property of the args spec, not of live state.
+	variable BareCache [dict create]
+	# The Ask list reads every row on every keystroke. Its state-qualified
+	# rows are cached until a state input changes. The stamp below reads the
+	# same inputs menu::state does, so a menu build (a pure read) does not
+	# have to invalidate the cache.
+	variable AskCachedStamp ""
+	variable AskCachedRows {}
+	# Availability each cached row had when it was captured, so a menu read
+	# that observes a different availability can invalidate the snapshot.
+	variable AskStateMap [dict create]
+	variable AskBuilding 0
+	variable RegistryVersion 0
 
 	namespace export register run list get labels invoke
 }
@@ -113,6 +126,8 @@ proc ::action::_requiredState {opts} {
 # ----------------------------------------------------------------------
 proc ::action::register {id record} {
 	variable Registry
+	variable BareCache
+	variable RegistryVersion
 
 	if {$id eq ""} {
 		return -code error "error: action id cannot be empty"
@@ -199,7 +214,18 @@ proc ::action::register {id record} {
 	]
 
 	dict set Registry $id $normalized
+	dict unset BareCache $id
+	incr RegistryVersion
+	InvalidateAskRows
 	return $id
+}
+
+# Direct ::action::Registry mutations (context rows, named sorts, menu
+# nodes) bypass register; they call this so the Ask snapshot sees them.
+proc ::action::NoteRegistryChange {} {
+	variable RegistryVersion
+	incr RegistryVersion
+	InvalidateAskRows
 }
 
 # ----------------------------------------------------------------------
@@ -811,6 +837,14 @@ proc ::action::fuzzyScore {query text} {
 	if {$query eq ""} { return 0 }
 	set q [string tolower $query]
 	set t [string tolower $text]
+	return [fuzzyScoreLower $q $t]
+}
+
+# fuzzyScore with both strings already lowercased. The Ask list keeps its
+# row text lowercased and lowercases the query once, so typing does not
+# re-case every registry row on every keystroke.
+proc ::action::fuzzyScoreLower {q t} {
+	if {$q eq ""} { return 0 }
 	set pos [string first $q $t]
 	if {$pos >= 0} {
 		set score [expr {1000 - [string length $t] - $pos}]
@@ -865,6 +899,142 @@ proc ::action::labelAccel {id} {
 	return ""
 }
 
+# The same two readings from a record the caller already resolved. The Ask
+# field reads every registry row per keystroke, so it must not call get (and
+# a label-command) again for the text and the accelerator.
+proc ::action::searchTextRecord {record} {
+	set text "[displayLabel [dict get $record label]] [dict get $record doc]"
+	set ks [dict get $record keys]
+	if {[llength $ks] >= 2 && [lindex $ks 1] ne ""} { append text " " [lindex $ks 1] }
+	return $text
+}
+
+proc ::action::labelAccelRecord {id record} {
+	if {[llength [info commands ::menu::Accel]]} {
+		if {![catch { set a [::menu::Accel $id] }]} { return $a }
+	}
+	set ks [dict get $record keys]
+	if {[llength $ks] >= 2} { return [lindex $ks 1] }
+	return ""
+}
+
+# Drop the cached Ask rows. Called by every input the stamp cannot see
+# cheaply (register, capability override, tab/language/key changes) and by
+# any menu-state read outside an Ask rebuild.
+proc ::action::InvalidateAskRows {} {
+	variable AskCachedStamp
+	set AskCachedStamp ""
+}
+
+# A menu build (or any state read outside an Ask rebuild) sees live
+# availability. If it disagrees with the snapshot we captured, some state
+# input the stamp cannot read has changed; drop the snapshot rather than
+# serve a stale row set.
+proc ::action::_ObserveState {id visible enabled} {
+	variable AskCachedStamp
+	variable AskStateMap
+	variable AskBuilding
+	if {$AskBuilding || $AskCachedStamp eq ""} { return }
+	if {![dict exists $AskStateMap $id]} { return }
+	set now [expr {$visible && $enabled ? 1 : 0}]
+	if {$now != [dict get $AskStateMap $id]} { set AskCachedStamp "" }
+}
+
+proc ::action::_stampOf {cmd} {
+	if {![llength [info commands $cmd]]} { return "M" }
+	if {[catch {$cmd} value]} { return "E" }
+	return $value
+}
+
+# A cheap reading of the state inputs that decide availability. The
+# context objects and their posted rows are passed in because they change
+# per position/selection. Anything else menu::state reads is named here, so
+# a menu build (which reads the same state) does not need to invalidate.
+proc ::action::AskStamp {ctxObjects ctxMenus} {
+	variable Registry
+	variable RegistryVersion
+
+	set parts [::list [dict size $Registry] $RegistryVersion]
+	if {[info exists ::mc::langID]} { lappend parts L $::mc::langID }
+	foreach {key cmd} {
+		tab ::application::activeTab
+		game ::menu::GameLoaded
+		trial ::menu::TrialMode
+		engine ::menu::EngineRunning
+		over ::menu::GameOver
+		variant ::menu::NormalVariant
+		boardsetup ::menu::BoardSetupOpen
+		dbopen ::menu::DbOpen
+		dbwritable ::menu::DbWritable
+		sortable ::menu::Sortable
+		boardonly ::menu::BoardOnlyLayout
+		base ::menu::CurrentBase
+		panetwm ::menu::PaneTWM
+	} {
+		lappend parts $key [_stampOf $cmd]
+	}
+	if {[info exists ::menu::SupportURL]} { lappend parts support $::menu::SupportURL }
+	if {[llength [info commands ::game::clipboard::entries]]} {
+		lappend parts clip [::game::clipboard::entries]
+	}
+	if {[llength [info commands ::scidb::db::get]]} {
+		if {![catch {::scidb::db::get variant?} dbvariant]} {
+			lappend parts dbvariant $dbvariant
+		}
+	}
+	if {[llength [info commands ::gamebar::size]] \
+	 && [info exists ::application::pgn::Vars(gamebar)] \
+	 && [winfo exists $::application::pgn::Vars(gamebar)]} {
+		lappend parts gb [::gamebar::size $::application::pgn::Vars(gamebar)]
+	}
+	if {[info exists ::context::PredicateVersion]} {
+		lappend parts predver $::context::PredicateVersion
+	}
+	# Each online control row follows ::online::view::Available, i.e. the
+	# presence and state of its widget, which no variable below covers.
+	if {[llength [info commands ::online::view::Available]] \
+	 && [llength [info commands ::online::view::Current]]} {
+		set onlineCurrent ""
+		catch {set onlineCurrent [::online::view::Current]}
+		lappend parts online $onlineCurrent
+		if {$onlineCurrent ne ""} {
+			foreach key {resign draw takeback abort claim flip live
+				     accept decline analyse close chat autoqueen} {
+				if {[catch {::online::view::Available $key} avail]} { set avail E }
+				lappend parts online:$key $avail
+			}
+		}
+	}
+	if {[info exists ::capability::Overrides]} { lappend parts cap $::capability::Overrides }
+	if {[info exists ::application::keyEditor::Options]} {
+		lappend parts keys [lsort [array get ::application::keyEditor::Options]]
+	}
+	if {[info exists ::application::ai::Config(provider)]} {
+		lappend parts provider $::application::ai::Config(provider)
+	}
+	if {[info exists ::application::ai::Config(model)]} {
+		lappend parts model $::application::ai::Config(model)
+	}
+	if {[info exists ::comment::Vars(langSet)]} { lappend parts clangs $::comment::Vars(langSet) }
+	if {[info exists ::comment::Vars(lang)]} { lappend parts clang $::comment::Vars(lang) }
+	lappend parts ctx $ctxObjects $ctxMenus
+	return $parts
+}
+
+# A row may be offered in the Ask list only when its bare call validates.
+# The answer depends on the registered args spec alone, so cache it per id;
+# register drops the entry when the record changes.
+proc ::action::_bareRunnable {id} {
+	variable BareCache
+	if {[dict exists $BareCache $id]} { return [dict get $BareCache $id] }
+	set ok 0
+	if {![catch { ::action::validateArgs $id {} } validation]} {
+		set ok [expr {[lindex $validation 0] ne "error"}]
+	}
+	dict set BareCache $id $ok
+	return $ok
+}
+
 # ----------------------------------------------------------------------
 # labels: return {id label accelerator enabled visible} rows for a surface.
 # Surface: bar, context:<id>, palette, asklist ?query?
@@ -881,23 +1051,10 @@ proc ::action::labels {surface args} {
 	set query ""
 	if {$surface eq "asklist" && [llength $args]} { set query [lindex $args 0] }
 
+	if {$surface eq "asklist"} { return [AskRows $query] }
+
 	set output {}
 	set keyed {}
-	set contextIds {}
-	if {$surface eq "asklist"} {
-		# Context rows belong to their current object. Use the declared
-		# menu rows for every context, including pane-specific C9 rows,
-		# so unposted compatibility aliases cannot become Ask no-ops.
-		if {[llength [info commands ::context::MenuIds]] \
-		 && [llength [info commands ::context::CurrentObject]]} {
-			foreach cid {C1 C2 C3 C4 C5 C6 C7 C8 C9 C10 C11 C12} {
-				if {![catch {set object [::context::CurrentObject $cid]}] \
-				 && [dict size $object] && [::context::HasObject $cid $object]} {
-					lappend contextIds {*}[::context::MenuIds $cid $object]
-				}
-			}
-		}
-	}
 	foreach id [dict keys $Registry] {
 		set record [get $id]
 
@@ -914,7 +1071,7 @@ proc ::action::labels {surface args} {
 		} elseif {[string match "context:*" $surface]} {
 			set ctxId [string range $surface 8 end]
 			if {$ctxId in [dict get $record context]} { set include 1 }
-		} elseif {$surface eq "palette" || $surface eq "asklist"} {
+		} elseif {$surface eq "palette"} {
 			set vp [dict get $record visible]
 			if {$vp eq ""} {
 				set include 1
@@ -928,14 +1085,6 @@ proc ::action::labels {surface args} {
 		}
 
 		if {!$include} continue
-
-		if {$surface eq "asklist"} {
-			# The context menus' assistant row is not a runnable action.
-			if {$id eq "context.ask"} continue
-			set ctx [dict get $record context]
-			if {[llength $ctx] && [dict get $record dropdown] eq "" \
-			 && [lsearch -exact $contextIds $id] < 0} { continue }
-		}
 
 		set ep [dict get $record enabled]
 		set en 1
@@ -957,34 +1106,6 @@ proc ::action::labels {surface args} {
 		set label [displayLabel [dict get $record label]]
 		set ac [labelAccel $id]
 
-		if {$surface eq "asklist"} {
-			# The list shows only actions the user can run now. Ask the same
-			# state function the drop-down and context menus use, so R1-R16,
-			# absent optional modules and context predicates agree exactly
-			# (VAL-RULE-004).
-			if {[llength [info commands ::menu::state]]} {
-				if {![catch {::menu::state $id} state]} {
-					set en [dict get $state enabled]
-					set vis [dict get $state visible]
-				}
-			}
-			if {!$en || !$vis} { continue }
-			# A row that cannot run with no arguments is not an Ask row:
-			# choosing it would only raise "missing argument". Parameterised
-			# tools stay reachable through the assistant (run_action).
-			if {[catch {::action::validateArgs $id {}} validation]
-			 || [lindex $validation 0] eq "error"} { continue }
-			if {$query ne ""} {
-				set score [fuzzyScore $query [searchText $id]]
-				if {$score < 0} { continue }
-			} else {
-				set score 0
-			}
-			set row [::list $id $label $ac $en $vis]
-			lappend output [::list $score $label $row]
-			continue
-		}
-
 		set row [::list $id $label $ac $en $vis]
 		lappend output $row
 		if {$surface eq "dropdown"} { lappend keyed [::list $order $row] }
@@ -994,12 +1115,163 @@ proc ::action::labels {surface args} {
 		set sorted [lsort -index 0 $keyed]
 		set output {}
 		foreach pair $sorted { lappend output [lindex $pair 1] }
-	} elseif {$surface eq "asklist"} {
-		set sorted [lsort -integer -decreasing -index 0 $output]
-		set output {}
-		foreach entry $sorted { lappend output [lindex $entry 2] }
 	}
 	return $output
+}
+
+# ----------------------------------------------------------------------
+# Ask list rows. Same predicates as the drop-down and context menus, but
+# every input that does not depend on the row is read once and every row
+# record is resolved once. The row set must stay identical to the general
+# path; tests/test_app_ask_arguments.tcl compares it with an independent
+# menu::state + validateArgs reference.
+# ----------------------------------------------------------------------
+proc ::action::AskRows {query} {
+	variable AskCachedStamp
+	variable AskCachedRows
+	variable AskBuilding
+
+	# Context resolution reads live menus; its own state reads are not an
+	# external change and must not invalidate the snapshot we are building.
+	set AskBuilding 1
+	set rc [catch {
+		# Context rows belong to their current object. Resolve each
+		# context's object and posted ids once, exactly as CurrentObjectFor
+		# would per row.
+		set ctxIds {}
+		set ctxObjects [dict create]
+		set ctxMenus [dict create]
+		if {[llength [info commands ::context::MenuIds]] \
+		 && [llength [info commands ::context::CurrentObject]]} {
+			foreach cid {C1 C2 C3 C4 C5 C6 C7 C8 C9 C10 C11 C12} {
+				if {![catch {set object [::context::CurrentObject $cid]}] \
+				 && [dict size $object] && [::context::HasObject $cid $object]} {
+					set ids [::context::MenuIds $cid $object]
+					lappend ctxIds {*}$ids
+					dict set ctxObjects $cid $object
+					dict set ctxMenus $cid $ids
+				}
+			}
+		}
+
+		set stamp [AskStamp $ctxObjects $ctxMenus]
+		if {$stamp ne $AskCachedStamp} {
+			set rows [_BuildAskRows $ctxObjects $ctxMenus $ctxIds]
+			set AskCachedRows $rows
+			# A lazy registration during the build would make this
+			# snapshot mixed; leave the cache cold in that case.
+			if {[AskStamp $ctxObjects $ctxMenus] eq $stamp} {
+				set AskCachedStamp $stamp
+			} else {
+				set AskCachedStamp ""
+			}
+		} else {
+			set rows $AskCachedRows
+		}
+		set rows
+	} result]
+	set AskBuilding 0
+	if {$rc} { return -code error $result }
+	set rows $result
+
+	# With no query every row scores 0 and the stable sort keeps registry
+	# order, so skip building and sorting one key per row.
+	if {$query eq ""} {
+		set output {}
+		foreach row $rows {
+			lappend output [::list [lindex $row 0] [lindex $row 1] [lindex $row 2] 1 1]
+		}
+		return $output
+	}
+	set q [string tolower $query]
+	set output {}
+	foreach row $rows {
+		lassign $row id label ac text
+		set score [fuzzyScoreLower $q $text]
+		if {$score < 0} { continue }
+		lappend output [::list $score $label [::list $id $label $ac 1 1]]
+	}
+	set sorted [lsort -integer -decreasing -index 0 $output]
+	set result {}
+	foreach entry $sorted { lappend result [lindex $entry 2] }
+	return $result
+}
+
+# Rebuild the state-qualified rows. This is the only place the Ask path
+# asks ::menu::state; the same predicates therefore decide the menus and
+# the Ask list, but a state change costs one pass rather than every key.
+proc ::action::_BuildAskRows {ctxObjects ctxMenus ctxIds} {
+	variable Registry
+	variable AskStateMap
+
+	set ctxSet [dict create]
+	foreach id $ctxIds { dict set ctxSet $id 1 }
+
+	set hasMenu [expr {[llength [info commands ::menu::state]] ? 1 : 0}]
+	set gameLoaded 1
+	set onDb 0
+	set boardOnly 0
+	if {$hasMenu} {
+		if {[llength [info commands ::menu::GameLoaded]]} { set gameLoaded [::menu::GameLoaded] }
+		if {[llength [info commands ::menu::OnDatabaseTab]]} { set onDb [::menu::OnDatabaseTab] }
+		if {[llength [info commands ::menu::BoardOnlyLayout]]} { set boardOnly [::menu::BoardOnlyLayout] }
+	}
+
+	set rows {}
+	set stateMap [dict create]
+	foreach id [dict keys $Registry] {
+		set record [get $id]
+
+		if {[dict get $record ai] eq "debug"} { continue }
+		# The context menus' assistant row is not a runnable action.
+		if {$id eq "context.ask"} { continue }
+
+		set ctx [dict get $record context]
+		set object {}
+		if {[llength $ctx] && [dict get $record dropdown] eq ""} {
+			if {![dict exists $ctxSet $id]} { continue }
+			foreach cid $ctx {
+				if {[dict exists $ctxObjects $cid]} {
+					if {$cid eq "C5" && $id ni [dict get $ctxMenus $cid]} { continue }
+					set object [dict get $ctxObjects $cid]
+					break
+				}
+			}
+		}
+
+		if {$hasMenu} {
+			set top ""
+			if {[llength [info commands ::menu::TopOfRecord]]} {
+				set top [::menu::TopOfRecord $record]
+			}
+			set pre [dict create record $record objectResolved 1 \
+				gameLoaded $gameLoaded onDb $onDb boardOnly $boardOnly top $top]
+			set state [::menu::state $id $object {} 0 $pre]
+			set available [expr {[dict get $state visible] && [dict get $state enabled] ? 1 : 0}]
+			dict set stateMap $id $available
+			if {!$available} { continue }
+		} else {
+			set en 1
+			set ep [dict get $record enabled]
+			if {$ep ne ""} {
+				if {[catch { uplevel #0 $ep } state]} { set en 0 } else { set en [expr {$state ? 1 : 0}] }
+			}
+			set vis 1
+			set vp [dict get $record visible]
+			if {$vp ne ""} {
+				if {[catch { uplevel #0 $vp } state]} { set vis 0 } else { set vis [expr {$state ? 1 : 0}] }
+			}
+			if {!$en || !$vis} { continue }
+		}
+
+		if {![_bareRunnable $id]} { continue }
+
+		set label [displayLabel [dict get $record label]]
+		set ac [labelAccelRecord $id $record]
+		lappend rows [::list $id $label $ac [string tolower [searchTextRecord $record]]]
+	}
+	set AskStateMap $stateMap
+	return $rows
 }
 
 # ----------------------------------------------------------------------

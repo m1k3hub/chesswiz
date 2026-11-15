@@ -309,12 +309,17 @@ proc ::context::Item {id text contexts {keys {}} {visible {}} {enabled {}}} {
 		set record [::action::get $id]
 		dict set record context $contexts
 		dict set ::action::Registry $id $record
+		if {[llength [info commands ::action::NoteRegistryChange]]} {
+			::action::NoteRegistryChange
+		}
 	}
 	if {$visible ne ""} {
 		dict set ::context::Predicates $id visible $visible
+		incr ::context::PredicateVersion
 	}
 	if {$enabled ne ""} {
 		dict set ::context::Predicates $id enabled $enabled
+		incr ::context::PredicateVersion
 	}
 	return $id
 }
@@ -376,6 +381,7 @@ proc ::context::AskArgs {argsDict} {
 
 namespace eval ::context {
 	variable Predicates [dict create]
+	variable PredicateVersion 0
 }
 
 proc ::context::Define {cid rows} {
@@ -2140,6 +2146,11 @@ proc ::context::ObjectEnd {object} {
 # R10: strip/truncate/comment rows follow the move object. Returns
 # {visible enabled} or empty when the id has no object rule.
 proc ::context::ObjectRule {id object {visibilityOnly 0}} {
+	# Every object rule below names a context row (c1..c12). Menu rows and
+	# assistant tools carry no object rule, and the Ask field asks for every
+	# row on every keystroke, so skip them before the rule chain.
+	if {![string match {c[0-9]*} $id]} { return {} }
+
 	# R2 also guards explicit-object dispatch, not just menu construction.
 	if {($id in {c2.add_variation c2.replace_move c2.strip}
 	 || [string match c2.strip.* $id]) && [::menu::TrialMode]} { return {0 0} }
@@ -3420,6 +3431,9 @@ proc ::context::RegisterNamedSorts {} {
 		}
 	}
 	foreach id {c5.sort_ascending c5.sort_descending} { dict set ::action::Registry $id operator 1 }
+	if {[llength [info commands ::action::NoteRegistryChange]]} {
+		::action::NoteRegistryChange
+	}
 }
 
 # Use the same table heading variable as the native sort submenu, even

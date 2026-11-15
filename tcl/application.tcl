@@ -1921,6 +1921,9 @@ proc switchTab {which} {
 	.application.nb select .application.nb.$which
 	update idletasks
 	${which}::setFocus
+	if {[llength [info commands ::action::InvalidateAskRows]]} {
+		::action::InvalidateAskRows
+	}
 }
 
 

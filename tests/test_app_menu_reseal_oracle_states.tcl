@@ -11,7 +11,15 @@ proc ::reseal::snap {tag} {
   lassign $row id label accel en vis
   puts [list STATE_ROW $tag $id $en $vis]
   set listed [expr {$id in $ask}]
-  if {!$en || !$vis} {incr forbidden; if {$listed} {lappend bad [list $id leaked]}} else {incr runnable; if {!$listed} {lappend bad [list $id missing]}}
+  if {!$en || !$vis} {incr forbidden; if {$listed} {lappend bad [list $id leaked]}} else {
+   incr runnable
+   # GAP-003: the bare Ask list offers only rows that validate with no
+   # arguments. Parameterised dropdown rows stay reachable through the
+   # assistant (run_action) and are intentionally not listed here.
+   set bare 0
+   if {![catch {::action::validateArgs $id {}} v]} {set bare [expr {[lindex $v 0] ne "error"}]}
+   if {$bare && !$listed} {lappend bad [list $id missing]}
+  }
  }
  set allExpected {}
  foreach cid {C1 C2 C3 C4 C5 C6 C7 C8 C9 C10 C11 C12} {

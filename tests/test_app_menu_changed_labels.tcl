@@ -1,4 +1,6 @@
 # Baseline 08ba7f1bb serialized registry delta; regenerated at W-labels-root HEAD (142 IDs).
+# W-term4: GAP-003 drops required-argument rows from the bare Ask list, so
+# opening_line and menu.view.layout.fold are not Ask-visible (140 IDs).
 # Exercise every changed ID through live states and the actual typed Ask list.
 # Native labels are read independently from mc variables / widget tooltips.
 package require tcltest 2.5
@@ -66,9 +68,7 @@ namespace eval ::scidb::test::changedLabels {
         menu.training.stream
         menu.training.studyplan
         menu.training.training_set
-        menu.view.layout.fold
         menu.view.layout.manage
-        opening_line
         set_position
         toolbar.analysis_control.0
         toolbar.analysis_control.1
@@ -302,7 +302,7 @@ foreach lang {de es it hu sv} {
         catch {destroy .entrynative}
         ::menu::SwitchLanguage $savedLanguage
         set ::application::ai::Config(provider) $savedProvider
-    } -result 142
+    } -result 140
 }
 if {[info exists ::scidb::test::changedLabels::base]} {
     # Only our generated, unmodified game is open. Close it without the

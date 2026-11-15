@@ -144,6 +144,10 @@ variable ConflictTags {ChessBaseBoard ChessBaseEditing .application all}
 variable WrappedAppKeys {Control-n Control-o Control-f Control-x}
 
 variable Dialog
+# Action rows are looked up by id on the Ask-field path; scanning the whole
+# table for every row made one keystroke quadratic in the registry size.
+variable ActionIndex {}
+variable ActionIndexBuilt 0
 
 array set Options {}
 array set Dialog {}
@@ -248,14 +252,20 @@ proc ::application::keyEditor::WrappedAppKey? {spec} {
 # ("" when the scheme has none).
 proc ::application::keyEditor::SchemeKey {action} {
 	variable Actions
+	variable ActionIndex
+	variable ActionIndexBuilt
 
-	foreach entry $Actions {
-		lassign $entry a labelVar tag keySpec cbSpec cmd
-		if {$a ne $action} { continue }
-		if {[SchemeActive?] && $cbSpec ne ""} { return $cbSpec }
-		return $keySpec
+	if {!$ActionIndexBuilt} {
+		set ActionIndex {}
+		foreach entry $Actions {
+			dict set ActionIndex [lindex $entry 0] $entry
+		}
+		set ActionIndexBuilt 1
 	}
-	return ""
+	if {![dict exists $ActionIndex $action]} { return "" }
+	lassign [dict get $ActionIndex $action] a labelVar tag keySpec cbSpec cmd
+	if {[SchemeActive?] && $cbSpec ne ""} { return $cbSpec }
+	return $keySpec
 }
 
 

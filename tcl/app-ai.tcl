@@ -385,6 +385,9 @@ if {[llength [info commands ::process::optionValue]]} {
 
 
 proc ::application::ai::configure {args} {
+	if {[llength [info commands ::action::InvalidateAskRows]]} {
+		::action::InvalidateAskRows
+	}
 	variable Config
 
 	foreach {key value} $args {

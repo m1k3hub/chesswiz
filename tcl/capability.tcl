@@ -72,11 +72,17 @@ proc ::capability::DefineAll {} {
 proc ::capability::Override {module value} {
 	variable Overrides
 	dict set Overrides $module [expr {$value ? 1 : 0}]
+	if {[llength [info commands ::action::InvalidateAskRows]]} {
+		::action::InvalidateAskRows
+	}
 }
 
 proc ::capability::ClearOverrides {} {
 	variable Overrides
 	set Overrides [dict create]
+	if {[llength [info commands ::action::InvalidateAskRows]]} {
+		::action::InvalidateAskRows
+	}
 }
 
 proc ::capability::present {module} {
@@ -172,18 +178,33 @@ namespace eval ::capability {
 	# An action can remain useful when just one argument choice is absent.
 	variable ArgumentModules {open_view {kind {player_card playercard event_report ai}}}
 	variable ArgumentCommands {open_view {kind {event_report ::ai::eventreport::report}}}
+
+	# The Ask field asks for every row on every keystroke, so the ownership
+	# map is inverted once instead of scanning every module list per row.
+	variable ActionModuleById [dict create]
+	dict for {module ids} $ActionModules {
+		foreach id $ids {
+			if {[dict exists $ActionModuleById $id]} {
+				dict lappend ActionModuleById $id $module
+			} else {
+				dict set ActionModuleById $id [list $module]
+			}
+		}
+	}
 }
 
 proc ::capability::actionAvailable {id {arguments {}}} {
-	variable ActionModules
+	variable ActionModuleById
 	variable ArgumentModules
 	variable ArgumentCommands
 	variable ActionCommands
 	if {[string match "td.*" $id] && ![present td]} {return 0}
 	if {[dict exists $ActionCommands $id]
 	 && ![llength [info commands [dict get $ActionCommands $id]]]} {return 0}
-	dict for {module ids} $ActionModules {
-		if {$id in $ids && ![present $module]} {return 0}
+	if {[dict exists $ActionModuleById $id]} {
+		foreach module [dict get $ActionModuleById $id] {
+			if {![present $module]} {return 0}
+		}
 	}
 	if {[dict exists $ArgumentCommands $id]} {
 		dict for {param values} [dict get $ArgumentCommands $id] {
