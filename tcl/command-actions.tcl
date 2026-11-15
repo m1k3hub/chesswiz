@@ -19,7 +19,6 @@ proc ::commandline::RegisterActions {} {
   similar {number} {Find similar games}
   find {player color result opponent eco from to event site min_elo both_min_elo pattern} {Find games}
   setup {opening after} {Set up opening}
-  trends {} {Opening trends}
   player_stats {name} {Player statistics}
   structure_profile {player} {Player structures}
   review {games player} {Review my games}
@@ -124,10 +123,6 @@ proc ::commandline::Action {name arguments} {
    return [::action::run similar_games [dict create number $number]]
   }
   setup {return [Setup $arguments]}
-  trends {
-   lassign [::application::assistant::ActiveBase] base variant
-   return [::ai::trend::factsText [::ai::trend::facts $base $variant]]
-  }
   player_stats {
    set name [Get $arguments name]
    set text [::application::assistant::DoPlayerStats $name]
