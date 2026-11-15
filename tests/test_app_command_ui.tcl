@@ -13,7 +13,10 @@ proc ::action::run {id args} {lappend ::commandtest::calls [::list $id {*}$args]
 ::tcltest::test command-ui-type {typing and full sentences never run anything} -body {
  set ::commandtest::calls {}
  ::commandtest::type {list engines}
- set n [llength $::application::ask::Priv(commands)]
+ set n 0
+ foreach row $::application::ask::Priv(commands) {
+  if {![dict exists $row palette]} {incr n}
+ }
  ::commandtest::type {Please start a new game for me.}
  ::application::ask::Choose
  list $n $::commandtest::calls

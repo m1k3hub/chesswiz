@@ -279,7 +279,7 @@ proc ::commandline::Values {slot query} {
  } elseif {$type eq "time_control"} {
   if {[regexp {^[1-9][0-9]{0,3}\+[0-9]{1,3}$} $query]} {set values [list $query]}
  } elseif {$type eq "opening_move"} {
-  if {[regexp {^([1-9][0-9]*\.)?([KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](=[QRBN])?[+#]?|O-O(-O)?)$} $query]} {set values [list $query]}
+  if {[regexp {^([1-9][0-9]*\.(\.\.)?)?([KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](=[QRBN])?[+#]?|O-O(-O)?)$} $query]} {set values [list $query]}
  } elseif {$type eq "result_index"} {
   if {[regexp {^[0-9]+$} $query] && [string length $query] < 10} {
    scan $query %d n
@@ -356,7 +356,7 @@ proc ::commandline::Criteria {words arguments missing score} {
  }
  set key [string tolower [lindex $words 0]]; set consumed 1
  switch -- $key {
-  player - event - from - to {set slot $key}
+  player - event - site - from - to {set slot $key}
   colour - color {set slot color}
   result {set slot result}
   opening - eco {set slot eco}
@@ -376,7 +376,7 @@ proc ::commandline::Criteria {words arguments missing score} {
  set stop [llength $rest]
  for {set k 1} {$k < [llength $rest]} {incr k} {
   set kw [string tolower [lindex $rest $k]]
-  if {$kw in {player event from to colour color result opening eco motif pattern min both wins win losses loss draws draw wh white bl black}} {
+  if {$kw in {player event site from to colour color result opening eco motif pattern min both wins win losses loss draws draw wh white bl black}} {
    set stop $k
    break
   }

@@ -11,7 +11,7 @@ proc fixtureSource {type query} {
 set ::commandline::Source fixtureSource
 ::tcltest::test command-table-50 {all planned command ids exist} -body {
  llength [lsort -unique -integer [lmap row $::commandline::Table {lindex $row 0}]]
-} -result 50
+} -result 51
 ::tcltest::test command-ambiguity {ambiguous player names stay separate and exact} -body {
  set rows [::commandline::Suggest {find kasp wins wh}]
  lmap row $rows {dict get $row args}

@@ -25,11 +25,11 @@ set CommandCases {
  23 {opening tree} pane {action show pane tree}
  24 {score of Sicilian for Kasparov} opening_score {eco B20-B99 player {Kasparov, Garry}}
  25 {opening report} open_view {kind opening_report}
- 26 {opening trends} command.trends {}
+ 26 {opening trends} open_view {kind trend}
  27 {repertoire add this line} add_to_repertoire {}
  28 {prepare against Corti i have white} opponent_brief {prose 0 download 0 name {Corti, Horacio} colour black}
  29 {player card Caruana} open_view {kind player_card name {Caruana, Fabiano}}
- 30 {Corti stats} player_stats {name {Corti, Horacio}}
+ 30 {Corti stats} command.player_stats {name {Corti, Horacio}}
  31 {i am Thomas} remember_me {name {Thomas, Michael}}
  32 {review my last 10 games} command.review {games 10 player {Thomas, Michael}}
  33 {study plan from my games} command.study {player {Thomas, Michael}}

@@ -445,6 +445,114 @@ proc ::fix::noop {args} {return {}}
  ::application::ask::HideList
 } -result {1 1 1 1 1 1 1 1 1 1}
 
+
+# ----------------------------------------------------------------------
+# F-14: the command contracts match the plan.
+# ----------------------------------------------------------------------
+::tcltest::test F-14-confirm-before-switch {a declined import or compact never switches the active database} -setup {
+ set ::fix::Switches 0
+ rename ::application::database::switchToBase ::fix::realSwitchToBase
+ proc ::application::database::switchToBase {base} {incr ::fix::Switches}
+ set ::fix::SavedBulkHook $::action::BulkHook
+ proc ::fix::decline {what} {return 0}
+ set ::action::BulkHook ::fix::decline
+} -body {
+ set imported [::commandline::Action import [dict create files x.pgn database Main]]
+ set afterImport $::fix::Switches
+ set compacted [::commandline::Action compact [dict create database Main]]
+ list $afterImport [string match declined* $imported] $::fix::Switches [string match declined* $compacted]
+} -cleanup {
+ catch {rename ::application::database::switchToBase {}}
+ rename ::fix::realSwitchToBase ::application::database::switchToBase
+ set ::action::BulkHook $::fix::SavedBulkHook
+} -result {0 1 0 1}
+
+::tcltest::test F-14-convert-format {convert passes the requested format instead of opening the format picker} -setup {
+ set ::fix::Switches 0
+ set ::fix::ConvertArgs {}
+ rename ::application::database::switchToBase ::fix::realSwitchToBase
+ proc ::application::database::switchToBase {base} {incr ::fix::Switches}
+ rename ::application::assistant::DoConvertDatabase ::fix::realConvert
+ proc ::application::assistant::DoConvertDatabase {args} {set ::fix::ConvertArgs $args; return converted}
+ set ::fix::SavedBulkHook $::action::BulkHook
+ proc ::fix::accept {what} {return 1}
+ set ::action::BulkHook ::fix::accept
+} -body {
+ set result [::commandline::Action convert [dict create database $::fix::Base dbformat sci]]
+ list $::fix::ConvertArgs $::fix::Switches $result
+} -cleanup {
+ catch {rename ::application::database::switchToBase {}}
+ rename ::fix::realSwitchToBase ::application::database::switchToBase
+ catch {rename ::application::assistant::DoConvertDatabase {}}
+ rename ::fix::realConvert ::application::assistant::DoConvertDatabase
+ set ::action::BulkHook $::fix::SavedBulkHook
+} -result {sci 1 converted}
+
+::tcltest::test F-14-open-game-optional-after {open game at a move does not require white or black} -body {
+ set row [::fix::row {open game 1 at move 20} 16]
+ set args [dict get $row args]
+ list [llength [dict get $row missing]] [dict get $args move] [dict exists $args after]
+} -result {0 20 0}
+
+::tcltest::test F-14-black-opening-move {Black move numbers resolve to Black's move, not White's} -body {
+ set dotted [::commandline::OpeningMoves [dict create opening Najdorf after 5...a6]]
+ set compact [::commandline::OpeningMoves [dict create opening Najdorf after 5.a6]]
+ set row [::fix::row {set up Najdorf after 5...a6} 22]
+ list [lindex [split $dotted] 9] [expr {$dotted eq $compact}] [llength [dict get $row missing]]
+} -result {a6 1 0}
+
+::tcltest::test F-14-trend-view {opening trends opens the trend report instead of returning hidden text} -setup {
+ set ::fix::Trends 0
+ rename ::ai::trend::report ::fix::realTrend
+ proc ::ai::trend::report {args} {incr ::fix::Trends; return {}}
+} -body {
+ set row [::fix::row {opening trends} 26]
+ set action [dict get $row action]
+ set kind [expr {[dict exists [dict get $row args] kind] ? [dict get [dict get $row args] kind] : {}}]
+ ::action::run $action [dict get $row args]
+ list $action $kind $::fix::Trends
+} -cleanup {
+ catch {rename ::ai::trend::report {}}
+ rename ::fix::realTrend ::ai::trend::report
+} -result {open_view trend 1}
+
+::tcltest::test F-14-player-reports {player stats and structures open Report tabs instead of returning text} -setup {
+ set ::fix::Reports {}
+ rename ::application::ai::showReport ::fix::realShowReport
+ proc ::application::ai::showReport {parent title html} {lappend ::fix::Reports $title}
+ rename ::application::assistant::DoPlayerStats ::fix::realPlayerStats
+ proc ::application::assistant::DoPlayerStats {name} {return "stats for $name"}
+ rename ::application::assistant::DoStructureProfile ::fix::realStructure
+ proc ::application::assistant::DoStructureProfile {player colour games} {return "structures for $player"}
+} -body {
+ set stats [::fix::row {player Kasparov stats} 30]
+ set structures [::fix::row {player Kasparov structures} 30]
+ set a [dict get $stats action]
+ set b [dict get $structures action]
+ ::action::run $a [dict get $stats args]
+ ::action::run $b [dict get $structures args]
+ list $a $b [llength $::fix::Reports] \
+  [string match {*Player statistics*} [lindex $::fix::Reports 0]] \
+  [string match {*Player structures*} [lindex $::fix::Reports 1]]
+} -cleanup {
+ catch {rename ::application::ai::showReport {}}
+ rename ::fix::realShowReport ::application::ai::showReport
+ catch {rename ::application::assistant::DoPlayerStats {}}
+ rename ::fix::realPlayerStats ::application::assistant::DoPlayerStats
+ catch {rename ::application::assistant::DoStructureProfile {}}
+ rename ::fix::realStructure ::application::assistant::DoStructureProfile
+} -result {command.player_stats command.structure_profile 2 1 1}
+
+::tcltest::test F-14-site-criterion {the site criterion is parsed and narrows the search} -body {
+ set row [::fix::row {find games site Karvina} 15]
+ set args [dict get $row args]
+ lassign [::application::assistant::BuildQuery $::fix::Base Normal [dict create \
+  player {} color any result {} opponent {} eco {} from {} to {} event {} \
+  site Karvina min_elo {} both_min_elo {} pattern {}]] query summary
+ list [dict get $args site] [llength [dict get $row missing]] \
+  [string match {*sitename*} $query] [string match {*site matching*} $summary]
+} -result {Karvina 0 1 1}
+
 trace remove execution ::action::run enter ::fix::trace
 foreach position [::game::usedPositions?] {catch {::game::release $position}}
 catch {::application::database::closeBase .application $::fix::Base}

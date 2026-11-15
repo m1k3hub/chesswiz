@@ -135,7 +135,7 @@ proc ::commandAccept::validSlotValues {row} {
 				if {$v ni $validPlayers} { return "unknown player '$v'" }
 			}
 			name {
-				if {$action in {player_stats remember_me opponent_brief} || ($action eq "open_view" && [dict get $args kind] in {player_card prep_report})} {
+				if {$action in {command.player_stats player_stats remember_me opponent_brief} || ($action eq "open_view" && [dict get $args kind] in {player_card prep_report})} {
 					if {$v ni $validPlayers} { return "unknown player name '$v'" }
 				}
 			}

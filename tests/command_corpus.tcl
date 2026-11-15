@@ -108,7 +108,7 @@ set InScopeCommandCorpus {
 	open-report J4 {Open the opening report for this position.}
 		{opening report} 25 open_view {kind opening_report}
 	open-trend J4 {Which openings are getting more popular here?}
-		{opening trends} 26 command.trends {}
+		{opening trends} 26 open_view {kind trend}
 	open-rep-check J4 {Check my repertoire against my games.}
 		{repertoire check against my games} 27 repertoire_check {}
 	open-rep-add J4 {Add this line to my repertoire.}
@@ -121,9 +121,9 @@ set InScopeCommandCorpus {
 	prep-report J5 {Open Corti's prep report.}
 		{player Corti prep report} 30 open_view {kind prep_report name {Corti, Horacio}}
 	prep-stats J5 {How does Corti score?}
-		{player Corti stats} 30 player_stats {name {Corti, Horacio}}
+		{player Corti stats} 30 command.player_stats {name {Corti, Horacio}}
 	prep-structures J5 {Which pawn structures does Corti reach, and how does he score in them?}
-		{player Corti structures} 30 structure_profile {player {Corti, Horacio}}
+		{player Corti structures} 30 command.structure_profile {player {Corti, Horacio}}
 
 	me-remember J6 {By the way, I'm Anna Musterfrau.}
 		{i am Musterfrau} 31 remember_me {name {Musterfrau, Anna}}
@@ -201,7 +201,7 @@ set InScopeCommandCorpus {
 	train-forks J8 {Give me knight fork puzzles.}
 		{puzzles from this database motif knight fork} 44 command.training {source {this database} pattern knight_fork}
 	play-trend J10 {What's trending in openings lately?}
-		{opening trends} 26 command.trends {}
+		{opening trends} 26 open_view {kind trend}
 
 	db-compact J1 {Compact my database.}
 		{compact Main} 12 command.compact {database Main}

@@ -305,8 +305,8 @@ variable Actions {
 	}
 	open_view {
 		0 0 "open the %s"
-		"Open one of Chesswiz's reports or dialogs for the user (they only show things; nothing changes). kind: player_card (a player's card: ratings, photo, links; needs 'name'), prep_report (a player's preparation report: scores by colour, openings, recent games, gaps, the opponent dossier; needs 'name'), crosstable (an event's tournament table; needs 'event', part of the event name), event_report (the story of an event: standings, leaders and upsets, told from its results; needs 'event'), opening_report (the opening report of the position on the board: statistics, main lines, fashion, plans), opening_prep (opening preparation: the moves played from the board's position), repertoire_report (the active repertoire database's report), duplicates (find duplicate games in the active database)."
-		{{"type":"object","properties":{"kind":{"type":"string","enum":["player_card","prep_report","crosstable","event_report","opening_report","opening_prep","repertoire_report","duplicates"]},"name":{"type":"string","description":"a player, for player_card and prep_report"},"event":{"type":"string","description":"part of an event name, for crosstable"}},"required":["kind"]}}
+		"Open one of Chesswiz's reports or dialogs for the user (they only show things; nothing changes). kind: player_card (a player's card: ratings, photo, links; needs 'name'), prep_report (a player's preparation report: scores by colour, openings, recent games, gaps, the opponent dossier; needs 'name'), crosstable (an event's tournament table; needs 'event', part of the event name), event_report (the story of an event: standings, leaders and upsets, told from its results; needs 'event'), opening_report (the opening report of the position on the board: statistics, main lines, fashion, plans), opening_prep (opening preparation: the moves played from the board's position), repertoire_report (the active repertoire database's report), duplicates (find duplicate games in the active database), trend (the database's opening trends, in the Report pane)."
+		{{"type":"object","properties":{"kind":{"type":"string","enum":["player_card","prep_report","crosstable","event_report","opening_report","opening_prep","repertoire_report","duplicates","trend"]},"name":{"type":"string","description":"a player, for player_card and prep_report"},"event":{"type":"string","description":"part of an event name, for crosstable"}},"required":["kind"]}}
 		::application::assistant::DoOpenView
 	}
 	opening_line {
@@ -2635,7 +2635,7 @@ proc ::application::assistant::CheckArgs {name cargs} {
 		}
 		open_view {
 			set kind [Arg $cargs kind]
-			set kinds {player_card prep_report crosstable event_report opening_report opening_prep repertoire_report duplicates}
+			set kinds {player_card prep_report crosstable event_report opening_report opening_prep repertoire_report duplicates trend}
 			if {$kind ni $kinds} { error "kind must be one of: [join $kinds {, }]" }
 			set name [expr {[dict exists $cargs name] ? [string trim [dict get $cargs name]] : ""}]
 			set event [expr {[dict exists $cargs event] ? [string trim [dict get $cargs event]] : ""}]
@@ -3147,9 +3147,9 @@ proc ::application::assistant::DoCompactDatabase {} {
 }
 
 
-proc ::application::assistant::DoConvertDatabase {} {
+proc ::application::assistant::DoConvertDatabase {{format ""}} {
 	lassign [ActiveBase] base variant
-	::application::database::ConvertDatabase .application $base $variant
+	::application::database::ConvertDatabase .application $base $variant $format
 	return "the conversion of [::util::databaseName $base no] was started; the user picks the version and the new file in Chesswiz's dialogs"
 }
 
@@ -3706,6 +3706,10 @@ proc ::application::assistant::BuildQuery {base variant criteria {includePattern
 		lappend common [list eventname [EventPattern $event]]
 		lappend summary "event matching '$event'"
 	}
+	if {[info exists site] && $site ne ""} {
+		lappend common [list sitename [EventPattern $site]]
+		lappend summary "site matching '$site'"
+	}
 	if {$min_elo ne ""} {
 		lappend common [list rating Elo average $min_elo-4000]
 		lappend summary "average Elo at least $min_elo"
@@ -4194,6 +4198,13 @@ proc ::application::assistant::DoOpenView {kind name event} {
 		duplicates {
 			::application::database::ShowDuplicates .application $base $variant
 			return "the duplicate search for $db is open"
+		}
+		trend {
+			if {[llength [info commands ::ai::trend::report]] == 0} {
+				return "error: the trend report is not available in this build"
+			}
+			::ai::trend::report .application
+			return "the opening trends of $db are opening in the Report pane"
 		}
 	}
 }

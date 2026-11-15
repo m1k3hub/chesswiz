@@ -20,6 +20,8 @@ proc ::commandline::RegisterActions {} {
   find {player color result opponent eco from to event min_elo both_min_elo pattern} {Find games}
   setup {opening after} {Set up opening}
   trends {} {Opening trends}
+  player_stats {name} {Player statistics}
+  structure_profile {player} {Player structures}
   review {games player} {Review my games}
   my_score {player} {My score}
   study {player} {Study plan}
@@ -49,6 +51,34 @@ proc ::commandline::SelectDatabase {base} {
  if {$base ni [AppSource database ""]} {error "database is no longer open"}
  ::application::database::switchToBase $base
 }
+# Destructive actions ask first. The answer must come before any active
+# database switch, so a declined import/compact leaves the user where they
+# were. Returns the validated arguments, or {} when the user declines.
+proc ::commandline::ConfirmAction {id arguments} {
+ set validation [::action::validateArgs $id $arguments]
+ if {[lindex $validation 0] eq "error"} {error [lindex $validation 1]}
+ set checked [lindex $validation 1]
+ set record [::action::get $id]
+ if {![dict get $record confirm] && ![dict get $record bulk]} {return $checked}
+ set what [dict get $record what]
+ if {$what eq ""} {
+  set what "perform action '$id'"
+ } elseif {[catch {set what [format $what {*}[dict values $checked]]}]} {
+  set what "perform action '$id'"
+ }
+ set ask [expr {[dict get $record bulk] ? $::action::BulkHook : $::action::ConfirmHook}]
+ if {$ask ne ""} {
+  if {[catch {uplevel #0 [list $ask $what]} answer]} {set answer 0}
+  if {!$answer} {return declined}
+ }
+ return $checked
+}
+proc ::commandline::ShowReport {title text} {
+ if {[llength [info commands ::application::ai::showReport]] == 0} {return}
+ set html "<p><b>[::application::ai::escape $title]</b></p><pre>[::application::ai::escape $text]</pre>"
+ catch {::application::ai::showReport .application $title [::application::ai::htmlData $html]}
+ return
+}
 proc ::commandline::Me {arguments} {
  set player [Get $arguments player]
  if {$player eq ""} {error "First use 'I am <player>' to select your name."}
@@ -59,12 +89,22 @@ proc ::commandline::Action {name arguments} {
   database.select {SelectDatabase [Get $arguments database]; return {}}
   database.close {return [::application::database::closeBase .application [Get $arguments database]]}
   import {
+   set checked [ConfirmAction import_games [dict create files [list [Get $arguments files]]]]
+   if {$checked eq "declined"} {return declined}
    SelectDatabase [Get $arguments database]
-   return [::action::run import_games [dict create files [list [Get $arguments files]]]]
+   return [::action::RunApproved import_games $checked]
   }
-  compact - convert {
+  compact {
+   set checked [ConfirmAction compact_database {}]
+   if {$checked eq "declined"} {return declined}
    SelectDatabase [Get $arguments database]
-   return [::action::run ${name}_database]
+   return [::action::RunApproved compact_database $checked]
+  }
+  convert {
+   set checked [ConfirmAction convert_database {}]
+   if {$checked eq "declined"} {return declined}
+   SelectDatabase [Get $arguments database]
+   return [::application::assistant::DoConvertDatabase [Get $arguments dbformat]]
   }
   export {return [Export $arguments]}
   export.replace {return [Export $arguments 1]}
@@ -86,6 +126,18 @@ proc ::commandline::Action {name arguments} {
   trends {
    lassign [::application::assistant::ActiveBase] base variant
    return [::ai::trend::factsText [::ai::trend::facts $base $variant]]
+  }
+  player_stats {
+   set name [Get $arguments name]
+   set text [::application::assistant::DoPlayerStats $name]
+   ShowReport "Player statistics: $name" $text
+   return "the statistics of $name are open in the Report pane"
+  }
+  structure_profile {
+   set player [Get $arguments player]
+   set text [::application::assistant::DoStructureProfile $player "" 200]
+   ShowReport "Player structures: $player" $text
+   return "the structure profile of $player is open in the Report pane"
   }
   find {
    set result [::application::assistant::DoSearchGames $arguments]
@@ -179,14 +231,32 @@ proc ::commandline::OpeningMoves {arguments} {
  }
  set choices {}
  set moveNum 0
- regexp {^([0-9]+)\.} $after -> moveNum
+ set side auto
+ if {[regexp {^([0-9]+)\.\.\.} $after -> moveNum]} {
+  set side black
+ } elseif {[regexp {^([0-9]+)\.[ \t]} $after -> moveNum]} {
+  set side white
+ } elseif {[regexp {^([0-9]+)\.} $after -> moveNum]} {
+  # "5.a6" may be White's "5. a6" without the space or Black's "5...a6"
+  # compact spelling. Try White first, then Black, and keep the one that
+  # actually has that move in the opening line.
+  set side auto
+ }
  foreach moves $lines {
   if {$targetMove ne "" && [string first $targetMove $moves] < 0} {continue}
   set tokens [EcoMovesTokens $moves]
   if {[llength $wanted]} {
    if {$moveNum > 0} {
-    set at [expr {2*$moveNum-2}]
-    if {[lindex $tokens $at] ne $targetMove} {continue}
+    switch -- $side {
+     white {set candidates [list [expr {2*$moveNum-2}]]}
+     black {set candidates [list [expr {2*$moveNum-1}]]}
+     default {set candidates [list [expr {2*$moveNum-2}] [expr {2*$moveNum-1}]]}
+    }
+    set at ""
+    foreach candidate $candidates {
+     if {[lindex $tokens $candidate] eq $targetMove} {set at $candidate; break}
+    }
+    if {$at eq ""} {continue}
    } else {
     set at [lsearch -exact $tokens $targetMove]
     if {$at < 0} {continue}

@@ -18,7 +18,7 @@ namespace eval ::commandline {
   {13 command.convert {} {{convert @database to @dbformat}}}
   {14 maintenance_report {tab overview} {{maintenance report}}}
   {15 command.find {} {{find games @criteria} {find @criteria}}}
-  {16 open_game {} {{open game @number {? at move @move_number @after}}}}
+  {16 open_game {} {{open game @number {? at move @move_number {? @after}}}}}
   {17 open_game {} {{open last game of @player}}}
   {18 command.similar {} {{games like this one} {games like game @number} {like game @number}}}
   {19 command.find {} {{find motif @pattern {? from @from}}}}
@@ -30,13 +30,13 @@ namespace eval ::commandline {
   {23 pane {action show pane tree} {{opening tree}}}
   {24 opening_score {} {{score of @eco {? for @player}}}}
   {25 open_view {kind opening_report} {{opening report}}}
-  {26 command.trends {} {{opening trends}}}
+  {26 open_view {kind trend} {{opening trends}}}
   {27 add_to_repertoire {} {{repertoire add this line}}}
   {27 repertoire_check {} {{repertoire check against my games}}}
   {28 opponent_brief {prose 0 download 0} {{prepare against @opponent {? i have @colour}} {prepare against @opponent {? as @colour}}}}
   {29 open_view {kind player_card} {{player card @person}}}
-  {30 player_stats {} {{player @person stats} {@person stats}}}
-  {30 structure_profile {} {{player @player structures} {@player structures}}}
+  {30 command.player_stats {} {{player @person stats} {@person stats}}}
+  {30 command.structure_profile {} {{player @player structures} {@player structures}}}
   {30 open_view {kind prep_report} {{player @person prep report} {@person prep report}}}
   {31 remember_me {} {{i am @person}}}
   {32 command.review {} {{review my last @games games}}}
