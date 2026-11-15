@@ -630,7 +630,7 @@ proc ::application::ask::Choose {} {
  if {[llength [dict get $row missing]]} {MissingSlot $row; return "break"}
  set failed [catch {::commandline::Run $row} result]
  if {$failed || [string match "error:*" $result] || [string match "declined*" $result]} {
-  catch {::ui::message $result}
+  catch {::ui::message $result error}
  } else {
   set Query ""
   HideList

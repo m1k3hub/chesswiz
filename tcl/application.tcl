@@ -34,8 +34,19 @@
 # ======================================================================
 
 namespace eval ui {
-proc message {text} {
+proc message {text {kind info}} {
+	if {$kind ni {error warning info}} { set kind info }
 	::log::info UI $text
+	# A message the user must see never belongs only to the withdrawn log
+	# window: post a card, and keep long or multi-line output in the
+	# assistant transcript so it can still be read after the card fades.
+	if {[llength [info commands ::dialog::notice::post]]} {
+		catch { ::dialog::notice::post $kind $text }
+	}
+	if {($kind eq "error" || [string first "\n" $text] >= 0 || [string length $text] > 140)
+	 && [llength [info commands ::application::assistant::Append]]} {
+		catch { ::application::assistant::Append [expr {$kind eq "error" ? "info" : "assistant"}] $text }
+	}
 }
 }
 
