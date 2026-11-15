@@ -589,11 +589,10 @@ proc ::fix::noop {args} {return {}}
 ::tcltest::test F-14-site-criterion {the site criterion is parsed and narrows the search} -body {
  set row [::fix::row {find games site Karvina} 15]
  set args [dict get $row args]
- lassign [::application::assistant::BuildQuery $::fix::Base Normal [dict create \
-  player {} color any result {} opponent {} eco {} from {} to {} event {} \
-  site Karvina min_elo {} both_min_elo {} pattern {}]] query summary
+ set calls [::fix::run {find games site Karvina} 15]
  list [dict get $args site] [llength [dict get $row missing]] \
-  [string match {*sitename*} $query] [string match {*site matching*} $summary]
+  [expr {[lsearch -exact $calls {command.find {site Karvina}}] >= 0}] \
+  [::scidb::view::count games $::fix::Base Normal 0]
 } -result {Karvina 0 1 1}
 
 trace remove execution ::action::run enter ::fix::trace

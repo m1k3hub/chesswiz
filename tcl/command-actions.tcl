@@ -17,7 +17,7 @@ proc ::commandline::RegisterActions {} {
   compact {database} {Compact database}
   convert {database format} {Convert database}
   similar {number} {Find similar games}
-  find {player color result opponent eco from to event min_elo both_min_elo pattern} {Find games}
+  find {player color result opponent eco from to event site min_elo both_min_elo pattern} {Find games}
   setup {opening after} {Set up opening}
   trends {} {Opening trends}
   player_stats {name} {Player statistics}
