@@ -288,6 +288,13 @@ tcltest::test review4-gap005-beside-pack-numeric {numeric candidate order places
 	list $rect [::layoutGaps::overlap $rect $view]
 } -result {{1 98 56 26} 0}
 
+# Negative monitor origins are numerically ordered too: ASCII would visit
+# -400/-500 before -600/-600 and pick the wrong (lower-priority) corner.
+tcltest::test review4-gap005-beside-pack-negative {negative-origin candidates sort numerically} -body {
+	set packed [::util::place::besidePack {-500 -500 100 100} {{40 20}} {-600 -600 2000 2000} 0 {}]
+	lindex $packed 0
+} -result {-600 -600 40 20}
+
 # REVIEW4 GAP-005: the embedded 3D view keeps the folded Media button's top
 # clearance instead of resetting it to zero.
 tcltest::test review4-gap005-3d-media-button-clear {the 3D view reserves the Media button's height} 		-constraints embed3d -setup {
