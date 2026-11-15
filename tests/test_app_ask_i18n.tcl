@@ -311,7 +311,7 @@ tcltest::test ask-i18n-german-coverage {every string of the field has a German t
 			# whisper-cli is the tool it is, in every language
 			if {$name eq "MissingCli"} { continue }
 			incr checked
-			if {[set ${ns}::mc::$name] eq $value} { lappend same "$ns::$name" }
+			if {[set ${ns}::mc::$name] eq $value} { lappend same "${ns}::$name" }
 		}
 	}
 	::menu::SwitchLanguage English
@@ -319,7 +319,7 @@ tcltest::test ask-i18n-german-coverage {every string of the field has a German t
 	list $checked $same
 } -cleanup {
 	::scidb::test::askI18n::Clean
-} -result {34 {}}
+} -result {37 {}}
 
 tcltest::test ask-i18n-fallback {ResetMC restores English defaults} -body {
 	::menu::SwitchLanguage Deutsch
