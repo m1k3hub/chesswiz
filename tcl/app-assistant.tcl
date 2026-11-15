@@ -1574,7 +1574,11 @@ proc ::application::assistant::Resolve {token reply} {
 	variable Priv
 	variable MaxReply
 
-	if {![info exists Priv(pending)] || [lindex $Priv(pending) 0] ne $token} { return 0 }
+	if {![info exists Priv(pending)] || [lindex $Priv(pending) 0] ne $token} {
+		# A queued command (not an assistant turn) may own this token.
+		if {[llength [info commands ::commandline::ResolveLater]] && [::commandline::ResolveLater $token $reply]} { return 1 }
+		return 0
+	}
 	lassign $Priv(pending) _ round name cargs calls isRouted planMode
 	set Priv(pending) {}
 	set reply [WithMenu $name [Scrub $reply]]

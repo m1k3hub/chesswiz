@@ -91,6 +91,34 @@ close $f
  rename ::fix::realRun ::commandline::Run
 } -result {1 error {error:handler exploded}}
 
+# ----------------------------------------------------------------------
+# F-02: async handlers answer later through Resolve; the token must not
+# leak to the user and the reply must reach them.
+# ----------------------------------------------------------------------
+::tcltest::test F-02-async-completion {a later token is hidden and its reply is shown when resolved} -setup {
+ set ::fix::Notices {}
+ set ::fix::Picked 0
+ rename ::dialog::notice::post ::fix::realPost
+ proc ::dialog::notice::post {kind message args} {lappend ::fix::Notices [list $kind $message]}
+ rename ::action::run ::fix::realActionRun
+ proc ::action::run {action args} {return "\x00later:77"}
+ rename ::commandline::RecordPick ::fix::realRecordPick
+ proc ::commandline::RecordPick {row} {incr ::fix::Picked}
+} -body {
+ set row [lindex [::commandline::Suggest tablebase] 0]
+ set result [::commandline::Run $row]
+ set pickedBefore $::fix::Picked
+ set resolved [::application::assistant::Resolve "\x00later:77" "Tablebase verdict: draw"]
+ list [string match "\x00later:*" $result] $pickedBefore $resolved $::fix::Picked [llength $::fix::Notices] [lindex $::fix::Notices 0 1]
+} -cleanup {
+ catch {rename ::dialog::notice::post {}}
+ rename ::fix::realPost ::dialog::notice::post
+ catch {rename ::action::run {}}
+ rename ::fix::realActionRun ::action::run
+ catch {rename ::commandline::RecordPick {}}
+ rename ::fix::realRecordPick ::commandline::RecordPick
+} -result {0 0 1 1 1 {Tablebase verdict: draw}}
+
 trace remove execution ::action::run enter ::fix::trace
 foreach position [::game::usedPositions?] {catch {::game::release $position}}
 catch {::application::database::closeBase .application $::fix::Base}

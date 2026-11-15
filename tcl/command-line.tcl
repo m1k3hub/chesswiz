@@ -8,6 +8,10 @@ namespace eval ::commandline {
  variable OpeningLines {}
  variable MotifIndex {}
  variable RerankThreshold 40
+ # Async handlers (Tablebase, SimilarGames, ...) answer later through
+ # ::application::assistant::Resolve; remember the command row for each token
+ # so the reply reaches the user instead of being dropped.
+ variable Pending {}
 }
 proc ::commandline::Tokenize {text} {
  return [regexp -all -inline {[^\s,;:()]+} [string map [list \x27 "" \u2019 ""] [string tolower $text]]]
@@ -395,8 +399,34 @@ proc ::commandline::Run {row} {
  }
  if {!$valid} {return "declined: the command's values changed; choose again"}
  set result [::action::run [dict get $row action] [dict get $row args]]
+ # An async handler returns \x00later:<N> and answers through Resolve. It is
+ # not a finished run: never record it as a pick yet, and hide the raw token.
+ if {[IsLater $result]} {AwaitLater $result $row; return ""}
  if {![string match "error:*" $result] && ![string match "declined*" $result] && [llength [info commands ::commandline::RecordPick]]} {RecordPick $row}
  return $result
+}
+proc ::commandline::IsLater {result} {
+ return [string match "\x00later:*" $result]
+}
+proc ::commandline::AwaitLater {token row} {
+ variable Pending
+ dict set Pending $token $row
+}
+# Called by ::application::assistant::Resolve for a token that belongs to a
+# queued command rather than an assistant turn. Returns 0 when unknown.
+proc ::commandline::ResolveLater {token reply} {
+ variable Pending
+ if {![dict exists $Pending $token]} {return 0}
+ set row [dict get $Pending $token]
+ catch {dict unset Pending $token}
+ catch {set reply [::application::assistant::Scrub $reply]}
+ if {[string match "error:*" $reply]} {
+  catch {::ui::message $reply error}
+ } else {
+  catch {::ui::message $reply}
+  if {[llength [info commands ::commandline::RecordPick]]} {catch {RecordPick $row}}
+ }
+ return 1
 }
 namespace eval ::application::assistant {}
 # A separate, tools-free conversation path. Even unsolicited provider tool calls
