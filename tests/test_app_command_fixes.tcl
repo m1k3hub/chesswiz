@@ -521,15 +521,18 @@ proc ::fix::noop {args} {return {}}
  proc ::fix::accept {what} {return 1}
  set ::action::BulkHook ::fix::accept
 } -body {
- set result [::commandline::Action convert [dict create database $::fix::Base dbformat sci]]
- list $::fix::ConvertArgs $::fix::Switches $result
+ set calls [::fix::run {convert Main to sci} 13]
+ set cbh [::fix::row {convert Main to cbh} 13]
+ list $::fix::ConvertArgs $::fix::Switches \
+  [expr {[lsearch -exact $calls [list command.convert [dict create database $::fix::Base format sci]]] >= 0}] \
+  [expr {[dict get $cbh args] eq [dict create database $::fix::Base format cbh]}]
 } -cleanup {
  catch {rename ::application::database::switchToBase {}}
  rename ::fix::realSwitchToBase ::application::database::switchToBase
  catch {rename ::application::assistant::DoConvertDatabase {}}
  rename ::fix::realConvert ::application::assistant::DoConvertDatabase
  set ::action::BulkHook $::fix::SavedBulkHook
-} -result {sci 1 converted}
+} -result {sci 1 1 1}
 
 ::tcltest::test F-14-open-game-optional-after {open game at a move does not require white or black} -body {
  set row [::fix::row {open game 1 at move 20} 16]

@@ -104,7 +104,7 @@ proc ::commandline::Action {name arguments} {
    set checked [ConfirmAction convert_database {}]
    if {$checked eq "declined"} {return declined}
    SelectDatabase [Get $arguments database]
-   return [::application::assistant::DoConvertDatabase [Get $arguments dbformat]]
+   return [::application::assistant::DoConvertDatabase [Get $arguments format]]
   }
   export {return [Export $arguments]}
   export.replace {return [Export $arguments 1]}
