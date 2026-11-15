@@ -238,6 +238,18 @@ proc ::td::ui::BuildResults {f} {
 	ttk::button $f.edit.enter -text "Enter result" -command ::td::ui::EnterResult
 	ttk::button $f.edit.correct -text "Correct result" -command ::td::ui::CorrectResult
 	pack $f.edit.result -side left; pack $f.edit.category -side left; pack $f.edit.enter -side left; pack $f.edit.correct -side left
+	ttk::frame $f.ruling; pack $f.ruling -fill x -pady 2
+	ttk::combobox $f.ruling.incident -state readonly -values {illegal-move gui-illegal-attempt flag-fall draw-claim-3fold draw-claim-50move 75-move fivefold late-arrival} -textvariable ::td::ui::Fields(ruling_incident); set Fields(ruling_incident) illegal-move
+	ttk::combobox $f.ruling.regime -state readonly -values {standard A4 A5 B2 B3} -textvariable ::td::ui::Fields(ruling_regime); set Fields(ruling_regime) standard
+	ttk::label $f.ruling.alabel -text "Arbiter"
+	ttk::entry $f.ruling.arbiter -width 16 -textvariable ::td::ui::Fields(ruling_arbiter); set Fields(ruling_arbiter) {}
+	ttk::button $f.ruling.btn -text "Record ruling" -command ::td::ui::RecordRuling
+	pack $f.ruling.incident $f.ruling.regime $f.ruling.alabel $f.ruling.arbiter $f.ruling.btn -side left -padx 2
+}
+proc ::td::ui::RecordRuling {} {
+	variable Fields; variable Notebook
+	set pairing [Selected $Notebook.results.tree]
+	Mutate td.ruling [dict create pairing $pairing incident $Fields(ruling_incident) regime $Fields(ruling_regime) arbiter $Fields(ruling_arbiter)]
 }
 proc ::td::ui::ResultCommand {id} {
 	variable Fields

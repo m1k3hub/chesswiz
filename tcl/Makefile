@@ -205,6 +205,7 @@ SOURCES = \
 	td-openings.tcl \
 	td-model.tcl \
 	td-registration.tcl \
+	td-arbiter.tcl \
 	td-event.tcl \
 	td-ui.tcl \
 	td-actions.tcl \

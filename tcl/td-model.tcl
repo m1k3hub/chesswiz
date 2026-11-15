@@ -434,6 +434,7 @@ proc ::td::model::Apply {command info domain} {
 			return [list $state [dict create overridden [dict get $p id] compliant [dict get $check compliant] violations [dict get $check violations] bbp_report [dict get $check bbp_report]] $target $history]
 		}
 		withdraw { return [Withdraw $state $domain] }
+		ruling { return [::td::arbiter::Record $state $domain] }
 		bye {
 			set id [FindPlayer $state [dg $domain player {}]]
 			set category [dg $domain category requested-bye]
