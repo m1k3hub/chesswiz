@@ -1502,11 +1502,17 @@ proc ::knowledge::Runnable {id {object {}}} {
 	if {$id eq "c9.float" && ![lindex [::context::ObjectRule $id $object] 1]} {
 		return [list 0 "unavailable: focus or select a pane that supports floating"]
 	}
-	if {[llength [dict get $rec context]] && [llength [info commands ::menu::state]]} {
+	# Every row follows the same gates as the menus, not only context rows:
+	# an absent optional module, a hidden row (R1/R3) or a disabled row
+	# (R16, platform) is not runnable, so find_capability never offers it.
+	if {[llength [info commands ::capability::actionAvailable]] \
+	 && ![::capability::actionAvailable $id]} {
+		return [list 0 "not available in this build"]
+	}
+	if {[llength [info commands ::menu::state]]} {
 		if {![catch {::menu::state $id $object} state]} {
-			if {![dict get $state visible] || ![dict get $state enabled]} {
-				return [list 0 "not available in the current context"]
-			}
+			if {![dict get $state visible]} { return [list 0 "hidden in the current context"] }
+			if {![dict get $state enabled]} { return [list 0 "disabled in the current context"] }
 		}
 	}
 	set ep [dict get $rec enabled]

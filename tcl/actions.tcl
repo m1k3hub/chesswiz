@@ -969,6 +969,11 @@ proc ::action::labels {surface args} {
 				}
 			}
 			if {!$en || !$vis} { continue }
+			# A row that cannot run with no arguments is not an Ask row:
+			# choosing it would only raise "missing argument". Parameterised
+			# tools stay reachable through the assistant (run_action).
+			if {[catch {::action::validateArgs $id {}} validation]
+			 || [lindex $validation 0] eq "error"} { continue }
 			if {$query ne ""} {
 				set score [fuzzyScore $query [searchText $id]]
 				if {$score < 0} { continue }
