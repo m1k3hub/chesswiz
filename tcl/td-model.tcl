@@ -485,6 +485,10 @@ proc ::td::model::Apply {command info domain} {
 			lset pairings $index $p
 			dict set state pairings $pairings
 			set check [::td::swiss::CheckRound $state $round]
+			set duplicates [lmap v [dict get $check violations] {expr {[dict get $v code] eq "C4-DUPLICATE" ? $v : [continue]}}]
+			if {[llength $duplicates]} {
+				error "structural round duplicate (C4-DUPLICATE: [join [lmap v $duplicates {dict get $v detail}] {; }]) cannot be committed even with a TD ruling"
+			}
 			set ruling [string trim [dg $domain ruling {}]]
 			set absolute [lmap v [dict get $check violations] {expr {[string match C\[1234\]-* [dict get $v code]] || [dict get $v code] eq "C04-CHECKER-UNAVAILABLE" ? $v : [continue]}}]
 			if {[llength $absolute] && $ruling eq ""} {

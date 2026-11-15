@@ -106,4 +106,35 @@ tcltest::test td-override-f6-final-round-c3-absolute-colour {F6: C3 absolute-col
     list $rejectedNoRuling [dict get $withRuling compliant] [expr {"C3-ABSOLUTE-COLOUR" in $codes}]
 } -result {1 0 1}
 
+tcltest::test td-override-f7-forbid-c4-duplicate-even-with-ruling {F7: C4-DUPLICATE (same player twice in one round) is rejected unconditionally even when a TD ruling is supplied} -body {
+    set path [file join $::env(HOME) override_f7.tdj]
+    ::tdOverride::call $path create {name {No Duplicate Seats} players {A B C D E} system swiss rounds 3 start 0}
+    ::tdOverride::call $path bye {player p5 round 1 category requested-bye}
+    ::tdOverride::call $path pair_round {round 1}
+    set st0 [dict get [::td::store::Read $path] state]
+    set boards [lmap p [::td::model::Pairings $st0 1] {expr {[dict get $p black] ne "" ? $p : [continue]}}]
+    set b0 [lindex $boards 0]
+    set b1 [lindex $boards 1]
+    set donePlayer [dict get $b0 white]
+    set keepBlack [dict get $b1 black]
+    # Complete board 0 so its seats are locked
+    ::tdOverride::call $path enter_result [dict create pairing [dict get $b0 id] result 1-0 category played]
+
+    # Attempt to place donePlayer onto pending board 1 WITHOUT ruling and WITH ruling
+    set errNoRuling [catch {
+        ::tdOverride::call $path override_pairing [dict create pairing [dict get $b1 id] white $donePlayer black $keepBlack reason {Duplicate seat}]
+    }]
+    set errWithRuling [catch {
+        ::tdOverride::call $path override_pairing [dict create pairing [dict get $b1 id] white $donePlayer black $keepBlack reason {Duplicate seat} ruling {CA tried to force duplicate}]
+    } msgDup]
+    # Also attempt to place bye player p5 onto pending board 1 WITH ruling without cancelling bye
+    set errByeDup [catch {
+        ::tdOverride::call $path override_pairing [dict create pairing [dict get $b1 id] white p5 black $keepBlack reason {Duplicate bye player} ruling {CA tried to force bye player}]
+    }]
+
+    set stAfter [dict get [::td::store::Read $path] state]
+    set chkAfter [::td::swiss::CheckRound $stAfter 1]
+    list $errNoRuling $errWithRuling [string match "*C4-DUPLICATE*" $msgDup] $errByeDup [dict get $chkAfter compliant]
+} -result {1 1 1 1 1}
+
 tcltest::cleanupTests
