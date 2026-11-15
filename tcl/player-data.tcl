@@ -555,7 +555,7 @@ proc ::playerdata::EmbedLists {w infoFont alertFont} {
 			::tk::AmpWidget ::ttk::button $w.button$kind -text " $mc::ListChoose" \
 				-command [namespace code [list ChooseList $kind $w]]
 		}
-		grid $w.name$kind $w.status$kind $w.button$kind -row $row -sticky w -padx {0 8} -pady {8 0 0 0}
+		grid $w.name$kind $w.status$kind $w.button$kind -row $row -sticky w -padx {0 8} -pady {8 0}
 		grid $w.note$kind -row [incr row] -column 0 -columnspan 3 -sticky w -padx {0 8}
 		grid columnconfigure $w 0 -weight 1
 		incr row

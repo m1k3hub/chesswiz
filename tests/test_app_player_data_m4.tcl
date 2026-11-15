@@ -84,22 +84,47 @@ tcltest::test VAL-PD4-011-corrupt-zip {Corrupt ZIP and HTML 403 bodies are rejec
       [catch {::scidb::app::filterRatingList ecf $html403 $::m4::dir/bad2.txt}] \
       [catch {::scidb::app::filterRatingList iccf $html403 $::m4::dir/bad3.txt}]
 } -result {1 1 1}
-tcltest::test VAL-PD4-011-empty-name {DWZ and ECF rows with empty or invalid required name or ID reject whole import} -body {
- set ecfEmpty [::m4::write ecf-empty.csv "ECF_code,full_name,revised_standard\n999001A,\"Fixture, Valid\",1900\n999002B,,1900\n"]
- set dwzEmpty [::m4::write dwz-empty.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n99999,2,,1900\n"]
- set dwzComma [::m4::write dwz-comma.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n99999,2,\",GivenOnly\",1900\n"]
- set dwzNoId  [::m4::write dwz-noid.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n,2,\"Fixture, MissingZps\",1900\n"]
- set ecfNoId  [::m4::write ecf-noid.csv "ECF_code,full_name,revised_standard\n999001A,\"Fixture, Valid\",1900\n,\"Fixture, MissingCode\",1900\n"]
+tcltest::test VAL-PD4-011-required-fields {DWZ and ECF rows with empty or non-numeric required/typed fields reject whole import} -body {
+ set ecfEmpty      [::m4::write ecf-empty.csv "ECF_code,full_name,revised_standard\n999001A,\"Fixture, Valid\",1900\n999002B,,1900\n"]
+ set dwzEmpty      [::m4::write dwz-empty.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n99999,2,,1900\n"]
+ set dwzComma      [::m4::write dwz-comma.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n99999,2,\",GivenOnly\",1900\n"]
+ set dwzNoId       [::m4::write dwz-noid.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n,2,\"Fixture, MissingZps\",1900\n"]
+ set ecfNoId       [::m4::write ecf-noid.csv "ECF_code,full_name,revised_standard\n999001A,\"Fixture, Valid\",1900\n,\"Fixture, MissingCode\",1900\n"]
+ set dwzBadMember  [::m4::write dwz-bad-member.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n99999,abc,\"Fixture, BadMember\",1900\n"]
+ set dwzZeroMember [::m4::write dwz-zero-member.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n99999,0,\"Fixture, ZeroMember\",1900\n"]
+ set dwzBadRating  [::m4::write dwz-bad-rating.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n99999,2,\"Fixture, BadRating\",abc\n"]
+ set dwzHugeRating [::m4::write dwz-huge-rating.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n99999,2,\"Fixture, HugeRating\",99999\n"]
+ set dwzBadFide    [::m4::write dwz-bad-fide.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ,FIDE-ID\n99999,1,\"Fixture, Valid\",1900,\n99999,2,\"Fixture, BadFide\",1500,xyz\n"]
+ set dwzBadBirth   [::m4::write dwz-bad-birth.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ,Geburtsjahr\n99999,1,\"Fixture, Valid\",1900,\n99999,2,\"Fixture, BadBirth\",1900,19x5\n"]
+ set dwzDupBad     [::m4::write dwz-dup-bad.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n99999,1,\"Fixture, Valid\",abc\n"]
+ set ecfBadRating  [::m4::write ecf-bad-rating.csv "ECF_code,full_name,revised_standard,FIDE_no\n999001A,\"Fixture, Valid\",1900,\n999002B,\"Fixture, BadRating\",abc,\n"]
+ set ecfBadOrig    [::m4::write ecf-bad-orig.csv "ECF_code,full_name,revised_standard,original_standard\n999001A,\"Fixture, Valid\",1900,1850\n999002B,\"Fixture, BadOrig\",1900,abc\n"]
+ set ecfBadGrade   [::m4::write ecf-bad-grade.csv "ECF_code,full_name,grade\n999001A,\"Fixture, Valid\",150\n999002B,\"Fixture, BadGrade\",abc\n"]
+ set ecfBadFide    [::m4::write ecf-bad-fide.csv "ECF_code,full_name,revised_standard,FIDE_no\n999001A,\"Fixture, Valid\",1900,\n999002B,\"Fixture, BadFide\",1500,xyz\n"]
  set ecfOut $::m4::dir/ecf-empty-out.txt
  set dwzOut $::m4::dir/dwz-empty-out.txt
- file delete -force $ecfOut $dwzOut
+ set dwzBadMemberOut $::m4::dir/dwz-bad-member-out.txt
+ set dwzBadRatingOut $::m4::dir/dwz-bad-rating-out.txt
+ set ecfBadRatingOut $::m4::dir/ecf-bad-rating-out.txt
+ file delete -force $ecfOut $dwzOut $dwzBadMemberOut $dwzBadRatingOut $ecfBadRatingOut
  list \
   [catch {::scidb::app::filterRatingList ecf $ecfEmpty $ecfOut 1800}] [file exists $ecfOut] \
   [catch {::scidb::app::filterRatingList dwz $dwzEmpty $dwzOut 1800}] [file exists $dwzOut] \
   [catch {::scidb::app::filterRatingList dwz $dwzComma $::m4::dir/dwz-comma-out.txt 1800}] \
   [catch {::scidb::app::filterRatingList dwz $dwzNoId $::m4::dir/dwz-noid-out.txt 1800}] \
-  [catch {::scidb::app::filterRatingList ecf $ecfNoId $::m4::dir/ecf-noid-out.txt 1800}]
-} -result {1 0 1 0 1 1 1}
+  [catch {::scidb::app::filterRatingList ecf $ecfNoId $::m4::dir/ecf-noid-out.txt 1800}] \
+  [catch {::scidb::app::filterRatingList dwz $dwzBadMember $dwzBadMemberOut 1800}] [file exists $dwzBadMemberOut] \
+  [catch {::scidb::app::filterRatingList dwz $dwzZeroMember $::m4::dir/dwz-zero-member-out.txt 1800}] \
+  [catch {::scidb::app::filterRatingList dwz $dwzBadRating $dwzBadRatingOut 1800}] [file exists $dwzBadRatingOut] \
+  [catch {::scidb::app::filterRatingList dwz $dwzHugeRating $::m4::dir/dwz-huge-rating-out.txt 1800}] \
+  [catch {::scidb::app::filterRatingList dwz $dwzBadFide $::m4::dir/dwz-bad-fide-out.txt 1800}] \
+  [catch {::scidb::app::filterRatingList dwz $dwzBadBirth $::m4::dir/dwz-bad-birth-out.txt 1800}] \
+  [catch {::scidb::app::filterRatingList dwz $dwzDupBad $::m4::dir/dwz-dup-bad-out.txt 1800}] \
+  [catch {::scidb::app::filterRatingList ecf $ecfBadRating $ecfBadRatingOut 1800}] [file exists $ecfBadRatingOut] \
+  [catch {::scidb::app::filterRatingList ecf $ecfBadOrig $::m4::dir/ecf-bad-orig-out.txt 1800}] \
+  [catch {::scidb::app::filterRatingList ecf $ecfBadGrade $::m4::dir/ecf-bad-grade-out.txt 1800}] \
+  [catch {::scidb::app::filterRatingList ecf $ecfBadFide $::m4::dir/ecf-bad-fide-out.txt 1800}]
+} -result {1 0 1 0 1 1 1 1 0 1 1 0 1 1 1 1 1 0 1 1 1}
 tcltest::test VAL-PD4-014 {Same FIDE identity joins without overwriting authoritative spelling; conflicting IDs remain distinct} -body {
  set fideHdr "ID Number      Name                                                         Fed Sex Tit  WTit OTit           FOA SRtng SGm SK RRtng RGm Rk BRtng BGm BK B-day Flag"
  set r1 [format "%-15s%-61s%-4s%-4s%-5s%-5s%-15s%-4s%-6s%-4s%-3s%-6s%-4s%-3s%-6s%-4s%-3s%-6s%-4s" 999700001 {Authoritative, One} GER M GM "" "" "" 2500 0 10 0 0 10 0 0 10 1985 ""]

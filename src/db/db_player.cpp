@@ -3530,6 +3530,34 @@ numberOf(mstl::string const& field)
 }
 
 
+// Parse an optional numeric cell (empty, "-", "0", "0000" -> 0) and reject
+// non-digit text or uint32 overflow so malformed rows fail the whole import.
+bool
+parseOptionalNumber(mstl::string const& field, unsigned& value)
+{
+	mstl::string s(trimmed(field));
+	value = 0;
+
+	if (s.empty() || s == ListNone)
+		return true;
+
+	for (unsigned i = 0; i < s.size(); ++i)
+	{
+		if (!::isdigit(static_cast<unsigned char>(s[i])))
+			return false;
+
+		unsigned digit = unsigned(s[i] - '0');
+
+		if (value > (0xffffffffu - digit)/10u)
+			return false;
+
+		value = value*10u + digit;
+	}
+
+	return true;
+}
+
+
 // "m", "w" and "f" are the spellings of the three lists; "-" and "n" are none.
 sex::ID
 sexOf(mstl::string const& field)
@@ -3935,12 +3963,20 @@ convertDwzList(	mstl::istream& stream,
 		// the federation's player number: the club's ZPS and the member's number
 		mstl::string zpsCode(trimmed(fieldOf(f, zps)));
 		mstl::string memberNr(trimmed(fieldOf(f, nr)));
+		unsigned memberNum = 0;
 
 		if (	zpsCode.empty()
-			|| memberNr.empty()
+			|| !isNumber(memberNr)
+			|| !parseOptionalNumber(memberNr, memberNum)
+			|| memberNum == 0
 			|| r.name.empty()
 			|| !sys::utf8::validate(r.name)
-			|| r.name.find('|') != mstl::string::npos)
+			|| r.name.find('|') != mstl::string::npos
+			|| !parseOptionalNumber(fieldOf(f, birth), r.birthYear)
+			|| !parseOptionalNumber(fieldOf(f, rating), r.rating)
+			|| !parseOptionalNumber(fieldOf(f, fideID), r.fideID)
+			|| r.rating > rating::Max_Value
+			|| (r.birthYear != 0 && (r.birthYear < Date::MinYear || r.birthYear > 2047)))
 		{
 			return false;
 		}
@@ -3954,9 +3990,6 @@ convertDwzList(	mstl::istream& stream,
 
 		r.id			= member;
 		r.sex			= sexOf(fieldOf(f, sex));
-		r.birthYear	= numberOf(fieldOf(f, birth));
-		r.rating		= numberOf(fieldOf(f, rating));
-		r.fideID		= numberOf(fieldOf(f, fideID));
 		r.federation	= federationOf(fieldOf(f, fideLand));
 		r.titles		= titlesOf(fieldOf(f, titles)) | titlesOf(fieldOf(f, wTitles));
 
@@ -4041,22 +4074,41 @@ convertEcfList(	mstl::istream& stream,
 		}
 
 		r.sex			= sexOf(fieldOf(f, sex));
-		r.fideID		= numberOf(fieldOf(f, fideID));
 		r.titles		= titlesOf(fieldOf(f, titles));
+
+		if (!parseOptionalNumber(fieldOf(f, fideID), r.fideID))
+			return false;
 
 		if (rating >= 0)
 		{
 			// since 2020 the ECF publishes Elo-like ratings, recalculated nightly
-			r.rating = numberOf(fieldOf(f, rating));
+			unsigned fallback = 0;
 
-			if (r.rating == 0 && rating2 >= 0)
-				r.rating = numberOf(fieldOf(f, rating2));
+			if (!parseOptionalNumber(fieldOf(f, rating), r.rating))
+				return false;
+
+			if (rating2 >= 0 && rating2 != rating && !parseOptionalNumber(fieldOf(f, rating2), fallback))
+				return false;
+
+			if (fallback > rating::Max_Value)
+				return false;
+
+			if (r.rating == 0 && rating2 >= 0 && rating2 != rating)
+				r.rating = fallback;
 		}
 		else if (grade >= 0)
 		{
 			// the export until 2020 published grades: convert them to Elo
-			r.rating = rating::convertEcfToElo(numberOf(fieldOf(f, grade)));
+			unsigned ecfGrade = 0;
+
+			if (!parseOptionalNumber(fieldOf(f, grade), ecfGrade))
+				return false;
+
+			r.rating = rating::convertEcfToElo(ecfGrade);
 		}
+
+		if (r.rating > rating::Max_Value)
+			return false;
 
 		// the nation a player plays for; the API marks a foreign club with an 'F'
 		// followed by the federation, and leaves the nation empty for an English one
