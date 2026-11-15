@@ -3624,6 +3624,9 @@ personName(mstl::string const& field)
 
 	name = trimmed(name.substr(0, comma));
 
+	if (name.empty())
+		return mstl::string();
+
 	if (!first.empty())
 	{
 		name += ", ";
@@ -3929,13 +3932,22 @@ convertDwzList(	mstl::istream& stream,
 		ListRecord r;
 		r.name = personName(fieldOf(f, name));
 
-		if (r.name.empty() || !sys::utf8::validate(r.name))
-			continue;
-
 		// the federation's player number: the club's ZPS and the member's number
-		mstl::string member(trimmed(fieldOf(f, zps)));
+		mstl::string zpsCode(trimmed(fieldOf(f, zps)));
+		mstl::string memberNr(trimmed(fieldOf(f, nr)));
+
+		if (	zpsCode.empty()
+			|| memberNr.empty()
+			|| r.name.empty()
+			|| !sys::utf8::validate(r.name)
+			|| r.name.find('|') != mstl::string::npos)
+		{
+			return false;
+		}
+
+		mstl::string member(zpsCode);
 		member += '-';
-		member += trimmed(fieldOf(f, nr));
+		member += memberNr;
 
 		if (members.has_key(member))
 			continue;
@@ -4020,8 +4032,13 @@ convertEcfList(	mstl::istream& stream,
 		r.id			= trimmed(fieldOf(f, code));
 		r.name		= personName(fieldOf(f, name));
 
-		if (r.name.empty() || !sys::utf8::validate(r.name))
-			continue;
+		if (	r.id.empty()
+			|| r.name.empty()
+			|| !sys::utf8::validate(r.name)
+			|| r.name.find('|') != mstl::string::npos)
+		{
+			return false;
+		}
 
 		r.sex			= sexOf(fieldOf(f, sex));
 		r.fideID		= numberOf(fieldOf(f, fideID));

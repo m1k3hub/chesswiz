@@ -189,6 +189,9 @@ cmdFilterRatingList(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 	unsigned read = 0, kept = 0;
 	bool ok = false;
+	mstl::string tmpOut(out);
+	tmpOut += ".part";
+	FILE* fp = nullptr;
 	try
 	{
 		util::ZStream stream(in, mstl::ios_base::in | mstl::ios_base::binary);
@@ -197,24 +200,38 @@ cmdFilterRatingList(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			util::ZStream::setZipFileSuffixes(oldSuffixes);
 			return error(CmdFilterRating, 0, nullptr, "cannot open file '%s'", in);
 		}
-		FILE* fp = ::fopen(out, "w");
+		fp = ::fopen(tmpOut.c_str(), "w");
 		if (!fp)
 		{
 			util::ZStream::setZipFileSuffixes(oldSuffixes);
 			return error(CmdFilterRating, 0, nullptr, "cannot write file '%s'", out);
 		}
 		ok = db::Player::convertRatingList(kind, stream, fp, in, min, read, kept);
-		::fclose(fp);
+		if (::fclose(fp) != 0)
+			ok = false;
+		fp = nullptr;
 	}
 	catch (...)
 	{
+		if (fp)
+			::fclose(fp);
+		::remove(tmpOut.c_str());
 		util::ZStream::setZipFileSuffixes(oldSuffixes);
 		return error(CmdFilterRating, 0, nullptr, "cannot read '%s'", in);
 	}
 	util::ZStream::setZipFileSuffixes(oldSuffixes);
 
 	if (!ok)
+	{
+		::remove(tmpOut.c_str());
 		return error(CmdFilterRating, 0, nullptr, "'%s' is not the %s rating list", in, kind);
+	}
+
+	if (::rename(tmpOut.c_str(), out) != 0)
+	{
+		::remove(tmpOut.c_str());
+		return error(CmdFilterRating, 0, nullptr, "cannot write file '%s'", out);
+	}
 
 	Tcl_Obj* objs[2] = { Tcl_NewIntObj(read), Tcl_NewIntObj(kept) };
 	setResult(Tcl_NewListObj(2, objs));

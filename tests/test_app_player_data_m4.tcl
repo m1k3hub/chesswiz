@@ -84,6 +84,22 @@ tcltest::test VAL-PD4-011-corrupt-zip {Corrupt ZIP and HTML 403 bodies are rejec
       [catch {::scidb::app::filterRatingList ecf $html403 $::m4::dir/bad2.txt}] \
       [catch {::scidb::app::filterRatingList iccf $html403 $::m4::dir/bad3.txt}]
 } -result {1 1 1}
+tcltest::test VAL-PD4-011-empty-name {DWZ and ECF rows with empty or invalid required name or ID reject whole import} -body {
+ set ecfEmpty [::m4::write ecf-empty.csv "ECF_code,full_name,revised_standard\n999001A,\"Fixture, Valid\",1900\n999002B,,1900\n"]
+ set dwzEmpty [::m4::write dwz-empty.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n99999,2,,1900\n"]
+ set dwzComma [::m4::write dwz-comma.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n99999,2,\",GivenOnly\",1900\n"]
+ set dwzNoId  [::m4::write dwz-noid.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n,2,\"Fixture, MissingZps\",1900\n"]
+ set ecfNoId  [::m4::write ecf-noid.csv "ECF_code,full_name,revised_standard\n999001A,\"Fixture, Valid\",1900\n,\"Fixture, MissingCode\",1900\n"]
+ set ecfOut $::m4::dir/ecf-empty-out.txt
+ set dwzOut $::m4::dir/dwz-empty-out.txt
+ file delete -force $ecfOut $dwzOut
+ list \
+  [catch {::scidb::app::filterRatingList ecf $ecfEmpty $ecfOut 1800}] [file exists $ecfOut] \
+  [catch {::scidb::app::filterRatingList dwz $dwzEmpty $dwzOut 1800}] [file exists $dwzOut] \
+  [catch {::scidb::app::filterRatingList dwz $dwzComma $::m4::dir/dwz-comma-out.txt 1800}] \
+  [catch {::scidb::app::filterRatingList dwz $dwzNoId $::m4::dir/dwz-noid-out.txt 1800}] \
+  [catch {::scidb::app::filterRatingList ecf $ecfNoId $::m4::dir/ecf-noid-out.txt 1800}]
+} -result {1 0 1 0 1 1 1}
 tcltest::test VAL-PD4-014 {Same FIDE identity joins without overwriting authoritative spelling; conflicting IDs remain distinct} -body {
  set fideHdr "ID Number      Name                                                         Fed Sex Tit  WTit OTit           FOA SRtng SGm SK RRtng RGm Rk BRtng BGm BK B-day Flag"
  set r1 [format "%-15s%-61s%-4s%-4s%-5s%-5s%-15s%-4s%-6s%-4s%-3s%-6s%-4s%-3s%-6s%-4s%-3s%-6s%-4s" 999700001 {Authoritative, One} GER M GM "" "" "" 2500 0 10 0 0 10 0 0 10 1985 ""]
