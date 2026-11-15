@@ -372,13 +372,19 @@ proc activeWorkAreasFor {w} {
 	# asks from the main window; Tk's window id is still 0 before mapping
 	# and XQueryTree on 0 aborts the process.
 	set source $w
-	if {![winfo ismapped $source] && [winfo exists .application] && [winfo ismapped .application]} {
+	set mapped 0
+	catch {set mapped [winfo ismapped $source]}
+	set mainExists 0
+	catch {set mainExists [winfo exists .application]}
+	set mainMapped 0
+	catch {set mainMapped [winfo ismapped .application]}
+	if {!$mapped && $mainExists && $mainMapped} {
 		set source .application
 	}
 	# A caller-supplied work-area provider (tests and embedded surfaces) is
 	# authoritative when it disagrees with the native single-window query.
 	# In the app the two are the same call, so this only catches overrides.
-	if {![catch {getWmWorkArea $source} own] && [llength $own] == 4
+	if {![catch {winfo workarea $source} own] && [llength $own] == 4
 		&& ![catch {::scidb::tk::wm workarea $source} nativeOwn]
 		&& $own ne $nativeOwn} {
 		return [list $own]
@@ -386,25 +392,29 @@ proc activeWorkAreasFor {w} {
 	set areas {}
 	catch { set areas [::scidb::tk::wm workareas $source] }
 	if {![llength $areas]} { return [list [winfo workarea $source]] }
-	if {[llength $areas] > 1 && [winfo exists $source]} {
-		set sw [winfo screenwidth $source]
-		set sh [winfo screenheight $source]
+	if {[llength $areas] > 1} {
+		set sw 0
+		set sh 0
+		catch {set sw [winfo screenwidth $source]}
+		catch {set sh [winfo screenheight $source]}
 		set filtered {}
-		foreach area $areas {
-			lassign $area ax ay aw ah
-			if {$ax <= 0 && $ay <= 0 && $ax + $aw >= $sw && $ay + $ah >= $sh} {
-				set covered 0
-				foreach other $areas {
-					if {$other eq $area} { continue }
-					lassign $other ox oy ow oh
-					if {$ow > 0 && $oh > 0 && $ow * $oh < $aw * $ah
-						&& $ox >= $ax && $oy >= $ay
-						&& $ox + $ow <= $ax + $aw
-						&& $oy + $oh <= $ay + $ah} { set covered 1; break }
+		if {$sw > 0 && $sh > 0} {
+			foreach area $areas {
+				lassign $area ax ay aw ah
+				if {$ax <= 0 && $ay <= 0 && $ax + $aw >= $sw && $ay + $ah >= $sh} {
+					set covered 0
+					foreach other $areas {
+						if {$other eq $area} { continue }
+						lassign $other ox oy ow oh
+						if {$ow > 0 && $oh > 0 && $ow * $oh < $aw * $ah
+							&& $ox >= $ax && $oy >= $ay
+							&& $ox + $ow <= $ax + $aw
+							&& $oy + $oh <= $ay + $ah} { set covered 1; break }
+					}
+					if {$covered} { continue }
 				}
-				if {$covered} { continue }
+				lappend filtered $area
 			}
-			lappend filtered $area
 		}
 		if {[llength $filtered]} { set areas $filtered }
 	}
