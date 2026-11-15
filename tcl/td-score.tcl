@@ -99,9 +99,19 @@ proc ::td::score::BaseRows {state} {
 
 proc ::td::score::AdjustedScores {state rows} {
 	set adjusted [dict create]
+	set maxCompleteRound 0
+	foreach q [dg $state pairings {}] {
+		if {[Complete $q] && ([dict get $q black] ne "" || [dg $q category {}] eq "pairing-bye")} {
+			set maxCompleteRound [expr {max($maxCompleteRound, [dict get $q round])}]
+		}
+	}
 	dict for {id row} $rows {
 		set score [dict get $row score2]
+		set pairedRounds [dict create]
 		foreach p [dg $state pairings {}] {
+			if {[dict get $p white] eq $id || [dict get $p black] eq $id} {
+				dict set pairedRounds [dict get $p round] 1
+			}
 			if {![Complete $p] || ([dict get $p white] ne $id && [dict get $p black] ne $id)} { continue }
 			set category [dg $p category {}]
 			if {$category ni {requested-bye zero-point-bye trailing-bye}} { continue }
@@ -114,6 +124,24 @@ proc ::td::score::AdjustedScores {state rows} {
 			}
 			if {[dict get $p round] == [dg $state rounds 0] || !$laterNonVur} {
 				set score [Add $score [Sub {1 1} [Points $p $id]]]
+			}
+		}
+		if {[dg $state system round-robin] eq "swiss"} {
+			set player [::td::model::Player $state $id]
+			set wRound [dg $player withdrawn 0]
+			if {$wRound > 0} {
+				# C.07 16.1.1: any unpaired round after a participant withdraws is a zero-point-bye.
+				for {set r $wRound} {$r <= $maxCompleteRound} {incr r} {
+					if {[dict exists $pairedRounds $r]} { continue }
+					set laterNonVur 0
+					foreach q [dg $state pairings {}] {
+						if {[dict get $q round] <= $r || ([dict get $q white] ne $id && [dict get $q black] ne $id)} { continue }
+						if {[dg $q category {}] ni {requested-bye zero-point-bye forfeit forfeit-loss double-forfeit withdrawal trailing-bye}} { set laterNonVur 1 }
+					}
+					if {$r == [dg $state rounds 0] || !$laterNonVur} {
+						set score [Add $score {1 1}]
+					}
+				}
 			}
 		}
 		dict set adjusted $id $score

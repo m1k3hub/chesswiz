@@ -197,46 +197,81 @@ tcltest::test td-p2-torture-vectors-c04-c07 {FIDE C.04.3 and C.07 torture vector
             ::tdP2Acc::call $pTort enter_result [dict create pairing [dict get $p id] result 1-0 category played]
         }
     }
-    # Compute Buchholz of P2's R1 opponent when P2 has a 0-point bye in R2 followed by played R3 (0-point bye counts 0.0)
-    # versus when P2 withdraws before R3 (R2 0-point bye + R3 Z become trailing VURs under C.07 16.2.5/16.3, counting as 0.5 draws each!).
-    set pShift [file join $::env(HOME) shift.tdj]
-    ::tdP2Acc::call $pShift create {name {Withdraw Shift} players {S1 S2 S3 S4} system swiss rounds 3 colour_lot white start 0}
-    ::tdP2Acc::call $pShift bye {player p2 round 2 category zero-point-bye}
-    ::tdP2Acc::call $pShift pair_round {round 1}
-    set stS1 [dict get [::td::store::Read $pShift] state]
-    foreach p [::td::model::Pairings $stS1 1] {
-        if {[dict get $p status] eq "pending"} {
-            ::tdP2Acc::call $pShift enter_result [dict create pairing [dict get $p id] result 1-0 category played]
+    # 3. Withdrawal shifting opponents' Buchholz under C.07 16.1.1 ("any round after a participant withdraws is a zero-point-bye"), 16.2.5 & 16.3.2:
+    # Compare P2 playing Rounds 1..3 (0/3, all played -> contributes 0.0 to R1 opponent's Buchholz)
+    # versus P2 actually withdrawing via `withdraw` before Round 3 (R3 becomes a post-withdrawal zero-point-bye evaluated as a 0.5 draw for opponents' Buchholz!).
+    set pWithdrawn [file join $::env(HOME) shift_withdrawn.tdj]
+    set pPlayed [file join $::env(HOME) shift_played.tdj]
+    foreach store [list $pWithdrawn $pPlayed] {
+        ::tdP2Acc::call $store create {name {Withdraw Shift C07} players {S1 S2 S3 S4} system swiss rounds 3 colour_lot white start 0}
+        ::tdP2Acc::call $store pair_round {round 1}
+        foreach p [::td::model::Pairings [dict get [::td::store::Read $store] state] 1] {
+            if {[dict get $p status] eq "pending"} {
+                set res [expr {[dict get $p white] eq "p2" ? "0-1" : "1-0"}]
+                ::tdP2Acc::call $store enter_result [dict create pairing [dict get $p id] result $res category played]
+            }
+        }
+        ::tdP2Acc::call $store pair_round {round 2}
+        foreach p [::td::model::Pairings [dict get [::td::store::Read $store] state] 2] {
+            if {[dict get $p status] eq "pending"} {
+                set res [expr {[dict get $p white] eq "p2" ? "0-1" : "1-0"}]
+                ::tdP2Acc::call $store enter_result [dict create pairing [dict get $p id] result $res category played]
+            }
         }
     }
     set oppId {}
-    foreach p [::td::model::Pairings $stS1 1] {
+    foreach p [::td::model::Pairings [dict get [::td::store::Read $pWithdrawn] state] 1] {
         if {[dict get $p white] eq "p2"} { set oppId [dict get $p black] }
         if {[dict get $p black] eq "p2"} { set oppId [dict get $p white] }
     }
-    # At end of Round 2, P2's R2 zero-point-bye has no later non-VUR -> counts as 0.5 for oppId's Buchholz
-    # Wait: if P2 plays in Round 3 and loses (0-1), P2's R2 zero-point-bye is no longer trailing!
-    ::tdP2Acc::call $pShift pair_round {round 2}
-    foreach p [::td::model::Pairings [dict get [::td::store::Read $pShift] state] 2] {
+
+    # Branch A: P2 withdraws before Round 3 via the real `withdraw` command
+    set wRes [::tdP2Acc::call $pWithdrawn withdraw {player p2 round 3}]
+    ::tdP2Acc::call $pWithdrawn pair_round {round 3}
+    foreach p [::td::model::Pairings [dict get [::td::store::Read $pWithdrawn] state] 3] {
         if {[dict get $p status] eq "pending"} {
-            ::tdP2Acc::call $pShift enter_result [dict create pairing [dict get $p id] result 1-0 category played]
+            ::tdP2Acc::call $pWithdrawn enter_result [dict create pairing [dict get $p id] result 1/2-1/2 category played]
         }
     }
-    # Snapshot Buchholz of oppId when P2 withdraws in Round 3 (R2 zero-point-bye stays trailing -> adjusted +0.5)
-    # vs when P2 plays and loses in Round 3 (R2 zero-point-bye is followed by played game -> 0.0)
-    set rowsTrailing [::td::score::Compute [dict get [::td::store::Read $pShift] state]]
-    set bhBefore {}
-    foreach r $rowsTrailing { if {[dict get $r id] eq $oppId} { set bhBefore [dict get $r tiebreaks buchholz text] } }
-    ::tdP2Acc::call $pShift pair_round {round 3}
-    foreach p [::td::model::Pairings [dict get [::td::store::Read $pShift] state] 3] {
+
+    # Branch B: P2 does NOT withdraw, plays Round 3 and loses over the board
+    ::tdP2Acc::call $pPlayed pair_round {round 3}
+    foreach p [::td::model::Pairings [dict get [::td::store::Read $pPlayed] state] 3] {
         if {[dict get $p status] eq "pending"} {
             set res [expr {[dict get $p white] eq "p2" ? "0-1" : "1-0"}]
-            ::tdP2Acc::call $pShift enter_result [dict create pairing [dict get $p id] result $res category played]
+            ::tdP2Acc::call $pPlayed enter_result [dict create pairing [dict get $p id] result $res category played]
         }
     }
-    set rowsPlayed [::td::score::Compute [dict get [::td::store::Read $pShift] state]]
-    set bhAfter {}
-    foreach r $rowsPlayed { if {[dict get $r id] eq $oppId} { set bhAfter [dict get $r tiebreaks buchholz text] } }
+
+    set stW [dict get [::td::store::Read $pWithdrawn] state]
+    set stP [dict get [::td::store::Read $pPlayed] state]
+    set rowsW [::td::score::Compute $stW]
+    set rowsP [::td::score::Compute $stP]
+    set p2ContribWithdrawn {}
+    set p2ContribPlayed {}
+    set oppBhWithdrawn {}
+    foreach r $rowsW {
+        if {[dict get $r id] eq $oppId} {
+            set oppBhWithdrawn [dict get $r tiebreaks buchholz text]
+            foreach e [dict get $r tiebreaks buchholz breakdown] {
+                if {[dict get $e opponent] eq "p2"} { set p2ContribWithdrawn [dict get $e opponent_score] }
+            }
+        }
+    }
+    foreach r $rowsP {
+        if {[dict get $r id] eq $oppId} {
+            foreach e [dict get $r tiebreaks buchholz breakdown] {
+                if {[dict get $e opponent] eq "p2"} { set p2ContribPlayed [dict get $e opponent_score] }
+            }
+        }
+    }
+    # Also verify native post-withdrawal Buchholz agrees with TRF26 export -> re-import (0000 - Z in R3)
+    set stWTrf [::td::trf::Read [::td::trf::Write $stW trf26]]
+    dict set stWTrf system swiss
+    set oppBhTrf {}
+    foreach r [::td::score::Compute $stWTrf] {
+        if {[dict get $r id] eq $oppId} { set oppBhTrf [dict get $r tiebreaks buchholz text] }
+    }
 
     # 4. Bracket collapse with floats (dutch_2025_C5 + dutch_2025_C9)
     set root [file normalize [file join [file dirname [info script]] .. engines bbpPairings test tests]]
@@ -244,8 +279,10 @@ tcltest::test td-p2-torture-vectors-c04-c07 {FIDE C.04.3 and C.07 torture vector
     set f [open [file join $root dutch_2025_C5.output.expected] r]; set c5Exp [string trim [read $f]]; close $f
     set c5Ok [expr {[::td::swiss::Run $c5In] eq $c5Exp}]
 
-    list [llength $pabR1] [llength $pabR2] [expr {$bhBefore ne $bhAfter}] $c5Ok
-} -result {1 0 1 1}
+    list [llength $pabR1] [llength $pabR2] [dict get $wRes timing] \
+        [expr {$p2ContribPlayed eq "0 1"}] [expr {$p2ContribWithdrawn eq "1 1"}] \
+        [expr {$oppBhWithdrawn eq $oppBhTrf}] $c5Ok
+} -result {1 0 withdrawal-before-pairing 1 1 1 1}
 
 tcltest::test td-p2-prizes-hort-and-payment {Prize calculation supports Hort system, equal split, one prize per player, withdrawal exclusion and payment receipts} -body {
     set path [file join $::env(HOME) prizes.tdj]
