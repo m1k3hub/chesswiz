@@ -35,13 +35,14 @@ proc ::td::model::EngineLabel {name existing} {
 
 proc ::td::model::EngineNames {} {
 	if {[llength [info commands ::enginematch::EngineNames]]} { return [::enginematch::EngineNames] }
-	return [::td::runner::EngineNames]
+	if {[llength [info commands ::td::runner::EngineNames]]} { return [::td::runner::EngineNames] }
+	return {}
 }
 
 proc ::td::model::MakePlayers {names kind start} {
 	set out {}
 	set existing {}
-	set configured [EngineNames]
+	set configured [expr {$kind eq "engine" ? [EngineNames] : {}}]
 	if {$kind eq "engine" && ![llength $names]} { error "no configured UCI engines" }
 	foreach name $names {
 		set name [string trim $name]
@@ -286,7 +287,7 @@ proc ::td::model::Apply {command info domain} {
 			set path [dict get $info path]
 			set id [format "evt-%08x" [zlib crc32 $path]]
 			set opening [::td::openings::Resolve $domain]
-			set now [clock seconds]
+			set now [dg $info now [clock seconds]]
 			set startDate [string trim [dg $domain start_date {}]]
 			if {$startDate eq ""} { set startDate [clock format $now -format %Y-%m-%d -gmt 1] }
 			set endDate [string trim [dg $domain end_date {}]]
@@ -367,11 +368,11 @@ proc ::td::model::Apply {command info domain} {
 				overhead_ms 100 concurrency 2 threads 1 max_plies 0 tablebase 1 online 0 \
 				colour_lot [dict get $parsed colour_lot] tiebreaks $tbList \
 				unrated_policy drop publication_revision 0 published 0 publications {} withdrawals {} rulings {} \
-				games {} created [clock seconds] updated [clock seconds]]
+				games {} created [dg $info now [clock seconds]] updated [dg $info now [clock seconds]]]
 			return [list $state [dict create imported [llength [dict get $parsed players]] rounds [dict get $parsed rounds] trf_format [dict get $parsed trf_format]] $target $history]
 		}
-		register { return [::td::registration::Add $state $domain] }
-        register_fide { return [::td::registration::Add $state $domain 1] }
+		register { return [::td::registration::Add $state $domain 0 $info] }
+        register_fide { return [::td::registration::Add $state $domain 1 $info] }
 		pair_round {
 			if {[dict get $state system] eq "swiss"} { return [::td::swiss::PairRound $state $domain] }
 			set wanted [dg $domain round 0]

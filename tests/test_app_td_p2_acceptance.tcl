@@ -306,56 +306,108 @@ tcltest::test td-p2-prizes-hort-and-payment {Prize calculation supports Hort sys
     list [dict get $p0 amount] [dict get $p1 amount] [dict get $p0 paid] [dict get $p0 receipt]
 } -result {875.00 625.00 1 RCPT-001}
 
-tcltest::test td-p2-5round-swiss-replay-undo-redo {5-round Swiss with manual override, result correction and late entry gives byte-identical standings and TRF across undo/redo and journal replay} -body {
+tcltest::test td-p2-5round-swiss-replay-undo-redo {5-round Swiss via Ask actions with manual override, result correction and late entry gives byte-identical standings and TRF across undo/redo, fresh-process disk reopen and full journal command replay} -body {
     set path [file join $::env(HOME) replay5.tdj]
-    ::td::actions::Create [dict create path $path name {Five Round Replay Open} players {P1 P2 P3 P4 P5 P6 P7 P8 P9} kind human system swiss rounds 5 colour_lot white start 0 commit 1 expected_revision 0 idempotency rep-c]
+    set askRun {{id argsDict} {
+        set res [::action::run $id $argsDict]
+        if {[string match "error:*" $res]} { error $res }
+        return $res
+    }}
+    apply $askRun td.create [dict create path $path name {Five Round Replay Open} start_date 2026-11-15 end_date 2026-11-15 players {P1 P2 P3 P4 P5 P6 P7 P8 P9} kind human system swiss rounds 5 colour_lot white start 0 commit 1 expected_revision 0 idempotency rep-c]
     # Round 1
-    ::td::actions::Run pair_round [dict create path $path round 1 commit 1 expected_revision [dict get [::td::store::Read $path] revision] idempotency rep-r1p]
+    apply $askRun td.pair_round [dict create path $path round 1 commit 1 expected_revision [dict get [::td::store::Read $path] revision] idempotency rep-r1p]
     foreach p [::td::model::Pairings [dict get [::td::store::Read $path] state] 1] {
         if {[dict get $p status] eq "pending"} {
-            ::td::actions::Run enter_result [dict create path $path pairing [dict get $p id] result 1-0 category played signed_by "Players" commit 1 expected_revision [dict get [::td::store::Read $path] revision] idempotency "rep-r1-[dict get $p id]"]
+            apply $askRun td.enter_result [dict create path $path pairing [dict get $p id] result 1-0 category played signed_by "Players" commit 1 expected_revision [dict get [::td::store::Read $path] revision] idempotency "rep-r1-[dict get $p id]"]
         }
     }
     # Late entry before Round 2
-    ::td::actions::Run register [dict create path $path players {P10} kind human entry_round 2 rating 2050 commit 1 expected_revision [dict get [::td::store::Read $path] revision] idempotency rep-late]
+    set regRes [apply $askRun td.register [dict create path $path players {P10} kind human entry_round 2 rating 2050 commit 1 expected_revision [dict get [::td::store::Read $path] revision] idempotency rep-late]]
     # Round 2
-    ::td::actions::Run pair_round [dict create path $path round 2 commit 1 expected_revision [dict get [::td::store::Read $path] revision] idempotency rep-r2p]
+    apply $askRun td.pair_round [dict create path $path round 2 commit 1 expected_revision [dict get [::td::store::Read $path] revision] idempotency rep-r2p]
     # Manual override on r2b0 (colour swap)
     set st2 [dict get [::td::store::Read $path] state]
     set b0 [lindex [::td::model::Pairings $st2 2] 0]
-    ::td::actions::Run override_pairing [dict create path $path pairing [dict get $b0 id] white [dict get $b0 black] black [dict get $b0 white] reason "Board 1 colour swap" ruling "CA approved" commit 1 expected_revision [dict get [::td::store::Read $path] revision] idempotency rep-ovr]
+    apply $askRun td.override_pairing [dict create path $path pairing [dict get $b0 id] white [dict get $b0 black] black [dict get $b0 white] reason "Board 1 colour swap" ruling "CA approved" commit 1 expected_revision [dict get [::td::store::Read $path] revision] idempotency rep-ovr]
     foreach p [::td::model::Pairings [dict get [::td::store::Read $path] state] 2] {
         if {[dict get $p status] eq "pending"} {
-            ::td::actions::Run enter_result [dict create path $path pairing [dict get $p id] result 1-0 category played commit 1 expected_revision [dict get [::td::store::Read $path] revision] idempotency "rep-r2-[dict get $p id]"]
+            apply $askRun td.enter_result [dict create path $path pairing [dict get $p id] result 1-0 category played commit 1 expected_revision [dict get [::td::store::Read $path] revision] idempotency "rep-r2-[dict get $p id]"]
         }
     }
     # Correct result on r2b0 to 1/2-1/2
-    ::td::actions::Run correct_result [dict create path $path pairing [dict get $b0 id] result 1/2-1/2 category played reason "Scoresheet check" commit 1 expected_revision [dict get [::td::store::Read $path] revision] idempotency rep-corr]
+    apply $askRun td.correct_result [dict create path $path pairing [dict get $b0 id] result 1/2-1/2 category played reason "Scoresheet check" commit 1 expected_revision [dict get [::td::store::Read $path] revision] idempotency rep-corr]
     # Rounds 3, 4, 5
     for {set r 3} {$r <= 5} {incr r} {
-        ::td::actions::Run pair_round [dict create path $path round $r commit 1 expected_revision [dict get [::td::store::Read $path] revision] idempotency "rep-r${r}p"]
+        apply $askRun td.pair_round [dict create path $path round $r commit 1 expected_revision [dict get [::td::store::Read $path] revision] idempotency "rep-r${r}p"]
         foreach p [::td::model::Pairings [dict get [::td::store::Read $path] state] $r] {
             if {[dict get $p status] eq "pending"} {
-                ::td::actions::Run enter_result [dict create path $path pairing [dict get $p id] result 1/2-1/2 category played commit 1 expected_revision [dict get [::td::store::Read $path] revision] idempotency "rep-r${r}-[dict get $p id]"]
+                apply $askRun td.enter_result [dict create path $path pairing [dict get $p id] result 1/2-1/2 category played commit 1 expected_revision [dict get [::td::store::Read $path] revision] idempotency "rep-r${r}-[dict get $p id]"]
             }
         }
     }
-    set stBefore [dict get [::td::store::Read $path] state]
-    set standingsBefore [::td::score::StandingsText [::td::score::Compute $stBefore]]
-    set trfBefore [::td::trf::Write $stBefore trf26]
+    set standingsBefore [dict get [apply $askRun td.standings [dict create path $path]] text]
+    set trfBeforePath [file join $::env(HOME) replay_before.trf]
+    set trfBefore [dict get [apply $askRun td.export [dict create path $path filename $trfBeforePath format trf26 overwrite 1]] text]
 
-    # Undo 3 commands and Redo 3 commands
+    # Undo 3 commands and Redo 3 commands via Ask actions
     for {set k 1} {$k <= 3} {incr k} {
-        ::td::actions::Undo [dict create path $path commit 1 expected_revision [dict get [::td::store::Read $path] revision] idempotency "rep-u$k"]
+        apply $askRun td.undo [dict create path $path commit 1 expected_revision [dict get [::td::store::Read $path] revision] idempotency "rep-u$k"]
     }
     for {set k 1} {$k <= 3} {incr k} {
-        ::td::actions::Redo [dict create path $path commit 1 expected_revision [dict get [::td::store::Read $path] revision] idempotency "rep-d$k"]
+        apply $askRun td.redo [dict create path $path commit 1 expected_revision [dict get [::td::store::Read $path] revision] idempotency "rep-d$k"]
     }
-    set stAfter [dict get [::td::store::Read $path] state]
-    set standingsAfter [::td::score::StandingsText [::td::score::Compute $stAfter]]
-    set trfAfter [::td::trf::Write $stAfter trf26]
+    set standingsAfter [dict get [apply $askRun td.standings [dict create path $path]] text]
+    set trfAfterPath [file join $::env(HOME) replay_after.trf]
+    set trfAfter [dict get [apply $askRun td.export [dict create path $path filename $trfAfterPath format trf26 overwrite 1]] text]
 
-    list [expr {$standingsBefore eq $standingsAfter}] [expr {$trfBefore eq $trfAfter}]
-} -result {1 1}
+    # Spawn a genuinely fresh OS child process with an isolated HOME to reopen the journal from disk
+    # AND re-execute the entire journal command log from seq 1..N (::td::store::Replay).
+    set childHome [file join $::env(HOME) child_home]
+    set outDir [file join $::env(HOME) child_out]
+    file mkdir $childHome $outDir
+    set tclDir [file normalize [file join [file dirname [info script]] .. tcl]]
+    set childScript [file join $::env(HOME) child_replay_check.tcl]
+    set cf [open $childScript w]
+    fconfigure $cf -encoding utf-8 -translation lf
+    puts $cf {
+        lassign $argv journalPath outDir tclDir
+        foreach f {td-store.tcl td-openings.tcl td-pair.tcl td-swiss.tcl td-score.tcl td-arbiter.tcl td-registration.tcl td-trf.tcl td-model.tcl td-command.tcl} {
+            source -encoding utf-8 [file join $tclDir $f]
+        }
+
+        set readInfo [::td::store::Read $journalPath]
+        set readState [dict get $readInfo state]
+        set f [open [file join $outDir read_standings.txt] w]; fconfigure $f -encoding utf-8 -translation lf
+        puts -nonewline $f [::td::score::StandingsText [::td::score::Compute $readState]]; close $f
+        set f [open [file join $outDir read_trf.txt] w]; fconfigure $f -encoding utf-8 -translation lf
+        puts -nonewline $f [::td::trf::Write $readState trf26]; close $f
+
+        set replayInfo [::td::store::Replay $journalPath]
+        set replayState [dict get $replayInfo state]
+        set f [open [file join $outDir replay_standings.txt] w]; fconfigure $f -encoding utf-8 -translation lf
+        puts -nonewline $f [::td::score::StandingsText [::td::score::Compute $replayState]]; close $f
+        set f [open [file join $outDir replay_trf.txt] w]; fconfigure $f -encoding utf-8 -translation lf
+        puts -nonewline $f [::td::trf::Write $replayState trf26]; close $f
+        exit 0
+    }
+    close $cf
+
+    set tclshBin [lindex [auto_execok tclsh] 0]
+    set childOk [expr {![catch {exec env HOME=$childHome $tclshBin $childScript $path $outDir $tclDir} childErr]}]
+    set readFile {{p} { if {![file exists $p]} { return {} }; set f [open $p r]; fconfigure $f -encoding utf-8 -translation lf; set s [read $f]; close $f; return $s }}
+    set readStandings [apply $readFile [file join $outDir read_standings.txt]]
+    set readTrf [apply $readFile [file join $outDir read_trf.txt]]
+    set replayStandings [apply $readFile [file join $outDir replay_standings.txt]]
+    set replayTrf [apply $readFile [file join $outDir replay_trf.txt]]
+
+    list [dict get $regRes entry_round] \
+        [expr {$standingsBefore eq $standingsAfter}] \
+        [expr {$trfBefore eq $trfAfter}] \
+        $childOk \
+        [expr {$readStandings eq $standingsBefore}] \
+        [expr {$readTrf eq $trfBefore}] \
+        [expr {$replayStandings eq $standingsBefore}] \
+        [expr {$replayTrf eq $trfBefore}]
+} -result {2 1 1 1 1 1 1 1}
 
 tcltest::cleanupTests

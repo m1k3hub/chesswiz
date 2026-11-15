@@ -206,4 +206,50 @@ proc ::td::store::FindKey {info key} {
 proc ::td::store::Audit {path} { return [dict get [Read $path] records] }
 proc ::td::store::Games {state} { return [dg $state games {}] }
 
+proc ::td::store::Replay {path} {
+	set stored [Read $path]
+	set storedRecords [dict get $stored records]
+	if {![llength $storedRecords]} {
+		return [dict create path $path state {} stored_state {} records {} undo {} redo {} revision 0]
+	}
+	set replayInfo [dict create path $path state {} records {} undo {} redo {} revision 0]
+	foreach record $storedRecords {
+		set seq [dict get $record seq]
+		set command [dict get $record command]
+		set domain [dict get $record args]
+		set before [dict get $replayInfo state]
+		set stepInfo [dict merge $replayInfo [dict create now [dg $record created [clock seconds]] recorded_result [dg $record result {}]]]
+		lassign [::td::model::Apply $command $stepInfo $domain] after result target history
+		if {$history ni {0 1}} { error "journal replay produced invalid history flag at seq $seq" }
+		if {[catch {dict size $after}]} { error "journal replay produced invalid event state at seq $seq" }
+		dict set after revision $seq
+		set undo [dict get $replayInfo undo]
+		set redo [dict get $replayInfo redo]
+		if {$command eq "undo"} {
+			if {![llength $undo]} { error "journal replay undo underflow at seq $seq" }
+			set popped [Pop undo]
+			if {$target != $popped || $target != [dict get $record target]} { error "journal replay undo target mismatch at seq $seq" }
+			lappend redo $target
+		} elseif {$command eq "redo"} {
+			if {![llength $redo]} { error "journal replay redo underflow at seq $seq" }
+			set popped [Pop redo]
+			if {$target != $popped || $target != [dict get $record target]} { error "journal replay redo target mismatch at seq $seq" }
+			lappend undo $target
+		} elseif {$history} {
+			lappend undo $seq
+			set redo {}
+		}
+		set replayedRecord [dict create version [dg $record version 1] seq $seq revision $seq command $command \
+			key [dict get $record key] args $domain before $before after $after result $result target $target \
+			history $history created [dg $record created 0]]
+		dict lappend replayInfo records $replayedRecord
+		dict set replayInfo state $after
+		dict set replayInfo undo $undo
+		dict set replayInfo redo $redo
+		dict set replayInfo revision $seq
+	}
+	dict set replayInfo stored_state [dict get $stored state]
+	return $replayInfo
+}
+
 # vi:set ts=3 sw=3:

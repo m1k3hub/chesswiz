@@ -17,7 +17,7 @@ proc ::td::registration::Lookup {arguments} {
         sex [::td::model::dg $row sex] born [::td::model::dg $row born] \
         rating_source {installed FIDE player data} rating_snapshot [clock seconds]]
 }
-proc ::td::registration::Add {state domain {fide 0}} {
+proc ::td::registration::Add {state domain {fide 0} {info {}}} {
     set swiss [expr {[dict get $state system] eq "swiss"}]
     if {[dict get $state status] eq "finished" || (!$swiss && [llength [dict get $state pairings]])} { error "registration is closed" }
     set entry 1
@@ -44,7 +44,11 @@ proc ::td::registration::Add {state domain {fide 0}} {
     }
     set start [expr {[llength [dict get $state players]]+1}]
     if {$fide} {
-        set row [Lookup $domain]
+        if {[dict exists $info recorded_result players] && [llength [dict get $info recorded_result players]] == 1} {
+            set row [lindex [dict get $info recorded_result players] 0]
+        } else {
+            set row [Lookup $domain]
+        }
         foreach existing [dict get $state players] {
             if {[dict get $existing fide_id] eq [dict get $row fide_id]} { error "FIDE player is already registered" }
         }
