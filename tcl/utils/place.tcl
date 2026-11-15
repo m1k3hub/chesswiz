@@ -149,7 +149,13 @@ proc geometry {path args} {
 		set sw [winfo screenwidth  $path]
 		set sh [winfo screenheight $path]
 	} else {
-		lassign [winfo workarea $path] sx sy sw sh
+		# A dialog being centred on a parent uses the parent's monitor, not
+		# the unmapped child's default screen coordinates (GAP-001).
+		set areaWindow $path
+		if {$opts(-parent) ne "" && [winfo exists $opts(-parent)]} {
+			set areaWindow $opts(-parent)
+		}
+		lassign [winfo workarea $areaWindow] sx sy sw sh
 	}
 
 	set where $opts(-position)
@@ -188,34 +194,40 @@ proc geometry {path args} {
 		if {$where eq "top-center"} {
 			if {[string length $parent]} {
 				# center to parent
-				set x0 [expr {[winfo rootx $parent] + $sx + ([winfo width $parent] - ($w + $el + $er))/2}]
+				set x0 [expr {[winfo rootx $parent] + ([winfo width $parent] - ($w + $el + $er))/2}]
 			} else {
 				# center to screen/desktop
-				set x0 [expr {($sw - ($w + $el + $er))/2 - [winfo vrootx $path] - $sx}]
+				set x0 [expr {$sx + ($sw - ($w + $el + $er))/2 - [winfo vrootx $path]}]
 			}
 			set x "+$x0"
 			set y "+$opts(-shift)"
 			if {$windowingsystem ne "win32"} {
-				if {$x0 + $w > $sw}	{ set x "-0"; set x0 [expr {$sw - $w}] }
-				if {$x0 < 0}			{ set x "+0" }
+				if {$x0 + $w + $el + $er > $sx + $sw} {
+					set x0 [expr {$sx + $sw - $w - $el - $er}]
+				}
+				if {$x0 < $sx} { set x0 $sx }
 			}
 		} elseif {$where eq "center"} {
 			if {[string length $parent]} {
 				# center to parent
-				set x0 [expr {[winfo rootx $parent] + $sx + ([winfo width  $parent] - ($w + $el + $er))/2}]
-				set y0 [expr {[winfo rooty $parent] + $sy + ([winfo height $parent] - ($h + $et + $eb))/2}]
+				set x0 [expr {[winfo rootx $parent] + ([winfo width  $parent] - ($w + $el + $er))/2}]
+				set y0 [expr {[winfo rooty $parent] + ([winfo height $parent] - ($h + $et + $eb))/2}]
 			} else {
 				# center to screen/desktop
-				set x0 [expr {($sw - ($w + $el + $er))/2 - [winfo vrootx $path] - $sx}]
-				set y0 [expr {($sh - ($h + $et + $eb))/2 - [winfo vrooty $path] - $sy}]
+				set x0 [expr {$sx + ($sw - ($w + $el + $er))/2 - [winfo vrootx $path]}]
+				set y0 [expr {$sy + ($sh - ($h + $et + $eb))/2 - [winfo vrooty $path]}]
 			}
 			set x "+$x0"
 			set y "+$y0"
 			if {$windowingsystem ne "win32"} {
-				if {$x0 + $w > $sw}	{ set x "-0"; set x0 [expr {$sw - $w}] }
-				if {$x0 < 0}			{ set x "+0" }
-				if {$y0 + $h > $sh}	{ set y "-0"; set y0 [expr {$sh - $h}] }
-				if {$y0 < 0}			{ set y "+0" }
+				if {$x0 + $w + $el + $er > $sx + $sw} {
+					set x0 [expr {$sx + $sw - $w - $el - $er}]
+				}
+				if {$y0 + $h + $et + $eb > $sy + $sh} {
+					set y0 [expr {$sy + $sh - $h - $et - $eb}]
+				}
+				if {$x0 < $sx} { set x0 $sx }
+				if {$y0 < $sy} { set y0 $sy }
 			}
 		} else {
 			if {[string length $parent] == 0} {
@@ -3388,6 +3400,14 @@ proc BesideBoardPlan {dlg parent {retry 0}} {
 	set dw [expr {min($maxw, max($rw, $mw))}]
 	set dh [expr {min($maxh, max($rh, $mh))}]
 	set workarea [besideWorkArea $dlg]
+	# An in-window plan is relative to the main window, so it is bounded by
+	# the main window's monitor even when the dialog has already been mapped
+	# on another one (GAP-001). Crossing the bezel is the outside route's job;
+	# otherwise the normal ladder can label a cross-monitor move "right" and
+	# record the wrong work area.
+	if {[winfo exists $parent]} {
+		set workarea [workAreaFor [winfo toplevel $parent]]
+	}
 	set mainRect {}
 	if {[winfo exists $parent]} {
 		set pTop [winfo toplevel $parent]
@@ -3901,6 +3921,51 @@ proc getWmWorkArea {w} {
 	return -code error "[namespace current]::getWmWorkArea is not implemented"
 }
 
+# The work area of the monitor a window belongs to. A mapped window answers
+# for its own monitor. An unmapped dialog uses the monitor of its transient
+# parent, or the monitor its requested geometry was placed on, and falls back
+# to the main window only while it has neither (GAP-001).
+proc workAreaFor {window} {
+	variable mainWindow
+	if {[winfo exists $window]} {
+		if {[winfo ismapped $window]} {
+			return [getWmWorkArea $window]
+		}
+		if {![catch { set parent [wm transient $window] }] && $parent ne ""} {
+			set parent [winfo toplevel $parent]
+			if {[winfo exists $parent] && [winfo ismapped $parent]} {
+				return [getWmWorkArea $parent]
+			}
+		}
+		if {[regexp {^([0-9]+)x([0-9]+)\+(-?[0-9]+)\+(-?[0-9]+)$} \
+				[wm geometry $window] -> w h x y] && ($x != 0 || $y != 0)} {
+			set areas {}
+			# The native query needs a realised window; enumerate from the
+			# mapped main window when this one is still unmapped.
+			set source $window
+			if {[winfo exists $mainWindow] && [winfo ismapped $mainWindow]} {
+				set source $mainWindow
+			}
+			if {[winfo ismapped $source]} {
+				catch { set areas [::scidb::tk::wm workareas $source] }
+			}
+			set cx [expr {$x + $w/2}]
+			set cy [expr {$y + $h/2}]
+			foreach area $areas {
+				if {[llength $area] != 4} { continue }
+				lassign $area ax ay aw ah
+				if {$aw > 0 && $ah > 0
+					&& $cx >= $ax && $cx < $ax+$aw
+					&& $cy >= $ay && $cy < $ay+$ah} {
+					return $area
+				}
+			}
+		}
+	}
+	if {[winfo exists $mainWindow]} { return [getWmWorkArea $mainWindow] }
+	return [getWmWorkArea $window]
+}
+
 } ;# namespace place
 } ;# namespace util
 
@@ -3921,11 +3986,7 @@ proc winfo {args} {
 			variable util::place::mainWindow
 			set window .
 			lassign $args cmd window
-			if {[winfo exists $mainWindow]} {
-				set workarea [::util::place::getWmWorkArea $mainWindow]
-			} else {
-				set workarea [::util::place::getWmWorkArea $window]
-			}
+			set workarea [::util::place::workAreaFor $window]
 			if {[llength $workarea] == 0} {
 				set w [__place_winfo_orig screenwidth $window]
 				set h [__place_winfo_orig screenheight $window]
