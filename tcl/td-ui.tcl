@@ -239,18 +239,64 @@ proc ::td::ui::BuildResults {f} {
 	ttk::button $f.edit.enter -text "Enter result" -command ::td::ui::EnterResult
 	ttk::button $f.edit.correct -text "Correct result" -command ::td::ui::CorrectResult
 	pack $f.edit.result -side left; pack $f.edit.category -side left; pack $f.edit.enter -side left; pack $f.edit.correct -side left
-	ttk::frame $f.ruling; pack $f.ruling -fill x -pady 2
-	ttk::combobox $f.ruling.incident -state readonly -values {illegal-move gui-illegal-attempt flag-fall draw-claim-3fold draw-claim-50move 75-move fivefold late-arrival} -textvariable ::td::ui::Fields(ruling_incident); set Fields(ruling_incident) illegal-move
-	ttk::combobox $f.ruling.regime -state readonly -values {standard A4 A5 B2 B3} -textvariable ::td::ui::Fields(ruling_regime); set Fields(ruling_regime) standard
+	ttk::labelframe $f.ruling -text "Arbiter ruling & appeal"; pack $f.ruling -fill x -pady 4
+	ttk::label $f.ruling.slabel -text "Setting"
+	ttk::combobox $f.ruling.setting -width 9 -state readonly -values {otb local engine platform} -textvariable ::td::ui::Fields(ruling_setting); set Fields(ruling_setting) otb
+	ttk::label $f.ruling.plabel -text "Pace"
+	ttk::combobox $f.ruling.pace -width 9 -state readonly -values {standard rapid blitz} -textvariable ::td::ui::Fields(ruling_pace); set Fields(ruling_pace) standard
+	ttk::label $f.ruling.rlabel -text "Regime"
+	ttk::combobox $f.ruling.regime -width 9 -state readonly -values {standard A4 A5 B2 B3} -textvariable ::td::ui::Fields(ruling_regime); set Fields(ruling_regime) standard
+	ttk::label $f.ruling.ilabel -text "Incident"
+	ttk::combobox $f.ruling.incident -width 18 -state readonly -values {illegal-move gui-illegal-attempt flag-fall draw-claim-3fold draw-claim-50move 75-move fivefold late-arrival} -textvariable ::td::ui::Fields(ruling_incident); set Fields(ruling_incident) illegal-move
+	ttk::label $f.ruling.olabel -text "Offence #"
+	ttk::spinbox $f.ruling.offence -from 1 -to 10 -width 4 -textvariable ::td::ui::Fields(ruling_offence_count); set Fields(ruling_offence_count) 1
+	grid $f.ruling.slabel $f.ruling.setting $f.ruling.plabel $f.ruling.pace $f.ruling.rlabel $f.ruling.regime $f.ruling.ilabel $f.ruling.incident $f.ruling.olabel $f.ruling.offence -row 0 -padx 2 -pady 2 -sticky w
+
+	ttk::checkbutton $f.ruling.can_mate -text "Opponent can mate" -variable ::td::ui::Fields(ruling_opponent_can_mate); set Fields(ruling_opponent_can_mate) 1
+	ttk::checkbutton $f.ruling.claimed -text "Claimed in time" -variable ::td::ui::Fields(ruling_claimed_in_time); set Fields(ruling_claimed_in_time) 1
+	ttk::checkbutton $f.ruling.claim_valid -text "Claim valid" -variable ::td::ui::Fields(ruling_claim_valid); set Fields(ruling_claim_valid) 1
+	ttk::checkbutton $f.ruling.checkmate -text "Checkmate on board" -variable ::td::ui::Fields(ruling_checkmate_on_board); set Fields(ruling_checkmate_on_board) 0
+	ttk::label $f.ruling.dflabel -text "Default min"
+	ttk::spinbox $f.ruling.default_min -from 0 -to 240 -width 5 -textvariable ::td::ui::Fields(ruling_default_time_minutes); set Fields(ruling_default_time_minutes) 0
+	ttk::label $f.ruling.ltlabel -text "Late min"
+	ttk::spinbox $f.ruling.late_min -from 0 -to 240 -width 5 -textvariable ::td::ui::Fields(ruling_late_minutes); set Fields(ruling_late_minutes) 1
+	grid $f.ruling.can_mate $f.ruling.claimed $f.ruling.claim_valid $f.ruling.checkmate $f.ruling.dflabel $f.ruling.default_min $f.ruling.ltlabel $f.ruling.late_min -row 1 -padx 2 -pady 2 -sticky w
+
+	ttk::label $f.ruling.arlabel -text "Apply result"
+	ttk::combobox $f.ruling.apply_result -width 8 -state readonly -values {{} 1-0 0-1 1/2-1/2 0-0} -textvariable ::td::ui::Fields(ruling_apply_result); set Fields(ruling_apply_result) {}
+	ttk::label $f.ruling.aslabel -text "Appeal"
+	ttk::combobox $f.ruling.appeal_status -width 24 -state readonly -values {none provisional-pending-appeal upheld overturned} -textvariable ::td::ui::Fields(ruling_appeal_status); set Fields(ruling_appeal_status) none
+	ttk::label $f.ruling.aclabel -text "Committee"
+	ttk::entry $f.ruling.appeal_committee -width 16 -textvariable ::td::ui::Fields(ruling_appeal_committee); set Fields(ruling_appeal_committee) {}
+	ttk::label $f.ruling.adlabel -text "Deadline"
+	ttk::entry $f.ruling.appeal_deadline -width 11 -textvariable ::td::ui::Fields(ruling_appeal_deadline); set Fields(ruling_appeal_deadline) 0
+	ttk::label $f.ruling.aplabel -text "Deposit"
+	ttk::entry $f.ruling.appeal_deposit -width 10 -textvariable ::td::ui::Fields(ruling_appeal_deposit); set Fields(ruling_appeal_deposit) {}
+	grid $f.ruling.arlabel $f.ruling.apply_result $f.ruling.aslabel $f.ruling.appeal_status $f.ruling.aclabel $f.ruling.appeal_committee $f.ruling.adlabel $f.ruling.appeal_deadline $f.ruling.aplabel $f.ruling.appeal_deposit -row 2 -padx 2 -pady 2 -sticky w
+
 	ttk::label $f.ruling.alabel -text "Arbiter"
 	ttk::entry $f.ruling.arbiter -width 16 -textvariable ::td::ui::Fields(ruling_arbiter); set Fields(ruling_arbiter) {}
+	ttk::label $f.ruling.declabel -text "Decision"
+	ttk::entry $f.ruling.decision -width 32 -textvariable ::td::ui::Fields(ruling_decision); set Fields(ruling_decision) {}
 	ttk::button $f.ruling.btn -text "Record ruling" -command ::td::ui::RecordRuling
-	pack $f.ruling.incident $f.ruling.regime $f.ruling.alabel $f.ruling.arbiter $f.ruling.btn -side left -padx 2
+	grid $f.ruling.alabel $f.ruling.arbiter $f.ruling.declabel -row 3 -padx 2 -pady 2 -sticky w
+	grid $f.ruling.decision -row 3 -column 3 -columnspan 5 -padx 2 -pady 2 -sticky ew
+	grid $f.ruling.btn -row 3 -column 8 -columnspan 2 -padx 2 -pady 2 -sticky e
 }
 proc ::td::ui::RecordRuling {} {
 	variable Fields; variable Notebook
 	set pairing [Selected $Notebook.results.tree]
-	Mutate td.ruling [dict create pairing $pairing incident $Fields(ruling_incident) regime $Fields(ruling_regime) arbiter $Fields(ruling_arbiter)]
+	set deadline [expr {[string is integer -strict $Fields(ruling_appeal_deadline)] ? $Fields(ruling_appeal_deadline) : 0}]
+	Mutate td.ruling [dict create pairing $pairing \
+		setting $Fields(ruling_setting) pace $Fields(ruling_pace) regime $Fields(ruling_regime) \
+		incident $Fields(ruling_incident) offence_count $Fields(ruling_offence_count) \
+		opponent_can_mate $Fields(ruling_opponent_can_mate) claimed_in_time $Fields(ruling_claimed_in_time) \
+		claim_valid $Fields(ruling_claim_valid) checkmate_on_board $Fields(ruling_checkmate_on_board) \
+		default_time_minutes $Fields(ruling_default_time_minutes) late_minutes $Fields(ruling_late_minutes) \
+		arbiter $Fields(ruling_arbiter) decision $Fields(ruling_decision) \
+		apply_result $Fields(ruling_apply_result) appeal_status $Fields(ruling_appeal_status) \
+		appeal_committee $Fields(ruling_appeal_committee) appeal_deadline $deadline \
+		appeal_deposit $Fields(ruling_appeal_deposit)]
 }
 proc ::td::ui::ResultCommand {id} {
 	variable Fields
