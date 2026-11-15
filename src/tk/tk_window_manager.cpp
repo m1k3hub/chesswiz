@@ -59,7 +59,31 @@ struct Rect
 
 #ifdef __APPLE__
 extern "C" void chesswizAquaGeometry(Tk_Window, int, int*);
+extern "C" int chesswizAquaWorkAreas(Tk_Window, int*, int);
 extern "C" double chesswizAquaDpi(Tk_Window);
+#endif
+
+#if defined(__WIN32__)
+struct WorkAreaList
+{
+	enum { MaxMonitors = 32 };
+	RECT areas[MaxMonitors];
+	int count;
+	int hostIndex;
+	HMONITOR host;
+};
+
+static BOOL CALLBACK collectWorkArea(HMONITOR monitor, HDC, LPRECT, LPARAM data)
+{
+	WorkAreaList* list = reinterpret_cast<WorkAreaList*>(data);
+	if (list->count >= WorkAreaList::MaxMonitors) return FALSE;
+	MONITORINFO info = {};
+	info.cbSize = sizeof(info);
+	if (!GetMonitorInfo(monitor, &info)) return TRUE;
+	if (monitor == list->host) list->hostIndex = list->count;
+	list->areas[list->count++] = info.rcWork;
+	return TRUE;
+}
 #endif
 
 static Tcl_Command tk_cmd = 0;
@@ -938,29 +962,52 @@ cmdWM(ClientData, Tcl_Interp *ti, int objc, Tcl_Obj* const objv[])
 
 #if defined(__WIN32__)
 		Tk_MakeWindowExist(tkwin);
-		MONITORINFO info = {};
-		info.cbSize = sizeof(info);
-		if (GetMonitorInfo(MonitorFromWindow(TkWinGetHWND(Tk_WindowId(tkwin)),
-							MONITOR_DEFAULTTONEAREST), &info))
+		WorkAreaList monitors = {};
+		monitors.hostIndex = -1;
+		monitors.host = MonitorFromWindow(TkWinGetHWND(Tk_WindowId(tkwin)),
+			MONITOR_DEFAULTTONEAREST);
+		EnumDisplayMonitors(0, 0, collectWorkArea, reinterpret_cast<LPARAM>(&monitors));
+		if (monitors.hostIndex < 0)
+		{
+			MONITORINFO info = {};
+			info.cbSize = sizeof(info);
+			if (GetMonitorInfo(monitors.host, &info)
+				&& monitors.count < WorkAreaList::MaxMonitors)
+			{
+				monitors.hostIndex = monitors.count;
+				monitors.areas[monitors.count++] = info.rcWork;
+			}
+		}
+		// Two passes: the hosting monitor first, then the others.
+		for (int pass = 0; pass < 2; ++pass)
+		{
+			for (int i = 0; i < monitors.count; ++i)
+			{
+				if ((pass == 0) != (i == monitors.hostIndex)) continue;
+				RECT const& r = monitors.areas[i];
+				Tcl_Obj* objs[4] =
+				{
+					Tcl_NewIntObj(r.left), Tcl_NewIntObj(r.top),
+					Tcl_NewIntObj(r.right - r.left),
+					Tcl_NewIntObj(r.bottom - r.top)
+				};
+				Tcl_ListObjAppendElement(ti, list, Tcl_NewListObj(4, objs));
+			}
+		}
+#elif defined(__APPLE__)
+		int geometry[4 * 32] = {};
+		int count = chesswizAquaWorkAreas(tkwin, geometry, 32);
+		for (int i = 0; i < count; ++i)
 		{
 			Tcl_Obj* objs[4] =
 			{
-				Tcl_NewIntObj(info.rcWork.left),
-				Tcl_NewIntObj(info.rcWork.top),
-				Tcl_NewIntObj(info.rcWork.right - info.rcWork.left),
-				Tcl_NewIntObj(info.rcWork.bottom - info.rcWork.top)
+				Tcl_NewIntObj(geometry[i * 4 + 0]),
+				Tcl_NewIntObj(geometry[i * 4 + 1]),
+				Tcl_NewIntObj(geometry[i * 4 + 2]),
+				Tcl_NewIntObj(geometry[i * 4 + 3])
 			};
 			Tcl_ListObjAppendElement(ti, list, Tcl_NewListObj(4, objs));
 		}
-#elif defined(__APPLE__)
-		int geometry[4] = {};
-		chesswizAquaGeometry(tkwin, 1, geometry);
-		Tcl_Obj* objs[4] =
-		{
-			Tcl_NewIntObj(geometry[0]), Tcl_NewIntObj(geometry[1]),
-			Tcl_NewIntObj(geometry[2]), Tcl_NewIntObj(geometry[3])
-		};
-		Tcl_ListObjAppendElement(ti, list, Tcl_NewListObj(4, objs));
 #else
 		using namespace monitor_geometry;
 		Display* display = Tk_Display(tkwin);
