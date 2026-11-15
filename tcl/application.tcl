@@ -1105,6 +1105,11 @@ proc focuszoom::disableFollowsSize {twm} {
 	}
 	catch { unset lastPane($twm) }
 	catch { unset followGrown($twm) }
+	# The enabled size may have blocked a wide/tall reflow and a content
+	# collapse. Recompute them without waiting for another resize.
+	if {$twm eq [::application::reflow::boardTwm]} {
+		::application::reflow::onConfigure .application {*}[WindowSize $twm]
+	}
 }
 
 
@@ -1174,6 +1179,23 @@ proc focuszoom::WindowSize {twm} {
 # sashes at the new size are what switching off returns to. With focus
 # follows size on, the same resize then grows the pane the user is working
 # in, through the manual gesture's own resize path.
+proc focuszoom::resizePending {twm} {
+	variable baseline
+	variable lastPane
+	variable lastSize
+	variable followGrown
+	if {![isEnabled $twm] && ![isFollowsSize $twm]} { return }
+	set size [WindowSize $twm]
+	if {[info exists lastSize($twm)] && $lastSize($twm) eq $size} { return }
+	# The old snapshot belongs to the old size. Drop it before the shape
+	# reflow and content collapse run, so their work is not blocked by a
+	# zoom baseline that this resize is about to rebase anyway.
+	catch { unset baseline($twm) }
+	catch { unset lastPane($twm) }
+	catch { unset followGrown($twm) }
+}
+
+
 proc focuszoom::windowResized {twm} {
 	variable baseline
 	variable lastPane
@@ -2782,7 +2804,10 @@ proc collapsible? {t} {
  # View > Panes > Board off: no board leaf, so nothing to collapse or reflow.
  if {"board" ni [$t leaves]} {return 0}
  if {$::application::Vars(loading) || $::application::Vars(lock:layout)} {return 0}
- if {[info exists ::application::focuszoom::baseline($t)]} {return 0}
+ # Focus-Zoom's baseline records sashes, not a structure: a wide/tall
+ # reflow or an empty-pane collapse may run while it exists. A reflow
+ # rebuilds the panedwindows and invalidates the old paths; a content
+ # collapse keeps them and the restore no-ops for hidden panes.
  return 1
 }
 proc reflowable? {t} {
@@ -2887,10 +2912,14 @@ proc onConfigure {W w h} {
 }
 proc onDebounced {w h} {
  variable S; set S(afterId) {}
- if {[set t [boardTwm]] ne {}} {::application::focuszoom::windowResized $t}
+ if {[set t [boardTwm]] ne {}} {::application::focuszoom::resizePending $t}
  set mode $S(mode)
  evaluate $w $h
  updateCollapse
+ # Grow the focused pane after the shape and content have settled, so the
+ # baseline snapshots the adapted arrangement instead of a tree that the
+ # reflow is about to reload (GAP-001).
+ if {$t ne {}} {::application::focuszoom::windowResized $t}
  # The last settled wide arrangement, put back when a tall excursion
  # returns to this window size (see setMode).
  if {$S(mode) eq "wide" && [reflowable? [set t [boardTwm]]]} {

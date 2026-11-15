@@ -311,4 +311,38 @@ tcltest::test review4-gap005-3d-media-button-clear {the 3D view reserves the Med
 	::layoutGaps::settle 300
 } -result 1
 
+# REVIEW4 GAP-001: focus-follows-size must not hold the reflow or content
+# collapse behind its baseline, and switching it off must recompute at once.
+tcltest::test review4-gap001-follows-size-reflow {focus follows size composes with wide/tall reflow and disable recomputes} -setup {
+	set oldGeometry [wm geometry .application]
+	.application.nb select .application.nb.board
+	::application::reflow::reset
+	set t [::application::twm board]
+	foreach uid {board editor games dbgames tree media analysis:1} { catch {::application::openPane $uid} }
+	catch {::application::focuszoom::disableFollowsSize $t}
+	catch {::application::focuszoom::disable $t}
+	wm geometry .application 1400x850
+	::layoutGaps::settle 700
+} -body {
+	set t [::application::twm board]
+	set editor [$t leaf editor]
+	focus -force $editor
+	::application::focuszoom::enableFollowsSize $t
+	wm geometry .application 820x1100
+	::layoutGaps::settle 1200
+	set enabled [::application::reflow::mode]
+	set guarded [::application::reflow::collapsible? $t]
+	# Disabling at the tall size must recompute without another resize.
+	::application::focuszoom::disableFollowsSize $t
+	::layoutGaps::settle 1200
+	set disabled [::application::reflow::mode]
+	list $enabled $guarded $disabled
+} -cleanup {
+	catch { ::application::focuszoom::disableFollowsSize [::application::twm board] }
+	catch { ::application::focuszoom::disable [::application::twm board] }
+	::application::reflow::reset
+	wm geometry .application $oldGeometry
+	::layoutGaps::settle 500
+} -result {tall 1 tall}
+
 tcltest::cleanupTests
