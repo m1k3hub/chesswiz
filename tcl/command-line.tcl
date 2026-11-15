@@ -7,7 +7,6 @@ namespace eval ::commandline {
  variable EcoTokenMap {}
  variable OpeningLines {}
  variable MotifIndex {}
- variable RerankThreshold 40
  # Async handlers (Tablebase, SimilarGames, ...) answer later through
  # ::application::assistant::Resolve; remember the command row for each token
  # so the reply reaches the user instead of being dropped.
@@ -505,35 +504,5 @@ proc ::commandline::ShortName {a b} {
  return [expr {[string length $a]-[string length $b]}]
 }
 
-# Optional System One reorder over already-matched candidate rows when no candidate
-# exceeds RerankThreshold. It may only permute existing rows; it never adds a command,
-# invents a slot value, or executes anything.
-proc ::commandline::Rerank {text rows} {
- variable RerankThreshold
- if {[llength $rows] < 2} {return $rows}
- set top [lindex $rows 0]
- if {[dict exists $top frequency] && [dict get $top frequency] > 0} {return $rows}
- if {[dict get $top score] >= $RerankThreshold} {return $rows}
- if {![llength [info commands ::ai::systemone::chooseSync]]} {return $rows}
- if {![::ai::systemone::enabled] || ![::ai::systemone::qualified command_rerank]} {return $rows}
- set limit [expr {min(8, [llength $rows])}]
- set criteria [dict create none "No candidate is a clearer match than the lexical ranking."]
- set byKey {}
- for {set i 0} {$i < $limit} {incr i} {
-  set key c$i
-  set row [lindex $rows $i]
-  dict set criteria $key "[dict get $row label] (action: [dict get $row action])"
-  dict set byKey $key $i
- }
- set question [dict create type choice \
-  instructions "Which existing command suggestion best matches the user's command input? Choose none if uncertain." \
-  criteria $criteria]
- set choice [::ai::systemone::chooseSync command_rerank "COMMAND INPUT: [string range $text 0 200]" $question -timeout 500 -threshold 0.7]
- if {$choice eq "" || $choice eq "none" || ![dict exists $byKey $choice]} {return $rows}
- set idx [dict get $byKey $choice]
- if {$idx == 0} {return $rows}
- return [concat [list [lindex $rows $idx]] [lreplace $rows $idx $idx]]
-}
-
 # Plain Tcl consumers can use the matcher without loading persistence or Tk.
-proc ::commandline::Suggest {text} {return [Rerank $text [Match $text]]}
+proc ::commandline::Suggest {text} {return [Match $text]}

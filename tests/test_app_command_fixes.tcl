@@ -162,6 +162,32 @@ close $f
 } -result {1 1}
 
 # ----------------------------------------------------------------------
+# F-06: suggestion never makes a synchronous classifier call, even when a
+# cloud reranker is configured; ordering stays the deterministic Match order.
+# ----------------------------------------------------------------------
+::tcltest::test F-06-no-sync-rerank {Suggest is purely deterministic and never calls the classifier} -setup {
+ set ::fix::ClassifierCalls 0
+ rename ::ai::systemone::enabled ::fix::realEnabled
+ rename ::ai::systemone::qualified ::fix::realQualified
+ rename ::ai::systemone::chooseSync ::fix::realChooseSync
+ proc ::ai::systemone::enabled {} {return 1}
+ proc ::ai::systemone::qualified {feature} {return 1}
+ proc ::ai::systemone::chooseSync {args} {incr ::fix::ClassifierCalls; return c1}
+} -body {
+ set baseline [::commandline::Match repertoire]
+ set rows [::commandline::Suggest repertoire]
+ list $::fix::ClassifierCalls \
+  [expr {[lmap r $rows {dict get $r label}] eq [lmap r $baseline {dict get $r label}]}]
+} -cleanup {
+ catch {rename ::ai::systemone::enabled {}}
+ rename ::fix::realEnabled ::ai::systemone::enabled
+ catch {rename ::ai::systemone::qualified {}}
+ rename ::fix::realQualified ::ai::systemone::qualified
+ catch {rename ::ai::systemone::chooseSync {}}
+ rename ::fix::realChooseSync ::ai::systemone::chooseSync
+} -result {0 1}
+
+# ----------------------------------------------------------------------
 # F-05: the registry palette stays reachable beside the typed commands.
 # ----------------------------------------------------------------------
 proc ::fix::noop {args} {return {}}
