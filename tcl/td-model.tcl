@@ -391,17 +391,47 @@ proc ::td::model::Apply {command info domain} {
 			set pairings [dg $state pairings {}]
 			set p [lindex $pairings $index]
 			if {[dg $p status pending] ne "pending"} { error "only a pending pairing can be overridden" }
+			set round [dict get $p round]
 			set white [FindPlayer $state [dg $domain white {}]]
 			set black [FindPlayer $state [dg $domain black {}]]
 			if {$white eq $black} { error "a player cannot play itself" }
 			set reason [string trim [dg $domain reason {}]]
 			if {$reason eq ""} { error "a pairing override requires a reason" }
-			dict set p override [dict create white [dict get $p white] black [dict get $p black] reason $reason created [clock seconds]]
+			set prevWhite [dict get $p white]
+			set prevBlack [dict get $p black]
 			dict set p white $white
 			dict set p black $black
+			# If a swapped player was on another pending board in this round, swap the displaced player across so the round stays a valid partition.
+			for {set j 0} {$j < [llength $pairings]} {incr j} {
+				if {$j == $index} { continue }
+				set q [lindex $pairings $j]
+				if {[dict get $q round] != $round || [dg $q status pending] ne "pending" || [IsBye $q]} { continue }
+				set qChanged 0
+				if {[dict get $q white] eq $white && $prevWhite ni [list $white $black]} { dict set q white $prevWhite; set qChanged 1 }
+				if {[dict get $q black] eq $white && $prevWhite ni [list $white $black]} { dict set q black $prevWhite; set qChanged 1 }
+				if {[dict get $q white] eq $black && $prevBlack ni [list $white $black]} { dict set q white $prevBlack; set qChanged 1 }
+				if {[dict get $q black] eq $black && $prevBlack ni [list $white $black]} { dict set q black $prevBlack; set qChanged 1 }
+				if {$qChanged} {
+					set qOrig [lindex [dict get $info state pairings] $j]
+					dict set q override [dict create white [dict get $qOrig white] black [dict get $qOrig black] reason $reason created [clock seconds]]
+					lset pairings $j $q
+				}
+			}
 			lset pairings $index $p
 			dict set state pairings $pairings
-			return [list $state [dict create overridden [dict get $p id]] $target $history]
+			set check [::td::swiss::CheckRound $state $round]
+			set ruling [string trim [dg $domain ruling {}]]
+			set absolute [lmap v [dict get $check violations] {expr {[string match C\[1234\]-* [dict get $v code]] ? $v : [continue]}}]
+			if {[llength $absolute] && $ruling eq ""} {
+				error "prohibited pairing ([join [lmap v $absolute {dict get $v code}] {, }]) requires an explicit TD ruling"
+			}
+			dict set p override [dict create white $prevWhite black $prevBlack reason $reason ruling $ruling compliant [dict get $check compliant] violations [dict get $check violations] created [clock seconds]]
+			lset pairings $index $p
+			dict set state pairings $pairings
+			if {$ruling ne ""} {
+				dict lappend state rulings [dict create kind override-ruling pairing [dict get $p id] round $round reason $reason ruling $ruling compliant [dict get $check compliant] violations [dict get $check violations] created [clock seconds]]
+			}
+			return [list $state [dict create overridden [dict get $p id] compliant [dict get $check compliant] violations [dict get $check violations] bbp_report [dict get $check bbp_report]] $target $history]
 		}
 		withdraw { return [Withdraw $state $domain] }
 		bye {

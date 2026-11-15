@@ -20,7 +20,8 @@ proc ::td::trf::Code {p id} {
     return [expr {$win ? "1" : "0"}]
 }
 # through=0 exports all entered rounds; pairingRound adds exclusions for that round.
-proc ::td::trf::Write {state {format trf26} {through 0} {pairingRound 0}} {
+# checkPending=1 encodes pending non-bye games as '=' so bbpPairings -c can check the round.
+proc ::td::trf::Write {state {format trf26} {through 0} {pairingRound 0} {checkPending 0}} {
     if {$format ni {trf16 trf26}} { error "expected trf16 or trf26" }
     set lines [list "012 [Field [dict get $state name] 80]"]
     foreach {code key} {022 site 032 federation 042 start_date 052 end_date 102 chief_arbiter} {
@@ -55,6 +56,7 @@ proc ::td::trf::Write {state {format trf26} {through 0} {pairingRound 0}} {
                 continue
             }
             set code [Code $found $id]
+            if {$code eq " " && $checkPending && [dict get $found black] ne ""} { set code = }
             set other [expr {$id eq [dict get $found white] ? [dict get $found black] : [dict get $found white]}]
             set no [expr {$other eq "" ? 0 : [dict get $numbers $other]}]
             set c [expr {$other eq "" ? "-" : $id eq [dict get $found white] ? "w" : "b"}]

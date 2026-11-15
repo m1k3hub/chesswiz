@@ -35,6 +35,11 @@ proc ::td::actions::Status {arguments} {
 	::td::store::Register $state $path
 	return [::td::event::Status $path]
 }
+proc ::td::actions::CheckPairings {arguments} {
+	set path [::td::store::Resolve $arguments]
+	set state [dict get [::td::store::Read $path] state]
+	return [::td::swiss::CheckRound $state [dg $arguments round 0]]
+}
 proc ::td::actions::Standings {arguments} {
 	set path [::td::store::Resolve $arguments]
 	set state [dict get [::td::store::Read $path] state]
@@ -110,7 +115,8 @@ proc ::td::actions::Register {} {
 		td.stop {Stop tournament} {Stop all event engine processes and preserve completed games; running attempts become pending.} $controls [list Run stop] change \
 		td.enter_result {Enter result} {Enter a played or forfeit result for a pending human pairing.} $resultSpec [list Run enter_result] change \
 		td.correct_result {Correct result} {Correct a completed result without rewriting audit history; published standings gain a new publication revision.} $resultSpec [list Run correct_result] change \
-		td.override_pairing {Override pairing} {Change seats in a pending pairing with a required reason in the immutable audit record.} [MutationSpec {{white {type string required 1}} {black {type string required 1}} {reason {type string required 1}}}] [list Run override_pairing] change \
+		td.override_pairing {Override pairing} {Change seats in a pending pairing with a required reason and C.04.3 checker report; prohibited overrides require a human TD ruling and stay marked non-compliant.} [MutationSpec {{pairing {type string default {}}} {round {type integer default 0 range {0 1000}}} {board {type integer default -1 range {-1 10000}}} {white {type string required 1}} {black {type string required 1}} {reason {type string required 1}} {ruling {type string default {}}}}] [list Run override_pairing] change \
+		td.check_pairings {Check pairings} {Check a round's pairings against C.04.3 criteria and the Dutch pairing helper without changing tournament state.} [concat $query {{round {type integer default 0 range {0 1000}}}}] CheckPairings query \
 		td.withdraw {Withdraw player} {Withdraw a player before or after pairing; applies C.05 annulment or forfeits in round robins, and Swiss withdrawal handling.} [MutationSpec {{player {type string required 1}} {round {type integer default 0 range {0 1000}}} {policy {type enum default forfeit-win enum {forfeit-win double-forfeit}}}}] [list Run withdraw] change \
 		td.bye {Record bye} {Record a requested, zero-point, full-point or pairing-allocated bye with explicit points and category.} [MutationSpec {{player {type string required 1}} {round {type integer default 0 range {0 1000}}} {category {type enum default requested-bye enum {requested-bye zero-point-bye full-point-bye pairing-bye}}} {points {type integer default -1 range {-1 2}}}}] [list Run bye] change \
 		td.publish {Publish standings} {Append an immutable publication snapshot; later corrections create another publication revision.} $controls [list Run publish] change \

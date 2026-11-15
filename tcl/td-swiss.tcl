@@ -130,3 +130,77 @@ proc ::td::swiss::PairRound {state domain} {
     dict set state status active
     return [list $state [dict create paired [llength $pairs] round $next] {} 1]
 }
+proc ::td::swiss::CheckRound {state {round 0}} {
+    if {!$round} { set round [::td::model::dg $state current_round 1] }
+    set violations {}
+    set roundPairings [::td::model::Pairings $state $round]
+    set seen {}
+    foreach p $roundPairings {
+        foreach side {white black} {
+            set pid [dict get $p $side]
+            if {$pid eq ""} { continue }
+            if {$pid in $seen} {
+                lappend violations [dict create code C4-DUPLICATE player $pid detail "player $pid appears more than once in round $round"]
+            }
+            lappend seen $pid
+        }
+    }
+    foreach p $roundPairings {
+        set w [dict get $p white]
+        set b [dict get $p black]
+        if {$b eq ""} {
+            if {[::td::model::dg $p category {}] eq "pairing-bye"} {
+                foreach q [dict get $state pairings] {
+                    if {[dict get $q round] >= $round} { continue }
+                    if {[dict get $q white] eq $w && [dict get $q black] eq "" && [::td::model::dg $q category {}] in {pairing-bye full-point-bye}} {
+                        lappend violations [dict create code C2-REPEAT-PAB pairing [dict get $p id] player $w detail "player $w already received a pairing-allocated or full-point bye before round $round"]
+                    }
+                    if {([dict get $q white] eq $w || [dict get $q black] eq $w) && ![::td::model::dg $q played 0] && [::td::model::Points $q $w] eq "2 1"} {
+                        lappend violations [dict create code C2-FORFEIT-WIN-PAB pairing [dict get $p id] player $w detail "player $w already scored a forfeit win before round $round"]
+                    }
+                }
+            }
+            continue
+        }
+        # C1: two players shall not play each other more than once (played games).
+        foreach q [dict get $state pairings] {
+            if {[dict get $q round] >= $round || ![::td::model::dg $q played 0]} { continue }
+            if {([dict get $q white] eq $w && [dict get $q black] eq $b) || ([dict get $q white] eq $b && [dict get $q black] eq $w)} {
+                lappend violations [dict create code C1-REMATCH pairing [dict get $p id] white $w black $b detail "rematch of played game [dict get $q id] (round [dict get $q round])"]
+            }
+        }
+        # C3: non-topscorers with the same absolute colour preference shall not meet (check three consecutive same colours or +/-2 colour difference).
+        if {$round < [dict get $state rounds]} {
+            foreach {side pid req} [list white $w W black $b B] {
+                set hist {}
+                foreach q [dict get $state pairings] {
+                    if {[dict get $q round] >= $round || ![::td::model::dg $q played 0] || [dict get $q black] eq ""} { continue }
+                    if {[dict get $q white] eq $pid} { lappend hist W } elseif {[dict get $q black] eq $pid} { lappend hist B }
+                }
+                set wCount [llength [lsearch -all -exact $hist W]]
+                set bCount [llength [llength [lsearch -all -exact $hist B]]]
+                set bCount [llength [lsearch -all -exact $hist B]]
+                set diff [expr {$wCount - $bCount}]
+                set last2 [lrange $hist end-1 end]
+                set absPref {}
+                if {$diff > 1 || $last2 eq {W W}} { set absPref B }
+                if {$diff < -1 || $last2 eq {B B}} { set absPref W }
+                if {$absPref ne "" && $absPref ne $req} {
+                    lappend violations [dict create code C3-ABSOLUTE-COLOUR pairing [dict get $p id] player $pid detail "player $pid has absolute colour preference $absPref but is assigned $req"]
+                }
+            }
+        }
+    }
+    set bbpReport {}
+    set bbpDiscrepancy 0
+    if {[dict get $state system] eq "swiss" && ![llength [lsearch -all -inline -glob [lmap v $violations {dict get $v code}] C4-*]]} {
+        if {![catch {::td::trf::Write $state trf26 $round 0 1} trf] && ![catch {Run $trf -c} out]} {
+            set bbpReport $out
+            if {[string match "*Checker pairings*" $out] || [string match "*No valid pairing exists*" $out]} {
+                set bbpDiscrepancy 1
+                lappend violations [dict create code C04-QUALITY-DISCREPANCY round $round detail "bbpPairings -c reported pairing discrepancy from Dutch C.04.3 order"]
+            }
+        }
+    }
+    return [dict create round $round compliant [expr {[llength $violations] == 0}] violations $violations bbp_discrepancy $bbpDiscrepancy bbp_report $bbpReport]
+}

@@ -196,16 +196,32 @@ proc ::td::ui::BuildPairings {f} {
 	ttk::spinbox $f.buttons.round -from 0 -to 1000 -textvariable ::td::ui::Fields(pair_round); set Fields(pair_round) 0
 	ttk::button $f.buttons.pair -text "Pair round (0 = all)" -command ::td::ui::PairRound
 	ttk::button $f.buttons.swap -text "Swap colours (audited)" -command ::td::ui::Swap
-	pack $f.buttons.round -side left; pack $f.buttons.pair -side left; pack $f.buttons.swap -side left
+	ttk::button $f.buttons.check -text "Check pairings" -command ::td::ui::CheckPairings
+	ttk::label $f.buttons.rlabel -text "TD ruling"
+	ttk::entry $f.buttons.ruling -width 24 -textvariable ::td::ui::Fields(override_ruling); set Fields(override_ruling) {}
+	pack $f.buttons.round $f.buttons.pair $f.buttons.swap $f.buttons.check $f.buttons.rlabel $f.buttons.ruling -side left -padx 2
+	ttk::label $f.checker -justify left -wraplength 1000
+	pack $f.checker -fill x -pady 2
 }
 proc ::td::ui::PairRound {} { variable Fields; Mutate td.pair_round [dict create round $Fields(pair_round)] }
 proc ::td::ui::Selected {tree} { set selected [$tree selection]; if {![llength $selected]} { error "select a pairing first" }; return [lindex $selected 0] }
 proc ::td::ui::Swap {} {
-	variable Notebook
+	variable Notebook; variable Fields
 	set tree $Notebook.pairings.tree
-	set p [lsearch -inline [dg [State] pairings {}] [Selected $tree]]
+	set p {}
 	foreach q [dg [State] pairings {}] { if {[dict get $q id] eq [Selected $tree]} { set p $q } }
-	Mutate td.override_pairing [dict create pairing [dict get $p id] white [dict get $p black] black [dict get $p white] reason "Manual colour swap in TD workspace"]
+	set result [Mutate td.override_pairing [dict create pairing [dict get $p id] white [dict get $p black] black [dict get $p white] reason "Manual colour swap in TD workspace" ruling $Fields(override_ruling)]]
+	if {[winfo exists $Notebook.pairings.checker]} {
+		$Notebook.pairings.checker configure -text "Compliant: [dg $result compliant 1]; violations: [llength [dg $result violations {}]]"
+	}
+}
+proc ::td::ui::CheckPairings {} {
+	variable Notebook; variable Fields; variable Path
+	set res [::action::run td.check_pairings [dict create path $Path round $Fields(pair_round)]]
+	if {[winfo exists $Notebook.pairings.checker]} {
+		$Notebook.pairings.checker configure -text "Compliant: [dg $res compliant 1]; violations: [dg $res violations {}]"
+	}
+	return $res
 }
 proc ::td::ui::BuildResults {f} {
 	variable Fields
