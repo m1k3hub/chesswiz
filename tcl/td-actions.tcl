@@ -162,7 +162,10 @@ proc ::td::actions::Register {} {
 		{concurrency {type integer default 2 range {1 16}}} {max_plies {type integer default 0 range {0 1000}}} \
 		{tablebase {type boolean default 1}} {colour_lot {type enum default white enum {white black}}} \
 		{unrated_policy {type enum default drop enum {drop exclude}}} {start {type boolean default 1}}]]
-	set registerSpec [MutationSpec {{players {type array required 1}} {kind {type enum default human enum {human engine}}}}]
+	set registerSpec [MutationSpec [list {players {type array required 1}} {kind {type enum default human enum {human engine}}} \
+		{entry_round {type integer default 0 range {0 99}}} {rating {type integer default 0 range {0 4000}}} \
+		{fide_id {type string default {}}} {federation {type string default {}}} {title {type string default {}}} \
+		{sex {type string default {}}} {born {type string default {}}}]]
 	set pairSpec [MutationSpec {{round {type integer default 0 range {0 1000}}}}]
 	set resultSpec [MutationSpec [list {pairing {type string default {}}} {round {type integer default 0 range {0 1000}}} \
 		{board {type integer default -1 range {-1 10000}}} {result {type enum required 1 enum {1-0 0-1 1/2-1/2 0-0 *}}} \
@@ -170,7 +173,7 @@ proc ::td::actions::Register {} {
 	foreach {id label doc spec handler effect} [list \
 		td.create {Create tournament} {Create a C.05 round robin for humans or engines. Preview with commit false, then commit at the supplied revision. For an engine event it can also pair and play every round from a named opening, an opening code range or a list of moves.} $createSpec Create change \
         td.lookup_player {Find FIDE player} {Find a player by exact name or FIDE number in the installed rating list.} {{fide_id {type string default {}}} {name {type string default {}}}} LookupPlayer query \
-        td.register_fide {Register FIDE player} {Copy a player's identity and rating into this event, keeping a dated record for later review.} [MutationSpec {{fide_id {type string required 1}}}] [list Run register_fide] change \
+        td.register_fide {Register FIDE player} {Copy a player's identity and rating into this event, keeping a dated record for later review.} [MutationSpec {{fide_id {type string required 1}} {entry_round {type integer default 0 range {0 99}}}}] [list Run register_fide] change \
 		td.register {Register players} {Register human or configured engine players before pairings are published.} $registerSpec [list Run register] change \
 		td.pair_round {Pair round} {Preview or commit Berger pairings for one round, or all rounds when round is zero.} $pairSpec [list Run pair_round] change \
 		td.start {Start tournament} {Start or resume an event and schedule engine games with bounded concurrency.} $pairSpec [list Run start] change \

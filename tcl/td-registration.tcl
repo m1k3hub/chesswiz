@@ -22,7 +22,24 @@ proc ::td::registration::Add {state domain {fide 0}} {
     if {[dict get $state status] eq "finished" || (!$swiss && [llength [dict get $state pairings]])} { error "registration is closed" }
     set entry 1
     if {$swiss} {
-        foreach p [dict get $state pairings] { set entry [expr {max($entry,[dict get $p round]+1)}] }
+        foreach p [dict get $state pairings] {
+            if {[dict get $p black] ne "" || [::td::model::dg $p category {}] eq "pairing-bye"} {
+                set entry [expr {max($entry, [dict get $p round] + 1)}]
+            }
+        }
+        set reqEntry [::td::model::dg $domain entry_round 0]
+        if {$reqEntry ne "" && $reqEntry != 0} {
+            if {![string is integer -strict $reqEntry] || $reqEntry < 1} {
+                error "entry_round must be a positive round number"
+            }
+            if {$reqEntry < $entry} {
+                error "late entry cannot enter in round $reqEntry; earliest unpaired round is $entry"
+            }
+            if {$reqEntry > [dict get $state rounds]} {
+                error "entry_round $reqEntry exceeds scheduled rounds ([dict get $state rounds])"
+            }
+            set entry $reqEntry
+        }
         if {$entry > [dict get $state rounds]} { error "no rounds remain for a late entry" }
     }
     set start [expr {[llength [dict get $state players]]+1}]
@@ -37,6 +54,15 @@ proc ::td::registration::Add {state domain {fide 0}} {
         set kind [::td::model::dg $domain kind human]
         if {$swiss && $kind ne "human"} { error "P2 Swiss requires human players" }
         set players [::td::model::MakePlayers [::td::model::dg $domain players {}] $kind $start]
+        if {[llength $players] == 1} {
+            set p0 [lindex $players 0]
+            set rtg [::td::model::dg $domain rating 0]
+            if {[string is integer -strict $rtg] && $rtg > 0} { dict set p0 rating $rtg }
+            foreach k {fide_id federation title sex born} {
+                if {[::td::model::dg $domain $k {}] ne ""} { dict set p0 $k [dict get $domain $k] }
+            }
+            set players [list $p0]
+        }
     }
     set added {}
     foreach p $players { dict set p entry_round $entry; lappend added $p }
