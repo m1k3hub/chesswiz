@@ -215,7 +215,7 @@ proc open {} {
 			-command [list ::action::run menu.help.donate] \
 			;
 		::tooltip::tooltip $Vars(donate) [namespace current]::mc::DonateTip
-		bind $Vars(donate) <<LanguageChanged>> [list $Vars(donate) configure -text $mc::Donate]
+		bind $Vars(donate) <<LanguageChanged>> [namespace code [list UpdateDonateText $Vars(donate)]]
 	}
 	# The drop-down rows are actions in the registry; register them now, not on
 	# the first post, so ::action::run and the assistant reach them from startup.
@@ -2348,6 +2348,15 @@ proc UpdateSettingsText {w} {
 
 	lassign [::tk::UnderlineAmpersand $mc::MainMenu] text ul
 	$w configure -text " $text" -underline [incr ul]
+}
+
+# The Donate button sits left of the drop-down and its translated text is a
+# different width. Read the catalog at event time, then let PlaceMenues reflow
+# the strip around the new width.
+proc UpdateDonateText {w} {
+	if {![winfo exists $w]} { return }
+	$w configure -text $mc::Donate
+	catch { PlaceMenues }
 }
 
 

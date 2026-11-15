@@ -1094,9 +1094,17 @@ proc ::knowledge::For {id {lang ""}} {
 		if {[info exists ::mc::langID]} { set lang $::mc::langID } else { set lang en }
 	}
 	set rec [::action::get $id]
+	set title [LabelText [dict get $rec label]]
+	# A few authored titles stay generic: their registry label is refreshed
+	# from the active session (for example the database name in a toolbar
+	# tooltip), so it must never become the generated pack's title.
+	variable Explicit
+	if {[dict exists $Explicit $id] && [dict exists [dict get $Explicit $id] title]} {
+		set title [dict get $Explicit $id title]
+	}
 	set out [dict create \
 		id $id \
-		title [LabelText [dict get $rec label]] \
+		title $title \
 		purpose [dict get $rec purpose] \
 		when [dict get $rec when] \
 		examples [dict get $rec examples] \
@@ -2438,6 +2446,10 @@ dict set ::knowledge::Explicit timers purpose {List scheduled tasks and open con
 dict set ::knowledge::Explicit timers when {When investigating delayed work or a connection that remains open.}
 dict set ::knowledge::Explicit toolbar.configure purpose {View or change the controls and appearance of a selected toolbar.}
 dict set ::knowledge::Explicit toolbar.database_switcher.3 purpose {Close the active database.}
+# The toolbar tooltip names the active database, so this id's registry label
+# is session-dependent. The knowledge pack uses this fixed title instead.
+dict set ::knowledge::Explicit toolbar.database_switcher.3 title {Close current database}
+dict set ::knowledge::Explicit toolbar.database_switcher.5 title {Database read-only mode}
 dict set ::knowledge::Explicit triage_errors purpose {Group newly recorded problems and create a report for each suspected bug.}
 dict set ::knowledge::Explicit ui_state purpose {Show open windows, their sizes and positions, and which window receives typing and mouse clicks.}
 dict set ::knowledge::Explicit ui_state when {When investigating window placement or a window that prevents normal interaction.}

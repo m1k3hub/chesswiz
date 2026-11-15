@@ -68,6 +68,7 @@ set Busy			"The assistant is busy. Try again when it finishes."
 set Failed			"Error: %s"
 set PrefsTitle		"Assistant"
 set SpeechInput		"Speech input"
+set StartupAssistant	"Show assistant at startup"
 set SpeechReady		"A local speech path is configured."
 set PathWhisper		"whisper-cli path"
 set PathModel		"ggml model path"
@@ -106,6 +107,7 @@ array set Priv {
 	list		{}
 	window		{}
 	prefs		{}
+	prefsStartup	{}
 	prefsTitle	{}
 	prefsHint	{}
 	prefsStatus	{}
@@ -1714,7 +1716,7 @@ proc ::application::ask::Preferences {args} {
 	set top [ttk::frame $dlg.content -padding 12]
 	pack $top -fill both -expand yes
 
-	ttk::checkbutton $top.startup -text "Show assistant at startup" \
+	ttk::checkbutton $top.startup -text $mc::StartupAssistant \
 		-variable ::application::Options(assistant:startup) \
 		-command ::application::assistant::panel::SyncPreference
 	pack $top.startup -anchor w -pady {0 8}
@@ -1771,6 +1773,7 @@ proc ::application::ask::Preferences {args} {
 	# a language switch relabels the open dialog in place; the paths the
 	# user typed are in the settings, not in these labels
 	set Priv(prefs) $dlg
+	set Priv(prefsStartup) $top.startup
 	set Priv(prefsTitle) $top.title
 	set Priv(prefsHint) $top.hint
 	set Priv(prefsStatus) $status
@@ -1789,7 +1792,7 @@ proc ::application::ask::Preferences {args} {
 
 proc ::application::ask::ForgetPreferences {} {
 	variable Priv
-	foreach key {prefs prefsTitle prefsHint prefsStatus prefsDetect prefsClose prefsFields} {
+	foreach key {prefs prefsStartup prefsTitle prefsHint prefsStatus prefsDetect prefsClose prefsFields} {
 		set Priv($key) {}
 	}
 	return
@@ -1803,7 +1806,8 @@ proc ::application::ask::RelabelPreferences {} {
 
 	if {![info exists Priv(prefs)] || ![winfo exists $Priv(prefs)]} { return }
 	wm title $Priv(prefs) $mc::PrefsTitle
-	foreach {widget text} [list $Priv(prefsTitle) $mc::SpeechInput \
+	foreach {widget text} [list $Priv(prefsStartup) $mc::StartupAssistant \
+		$Priv(prefsTitle) $mc::SpeechInput \
 		$Priv(prefsDetect) $mc::Detect $Priv(prefsClose) $mc::Close] {
 		if {[winfo exists $widget]} { $widget configure -text $text }
 	}

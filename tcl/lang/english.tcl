@@ -311,6 +311,8 @@
 ::menu::mc::Extras							"E&xtras"
 ::menu::mc::Setup								"Setu&p"
 ::menu::mc::Layout							"La&yout"
+::menu::mc::Donate	"Donate"
+::menu::mc::TournamentDirector	"Tournament Director\u2026"
 
 # Font Size
 ::menu::mc::IncrFontSize					"Increase All Font Sizes"
@@ -495,6 +497,8 @@
 ::application::mc::Tab(position)				"S&tart Positions"
 ::application::mc::Tab(annotator)			"&Annotators"
 ::application::mc::MainMenu					"&Main Menu"
+::application::mc::Donate					"\u2665 Donate"
+::application::mc::DonateTip			"Support Chesswiz with a donation (PayPal or Ko-fi)"
 
 ::application::mc::ChessInfoDatabase		"Chess Information Data Base"
 ::application::mc::Shutdown					"Shutdown..."
@@ -997,6 +1001,10 @@
 ::application::ask::mc::Failed			"Error: %s"
 ::application::ask::mc::PrefsTitle			"Assistant"
 ::application::ask::mc::SpeechInput		"Speech input"
+::application::ask::mc::StartupAssistant	"Show assistant at startup"
+::application::ask::mc::PathSherpa		"sherpa-onnx-offline path"
+::application::ask::mc::PathSherpaModel	"sherpa-onnx model folder"
+::application::ask::mc::PathHotwords	"Hotwords file (optional)"
 ::application::ask::mc::SpeechReady		"A local speech path is configured."
 ::application::ask::mc::PathWhisper			"whisper-cli path"
 ::application::ask::mc::PathModel			"ggml model path"
@@ -3414,5 +3422,28 @@
 
 ### web ################################################################
 ::web::mc::SaveFile "Save File"
+
+
+### tournament director action labels #############################
+::td::actions::mc::Create	"Create tournament"
+::td::actions::mc::Register	"Register players"
+::td::actions::mc::PairRound	"Pair round"
+::td::actions::mc::Start	"Start tournament"
+::td::actions::mc::Stop	"Stop tournament"
+::td::actions::mc::EnterResult	"Enter result"
+::td::actions::mc::CorrectResult	"Correct result"
+::td::actions::mc::OverridePairing	"Override pairing"
+::td::actions::mc::Withdraw	"Withdraw player"
+::td::actions::mc::Bye	"Record bye"
+::td::actions::mc::Publish	"Publish standings"
+::td::actions::mc::Finish	"Finish tournament"
+::td::actions::mc::Undo	"Undo tournament command"
+::td::actions::mc::Redo	"Redo tournament command"
+::td::actions::mc::Status	"Tournament status"
+::td::actions::mc::Standings	"Tournament standings"
+::td::actions::mc::Crosstable	"Tournament crosstable"
+::td::actions::mc::Audit	"Tournament audit"
+::td::actions::mc::Export	"Export tournament"
+::td::actions::mc::Workspace	"Tournament Director workspace"
 
 # vi:set ts=3 sw=3:

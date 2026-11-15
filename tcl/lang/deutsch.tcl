@@ -313,6 +313,8 @@
 ::menu::mc::Extras							"E&xtras"
 ::menu::mc::Setup								"&Einstellungen"
 ::menu::mc::Layout							"La&yout"
+::menu::mc::Donate	"Spenden"
+::menu::mc::TournamentDirector	"Turnierleiter..."
 
 # Font Size
 ::menu::mc::IncrFontSize					"Alle Zeichensätze vergrößern"
@@ -609,6 +611,8 @@
 ::application::mc::Tab(position)				"Sta&rtpositionen"
 ::application::mc::Tab(annotator)			"&Kommentatoren"
 ::application::mc::MainMenu					"&Hauptmenü"
+::application::mc::Donate	"Spenden"
+::application::mc::DonateTip	"Unterstützen Sie Chesswiz mit einer Spende (PayPal oder Ko-fi)"
 
 ::application::mc::ChessInfoDatabase		"Schach-Informations-Datenbank"
 ::application::mc::Shutdown					"Schließung..."
@@ -1068,6 +1072,7 @@
 ::application::ask::mc::Failed			"Fehler: %s"
 ::application::ask::mc::PrefsTitle		"Assistent"
 ::application::ask::mc::SpeechInput		"Spracheingabe"
+::application::ask::mc::StartupAssistant	"Assistent beim Start anzeigen"
 ::application::ask::mc::SpeechReady		"Ein lokaler Sprachpfad ist eingerichtet."
 ::application::ask::mc::PathWhisper		"Pfad zu whisper-cli"
 ::application::ask::mc::PathModel		"Pfad zum ggml-Modell"
@@ -3754,6 +3759,28 @@
 ::context::mc::c12_merge_game "Partie"
 ::context::mc::c12_export "Partie exportieren"
 
+
+### tournament director action labels #############################
+::td::actions::mc::Create	"Turnier erstellen"
+::td::actions::mc::Register	"Spieler anmelden"
+::td::actions::mc::PairRound	"Runde auslosen"
+::td::actions::mc::Start	"Turnier starten"
+::td::actions::mc::Stop	"Turnier anhalten"
+::td::actions::mc::EnterResult	"Ergebnis eingeben"
+::td::actions::mc::CorrectResult	"Ergebnis korrigieren"
+::td::actions::mc::OverridePairing	"Paarung überschreiben"
+::td::actions::mc::Withdraw	"Spieler zurückziehen"
+::td::actions::mc::Bye	"Freilos eintragen"
+::td::actions::mc::Publish	"Tabelle veröffentlichen"
+::td::actions::mc::Finish	"Turnier beenden"
+::td::actions::mc::Undo	"Turnierbefehl rückgängig"
+::td::actions::mc::Redo	"Turnierbefehl wiederholen"
+::td::actions::mc::Status	"Turnierstatus"
+::td::actions::mc::Standings	"Turniertabelle"
+::td::actions::mc::Crosstable	"Kreuztabelle"
+::td::actions::mc::Audit	"Turnierprotokoll"
+::td::actions::mc::Export	"Turnier exportieren"
+::td::actions::mc::Workspace	"Turnierleiter-Arbeitsbereich"
 # vi:set ts=3 sw=3:
 
 # Training > Online (2026-11-12)

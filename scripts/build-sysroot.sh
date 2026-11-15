@@ -13,7 +13,7 @@
 #                                       multiword "zig cc -target ...")
 #
 # Packages: Tcl 8.6.17, Tk 8.6.17 (win|unix|macosx configure by target),
-#           zlib 1.3.1, Expat 2.6.4, tcllib json, OpenSSL and TclTLS.
+#           zlib 1.3.1, Expat 2.6.4, tcllib json+sha1 (sha256), OpenSSL and TclTLS.
 #           Sources and Mozilla CA roots are checksum-verified with sha256 pinned
 #           below; downloads are cached in build/src/.
 #
@@ -470,7 +470,8 @@ write_manifest() {
 # Pure-Tcl tcllib modules the program uses (Linux gets them from the system
 # tcllib). Installed as lib/<module>: Tcl searches the subdirectories of the
 # directory above its library.
-TCLLIB_MODULES="json"
+# sha1 also installs the sha256 package (::knowledge::RegistryHash needs it).
+TCLLIB_MODULES="json sha1"
 
 install_tcllib() {
     local srcdir m

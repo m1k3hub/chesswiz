@@ -314,6 +314,8 @@
 ::menu::mc::Extras						"&Tillägg"
 ::menu::mc::Setup							"&Inställningar"
 ::menu::mc::Layout						"La&yout" ;# NEW
+::menu::mc::Donate	"Donera"
+::menu::mc::TournamentDirector	"Turneringsledare…"
 
 # Font Size
 ::menu::mc::IncrFontSize				"Increase All Font Sizes" ;# NEW
@@ -615,6 +617,8 @@
 ::application::mc::Tab(position)				"S&tart Positions"
 ::application::mc::Tab(annotator)			"&Kommentatorer"
 ::application::mc::MainMenu					"&Huvudmeny"
+::application::mc::Donate	"Donera"
+::application::mc::DonateTip	"Stöd Chesswiz med en donation (PayPal eller Ko-fi)"
 
 ::application::mc::ChessInfoDatabase		"Chess Information Data Base"
 ::application::mc::Shutdown					"Avstängning..."
@@ -1075,6 +1079,10 @@
 ::application::ask::mc::Failed			"Fel: %s"
 ::application::ask::mc::PrefsTitle		"Assistent"
 ::application::ask::mc::SpeechInput		"Röstinmatning"
+::application::ask::mc::StartupAssistant	"Visa assistenten vid start"
+::application::ask::mc::PathSherpa	"sökväg till sherpa-onnx-offline"
+::application::ask::mc::PathSherpaModel	"mapp för sherpa-onnx-modellen"
+::application::ask::mc::PathHotwords	"fil med nyckelord (valfritt)"
 ::application::ask::mc::SpeechReady		"En lokal röstsökväg är konfigurerad."
 ::application::ask::mc::PathWhisper		"Sökväg till whisper-cli"
 ::application::ask::mc::PathModel		"Sökväg till ggml-modell"
@@ -3699,6 +3707,28 @@
 ::application::assistant::panel::mc::Hide	"D\u00f6lj"
 ::application::assistant::panel::mc::NoModelHint	"Ingen modell \u00e4r ansluten \u00e4n. \u00d6ppna Verktyg > V\u00e4lj modell\u2026 f\u00f6r att ansluta en; f\u00f6rslagen ovan fungerar utan."
 
+
+### tournament director action labels #############################
+::td::actions::mc::Create	"Skapa turnering"
+::td::actions::mc::Register	"Anmäl spelare"
+::td::actions::mc::PairRound	"Lotta rond"
+::td::actions::mc::Start	"Starta turnering"
+::td::actions::mc::Stop	"Stoppa turnering"
+::td::actions::mc::EnterResult	"Registrera resultat"
+::td::actions::mc::CorrectResult	"Rätta resultat"
+::td::actions::mc::OverridePairing	"Ändra lottning"
+::td::actions::mc::Withdraw	"Dra tillbaka spelare"
+::td::actions::mc::Bye	"Registrera friplats"
+::td::actions::mc::Publish	"Publicera ställning"
+::td::actions::mc::Finish	"Avsluta turnering"
+::td::actions::mc::Undo	"Ångra turneringskommando"
+::td::actions::mc::Redo	"Gör om turneringskommando"
+::td::actions::mc::Status	"Turneringsstatus"
+::td::actions::mc::Standings	"Turneringsställning"
+::td::actions::mc::Crosstable	"Korstabell"
+::td::actions::mc::Audit	"Turneringsgranskning"
+::td::actions::mc::Export	"Exportera turnering"
+::td::actions::mc::Workspace	"Turneringsledarens arbetsyta"
 # vi:set ts=3 sw=3:
 
 # Training > Online (2026-11-12)

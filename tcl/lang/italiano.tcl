@@ -314,6 +314,8 @@
 ::menu::mc::Extras							"E&xtras"
 ::menu::mc::Setup								"Impos&ta"
 ::menu::mc::Layout							"La&yout" ;# NEW
+::menu::mc::Donate	"Dona"
+::menu::mc::TournamentDirector	"Direttore del torneo…"
 
 # Font Size
 ::menu::mc::IncrFontSize					"Increase All Font Sizes" ;# NEW
@@ -610,6 +612,8 @@
 ::application::mc::Tab(position)				"S&tart Positions"
 ::application::mc::Tab(annotator)			"&Commentatori"
 ::application::mc::MainMenu					"&Menù principale"
+::application::mc::Donate	"Dona"
+::application::mc::DonateTip	"Sostieni Chesswiz con una donazione (PayPal o Ko-fi)"
 
 ::application::mc::ChessInfoDatabase		"Chess Information Data Base"
 ::application::mc::Shutdown					"Spegni..."
@@ -1070,6 +1074,10 @@
 ::application::ask::mc::Failed			"Errore: %s"
 ::application::ask::mc::PrefsTitle		"Assistente"
 ::application::ask::mc::SpeechInput		"Input vocale"
+::application::ask::mc::StartupAssistant	"Mostra l'assistente all'avvio"
+::application::ask::mc::PathSherpa	"percorso di sherpa-onnx-offline"
+::application::ask::mc::PathSherpaModel	"cartella del modello sherpa-onnx"
+::application::ask::mc::PathHotwords	"file delle parole chiave (facoltativo)"
 ::application::ask::mc::SpeechReady		"Un percorso vocale locale è configurato."
 ::application::ask::mc::PathWhisper		"Percorso di whisper-cli"
 ::application::ask::mc::PathModel		"Percorso del modello ggml"
@@ -3710,6 +3718,28 @@
 ::application::assistant::panel::mc::Hide	"Nascondi"
 ::application::assistant::panel::mc::NoModelHint	"Nessun modello \u00e8 ancora collegato. Apri Strumenti > Scegli modello\u2026 per collegarne uno; i suggerimenti qui sopra funzionano anche senza."
 
+
+### tournament director action labels #############################
+::td::actions::mc::Create	"Crea torneo"
+::td::actions::mc::Register	"Iscrivi giocatori"
+::td::actions::mc::PairRound	"Abbina turno"
+::td::actions::mc::Start	"Avvia torneo"
+::td::actions::mc::Stop	"Ferma torneo"
+::td::actions::mc::EnterResult	"Inserisci risultato"
+::td::actions::mc::CorrectResult	"Correggi risultato"
+::td::actions::mc::OverridePairing	"Sostituisci accoppiamento"
+::td::actions::mc::Withdraw	"Ritira giocatore"
+::td::actions::mc::Bye	"Registra bye"
+::td::actions::mc::Publish	"Pubblica classifica"
+::td::actions::mc::Finish	"Termina torneo"
+::td::actions::mc::Undo	"Annulla comando del torneo"
+::td::actions::mc::Redo	"Ripeti comando del torneo"
+::td::actions::mc::Status	"Stato del torneo"
+::td::actions::mc::Standings	"Classifica del torneo"
+::td::actions::mc::Crosstable	"Tabellone incrociato"
+::td::actions::mc::Audit	"Audit del torneo"
+::td::actions::mc::Export	"Esporta torneo"
+::td::actions::mc::Workspace	"Area di lavoro del direttore del torneo"
 # vi:set ts=3 sw=3:
 
 # Training > Online (2026-11-12)

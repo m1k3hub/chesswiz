@@ -315,6 +315,8 @@
 ::menu::mc::Extras			"E&xtras" ;# NEW
 ::menu::mc::Setup			"&Beállítások"
 ::menu::mc::Layout			"La&yout" ;# NEW
+::menu::mc::Donate	"Adományozás"
+::menu::mc::TournamentDirector	"Versenyigazgató…"
 
 # Font Size
 ::menu::mc::IncrFontSize		"Increase All Font Sizes" ;# NEW
@@ -625,6 +627,8 @@
 ::application::mc::Tab(position)		"S&tart Positions"
 ::application::mc::Tab(annotator)		"&Elemző"
 ::application::mc::MainMenu			"Fő&menü"
+::application::mc::Donate	"Adományozás"
+::application::mc::DonateTip	"Támogassa a Chesswizt adománnyal (PayPal vagy Ko-fi)"
 
 ::application::mc::ChessInfoDatabase		"Chess Information Data Base"
 ::application::mc::Shutdown			"Kilépés..."
@@ -1085,6 +1089,10 @@
 ::application::ask::mc::Failed			"Hiba: %s"
 ::application::ask::mc::PrefsTitle		"Asszisztens"
 ::application::ask::mc::SpeechInput		"Hangbevitel"
+::application::ask::mc::StartupAssistant	"Az asszisztens megjelenítése indításkor"
+::application::ask::mc::PathSherpa	"sherpa-onnx-offline elérési útja"
+::application::ask::mc::PathSherpaModel	"sherpa-onnx modellmappa"
+::application::ask::mc::PathHotwords	"kulcsszavak fájlja (nem kötelező)"
 ::application::ask::mc::SpeechReady		"Egy helyi hangútvonal be van állítva."
 ::application::ask::mc::PathWhisper		"whisper-cli útvonala"
 ::application::ask::mc::PathModel		"ggml modell útvonala"
@@ -3691,6 +3699,28 @@
 ::application::assistant::panel::mc::Hide	"Elrejt\u00e9s"
 ::application::assistant::panel::mc::NoModelHint	"M\u00e9g nincs modell csatlakoztatva. Nyissa meg az Eszk\u00f6z\u00f6k > Modell kiv\u00e1laszt\u00e1sa\u2026 men\u00fcpontot; a fenti javaslatok modell n\u00e9lk\u00fcl is m\u0171k\u00f6dnek."
 
+
+### tournament director action labels #############################
+::td::actions::mc::Create	"Verseny létrehozása"
+::td::actions::mc::Register	"Játékosok nevezése"
+::td::actions::mc::PairRound	"Forduló párosítása"
+::td::actions::mc::Start	"Verseny indítása"
+::td::actions::mc::Stop	"Verseny leállítása"
+::td::actions::mc::EnterResult	"Eredmény rögzítése"
+::td::actions::mc::CorrectResult	"Eredmény javítása"
+::td::actions::mc::OverridePairing	"Párosítás felülírása"
+::td::actions::mc::Withdraw	"Játékos visszaléptetése"
+::td::actions::mc::Bye	"Erőnyerő rögzítése"
+::td::actions::mc::Publish	"Ranglista közzététele"
+::td::actions::mc::Finish	"Verseny befejezése"
+::td::actions::mc::Undo	"Versenyparancs visszavonása"
+::td::actions::mc::Redo	"Versenyparancs ismétlése"
+::td::actions::mc::Status	"Verseny állapota"
+::td::actions::mc::Standings	"Verseny ranglistája"
+::td::actions::mc::Crosstable	"Kereszttábla"
+::td::actions::mc::Audit	"Verseny naplója"
+::td::actions::mc::Export	"Verseny exportálása"
+::td::actions::mc::Workspace	"Versenyigazgató munkaterülete"
 # vi:set ts=8 sw=8:
 
 # Training > Online (2026-11-12)

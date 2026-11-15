@@ -81,6 +81,64 @@ proc ::td::actions::Workspace {arguments} {
 }
 proc ::td::actions::dg {d key {default {}}} { if {[dict exists $d $key]} { return [dict get $d $key] }; return $default }
 
+# English defaults for the registered action labels. A language file
+# overrides these namespace variables; ResetMC restores the English text
+# before every language load (see i18n.tcl), and the registry label-command
+# reads the variable at event time so td.* rows relabel on a language switch.
+namespace eval ::td::actions::mc {
+	set Create			"Create tournament"
+	set Register		"Register players"
+	set PairRound		"Pair round"
+	set Start			"Start tournament"
+	set Stop				"Stop tournament"
+	set EnterResult	"Enter result"
+	set CorrectResult	"Correct result"
+	set OverridePairing	"Override pairing"
+	set Withdraw		"Withdraw player"
+	set Bye				"Record bye"
+	set Publish			"Publish standings"
+	set Finish			"Finish tournament"
+	set Undo				"Undo tournament command"
+	set Redo				"Redo tournament command"
+	set Status			"Tournament status"
+	set Standings		"Tournament standings"
+	set Crosstable		"Tournament crosstable"
+	set Audit			"Tournament audit"
+	set Export			"Export tournament"
+	set Workspace		"Tournament Director workspace"
+}
+
+proc ::td::actions::ResetMC {} {
+	foreach {name value} {
+		Create {Create tournament}
+		Register {Register players}
+		PairRound {Pair round}
+		Start {Start tournament}
+		Stop {Stop tournament}
+		EnterResult {Enter result}
+		CorrectResult {Correct result}
+		OverridePairing {Override pairing}
+		Withdraw {Withdraw player}
+		Bye {Record bye}
+		Publish {Publish standings}
+		Finish {Finish tournament}
+		Undo {Undo tournament command}
+		Redo {Redo tournament command}
+		Status {Tournament status}
+		Standings {Tournament standings}
+		Crosstable {Tournament crosstable}
+		Audit {Tournament audit}
+		Export {Export tournament}
+		Workspace {Tournament Director workspace}
+	} {
+		set ::td::actions::mc::$name $value
+	}
+	return
+}
+if {[llength [info commands ::mc::addDefaultReset]]} {
+	::mc::addDefaultReset ::td::actions::ResetMC
+}
+
 proc ::td::actions::Register {} {
 	set controls [Controls]
 	set query [QuerySpec]
@@ -98,30 +156,32 @@ proc ::td::actions::Register {} {
 	set resultSpec [MutationSpec [list {pairing {type string default {}}} {round {type integer default 0 range {0 1000}}} \
 		{board {type integer default -1 range {-1 10000}}} {result {type enum required 1 enum {1-0 0-1 1/2-1/2 0-0}}} \
 		{category {type enum default played enum {played forfeit forfeit-loss double-forfeit}}}]]
-	foreach {id label doc spec handler effect} [list \
-		td.create {Create tournament} {Create a C.05 round robin for humans or engines. Preview with commit false, then commit at the supplied revision. For an engine event it can also pair and play every round from a named opening, an opening code range or a list of moves.} $createSpec Create change \
-		td.register {Register players} {Register human or configured engine players before pairings are published.} $registerSpec [list Run register] change \
-		td.pair_round {Pair round} {Preview or commit Berger pairings for one round, or all rounds when round is zero.} $pairSpec [list Run pair_round] change \
-		td.start {Start tournament} {Start or resume an event and schedule engine games with bounded concurrency.} $pairSpec [list Run start] change \
-		td.stop {Stop tournament} {Stop all event engine processes and preserve completed games; running attempts become pending.} $controls [list Run stop] change \
-		td.enter_result {Enter result} {Enter a played or forfeit result for a pending human pairing.} $resultSpec [list Run enter_result] change \
-		td.correct_result {Correct result} {Correct a completed result without rewriting audit history; published standings gain a new publication revision.} $resultSpec [list Run correct_result] change \
-		td.override_pairing {Override pairing} {Change seats in a pending pairing with a required reason in the immutable audit record.} [MutationSpec {{white {type string required 1}} {black {type string required 1}} {reason {type string required 1}}}] [list Run override_pairing] change \
-		td.withdraw {Withdraw player} {Apply C.05 annulment below 50 percent played games, or remaining forfeits at or above 50 percent.} [MutationSpec {{player {type string required 1}} {round {type integer default 0 range {0 1000}}}}] [list Run withdraw] change \
-		td.bye {Record bye} {Record a requested, full-point or pairing-allocated bye with explicit points and category.} [MutationSpec {{player {type string required 1}} {round {type integer default 0 range {0 1000}}} {category {type enum default requested-bye enum {requested-bye full-point-bye pairing-bye}}} {points {type integer default 1 range {0 2}}}}] [list Run bye] change \
-		td.publish {Publish standings} {Append an immutable publication snapshot; later corrections create another publication revision.} $controls [list Run publish] change \
-		td.finish {Finish tournament} {Finish an event when every non-bye game is complete and return the final standings.} $controls [list Run finish] change \
-		td.undo {Undo tournament command} {Undo the latest reversible domain command at the current revision without deleting audit history.} $controls Undo change \
-		td.redo {Redo tournament command} {Redo an undone domain command at the current revision without deleting audit history.} $controls Redo change \
-		td.status {Tournament status} {Show the event's revision, current round, how many players and pairings it has, how it is saved, and whether undo or redo is available.} $query Status query \
-		td.standings {Tournament standings} {Compute exact C.07 standings and every tiebreak breakdown.} $query Standings query \
-		td.crosstable {Tournament crosstable} {Return the event crosstable as text, or open its journal-backed HTML view.} [concat $query {{open {type boolean default 0}}}] Crosstable change \
-		td.audit {Tournament audit} {Return immutable journal records, including commands, revisions, idempotency keys and before/after state.} $query Audit query \
-		td.export {Export tournament} {Save the tournament's games, or its crosstable as a web page, to a file you name.} [concat $query {{filename {type string required 1}} {format {type enum default pgn enum {pgn html}}} {overwrite {type boolean default 0}}}] Export change \
-		td.workspace {Tournament Director workspace} {Open the Event, Players, Pairings, Results and Standings workspace, close it, or select a tab.} [concat $query {{operation {type enum default open enum {open close select}}} {tab {type enum default event enum {event players pairings results standings}}}}] Workspace change \
+	foreach {id key doc spec handler effect} [list \
+		td.create Create {Create a C.05 round robin for humans or engines. Preview with commit false, then commit at the supplied revision. For an engine event it can also pair and play every round from a named opening, an opening code range or a list of moves.} $createSpec Create change \
+		td.register Register {Register human or configured engine players before pairings are published.} $registerSpec [list Run register] change \
+		td.pair_round PairRound {Preview or commit Berger pairings for one round, or all rounds when round is zero.} $pairSpec [list Run pair_round] change \
+		td.start Start {Start or resume an event and schedule engine games with bounded concurrency.} $pairSpec [list Run start] change \
+		td.stop Stop {Stop all event engine processes and preserve completed games; running attempts become pending.} $controls [list Run stop] change \
+		td.enter_result EnterResult {Enter a played or forfeit result for a pending human pairing.} $resultSpec [list Run enter_result] change \
+		td.correct_result CorrectResult {Correct a completed result without rewriting audit history; published standings gain a new publication revision.} $resultSpec [list Run correct_result] change \
+		td.override_pairing OverridePairing {Change seats in a pending pairing with a required reason in the immutable audit record.} [MutationSpec {{white {type string required 1}} {black {type string required 1}} {reason {type string required 1}}}] [list Run override_pairing] change \
+		td.withdraw Withdraw {Apply C.05 annulment below 50 percent played games, or remaining forfeits at or above 50 percent.} [MutationSpec {{player {type string required 1}} {round {type integer default 0 range {0 1000}}}}] [list Run withdraw] change \
+		td.bye Bye {Record a requested, full-point or pairing-allocated bye with explicit points and category.} [MutationSpec {{player {type string required 1}} {round {type integer default 0 range {0 1000}}} {category {type enum default requested-bye enum {requested-bye full-point-bye pairing-bye}}} {points {type integer default 1 range {0 2}}}}] [list Run bye] change \
+		td.publish Publish {Append an immutable publication snapshot; later corrections create another publication revision.} $controls [list Run publish] change \
+		td.finish Finish {Finish an event when every non-bye game is complete and return the final standings.} $controls [list Run finish] change \
+		td.undo Undo {Undo the latest reversible domain command at the current revision without deleting audit history.} $controls Undo change \
+		td.redo Redo {Redo an undone domain command at the current revision without deleting audit history.} $controls Redo change \
+		td.status Status {Show the event's revision, current round, how many players and pairings it has, how it is saved, and whether undo or redo is available.} $query Status query \
+		td.standings Standings {Compute exact C.07 standings and every tiebreak breakdown.} $query Standings query \
+		td.crosstable Crosstable {Return the event crosstable as text, or open its journal-backed HTML view.} [concat $query {{open {type boolean default 0}}}] Crosstable change \
+		td.audit Audit {Return immutable journal records, including commands, revisions, idempotency keys and before/after state.} $query Audit query \
+		td.export Export {Save the tournament's games, or its crosstable as a web page, to a file you name.} [concat $query {{filename {type string required 1}} {format {type enum default pgn enum {pgn html}}} {overwrite {type boolean default 0}}}] Export change \
+		td.workspace Workspace {Open the Event, Players, Pairings, Results and Standings workspace, close it, or select a tab.} [concat $query {{operation {type enum default open enum {open close select}}} {tab {type enum default event enum {event players pairings results standings}}}}] Workspace change \
 	] {
 		if {[dict exists $::action::Registry $id]} { continue }
-		::action::register $id [dict create label $label what $label doc $doc purpose $doc \
+		set label [set ::td::actions::mc::$key]
+		::action::register $id [dict create label $label \
+			label-command [list set ::td::actions::mc::$key] what $label doc $doc purpose $doc \
 			when "When managing a chess tournament through the Tournament Director." \
 			examples [list "Tournament Director: [string tolower $label]" "Please [string tolower $label] in my tournament"] \
 			related {td.workspace td.status td.standings} keywords {tournament director event round robin players pairings results standings} \

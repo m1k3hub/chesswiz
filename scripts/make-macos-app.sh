@@ -11,6 +11,7 @@ case "$APP" in *.app) ;; *) echo 'APP_DIR must end in .app' >&2; exit 2;; esac
 SIGN_ID="${CHESSWIZ_SIGN_ID:--}"
 VERSION="${CHESSWIZ_VERSION:-1.0}"
 [ -f "$SYSROOT/cacert.pem" ] && [ -f "$SYSROOT/lib/json/pkgIndex.tcl" ]
+[ -f "$SYSROOT/lib/sha1/pkgIndex.tcl" ]
 [ -x "$ENGINE_DIR/stockfish-chesswiz" ]
 TLS=("$SYSROOT"/lib/tls*)
 [ -f "${TLS[0]}/pkgIndex.tcl" ]
@@ -19,7 +20,8 @@ STAGE="$(mktemp -d "$(dirname "$APP")/cw-package.XXXXXX")"
 trap 'rm -rf "$STAGE"' EXIT
 "$ROOT/scripts/make-macos-run.sh" "$BUILD" "$STAGE/Chesswiz.app" "$SYSROOT"
 RES="$STAGE/Chesswiz.app/Contents/Resources"
-cp -R "$SYSROOT/lib/json" "${TLS[@]}" "$RES/lib/"
+# json for the knowledge pack, sha1 for its sha256 package.
+cp -R "$SYSROOT/lib/json" "$SYSROOT/lib/sha1" "${TLS[@]}" "$RES/lib/"
 cp "$SYSROOT/cacert.pem" "$RES/"
 mkdir -p "$RES/engines"
 cp "$ENGINE_DIR/stockfish-chesswiz" "$RES/engines/"

@@ -319,7 +319,7 @@ tcltest::test ask-i18n-german-coverage {every string of the field has a German t
 	list $checked $same
 } -cleanup {
 	::scidb::test::askI18n::Clean
-} -result {37 {}}
+} -result {38 {}}
 
 tcltest::test ask-i18n-fallback {ResetMC restores English defaults} -body {
 	::menu::SwitchLanguage Deutsch

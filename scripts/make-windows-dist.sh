@@ -8,7 +8,7 @@
 #     tkchesswiz.exe       the program (Tcl/Tk linked in statically)
 #     chesswiz.tcl         the script bundle; main() starts it when present
 #     lib/tcl8.6 tk8.6 tcl8   Tcl/Tk script libraries ([info library] finds them)
-#     lib/json              tcllib modules (from the sysroot)
+#     lib/json lib/sha1     tcllib modules (from the sysroot; sha1 ships sha256)
 #     lib/tls*              loadable TLS extension (static OpenSSL)
 #     cacert.pem            Mozilla CA roots for TLS verification
 #     data/ hyphen/ lang/ pieces/ themes/ ...   share files (share dir = exe dir)
@@ -75,7 +75,7 @@ if [ -d "$ROOT/build/engines-win" ]; then
 	[ ! -f "$DIST/engines/reckless-chesswiz.exe" ] || cp "$ROOT/engines/reckless/LICENSE" "$DIST/engines/Reckless-License.txt"
 fi
 
-for d in tcl8.6 tk8.6 tcl8 json; do
+for d in tcl8.6 tk8.6 tcl8 json sha1; do
 	cp -R "$SYSROOT/lib/$d" "$DIST/lib/"
 done
 
