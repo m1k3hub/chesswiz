@@ -286,13 +286,31 @@ proc ::td::model::Apply {command info domain} {
 			set path [dict get $info path]
 			set id [format "evt-%08x" [zlib crc32 $path]]
 			set opening [::td::openings::Resolve $domain]
-			set state [dict create schema 1 id $id name $name system $system status setup players $players pairings {} \
+			set now [clock seconds]
+			set startDate [string trim [dg $domain start_date {}]]
+			if {$startDate eq ""} { set startDate [clock format $now -format %Y-%m-%d -gmt 1] }
+			set endDate [string trim [dg $domain end_date {}]]
+			if {$endDate eq ""} { set endDate $startDate }
+			set deputies {}
+			foreach dep [dg $domain deputy_arbiters {}] {
+				if {[string trim $dep] ne ""} { lappend deputies [string trim $dep] }
+			}
+			if {![llength $deputies] && [string trim [dg $domain deputy_arbiter {}]] ne ""} {
+				lappend deputies [string trim [dg $domain deputy_arbiter {}]]
+			}
+			set state [dict create schema 1 id $id name $name site [string trim [dg $domain site {}]] \
+				federation [string trim [dg $domain federation {}]] start_date $startDate end_date $endDate \
+				chief_arbiter [string trim [dg $domain chief_arbiter {}]] deputy_arbiters $deputies \
+				tournament_type [string trim [dg $domain tournament_type {}]] \
+				time_control_desc [string trim [dg $domain time_control_desc {}]] \
+				round_dates [dg $domain round_dates {}] \
+				system $system status setup players $players pairings {} \
 				rounds $rounds current_round 1 revision 0 regulations [dict create laws 2023 C05 current C07 2026 C04.3 2026] \
 				time_control $tc opening $opening opening_name [dg $domain opening {}] overhead_ms [dg $domain overhead_ms 100] concurrency [dg $domain concurrency 2] \
 				threads 1 max_plies [dg $domain max_plies 0] tablebase [dg $domain tablebase 1] online 0 \
 				colour_lot [dg $domain colour_lot white] tiebreaks {directEncounter sonnebornBerger koya gamesWon gamesWonWithBlack progressive} \
 				unrated_policy [dg $domain unrated_policy drop] publication_revision 0 published 0 publications {} withdrawals {} rulings {} \
-				games {} created [clock seconds] updated [clock seconds]]
+				games {} created $now updated $now]
 			if {$system eq "swiss"} { dict set state tiebreaks {buchholzCut1 buchholz sonnebornBerger wins} }
 			set start [dg $domain start 0]
 			if {$start} {
@@ -317,12 +335,29 @@ proc ::td::model::Apply {command info domain} {
 			}
 			set parsed [::td::trf::Read $content [dg $domain through 0]]
 			set system [dg $domain system swiss]
-			set tc [TimeControl [dg $domain time_control 90+30]]
+			set tcArg [string trim [dg $domain time_control {}]]
+			set encTc [dg $parsed encoded_time_control {}]
+			set tcDesc [dg $parsed time_control_desc {}]
+			if {$tcArg ne ""} {
+				set tc [TimeControl $tcArg]
+				set encTc {}
+				set tcDesc {}
+			} elseif {[regexp {^([0-9]+)\+([0-9]+)$} $encTc -> bSec iSec]} {
+				set bMin [expr {$bSec % 60 == 0 ? $bSec / 60 : [format %g [expr {$bSec / 60.0}]]}]
+				set tc [dict create text "${bMin}+${iSec}" base_ms [expr {$bSec * 1000}] increment_ms [expr {$iSec * 1000}]]
+			} else {
+				set tc [TimeControl 90+30]
+			}
 			set path [dict get $info path]
 			set id [format "evt-%08x" [zlib crc32 $path]]
 			set state [dict create schema 1 id $id name [dict get $parsed name] site [dict get $parsed site] \
 				federation [dict get $parsed federation] start_date [dict get $parsed start_date] end_date [dict get $parsed end_date] \
-				chief_arbiter [dict get $parsed chief_arbiter] system $system status active \
+				teams_count [dg $parsed teams_count {}] tournament_type [dg $parsed tournament_type {}] \
+				chief_arbiter [dict get $parsed chief_arbiter] deputy_arbiters [dg $parsed deputy_arbiters {}] \
+				time_control_desc $tcDesc encoded_time_control $encTc \
+				trf_tiebreaks [dg $parsed trf_tiebreaks {}] trf_tiebreaks_202 [dg $parsed trf_tiebreaks_202 {}] \
+				round_dates [dg $parsed round_dates {}] \
+				system $system status active \
 				players [dict get $parsed players] pairings [dict get $parsed pairings] \
 				rounds [dict get $parsed rounds] current_round [dict get $parsed current_round] revision 0 \
 				regulations [dict create laws 2023 C05 current C07 2026 C04.3 2026] time_control $tc opening {} opening_name {} \

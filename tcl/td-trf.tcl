@@ -6,6 +6,78 @@ proc ::td::trf::Field {text width} {
     if {[regexp {[\r\n\t\x00]} $text] || [string length $text] > $width} { error "TRF field exceeds $width columns or contains control characters: $text" }
     return [format %-*s $width $text]
 }
+proc ::td::trf::HeaderVal {text {maxLen 120}} {
+    set trimmed [string trimright $text]
+    if {[regexp {[\r\n\t\x00]} $trimmed] || [string length $trimmed] > $maxLen} {
+        error "TRF header field exceeds $maxLen columns or contains control characters: $trimmed"
+    }
+    return $trimmed
+}
+proc ::td::trf::TournamentType {state} {
+    if {[dg $state tournament_type] ne ""} { return [HeaderVal [dict get $state tournament_type]] }
+    switch -- [dg $state system swiss] {
+        round-robin { return "Individual: Round-Robin" }
+        double-round-robin { return "Individual: Double Round-Robin" }
+        default { return "Individual: Swiss-System" }
+    }
+}
+proc ::td::trf::TimeControlDesc {state} {
+    if {[dg $state time_control_desc] ne ""} { return [HeaderVal [dict get $state time_control_desc]] }
+    set tc [dg $state time_control {}]
+    if {[dict exists $tc base_ms] && [dict exists $tc increment_ms]} {
+        set bms [dict get $tc base_ms]
+        set ims [dict get $tc increment_ms]
+        set bMin [expr {$bms % 60000 == 0 ? $bms / 60000 : [format %g [expr {$bms / 60000.0}]]}]
+        set iSec [expr {$ims % 1000 == 0 ? $ims / 1000 : [format %g [expr {$ims / 1000.0}]]}]
+        return "$bMin min/player + $iSec s/move"
+    }
+    return "90 min/player + 30 s/move"
+}
+proc ::td::trf::EncodedTimeControl {state} {
+    if {[dg $state encoded_time_control] ne ""} { return [HeaderVal [dict get $state encoded_time_control]] }
+    set tc [dg $state time_control {}]
+    if {[dict exists $tc base_ms] && [dict exists $tc increment_ms]} {
+        set bms [dict get $tc base_ms]
+        set ims [dict get $tc increment_ms]
+        set bSec [expr {$bms % 1000 == 0 ? $bms / 1000 : [format %g [expr {$bms / 1000.0}]]}]
+        set iSec [expr {$ims % 1000 == 0 ? $ims / 1000 : [format %g [expr {$ims / 1000.0}]]}]
+        return "${bSec}+${iSec}"
+    }
+    return "5400+30"
+}
+proc ::td::trf::TrfTiebreaks {state} {
+    if {[dg $state trf_tiebreaks] ne ""} { return [HeaderVal [dict get $state trf_tiebreaks]] }
+    set codes [list PTS]
+    set map {
+        buchholzCut1 BH/C1
+        buchholz BH
+        buchholzMedian1 BH/M1
+        sonnebornBerger SB
+        directEncounter DE
+        koya KS
+        gamesWon WON
+        wins WIN
+        gamesWonWithBlack BWG
+        progressive PS
+        aro ARO
+        averageRatingOfOpponents ARO
+    }
+    foreach tb [dg $state tiebreaks {buchholzCut1 buchholz sonnebornBerger wins}] {
+        if {[dict exists $map $tb]} { lappend codes [dict get $map $tb] }
+    }
+    return [join $codes ,]
+}
+proc ::td::trf::ToRoundDate {dateStr fallback} {
+    set s [string trim $dateStr]
+    if {[regexp {^([0-9]{4})[-/.]([0-9]{2})[-/.]([0-9]{2})$} $s -> yyyy mm dd]} {
+        return "[string range $yyyy 2 3]/$mm/$dd"
+    }
+    if {[regexp {^([0-9]{2})[-/.]([0-9]{2})[-/.]([0-9]{4})$} $s -> dd mm yyyy]} {
+        return "[string range $yyyy 2 3]/$mm/$dd"
+    }
+    if {[regexp {^[0-9]{2}/[0-9]{2}/[0-9]{2}$} $s]} { return $s }
+    return $fallback
+}
 proc ::td::trf::Code {p id} {
     if {[dict get $p black] eq ""} {
         if {[dg $p category] eq "pairing-bye"} { return U }
@@ -23,13 +95,64 @@ proc ::td::trf::Code {p id} {
 # checkPending=1 encodes pending non-bye games as '=' so bbpPairings -c can check the round.
 proc ::td::trf::Write {state {format trf26} {through -1} {pairingRound 0} {checkPending 0}} {
     if {$format ni {trf16 trf26}} { error "expected trf16 or trf26" }
-    set lines [list "012 [Field [dict get $state name] 80]"]
-    foreach {code key} {022 site 032 federation 042 start_date 052 end_date 102 chief_arbiter} {
-        if {[dg $state $key] ne ""} { lappend lines "$code [Field [dict get $state $key] 80]" }
+    set lines [list "012 [HeaderVal [dict get $state name] 80]"]
+    foreach {code key} {022 site 032 federation} {
+        if {[dg $state $key] ne ""} { lappend lines "$code [HeaderVal [dict get $state $key] 80]" }
     }
+    set startDate [HeaderVal [dg $state start_date] 80]
+    if {$startDate eq ""} {
+        set created [dg $state created 0]
+        set startDate [expr {$created > 0 ? [clock format $created -format %Y-%m-%d -gmt 1] : "2026-01-01"}]
+    }
+    set endDate [HeaderVal [dg $state end_date] 80]
+    if {$endDate eq ""} { set endDate $startDate }
+    lappend lines "042 $startDate" "052 $endDate"
+    set playerList [dg $state players {}]
+    set playerCount [llength $playerList]
+    set ratedCount 0
+    foreach p $playerList {
+        set r [string trim [dg $p rating {}]]
+        if {[regexp {^[0-9]+$} $r] && [scan $r %d] > 0} { incr ratedCount }
+    }
+    lappend lines "062 $playerCount" "072 $ratedCount"
+    if {[dg $state teams_count] ne ""} { lappend lines "082 [HeaderVal [dict get $state teams_count] 20]" }
+    lappend lines "092 [TournamentType $state]"
+    set ca [HeaderVal [dg $state chief_arbiter] 80]
+    lappend lines [expr {$ca eq "" ? "102" : "102 $ca"}]
+    set deputies {}
+    foreach dep [dg $state deputy_arbiters {}] {
+        set dep [HeaderVal $dep 80]
+        if {$dep ne ""} { lappend deputies $dep }
+    }
+    if {![llength $deputies] && [HeaderVal [dg $state deputy_arbiter] 80] ne ""} {
+        lappend deputies [HeaderVal [dict get $state deputy_arbiter] 80]
+    }
+    if {[llength $deputies]} {
+        foreach dep $deputies { lappend lines "112 $dep" }
+    } else {
+        lappend lines "112"
+    }
+    lappend lines "122 [TimeControlDesc $state]"
     set rounds [dict get $state rounds]
+    if {$rounds > 0} {
+        set defRd [ToRoundDate $startDate "26/01/01"]
+        set rDates [dg $state round_dates {}]
+        set line132 [format "132%86s" ""]
+        for {set r 1} {$r <= $rounds} {incr r} {
+            set rawRd [lindex $rDates [expr {$r - 1}]]
+            set rd [ToRoundDate $rawRd $defRd]
+            append line132 [format "  %-8s" [HeaderVal $rd 8]]
+        }
+        lappend lines [string trimright $line132]
+    }
     set colour [dg $state colour_lot white]
-    if {$format eq "trf26"} { lappend lines "142 $rounds" "152 [string toupper [string index $colour 0]]" } else { lappend lines "XXR $rounds" "XXC ${colour}1" }
+    if {$format eq "trf26"} {
+        lappend lines "142 $rounds" "152 [string toupper [string index $colour 0]]"
+        if {[dg $state trf_tiebreaks_202] ne ""} { lappend lines "202 [HeaderVal [dict get $state trf_tiebreaks_202]]" }
+        lappend lines "212 [TrfTiebreaks $state]" "222 [EncodedTimeControl $state]"
+    } else {
+        lappend lines "XXR $rounds" "XXC ${colour}1"
+    }
     set last 0
     foreach p [dict get $state pairings] { set last [expr {max($last,[dict get $p round])}] }
     if {$through >= 0} { set last $through }
@@ -90,7 +213,17 @@ proc ::td::trf::Read {text {through 0}} {
     set federation {}
     set start_date {}
     set end_date {}
+    set reported_players {}
+    set reported_rated_players {}
+    set teams_count {}
+    set tournament_type {}
     set chief_arbiter {}
+    set deputy_arbiters {}
+    set time_control_desc {}
+    set round_dates {}
+    set trf_tiebreaks {}
+    set trf_tiebreaks_202 {}
+    set encoded_time_control {}
     set rounds 0
     set colour_lot white
     set format trf16
@@ -106,9 +239,29 @@ proc ::td::trf::Read {text {through 0}} {
             032 { set federation $rest }
             042 { set start_date $rest }
             052 { set end_date $rest }
+            062 { set reported_players $rest }
+            072 { set reported_rated_players $rest }
+            082 { set teams_count $rest }
+            092 { set tournament_type $rest }
             102 { set chief_arbiter $rest }
+            112 { if {$rest ne ""} { lappend deputy_arbiters $rest } }
+            122 { set time_control_desc $rest }
+            132 {
+                if {[string length $line] > 89} {
+                    set round_dates {}
+                    for {set pos 89} {$pos < [string length $line]} {incr pos 10} {
+                        set tok [string trim [string range $line $pos [expr {$pos + 9}]]]
+                        if {$tok ne ""} { lappend round_dates $tok }
+                    }
+                } elseif {$rest ne ""} {
+                    set round_dates [regexp -all -inline {\S+} $rest]
+                }
+            }
             142 { set format trf26; if {[string is integer -strict $rest]} { set rounds $rest } }
             152 { set format trf26; set colour_lot [expr {[string toupper [string index $rest 0]] eq "B" ? "black" : "white"}] }
+            202 { set format trf26; set trf_tiebreaks_202 $rest }
+            212 { set format trf26; set trf_tiebreaks $rest }
+            222 { set format trf26; set encoded_time_control $rest }
             XXR { if {[string is integer -strict $rest]} { set rounds $rest } }
             XXC { set colour_lot [expr {[string match -nocase "black*" $rest] ? "black" : "white"}] }
             001 { lappend playerLines $line }
@@ -200,7 +353,11 @@ proc ::td::trf::Read {text {through 0}} {
         }
     }
     return [dict create name $name site $site federation $federation start_date $start_date end_date $end_date \
-        chief_arbiter $chief_arbiter rounds $rounds current_round [expr {max(1, $limit)}] colour_lot $colour_lot \
+        reported_players $reported_players reported_rated_players $reported_rated_players teams_count $teams_count \
+        tournament_type $tournament_type chief_arbiter $chief_arbiter deputy_arbiters $deputy_arbiters \
+        time_control_desc $time_control_desc round_dates $round_dates trf_tiebreaks $trf_tiebreaks \
+        trf_tiebreaks_202 $trf_tiebreaks_202 encoded_time_control $encoded_time_control \
+        rounds $rounds current_round [expr {max(1, $limit)}] colour_lot $colour_lot \
         trf_format $format players $players pairings $pairings]
 }
 

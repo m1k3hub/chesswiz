@@ -150,7 +150,11 @@ proc ::td::actions::Register {} {
 	set controls [Controls]
 	set query [QuerySpec]
 	set createSpec [MutationSpec [list \
-		{name {type string default Tournament}} {system {type enum default double-round-robin enum {round-robin double-round-robin swiss}}} \
+		{name {type string default Tournament}} {site {type string default {}}} {federation {type string default {}}} \
+		{start_date {type string default {}}} {end_date {type string default {}}} \
+		{chief_arbiter {type string default {}}} {deputy_arbiter {type string default {}}} \
+		{tournament_type {type string default {}}} {round_dates {type array default {}}} \
+		{system {type enum default double-round-robin enum {round-robin double-round-robin swiss}}} \
 		{rounds {type integer default 5 range {1 99}}} {players {type array default {}}} {engines {type array default {}}} {kind {type enum default engine enum {human engine}}} \
 		{engine_count {type integer default 0 range {0 64}}} {time_control {type string default 3+2}} \
 		{opening {type string default {}}} {eco {type string default {}}} {moves {type array default {}}} {suite {type string default {}}} \
@@ -188,7 +192,7 @@ proc ::td::actions::Register {} {
 		td.crosstable {Tournament crosstable} {Return the event crosstable as text, or open its journal-backed HTML view.} [concat $query {{open {type boolean default 0}}}] Crosstable change \
 		td.print {Print tournament sheet} {Format or save the tournament pairings, standings or crosstable for printing as a web page, plain text or a printable document.} [concat $query {{view {type enum default standings enum {pairings standings crosstable}}} {format {type enum default html enum {html text pdf}}} {round {type integer default 0 range {0 1000}}} {filename {type string default {}}} {overwrite {type boolean default 0}}}] Print change \
 		td.audit {Tournament audit} {Return immutable journal records, including commands, revisions, idempotency keys and before/after state.} $query Audit query \
-		td.import_trf {Import tournament report} {Create a tournament journal from a FIDE TRF16 or TRF26 report file.} [MutationSpec {{filename {type string default {}}} {trf_text {type string default {}}} {through {type integer default 0 range {0 100}}} {system {type enum default swiss enum {swiss round-robin double-round-robin}}} {time_control {type string default 90+30}}}] ImportTrf change \
+		td.import_trf {Import tournament report} {Create a tournament journal from a FIDE TRF16 or TRF26 report file.} [MutationSpec {{filename {type string default {}}} {trf_text {type string default {}}} {through {type integer default 0 range {0 100}}} {system {type enum default swiss enum {swiss round-robin double-round-robin}}} {time_control {type string default {}}}}] ImportTrf change \
 		td.export {Export tournament} {Save the tournament's games, its crosstable as a web page, or a FIDE TRF16/TRF26 rating report to a file you name.} [concat $query {{filename {type string required 1}} {format {type enum default pgn enum {pgn html trf16 trf26}}} {overwrite {type boolean default 0}}}] Export change \
 		td.workspace {Tournament Director workspace} {Open the Event, Players, Pairings, Results and Standings workspace, close it, or select a tab.} [concat $query {{operation {type enum default open enum {open close select}}} {tab {type enum default event enum {event players pairings results standings}}}}] Workspace change \
 	] {

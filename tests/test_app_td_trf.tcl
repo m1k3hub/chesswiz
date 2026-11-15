@@ -42,4 +42,80 @@ tcltest::test td-trf16-trf26-roundtrip-and-eligibility {TRF16 and TRF26 export/i
     list [expr {$sOrig eq $s16}] [expr {$sOrig eq $s26}] [expr {$re26 eq [dict get $exp26 text]}] [dict get $elig fide_eligible]
 } -result {1 1 1 0}
 
+tcltest::test td-trf-f1-mandatory-fide-headers {F1: TRF16 and TRF26 exports include mandatory FIDE report headers 062, 072, 092, 112, 122, 132 round dates, and TRF26 212/222} -body {
+    set fixPath [file normalize [file join [file dirname [info script]] fixtures td chessament-tournament-1.trf]]
+    set impPath [file join $::env(HOME) f1_chessament.tdj]
+    ::tdTrf::call $impPath import_trf [dict create filename $fixPath system swiss]
+    set out26File [file join $::env(HOME) f1_chessament26.trf]
+    set out16File [file join $::env(HOME) f1_chessament16.trf]
+    set out26 [dict get [::td::actions::Export [dict create path $impPath filename $out26File format trf26 overwrite 1]] text]
+    set out16 [dict get [::td::actions::Export [dict create path $impPath filename $out16File format trf16 overwrite 1]] text]
+
+    set hdrs26 [dict create]
+    foreach line [split [string trimright $out26 \n] \n] {
+        set tag [string range $line 0 2]
+        if {$tag ne "001"} { dict set hdrs26 $tag $line }
+    }
+    set hdrs16 [dict create]
+    foreach line [split [string trimright $out16 \n] \n] {
+        set tag [string range $line 0 2]
+        if {$tag ne "001"} { dict set hdrs16 $tag $line }
+    }
+
+    set line132 [expr {[dict exists $hdrs26 132] ? [dict get $hdrs26 132] : ""}]
+    set r1DateAtCol92 [string range $line132 91 98]
+    set len132Ok [expr {[string length $line132] == 89 + 9 * 10}]
+
+    # Freshly created tournament with mixed rated/unrated field and arbiter/date metadata
+    set crPath [file join $::env(HOME) f1_created.tdj]
+    ::tdTrf::call $crPath create {
+        name {Autumn Rating Open}
+        site {Reykjavik}
+        federation {ISL}
+        start_date {2026-10-01}
+        end_date {2026-10-03}
+        chief_arbiter {IA Olafsson}
+        deputy_arbiter {FA Sigurdsson}
+        round_dates {26/10/01 26/10/02 26/10/03}
+        time_control 90+30
+        players {UnratedA UnratedB}
+        system swiss
+        rounds 3
+        colour_lot white
+        start 0
+    }
+    # Add two rated players to verify 062=4 and 072=2
+    set stCr [dict get [::td::store::Read $crPath] state]
+    set pList [dict get $stCr players]
+    lappend pList [dict create id p3 number 3 name {RatedC} kind human engine {} rating 2150 fide_id 2300001 federation ISL title FM sex m born 1995/04/12 withdrawn 0 entry_round 1]
+    lappend pList [dict create id p4 number 4 name {RatedD} kind human engine {} rating 1980 fide_id 2300002 federation ISL title {} sex w born 2001/08/20 withdrawn 0 entry_round 1]
+    dict set stCr players $pList
+    set crTrf26 [::td::trf::Write $stCr trf26]
+    set crParsed [::td::trf::Read $crTrf26]
+    set crRe26 [::td::trf::Write $crParsed trf26]
+    set crHdrs [dict create]
+    foreach line [split [string trimright $crTrf26 \n] \n] {
+        set tag [string range $line 0 2]
+        if {$tag ne "001"} { dict set crHdrs $tag $line }
+    }
+
+    list \
+        [expr {[dict exists $hdrs26 062] && [string trim [string range [dict get $hdrs26 062] 3 end]] eq "100"}] \
+        [expr {[dict exists $hdrs26 072] && [string trim [string range [dict get $hdrs26 072] 3 end]] eq "100"}] \
+        [expr {[dict exists $hdrs26 092] && [string match "*Swiss*" [dict get $hdrs26 092]]}] \
+        [expr {[dict exists $hdrs26 112] && [string trim [string range [dict get $hdrs26 112] 3 end]] eq "Arbiter"}] \
+        [expr {[dict exists $hdrs26 122] && [string trim [string range [dict get $hdrs26 122] 3 end]] eq "8 min/player + 3 s/move"}] \
+        [expr {$r1DateAtCol92 eq "26/03/01" && $len132Ok}] \
+        [expr {[dict exists $hdrs26 212] && [string match "212 PTS,*" [dict get $hdrs26 212]]}] \
+        [expr {[dict exists $hdrs26 222] && [string trim [string range [dict get $hdrs26 222] 3 end]] eq "480+3"}] \
+        [expr {[dict exists $hdrs16 062] && [dict exists $hdrs16 072] && [dict exists $hdrs16 092] && [dict exists $hdrs16 112] && [dict exists $hdrs16 122] && [dict exists $hdrs16 132] && [dict exists $hdrs16 XXR]}] \
+        [expr {[dict exists $crHdrs 062] && [string trim [string range [dict get $crHdrs 062] 3 end]] eq "4"}] \
+        [expr {[dict exists $crHdrs 072] && [string trim [string range [dict get $crHdrs 072] 3 end]] eq "2"}] \
+        [expr {[dict exists $crHdrs 112] && [string trim [string range [dict get $crHdrs 112] 3 end]] eq "FA Sigurdsson"}] \
+        [expr {[dict exists $crHdrs 122] && [string trim [string range [dict get $crHdrs 122] 3 end]] eq "90 min/player + 30 s/move"}] \
+        [expr {[dict exists $crHdrs 132] && [string range [dict get $crHdrs 132] 91 128] eq "26/10/01  26/10/02  26/10/03"}] \
+        [expr {[dict exists $crHdrs 222] && [string trim [string range [dict get $crHdrs 222] 3 end]] eq "5400+30"}] \
+        [expr {$crTrf26 eq $crRe26}]
+} -result {1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1}
+
 tcltest::cleanupTests
