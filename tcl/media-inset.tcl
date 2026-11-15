@@ -1425,7 +1425,9 @@ proc ::mediainset::PostMediaMenu {w} {
 proc ::mediainset::PostMenuAt {w} {
 	if {![winfo exists $w.menu] || ![winfo ismapped $w]} { return }
 	set x [expr {[winfo rootx $w] + [winfo width $w] - [winfo reqwidth $w.menu]}]
-	tk_popup $w.menu [expr {max(0, $x)}] [expr {[winfo rooty $w] + [winfo height $w]}]
+	set y [expr {[winfo rooty $w] + [winfo height $w]}]
+	lassign [::application::MenuRootClamp $w $x $y $w.menu] x y
+	tk_popup $w.menu $x $y
 }
 
 # A player holds a media item: Stop can release it. Folded playback keeps

@@ -2404,6 +2404,10 @@ proc DoDeiconify {twm toplevel width height x y force} {
 	wm geometry $toplevel ${width}x${height}+${x}+${y}
 	SetTitle $twm $toplevel [$twm get $toplevel name]
 	wm state $toplevel normal
+	# A saved pane can have been undocked on a larger monitor, or with a
+	# negative-origin secondary. Restore it inside the work area that now
+	# hosts it instead of mapping it off screen (GAP-004).
+	::util::place::fitWindow $toplevel
 	if {$Vars(disable:close)} {
 		set cmd {#}
 	} else {
@@ -2439,6 +2443,7 @@ proc Undock {twm frame} {
 	wm geometry $toplevel +${x}+${y}
 	SetTitle $twm $toplevel [$twm get $frame name]
 	wm state $toplevel normal
+	::util::place::fitWindow $toplevel
 	wm protocol $toplevel WM_DELETE_WINDOW [list [namespace current]::Dock $twm $toplevel]
 	event generate $twm <<TwmUndocked>> -data $frame
 }

@@ -345,4 +345,80 @@ tcltest::test review4-gap001-follows-size-reflow {focus follows size composes wi
 	::layoutGaps::settle 500
 } -result {tall 1 tall}
 
+# REVIEW4 GAP-004: root-coordinate clamps respect a negative-origin monitor.
+tcltest::test review4-gap004-negative-origin-menu {popup clamping keeps a negative-origin work area} -setup {
+	catch { destroy .negmenu }
+	menu .negmenu -tearoff 0
+	.negmenu add command -label Test
+	::layoutGaps::settle 100
+} -body {
+	lassign [::application::MenuRootClamp . 40 40 .negmenu {-800 -600 800 600}] x y
+	list [expr {$x < 0 && $y < 0}]
+} -cleanup {
+	catch { destroy .negmenu }
+} -result {1}
+
+# REVIEW4 GAP-004: a restored floating pane is clamped to the work area it
+# maps on, even when its saved coordinates came from a larger monitor.
+tcltest::test review4-gap004-restore-clamped {restoring a floating pane keeps it inside the work area} -setup {
+	set saved [wm geometry .application]
+	set twm [::application::twm board]
+	foreach top [::scidb::tk::twm floats $twm] { catch { ::twm::Dock $twm $top } }
+	::layoutGaps::settle 300
+	wm geometry .application 1200x800+760+250
+	::layoutGaps::settle 700
+} -body {
+	set twm [::application::twm board]
+	set leaf [$twm leaf editor]
+	::twm::Undock $twm $leaf
+	::layoutGaps::settle 700
+	set float [lindex [::scidb::tk::twm floats $twm] end]
+	wm withdraw $float
+	::twm::DoDeiconify $twm $float 500 400 1900 1000 1
+	::layoutGaps::settle 700
+	list [::layoutGaps::inside [::layoutGaps::frame $float] [winfo workarea $float]]
+} -cleanup {
+	catch {
+		set twm [::application::twm board]
+		foreach top [::scidb::tk::twm floats $twm] { catch { ::twm::Dock $twm $top } }
+	}
+	wm geometry .application $saved
+	::layoutGaps::settle 500
+} -result {1}
+
+# REVIEW4 GAP-004: reopening a withdrawn Chesswiz Online fits the current
+# work area before the once-a-second display watcher gets a turn.
+tcltest::test review4-gap004-online-reopen-clamped {reopening online fits a shrunken work area immediately} -setup {
+	set saved [wm geometry .application]
+	set savedProperty ""
+	if {[regexp {_NET_WORKAREA\([A-Z]+\) = ([0-9, -]+)} [exec xprop -root _NET_WORKAREA] -> savedProperty]} {
+		set savedProperty [string trim $savedProperty]
+	}
+	catch { destroy .online }
+	wm geometry .application 900x700+40+40
+	::layoutGaps::settle 300
+	set path [::online::window::open]
+	::scidb::test::wait::until {[winfo exists $path] && [winfo ismapped $path]}
+	::layoutGaps::settle 300
+	::online::window::Hide
+	::layoutGaps::settle 200
+	exec xprop -root -f _NET_CURRENT_DESKTOP 32c -set _NET_CURRENT_DESKTOP 0
+	exec xprop -root -f _NET_WORKAREA 32c -set _NET_WORKAREA "0,0,700,600"
+	::layoutGaps::settle 200
+} -body {
+	set path [::online::window::open]
+	::layoutGaps::settle 250
+	list [::layoutGaps::inside [::layoutGaps::frame $path] {0 0 700 600}]
+} -cleanup {
+	catch { destroy .online }
+	if {$savedProperty ne ""} {
+		catch { exec xprop -root -f _NET_WORKAREA 32c -set _NET_WORKAREA $savedProperty }
+	} else {
+		catch { exec xprop -root -remove _NET_WORKAREA }
+	}
+	catch { exec xprop -root -remove _NET_CURRENT_DESKTOP }
+	wm geometry .application $saved
+	::layoutGaps::settle 500
+} -result {1}
+
 tcltest::cleanupTests

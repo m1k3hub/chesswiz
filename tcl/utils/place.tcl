@@ -363,6 +363,15 @@ proc clamp {pos size start length} {
 # Clamp client size and outer-frame position together. Pure arithmetic so this
 # also works before mapping, when winfo width/rootx still describe an old size.
 # Work area is {x y width height}; extents are {left right top bottom}.
+# Clamp a root-coordinate rectangle (menus, popups) to a work area. Unlike
+# max(0, ...) this respects a negative-origin monitor and a top bar.
+proc clampRoot {x y w h area} {
+	lassign $area ax ay aw ah
+	set x [expr {max($ax, min($x, $ax + $aw - $w))}]
+	set y [expr {max($ay, min($y, $ay + $ah - $h))}]
+	return [list $x $y]
+}
+
 proc clampGeometry {geometry workarea {extents {0 0 0 0}}} {
 	if {![regexp {^([0-9]+)x([0-9]+)([+-])(-?[0-9]+)([+-])(-?[0-9]+)$} $geometry -> w h xs x ys y]} {
 		return -code error "invalid window geometry: $geometry"

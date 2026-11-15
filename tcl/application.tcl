@@ -697,6 +697,7 @@ proc WindowResized {w} {
 	if {$w ne ".application" || !$Vars(ready)} { return }
 	if {[info exists Vars(after:fit)]} { after cancel $Vars(after:fit) }
 	set Vars(after:fit) [after 20 [namespace code [list KeepInWorkArea $w]]]
+	set Vars(after:floats) [after 20 [namespace code KeepFloatingInWorkArea]]
 	# A move sends the same event as a resize; open dialogs are re-planned
 	# against the board's settled rectangle (debounced in place.tcl).
 	::util::place::besideSchedule
@@ -746,6 +747,15 @@ proc KeepFloatingInWorkArea {} {
 		incr changed [KeepInWorkArea $w]
 	}
 	return [expr {$changed > 0}]
+}
+
+
+# A menu is not a toplevel: tk_popup takes root coordinates, and clamping to
+# 0 would drag a left-of-primary (negative x) or above-primary menu onto the
+# primary monitor. Keep it on its own monitor's work area (GAP-004).
+proc MenuRootClamp {w x y menu {area ""}} {
+	if {$area eq ""} { set area [winfo workarea $w] }
+	return [::util::place::clampRoot $x $y [winfo reqwidth $menu] [winfo reqheight $menu] $area]
 }
 
 

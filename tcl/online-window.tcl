@@ -33,6 +33,9 @@ proc open {} {
 	if {[winfo exists $Path]} {
 		wm deiconify $Path
 		raise $Path
+		# It may have been hidden on a monitor that has since gone away,
+		# or while the work area shrank (GAP-004).
+		::util::place::fitWindow $Path
 		return $Path
 	}
 	toplevel $Path -class ChesswizOnline
