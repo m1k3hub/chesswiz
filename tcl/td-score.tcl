@@ -469,28 +469,44 @@ proc ::td::score::StandingsHTML {state rows} {
 }
 
 proc ::td::score::SimplePdf {title bodyText} {
-	set lines [concat [list $title ""] [split $bodyText \n]]
-	set stream "BT\n/F1 10 Tf\n36 756 Td\n12 TL\n"
-	foreach line [lrange $lines 0 58] {
-		set safe [string map {\\ \\\\ ( \\( ) \\)} [regsub -all {[^\x20-\x7e]} $line ?]]
-		append stream "($safe) Tj T*\n"
-	}
-	append stream "ET\n"
+	set bodyLines [split $bodyText \n]
+	set perPage 55
+	set totalBody [llength $bodyLines]
+	set pageCount [expr {$totalBody == 0 ? 1 : ($totalBody + $perPage - 1) / $perPage}]
 	set obj1 "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n"
-	set obj2 "2 0 obj\n<< /Type /Pages /Kids \[3 0 R\] /Count 1 >>\nendobj\n"
-	set obj3 "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox \[0 0 612 792\] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n"
-	set obj4 "4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>\nendobj\n"
-	set obj5 "5 0 obj\n<< /Length [string length $stream] >>\nstream\n${stream}endstream\nendobj\n"
+	set obj3 "3 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>\nendobj\n"
+	set kids {}
+	set pageObjs {}
+	for {set p 0} {$p < $pageCount} {incr p} {
+		set pageObjId [expr {4 + 2 * $p}]
+		set contentObjId [expr {5 + 2 * $p}]
+		lappend kids "$pageObjId 0 R"
+		set start [expr {$p * $perPage}]
+		set chunk [lrange $bodyLines $start [expr {$start + $perPage - 1}]]
+		set hdr [expr {$pageCount > 1 ? [format "%s (Page %d of %d)" $title [expr {$p + 1}] $pageCount] : $title}]
+		set pageLines [concat [list $hdr ""] $chunk]
+		set stream "BT\n/F1 10 Tf\n36 756 Td\n12 TL\n"
+		foreach line $pageLines {
+			set safe [string map {\\ \\\\ ( \\( ) \\)} [regsub -all {[^\x20-\x7e]} $line ?]]
+			append stream "($safe) Tj T*\n"
+		}
+		append stream "ET\n"
+		lappend pageObjs "$pageObjId 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox \[0 0 612 792\] /Resources << /Font << /F1 3 0 R >> >> /Contents $contentObjId 0 R >>\nendobj\n"
+		lappend pageObjs "$contentObjId 0 obj\n<< /Length [string length $stream] >>\nstream\n${stream}endstream\nendobj\n"
+	}
+	set obj2 "2 0 obj\n<< /Type /Pages /Kids \[[join $kids { }]\] /Count $pageCount >>\nendobj\n"
+	set allObjs [concat [list $obj1 $obj2 $obj3] $pageObjs]
 	set pdf "%PDF-1.4\n"
 	set offsets {}
-	foreach obj [list $obj1 $obj2 $obj3 $obj4 $obj5] {
+	foreach obj $allObjs {
 		lappend offsets [string length $pdf]
 		append pdf $obj
 	}
+	set size [expr {[llength $allObjs] + 1}]
 	set xrefPos [string length $pdf]
-	append pdf "xref\n0 6\n0000000000 65535 f \n"
+	append pdf "xref\n0 $size\n0000000000 65535 f \n"
 	foreach off $offsets { append pdf [format "%010d 00000 n \n" $off] }
-	append pdf "trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n$xrefPos\n%%EOF\n"
+	append pdf "trailer\n<< /Size $size /Root 1 0 R >>\nstartxref\n$xrefPos\n%%EOF\n"
 	return $pdf
 }
 
