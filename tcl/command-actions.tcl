@@ -190,7 +190,7 @@ proc ::commandline::Action {name arguments} {
    set count [::scidb::view::count games $base $variant 0]
    if {$n < 1 || $n > $count} {error "the visible game list has only $count games"}
    set number [::scidb::db::get gameNumber $base $variant [expr {$n-1}] 0]
-   return [::application::assistant::DoOpenGame [expr {$number+1}]]
+   return [::application::assistant::DoOpenGame [expr {$number+1}] "" ""]
   }
  }
  error "unknown command adapter $name"

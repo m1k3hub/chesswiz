@@ -483,20 +483,15 @@ proc ::fix::noop {args} {return {}}
 # F-12: the last result list is a typed slot, file slots use the platform
 # picker, and a quoted path with spaces is one word.
 # ----------------------------------------------------------------------
-::tcltest::test F-12-open-result {open result N opens the Nth game of the visible list and is bounded by it} -setup {
- set ::fix::Opened {}
- rename ::application::assistant::DoOpenGame ::fix::realOpenGame
- proc ::application::assistant::DoOpenGame {number args} {set ::fix::Opened $number; return "opened $number"}
-} -body {
+::tcltest::test F-12-open-result {open result N opens the Nth game of the visible list and is bounded by it} -body {
  ::application::assistant::DoClearSearch
  set count [::scidb::view::count games $::fix::Base Normal 0]
  set calls [::fix::run {open result 2} 51]
+ update idletasks
+ set index [lindex [::scidb::game::sink? [::scidb::game::current]] 2]
  set over [expr {[::commandline::Values result_index 3] eq ""}]
- list $count $::fix::Opened $calls $over
-} -cleanup {
- catch {rename ::application::assistant::DoOpenGame {}}
- rename ::fix::realOpenGame ::application::assistant::DoOpenGame
-} -result {2 2 {{command.open_result {result_index 2}}} 1}
+ list $count $index $calls $over
+} -result {2 1 {{command.open_result {result_index 2}}} 1}
 
 ::tcltest::test F-12-quoted-path {a quoted file name with spaces stays one word and matches} -body {
  set path [file join $::fix::Dir "my games.pgn"]

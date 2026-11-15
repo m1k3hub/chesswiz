@@ -50,4 +50,5 @@ set CommandCases {
  48 {tournament director} td.workspace {}
  49 {go to database} command.tab {tab database}
  50 {dock tree} pane {action dock pane tree}
+ 51 {open result 2} command.open_result {result_index 2}
 }

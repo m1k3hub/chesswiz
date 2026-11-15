@@ -103,6 +103,9 @@ proc ::commandE2E::checkState {number} {
   48 {return [::commandE2E::called td.workspace]}
   49 {return [expr {[lindex [split [.application.nb select] .] end] eq "database"}]}
   50 {return [expr {[string length $::commandE2E::Message] > 0}]}
+  51 {
+   return [expr {[lindex [::scidb::game::sink? [::scidb::game::current]] 2] == 1}]
+  }
   default {return 0}
  }
 }
@@ -114,6 +117,7 @@ set ::commandE2E::Before(bulk) $::action::BulkHook
 proc ::commandE2E::yes {what} {return 1}
 set ::action::BulkHook ::commandE2E::yes
 set ::commandE2E::Before(confirm) $::action::ConfirmHook
+set ::commandE2E::Before(releaseAll) $::game::Options(askAgain:releaseAll)
 set ::application::ai::Settings(me) {Thomas, Michael}
 set ::action::ConfirmHook ::commandE2E::yes
 set ::commandE2E::Fixture [file join $::env(HOME) Main.pgn]
@@ -198,6 +202,8 @@ foreach {number input action expected} $CommandCases {
   set ::commandE2E::Message ""
   if {$number == 31} {catch {unset ::application::ai::Settings(me)}}
   if {$number == 49} {::application::switchTab board}
+  # "open result 2" indexes the visible list; make it the full fixture.
+  if {$number == 51} {catch {::application::assistant::DoClearSearch}}
   # "check move e4" is a command about the initial position; earlier commands
   # may have left another opening on the board.
   if {$number == 37} {catch {::action::run new_game}}
@@ -241,8 +247,12 @@ set ::engine::Engines $::commandE2E::SavedEngines
 unset -nocomplain ::engine::Options(Stockfish:cores)
 rename ::application::assistant::DoConvertDatabase {}
 rename ::commandE2E::realConvertDatabase ::application::assistant::DoConvertDatabase
+# Opened games stay on the board; closing the fixture database must not wait
+# for an interactive "close all games?" answer during teardown.
+set ::game::Options(askAgain:releaseAll) 0
 catch {::application::database::closeBase .application $::commandE2E::Other}
 catch {::application::database::closeBase .application $::commandE2E::Fixture}
+set ::game::Options(askAgain:releaseAll) $::commandE2E::Before(releaseAll)
 file delete $::commandE2E::Fixture $::commandE2E::Other
 ::application::ask::HideList
 set ::application::ask::Query {}
