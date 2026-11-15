@@ -358,6 +358,70 @@ proc ::fix::row {text id} {
  set ::engine::Engines $::fix::SavedEngines
 } -result {{} 8 0 0}
 
+::tcltest::test F-07-play-threads {the play engine sends the stored thread count} -setup {
+ set ::fix::SavedEngines $::engine::Engines
+ set ::engine::Engines [list [dict merge $::engine::EmptyEngine {
+  Name {Stub Engine} Command /bin/true Protocol UCI
+  Features:UCI {limitStrength {0 2000} skillLevel {0 20} threads {1 128}}
+ }]]
+ set ::fix::StubName {Stub Engine}
+ set ::fix::HadCores [info exists ::engine::Options(${::fix::StubName}:cores)]
+ set ::fix::OldCores [expr {$::fix::HadCores ? $::engine::Options(${::fix::StubName}:cores) : ""}]
+ set ::engine::Options(${::fix::StubName}:cores) 6
+ set ::fix::HadFull [info exists ::playengine::Priv(full)]
+ set ::fix::OldFull [expr {$::fix::HadFull ? $::playengine::Priv(full) : 0}]
+ set ::playengine::Priv(engine) {Stub Engine}
+ set ::playengine::Priv(full) 1
+ set ::fix::Sent {}
+ rename ::playengine::Send ::fix::realPlaySend
+ proc ::playengine::Send {line} {lappend ::fix::Sent $line}
+} -body {
+ ::playengine::SendOptions
+ expr {[lsearch -exact $::fix::Sent {setoption name Threads value 6}] >= 0}
+} -cleanup {
+ catch {rename ::playengine::Send {}}
+ rename ::fix::realPlaySend ::playengine::Send
+ set ::engine::Engines $::fix::SavedEngines
+ if {$::fix::HadCores} {set ::engine::Options(${::fix::StubName}:cores) $::fix::OldCores} else {unset -nocomplain ::engine::Options(${::fix::StubName}:cores)}
+ if {$::fix::HadFull} {set ::playengine::Priv(full) $::fix::OldFull} else {unset -nocomplain ::playengine::Priv(full)}
+ unset -nocomplain ::playengine::Priv(engine)
+} -result 1
+
+::tcltest::test F-07-ai-engine-threads {analysis, best move and annotation engines send the stored thread count} -setup {
+ set ::fix::FakeEngine [file join $::fix::Dir fake-uci.sh]
+ set ::fix::FakeLog [file join $::fix::Dir fake-uci.log]
+ file delete -force $::fix::FakeLog
+ set f [open $::fix::FakeEngine w]
+ puts $f {#!/bin/sh}
+ puts $f {while IFS= read -r line; do}
+ puts $f {printf '%s\n' "$line" >> "$FAKE_UCI_LOG"}
+ puts $f {case "$line" in}
+ puts $f {uci) echo "id name Fake"; echo uciok;;}
+ puts $f {isready) echo readyok;;}
+ puts $f {quit) exit 0;;}
+ puts $f {esac}
+ puts $f {done}
+ close $f
+ file attributes $::fix::FakeEngine -permissions 0755
+ set ::fix::OldConfigEngine $::ai::engine::Config(engine)
+ set ::fix::HadEngineCores [info exists ::engine::Options(Stockfish:cores)]
+ set ::fix::OldEngineCores [expr {$::fix::HadEngineCores ? $::engine::Options(Stockfish:cores) : ""}]
+ set ::engine::Options(Stockfish:cores) 7
+ set ::env(FAKE_UCI_LOG) $::fix::FakeLog
+ ::ai::engine::configure -engine $::fix::FakeEngine
+} -body {
+ ::ai::engine::ensure
+ ::ai::engine::kill
+ set f [open $::fix::FakeLog r]; set options [read $f]; close $f
+ expr {[string first {setoption name Threads value 7} $options] >= 0}
+} -cleanup {
+ catch {::ai::engine::kill}
+ ::ai::engine::configure -engine $::fix::OldConfigEngine
+ if {$::fix::HadEngineCores} {set ::engine::Options(Stockfish:cores) $::fix::OldEngineCores} else {unset -nocomplain ::engine::Options(Stockfish:cores)}
+ unset -nocomplain ::env(FAKE_UCI_LOG)
+ catch {file delete -force $::fix::FakeEngine $::fix::FakeLog}
+} -result 1
+
 # ----------------------------------------------------------------------
 # F-05: the registry palette stays reachable beside the typed commands.
 # ----------------------------------------------------------------------

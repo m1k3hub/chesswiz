@@ -227,14 +227,22 @@ proc ::ai::engine::ensure {} {
 	send "uci"
 	readUntil "uciok"
 	# the engine's minimum (1 thread, 16 MB) makes every answer slow: use
-	# part of the machine, leaving cores for the GUI and analysis panes
-	set cores 2
-	catch { set cores [::platform::sys::cpus] }
-	send "setoption name Threads value [expr {max(1, min(8, $cores / 2))}]"
+	# part of the machine, leaving cores for the GUI and analysis panes.
+	set profileName [expr {$profile ne "" ? $profile : "Stockfish"}]
+	# "set <engine> threads <n>" may have chosen a count for this engine.
+	set threads ""
+	if {[llength [info commands ::engine::DefaultThreads]]} {
+		catch { set threads [::engine::DefaultThreads $profileName] }
+	}
+	if {$threads eq ""} {
+		set cores 2
+		catch { set cores [::platform::sys::cpus] }
+		set threads [expr {max(1, min(8, $cores / 2))}]
+	}
+	send "setoption name Threads value $threads"
 	send "setoption name Hash value 256"
 	# endgame tablebases: the folder set on the engine's profile (Engine
 	# options, SyzygyPath), so the facts are perfect in endgames too
-	set profileName [expr {$profile ne "" ? $profile : "Stockfish"}]
 	if {![catch { lassign [::engine::profileOptions $profileName Default] _ _ options }]} {
 		foreach opt $options {
 			lassign $opt name _ value
