@@ -37,12 +37,15 @@ proc open {} {
 	}
 	toplevel $Path -class ChesswizOnline
 	wm title $Path $mc::Title
-	wm minsize $Path 900 600
-	set sw [winfo screenwidth $Path]
-	set sh [winfo screenheight $Path]
-	set width [expr {min(1400, $sw - 80)}]
-	set height [expr {min(900, $sh - 120)}]
-	wm geometry $Path ${width}x${height}+[expr {($sw - $width) / 2}]+[expr {($sh - $height) / 3}]
+	# Open on the main window's monitor, inside that monitor's work area
+	# (GAP-005); the display watcher re-clamps it after monitor, work-area
+	# and DPI changes.
+	lassign [winfo workarea .application] wx wy ww wh
+	set width [expr {min(1400, max(320, $ww - 40))}]
+	set height [expr {min(900, max(240, $wh - 80))}]
+	wm minsize $Path [expr {min(900, $width)}] [expr {min(600, $height)}]
+	wm geometry $Path ${width}x${height}+[expr {$wx + ($ww - $width) / 2}]+[expr {$wy + ($wh - $height) / 3}]
+	::util::place::fitWindow $Path
 	ttk::notebook $Path.tabs
 	# each tab reports its own status; a stale one would describe another tab
 	bind $Path.tabs <<NotebookTabChanged>> [list [namespace current]::status {}]

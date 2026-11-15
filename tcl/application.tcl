@@ -720,6 +720,34 @@ proc KeepInWorkArea {w} {
 	return 1
 }
 
+# Windows the app floats outside the main window that must follow the same
+# work-area rules: Chesswiz Online and every undocked TWM pane (GAP-005).
+proc FloatingWindows {} {
+	variable Vars
+	set windows {}
+	if {[winfo exists .online] && [wm state .online] eq "normal"} {
+		lappend windows .online
+	}
+	if {[info exists Vars(twm)]} {
+		foreach twm $Vars(twm) {
+			if {![winfo exists $twm]} { continue }
+			if {[catch { set floats [::scidb::tk::twm floats $twm] }]} { continue }
+			foreach top $floats {
+				if {[winfo exists $top] && $top ni $windows} { lappend windows $top }
+			}
+		}
+	}
+	return $windows
+}
+
+proc KeepFloatingInWorkArea {} {
+	set changed 0
+	foreach w [FloatingWindows] {
+		incr changed [KeepInWorkArea $w]
+	}
+	return [expr {$changed > 0}]
+}
+
 
 # ----------------------------------------------------------------------
 # Runtime DPI change: `tk scaling` got a new value while running. Tk 8.6
@@ -774,6 +802,7 @@ proc scalingChanged {} {
 	if {[wm state .application] eq "normal"} {
 		::util::place::fitWindow .application
 	}
+	KeepFloatingInWorkArea
 
 	# The media inset positions itself against the board's bbox; it owns no
 	# scaling hook of its own. Once it registers a listener, this call and
@@ -867,11 +896,13 @@ proc displayWatch {} {
 		incr Vars(display:changes)
 		scalingChanged
 		KeepInWorkArea .application
+		KeepFloatingInWorkArea
 		::util::place::besideSchedule
 	} elseif {[info exists Vars(display:pending)] && $Vars(display:pending)
 		&& ![::menu::fullscreen?]} {
 		scalingChanged
 		KeepInWorkArea .application
+		KeepFloatingInWorkArea
 		::util::place::besideSchedule
 	}
 	set Vars(display:after) [after 1000 [namespace code displayWatch]]

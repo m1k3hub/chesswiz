@@ -154,7 +154,12 @@ struct MyAtom
 		if (m_allocate)
 		{
 			m_atom = XInternAtom(display, m_name, onlyIfExists ? True : False);
-			m_allocate = false;
+			// Do not cache a failed "only if exists" lookup: a window
+			// manager or taskbar may intern _NET_WORKAREA after startup,
+			// and a new strut must still be picked up so floating windows
+			// can be re-clamped into the shrunken work area.
+			if (m_atom != None || !onlyIfExists)
+				m_allocate = false;
 		}
 
 		return m_atom;
