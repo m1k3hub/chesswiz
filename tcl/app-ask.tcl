@@ -49,6 +49,16 @@ namespace eval ask {
 namespace eval mc {
 set Placeholder		"Type a command (Ctrl+K)"
 set AskAssistant		"Ask a question"
+set AskQuestion		"Ask a question"
+set Commands		"Commands"
+set Aliases			"Aliases"
+set AliasesTitle	"Command aliases"
+set AliasesHelp		"Select a command in Ask, then give it a short name."
+set AliasesSave		"Save highlighted command"
+set AliasesRemove	"Remove selected alias"
+set AliasesNeedCommand	"Select a complete command in Ask first."
+set AliasesSaved	"Saved. Type the exact alias in Ask, then press Enter."
+set AliasesRemoved	"Alias removed."
 set Send				"Send to the assistant"
 set Mic				"Speak"
 set Recording		"Recording… click to stop"
@@ -143,8 +153,8 @@ proc ::application::ask::Build {notebook} {
 		-textvariable ::application::ask::Query]
 	set mic [ttk::button $frame.mic -text $::application::ask::mc::Mic \
 		-takefocus 0 -command ::application::speech::toggle]
-	ttk::button $frame.mode -text "Ask a question" -takefocus 0 -command ::application::ask::ToggleMode
-	ttk::button $frame.alias -text "Aliases" -takefocus 0 -command ::application::ask::Aliases
+	ttk::button $frame.mode -text $::application::ask::mc::AskQuestion -takefocus 0 -command ::application::ask::ToggleMode
+	ttk::button $frame.alias -text $::application::ask::mc::Aliases -takefocus 0 -command ::application::ask::Aliases
  pack $frame.alias -side right
  pack $frame.mode -side right
 	pack $mic -side right -padx {2 2} -pady 1
@@ -239,10 +249,19 @@ proc ::application::ask::MicText {} {
 # Preferences > Assistant dialog left open relabels itself.
 proc ::application::ask::Relabel {} {
 	variable Priv
+	variable Mode
 	variable mc
 
 	if {[info exists Priv(placeholder)] && [winfo exists $Priv(placeholder)]} {
 		$Priv(placeholder) configure -text $mc::Placeholder
+	}
+	if {[info exists Priv(frame)] && [winfo exists $Priv(frame)]} {
+		if {[winfo exists $Priv(frame).mode]} {
+			$Priv(frame).mode configure -text [expr {$Mode eq "command" ? $mc::AskQuestion : $mc::Commands}]
+		}
+		if {[winfo exists $Priv(frame).alias]} {
+			$Priv(frame).alias configure -text $mc::Aliases
+		}
 	}
 	PlaceholderState
 	if {[info exists Priv(mic)] && [winfo exists $Priv(mic)]} {
@@ -252,6 +271,18 @@ proc ::application::ask::Relabel {} {
 	RegisterAction
 	SyncMic
 	RelabelPreferences
+	RelabelAliases
+	return
+}
+
+proc ::application::ask::RelabelAliases {} {
+	variable mc
+	set w .application.commandAliases
+	if {![winfo exists $w]} { return }
+	wm title $w $mc::AliasesTitle
+	$w.help configure -text $mc::AliasesHelp
+	$w.save configure -text $mc::AliasesSave
+	$w.remove configure -text $mc::AliasesRemove
 	return
 }
 
@@ -624,8 +655,9 @@ proc ::application::ask::CommandContext {} {
 }
 proc ::application::ask::ToggleMode {} {
  variable Mode
+ variable mc
  set Mode [expr {$Mode eq "command" ? "question" : "command"}]
- [winfo parent [Entry]].mode configure -text [expr {$Mode eq "command" ? "Ask a question" : "Commands"}]
+ [winfo parent [Entry]].mode configure -text [expr {$Mode eq "command" ? $mc::AskQuestion : $mc::Commands}]
  unset -nocomplain ::application::ask::Priv(filtered)
  Typed
 }
@@ -1791,20 +1823,21 @@ if {[llength [info commands ::application::ask::Build]]} {
 # Save the highlighted concrete command; no alias text is ever executable Tcl.
 proc ::application::ask::Aliases {} {
  variable Priv
+ variable mc
  ::commandline::LoadLearning
  set Priv(aliasRow) {}
  if {[info exists Priv(commands)] && [llength $Priv(commands)]} {set Priv(aliasRow) [lindex $Priv(commands) $Priv(index)]}
  set w .application.commandAliases
  if {[winfo exists $w]} {raise $w; return}
  toplevel $w
- wm title $w "Command aliases"
+ wm title $w $mc::AliasesTitle
  wm transient $w .application
- ttk::label $w.help -text "Select a command in Ask, then give it a short name." -padding 8
+ ttk::label $w.help -text $mc::AliasesHelp -padding 8
  ttk::entry $w.name -width 40
  listbox $w.list -height 8 -exportselection 0
  foreach alias [lsort [dict keys $::commandline::Aliases]] {$w.list insert end $alias}
- ttk::button $w.save -text "Save highlighted command" -command ::application::ask::SaveAlias
- ttk::button $w.remove -text "Remove selected alias" -command ::application::ask::DeleteAlias
+ ttk::button $w.save -text $mc::AliasesSave -command ::application::ask::SaveAlias
+ ttk::button $w.remove -text $mc::AliasesRemove -command ::application::ask::DeleteAlias
  ttk::label $w.status -text "" -wraplength 420
  if {$Priv(aliasRow) ne ""} {$w.status configure -text [dict get $Priv(aliasRow) label]}
  pack $w.help $w.name $w.list $w.save $w.remove $w.status -fill x -padx 8 -pady 4
@@ -1814,18 +1847,20 @@ proc ::application::ask::Aliases {} {
 }
 proc ::application::ask::SaveAlias {} {
  variable Priv
+ variable mc
  set w .application.commandAliases
- if {$Priv(aliasRow) eq ""} {$w.status configure -text "Select a complete command in Ask first."; return}
+ if {$Priv(aliasRow) eq ""} {$w.status configure -text $mc::AliasesNeedCommand; return}
  if {[catch {::commandline::AddAlias [$w.name get] $Priv(aliasRow)} error]} {$w.status configure -text $error; return}
  $w.list delete 0 end
  foreach alias [lsort [dict keys $::commandline::Aliases]] {$w.list insert end $alias}
- $w.status configure -text "Saved. Type the exact alias in Ask, then press Enter."
+ $w.status configure -text $mc::AliasesSaved
 }
 proc ::application::ask::DeleteAlias {} {
+ variable mc
  set w .application.commandAliases
  set selection [$w.list curselection]
  if {$selection eq ""} {return}
  if {[catch {::commandline::RemoveAlias [$w.list get $selection]} error]} {$w.status configure -text $error; return}
  $w.list delete $selection
- $w.status configure -text "Alias removed."
+ $w.status configure -text $mc::AliasesRemoved
 }

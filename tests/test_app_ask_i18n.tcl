@@ -3,7 +3,7 @@
 # (tcl/app-ask.tcl, tcl/lang/english.tcl, tcl/lang/deutsch.tcl)
 # ======================================================================
 # Run 197: with the UI in German the Ask field kept the English
-# placeholder ("Ask or tell Chesswiz what to do (Ctrl+K)"). The field's
+# placeholder ("Type a command (Ctrl+K)"). The field's
 # text was set once, when it was built, so a language switch with the
 # window open left it behind; the module's English text also had no
 # entry in english.tcl, so switching back to English left the German
@@ -147,7 +147,7 @@ tcltest::test ask-i18n-placeholder {the placeholder follows a live language swit
 	list $english $german [expr {$again eq $english}]
 } -cleanup {
 	::scidb::test::askI18n::Clean
-} -result {{{Ask or tell Chesswiz what to do (Ctrl+K)} place} {{Chesswiz fragen oder sagen, was zu tun ist (Strg+K)} place} 1}
+} -result {{{Type a command (Ctrl+K)} place} {{Befehl eingeben (Strg+K)} place} 1}
 
 tcltest::test ask-i18n-typed-text-survives {a language switch never overwrites what was typed} -body {
 	::menu::SwitchLanguage English
@@ -169,7 +169,7 @@ tcltest::test ask-i18n-typed-text-survives {a language switch never overwrites w
 	list $typed $german $again
 } -cleanup {
 	::scidb::test::askI18n::Clean
-} -result {{{new game} {new game} {}} {{new game} {new game} {} {Chesswiz fragen oder sagen, was zu tun ist (Strg+K)}} {{new game} {new game} {}}}
+} -result {{{new game} {new game} {}} {{new game} {new game} {} {Befehl eingeben (Strg+K)}} {{new game} {new game} {}}}
 
 # ----------------------------------------------------------------------
 # The result list; its last row is the assistant row (also the row a
@@ -319,7 +319,7 @@ tcltest::test ask-i18n-german-coverage {every string of the field has a German t
 	list $checked $same
 } -cleanup {
 	::scidb::test::askI18n::Clean
-} -result {34 {}}
+} -result {44 {}}
 
 tcltest::test ask-i18n-fallback {ResetMC restores English defaults} -body {
 	::menu::SwitchLanguage Deutsch
@@ -334,7 +334,7 @@ tcltest::test ask-i18n-fallback {ResetMC restores English defaults} -body {
 	list [expr {$german ne $english}] $english
 } -cleanup {
 	::scidb::test::askI18n::Clean
-} -result {1 {{Ask or tell Chesswiz what to do (Ctrl+K)} {The assistant is busy. Try again when it finishes.} {a ggml model}}}
+} -result {1 {{Type a command (Ctrl+K)} {The assistant is busy. Try again when it finishes.} {a ggml model}}}
 
 tcltest::test ask-i18n-translated-languages {for es/it/hu/sv the Ask placeholder and assistant Send button differ from English} -body {
 	::menu::SwitchLanguage English

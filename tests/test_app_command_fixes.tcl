@@ -395,6 +395,56 @@ proc ::fix::noop {args} {return {}}
  ::application::ask::HideList
 } -result {1 1 1 1 1}
 
+# ----------------------------------------------------------------------
+# F-13: the field's own words, including the new buttons and the Aliases
+# dialog, follow the language; English no longer invites prose.
+# ----------------------------------------------------------------------
+::tcltest::test F-13-language {the placeholder and new controls are translated and relabel live} -body {
+ set ::fix::savedShare $::scidb::dir::share
+ set wt [file normalize [file join [file dirname [file normalize [info script]]] .. tcl]]
+ if {[file isdirectory [file join $wt lang]]} { set ::scidb::dir::share $wt }
+ set frame [winfo parent [::application::ask::Entry]]
+ ::menu::SwitchLanguage English
+ update idletasks
+ set en [list [set ::application::ask::mc::Placeholder] \
+  [$frame.mode cget -text] [$frame.alias cget -text]]
+ ::menu::SwitchLanguage Deutsch
+ update idletasks
+ set de [list [set ::application::ask::mc::Placeholder] \
+  [$frame.mode cget -text] [$frame.alias cget -text] \
+  [set ::application::ask::mc::AskQuestion] [set ::application::ask::mc::Aliases]]
+ ::application::ask::Aliases
+ update idletasks
+ set w .application.commandAliases
+ set dlg [list [wm title $w] [$w.help cget -text] [$w.save cget -text] [$w.remove cget -text]]
+ set dlgDe [list [set ::application::ask::mc::AliasesTitle]   [set ::application::ask::mc::AliasesHelp] [set ::application::ask::mc::AliasesSave]   [set ::application::ask::mc::AliasesRemove]]
+ destroy $w
+ ::menu::SwitchLanguage English
+ update idletasks
+ set back [list [set ::application::ask::mc::Placeholder] \
+  [$frame.mode cget -text] [$frame.alias cget -text]]
+ list \
+  [expr {[lindex $en 0] eq {Type a command (Ctrl+K)}}] \
+  [expr {[lindex $en 1] eq {Ask a question}}] \
+  [expr {[lindex $de 0] ne [lindex $en 0] && [string match {Befehl*} [lindex $de 0]]}] \
+  [expr {[lindex $de 1] eq [lindex $de 3] && [lindex $de 1] ne [lindex $en 1]}] \
+  [expr {[lindex $de 2] eq [lindex $de 4] && [lindex $de 2] ne [lindex $en 2]}] \
+  [expr {[lindex $dlg 0] eq [lindex $dlgDe 0]}] \
+  [expr {[lindex $dlg 1] eq [lindex $dlgDe 1]}] \
+  [expr {[lindex $dlg 2] eq [lindex $dlgDe 2]}] \
+  [expr {[lindex $dlg 3] eq [lindex $dlgDe 3]}] \
+  [expr {$back eq $en}]
+} -cleanup {
+ catch { destroy .application.commandAliases }
+ catch { ::menu::SwitchLanguage English }
+ if {[info exists ::fix::savedShare]} {
+  set ::scidb::dir::share $::fix::savedShare
+  unset ::fix::savedShare
+ }
+ set ::application::ask::Query {}
+ ::application::ask::HideList
+} -result {1 1 1 1 1 1 1 1 1 1}
+
 trace remove execution ::action::run enter ::fix::trace
 foreach position [::game::usedPositions?] {catch {::game::release $position}}
 catch {::application::database::closeBase .application $::fix::Base}
