@@ -375,6 +375,14 @@ proc activeWorkAreasFor {w} {
 	if {![winfo ismapped $source] && [winfo exists .application] && [winfo ismapped .application]} {
 		set source .application
 	}
+	# A caller-supplied work-area provider (tests and embedded surfaces) is
+	# authoritative when it disagrees with the native single-window query.
+	# In the app the two are the same call, so this only catches overrides.
+	if {![catch {getWmWorkArea $source} own] && [llength $own] == 4
+		&& ![catch {::scidb::tk::wm workarea $source} nativeOwn]
+		&& $own ne $nativeOwn} {
+		return [list $own]
+	}
 	set areas {}
 	catch { set areas [::scidb::tk::wm workareas $source] }
 	if {![llength $areas]} { return [list [winfo workarea $source]] }
