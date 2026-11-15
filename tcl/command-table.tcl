@@ -17,11 +17,11 @@ namespace eval ::commandline {
   {12 command.compact {} {{compact @database} {compact database @database}}}
   {13 command.convert {} {{convert @database to @dbformat}}}
   {14 maintenance_report {tab overview} {{maintenance report}}}
-  {15 search_games {} {{find games @criteria} {find @criteria}}}
+  {15 command.find {} {{find games @criteria} {find @criteria}}}
   {16 open_game {} {{open game @number {? at move @move_number @after}}}}
   {17 open_game {} {{open last game of @player}}}
   {18 command.similar {} {{games like this one} {games like game @number} {like game @number}}}
-  {19 search_games {} {{find motif @pattern {? from @from}}}}
+  {19 command.find {} {{find motif @pattern {? from @from}}}}
   {20 find_similar {aspects {pawns material pieces} mode all} {{find positions like the board}}}
   {20 find_similar {aspects pawns mode all} {{find positions like the board pawn structure only} {find pawn structure}}}
   {20 find_similar {aspects pawns tolerance 1 mode all} {{find positions like the board pawn structure only one pawn may differ}}}

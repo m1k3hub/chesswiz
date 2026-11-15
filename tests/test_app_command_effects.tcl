@@ -65,11 +65,11 @@ close $f
  ::commandEffects::run {open game 1 at move 2 white} 16
  expr {[string match {* b *} [::scidb::pos::fen]]}
 } -result 1
-::tcltest::test command-effect-filter {clear filter changes the actual game list} -body {
- ::action::run show_search
+::tcltest::test command-effect-filter {find games filters the list and clear filter restores it} -body {
+ set shown [::scidb::view::count games $base Normal 0]
  ::commandEffects::run {clear filter} 6
- ::scidb::view::count games $base Normal 0
-} -result 2
+ list $shown [::scidb::view::count games $base Normal 0]
+} -result {1 2}
 ::tcltest::test command-effect-me {identity selection stores an existing player} -body {
  ::commandEffects::run {i am Kasparov} 31
  set ::application::ai::Settings(me)

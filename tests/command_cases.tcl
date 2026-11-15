@@ -14,11 +14,11 @@ set CommandCases {
  12 {compact Main} command.compact {database Main}
  13 {convert Main to sci} command.convert {database Main format sci}
  14 {maintenance report} maintenance_report {tab overview}
- 15 {find kasp wins wh} search_games {player {Kasparov, Garry} result win color white}
+ 15 {find kasp wins wh} command.find {player {Kasparov, Garry} result win color white}
  16 {open game 12 at move 20 black} open_game {number 12 move 20 after black}
  17 {open last game of Carlsen} open_game {player {Carlsen, Magnus}}
  18 {like game 5} command.similar {number 5}
- 19 {find motif knight fork from 2020} search_games {pattern knight_fork from 2020}
+ 19 {find motif knight fork from 2020} command.find {pattern knight_fork from 2020}
  20 {find positions like the board pawn structure only one pawn may differ} find_similar {aspects pawns tolerance 1 mode all}
  21 {search by material} open_search {kind material}
  22 {set up Najdorf after 6.Bg5} command.setup {opening Najdorf after 6.Bg5}

@@ -17,6 +17,7 @@ proc ::commandline::RegisterActions {} {
   compact {database} {Compact database}
   convert {database format} {Convert database}
   similar {number} {Find similar games}
+  find {player color result opponent eco from to event min_elo both_min_elo pattern} {Find games}
   setup {opening after} {Set up opening}
   trends {} {Opening trends}
   review {games player} {Review my games}
@@ -83,6 +84,12 @@ proc ::commandline::Action {name arguments} {
   trends {
    lassign [::application::assistant::ActiveBase] base variant
    return [::ai::trend::factsText [::ai::trend::facts $base $variant]]
+  }
+  find {
+   set result [::application::assistant::DoSearchGames $arguments]
+   if {[string match "error:*" $result]} {return $result}
+   set shown [::application::assistant::DoShowSearch]
+   return "$result\n$shown"
   }
   my_score {return [::action::run player_stats [dict create name [Me $arguments]]]}
   review - study {

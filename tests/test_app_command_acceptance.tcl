@@ -273,7 +273,7 @@ proc ::commandAccept::validSlotValues {row} {
 	::commandAccept::typeInAsk {find games player Kasparov wins white}
 	::application::ask::Choose
 	list [llength $::commandAccept::Calls] [lindex [lindex $::commandAccept::Calls 0] 0] $::commandAccept::ProviderCalls [::ai::systemone::enabled]
-} -result {1 search_games 0 0}
+} -result {1 command.find 0 0}
 
 ::tcltest::test command-accept-jev-rerank-stubbed {optional System One reorder only permutes existing low-score suggestions, never adds commands or runs actions} -setup {
 	set ::commandAccept::Calls {}

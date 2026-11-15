@@ -119,6 +119,23 @@ close $f
  rename ::fix::realRecordPick ::commandline::RecordPick
 } -result {0 0 1 1 1 {Tablebase verdict: draw}}
 
+# ----------------------------------------------------------------------
+# F-03: find games / find motif filter the visible game list, so exports
+# and saves act on the found games rather than the whole database.
+# ----------------------------------------------------------------------
+::tcltest::test F-03-find-games-filters {find games narrows view 0} -body {
+ set before [::scidb::view::count games $::fix::Base Normal 0]
+ ::fix::run {find games player Kasparov wins white} 15
+ list $before [::scidb::view::count games $::fix::Base Normal 0]
+} -result {2 1}
+
+::tcltest::test F-03-find-motif-filters {find motif narrows view 0} -body {
+ ::fix::run {clear filter} 6
+ set before [::scidb::view::count games $::fix::Base Normal 0]
+ ::fix::run {find motif checkmate} 19
+ list $before [::scidb::view::count games $::fix::Base Normal 0]
+} -result {2 0}
+
 trace remove execution ::action::run enter ::fix::trace
 foreach position [::game::usedPositions?] {catch {::game::release $position}}
 catch {::application::database::closeBase .application $::fix::Base}

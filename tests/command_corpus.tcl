@@ -24,17 +24,17 @@ set InScopeCommandCorpus {
 		{save list as new database WorkingSet} 10 save_working_set {name WorkingSet}
 
 	find-player-wins J2 {Show me Kasparov's wins with White.}
-		{find games player Kasparov wins white} 15 search_games {player {Kasparov, Garry} result win color white}
+		{find games player Kasparov wins white} 15 command.find {player {Kasparov, Garry} result win color white}
 	find-years J2 {Games from 2015 to 2018 rated over 2600.}
-		{find games from 2015 to 2018 min elo 2600} 15 search_games {from 2015 to 2018 min_elo 2600}
+		{find games from 2015 to 2018 min elo 2600} 15 command.find {from 2015 to 2018 min_elo 2600}
 	find-eco J2 {Najdorf games in this database.}
-		{find games opening Najdorf} 15 search_games {eco B9*}
+		{find games opening Najdorf} 15 command.find {eco B9*}
 	find-event J2 {Games from the Karvina 5th tournament.}
-		{find games event Karvina} 15 search_games {event {Karvina 5th}}
+		{find games event Karvina} 15 command.find {event {Karvina 5th}}
 	find-both-elo J2 {Games where both players are rated 2600 or more.}
-		{find games both elo 2600} 15 search_games {both_min_elo 2600}
+		{find games both elo 2600} 15 command.find {both_min_elo 2600}
 	find-endgames-opening J2 {All endgames that arise from the London System.}
-		{find games opening London System motif endgame} 15 search_games {eco D02* pattern endgame}
+		{find games opening London System motif endgame} 15 command.find {eco D02* pattern endgame}
 	open-last-game J6 {Open Carlsen's last game.}
 		{open last game of Carlsen} 17 open_game {player {Carlsen, Magnus}}
 	event-story J10 {Tell me the story of the Biel tournament.}
@@ -50,24 +50,24 @@ set InScopeCommandCorpus {
 	pane-dock J1 {Dock the tree window.}
 		{dock tree} 50 pane {action dock pane tree}
 	find-draws J2 {All draws since 2020.}
-		{find games draws from 2020} 15 search_games {result 1/2-1/2 from 2020}
+		{find games draws from 2020} 15 command.find {result 1/2-1/2 from 2020}
 	find-similar-games J2 {Find games like the one on the board.}
 		{games like this one} 18 command.similar {}
 
 	pos-fork J3 {Find games where a knight forks king and queen.}
-		{find motif knight fork} 19 search_games {pattern knight_fork}
+		{find motif knight fork} 19 command.find {pattern knight_fork}
 	pos-smothered J3 {Smothered mates, please.}
-		{find motif smothered mate} 19 search_games {pattern smothered_mate}
+		{find motif smothered mate} 19 command.find {pattern smothered_mate}
 	pos-rook7 J3 {Games with a rook on the seventh rank.}
-		{find motif rook on the seventh} 19 search_games {pattern rook_seventh}
+		{find motif rook on the seventh} 19 command.find {pattern rook_seventh}
 	pos-greek J3 {Find a Greek gift sacrifice on h7.}
-		{find motif greek gift} 19 search_games {pattern greek_gift}
+		{find motif greek gift} 19 command.find {pattern greek_gift}
 	pos-underprom J3 {Show me underpromotions.}
-		{find motif underpromotion} 19 search_games {pattern underpromotion}
+		{find motif underpromotion} 19 command.find {pattern underpromotion}
 	pos-iqp J3 {Positions with an isolated queen's pawn.}
-		{find motif isolated queen's pawn} 19 search_games {pattern isolated_queen_pawn}
+		{find motif isolated queen's pawn} 19 command.find {pattern isolated_queen_pawn}
 	pos-oppbishops J3 {Endgames with opposite-coloured bishops.}
-		{find motif opposite-coloured bishops} 19 search_games {pattern opposite_bishops}
+		{find motif opposite-coloured bishops} 19 command.find {pattern opposite_bishops}
 	pos-like-board J3 {Find positions like this one.}
 		{find positions like the board} 20 find_similar {aspects {pawns material pieces} mode all}
 	pos-structure J3 {Games with the same pawn structure as on the board.}
@@ -75,25 +75,25 @@ set InScopeCommandCorpus {
 	pos-structure-loose J3 {Similar pawn structures, one pawn may differ.}
 		{find positions like the board pawn structure only one pawn may differ} 20 find_similar {aspects pawns tolerance 1 mode all}
 	pos-backrank J3 {Back-rank mates in this database.}
-		{find motif back-rank mate} 19 search_games {pattern back_rank_mate}
+		{find motif back-rank mate} 19 command.find {pattern back_rank_mate}
 	pos-lucena J3 {Show me Lucena positions.}
-		{find motif lucena} 19 search_games {pattern lucena}
+		{find motif lucena} 19 command.find {pattern lucena}
 	pos-carlsbad J3 {Games with the Carlsbad pawn structure.}
-		{find motif carlsbad} 19 search_games {pattern carlsbad}
+		{find motif carlsbad} 19 command.find {pattern carlsbad}
 	pos-outpost J3 {Knight outposts in my games.}
-		{find games player Thomas motif knight outpost} 15 search_games {player {Thomas, Michael} pattern knight_outpost}
+		{find games player Thomas motif knight outpost} 15 command.find {player {Thomas, Michael} pattern knight_outpost}
 	pos-skewer J3 {Find skewers in this database.}
-		{find motif skewer} 19 search_games {pattern skewer}
+		{find motif skewer} 19 command.find {pattern skewer}
 	pos-hedgehog J3 {Hedgehog structures since 2015.}
-		{find motif hedgehog from 2015} 19 search_games {pattern hedgehog from 2015}
+		{find motif hedgehog from 2015} 19 command.find {pattern hedgehog from 2015}
 	pos-gun J3 {Has anyone set up Alekhine's gun here?}
-		{find motif alekhine's gun} 19 search_games {pattern alekhines_gun}
+		{find motif alekhine's gun} 19 command.find {pattern alekhines_gun}
 	pos-philidor J3 {Rook endings where the defender holds the Philidor position.}
-		{find motif philidor position} 19 search_games {pattern philidor_position}
+		{find motif philidor position} 19 command.find {pattern philidor_position}
 	pos-badbishop J3 {Games where someone was stuck with a bad bishop.}
-		{find motif bad bishop} 19 search_games {pattern bad_bishop}
+		{find motif bad bishop} 19 command.find {pattern bad_bishop}
 	pos-pawnfork J3 {Show me pawn forks from 2020 on.}
-		{find motif pawn fork from 2020} 19 search_games {pattern pawn_fork from 2020}
+		{find motif pawn fork from 2020} 19 command.find {pattern pawn_fork from 2020}
 
 	open-najdorf J4 {Set up the Najdorf after 6.Bg5.}
 		{set up Najdorf after 6.Bg5} 22 command.setup {opening *Najdorf* after 6.Bg5}
@@ -165,19 +165,19 @@ set InScopeCommandCorpus {
 	db-export-pgn J1 {Save these games as a PGN file.}
 		{export list as pgn to /tmp/corpus-export.pgn} 8 command.export {scope list format pgn filename /tmp/corpus-export.pgn}
 	find-carlsen-black J2 {Carlsen's losses with Black.}
-		{find games player Carlsen losses black} 15 search_games {player {Carlsen, Magnus} result loss color black}
+		{find games player Carlsen losses black} 15 command.find {player {Carlsen, Magnus} result loss color black}
 	find-2700 J2 {Only games where both players are above 2700.}
-		{find games both elo 2700} 15 search_games {both_min_elo 2700}
+		{find games both elo 2700} 15 command.find {both_min_elo 2700}
 	find-kid J2 {All King's Indian games.}
-		{find games opening King's Indian} 15 search_games {eco E[6-9]*}
+		{find games opening King's Indian} 15 command.find {eco E[6-9]*}
 	find-like-5 J2 {Which games resemble game 5?}
 		{games like game 5} 18 command.similar {number 5}
 	game-like-board J2 {Are there games like the one I'm looking at?}
 		{games like this one} 18 command.similar {}
 	pos-bridge J3 {Building a bridge in rook endings: find examples.}
-		{find motif building a bridge} 19 search_games {pattern lucena}
+		{find motif building a bridge} 19 command.find {pattern lucena}
 	pos-d5-knight J3 {Knights on d5 that can't be chased away.}
-		{find motif knight outpost} 19 search_games {pattern knight_outpost}
+		{find motif knight outpost} 19 command.find {pattern knight_outpost}
 	open-kid-score J4 {What's White's score against the King's Indian here?}
 		{score of King's Indian} 24 opening_score {eco E[6-9]*}
 	open-player-eco J4 {How does Kasparov do in the Sicilian?}
