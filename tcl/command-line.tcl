@@ -425,19 +425,40 @@ proc ::commandline::AppSource {type query} {
  foreach v $values {if {[NameMatch $query $v]} {lappend out $v}}
  return [lrange [lsort -unique $out] 0 7]
 }
-proc ::commandline::CompleteText {template arguments} {
+proc ::commandline::CriteriaWord {slot} {
+ switch -- $slot {
+  min_elo {return {min elo}}
+  both_min_elo {return {both elo}}
+  colour - color_ {return colour}
+  default {return $slot}
+ }
+}
+proc ::commandline::CompleteText {template arguments {missing {}}} {
  set words {}
  foreach word $template {
   if {[lindex $word 0] eq "?"} {
    set group [lrange $word 1 end]; set include 0
    foreach item $group {if {[string index $item 0] eq "@" && [dict exists $arguments [Key [string range $item 1 end]]]} {set include 1}}
-   if {$include} {lappend words [CompleteText $group $arguments]}
+   if {$include} {lappend words [CompleteText $group $arguments $missing]}
   } elseif {[string index $word 0] eq "@"} {
    set slot [string range $word 1 end]; set key [Key $slot]
    if {$slot eq "criteria"} {
     dict for {k v} $arguments {lappend words $k $v}
-    if {![dict size $arguments]} {lappend words player <player>}
-   } elseif {[dict exists $arguments $key]} {lappend words [dict get $arguments $key]} else {lappend words <$slot>}
+    if {[dict size $arguments]} {
+     # filled criteria already appear above
+    } elseif {[llength $missing]} {
+     set first [lindex $missing 0]
+     lappend words [CriteriaWord $first] <$first>
+    } else {
+     lappend words player <player>
+    }
+   } elseif {[dict exists $arguments $key]} {
+    set value [dict get $arguments $key]
+    # Match stores the opponent's colour; the sentence the user types is
+    # their own side, so put it back before it is matched again.
+    if {$key eq "colour"} {set value [expr {$value eq "white" ? "black" : "white"}]}
+    lappend words $value
+   } else {lappend words <$slot>}
   } else {lappend words $word}
  }
  return [join $words]

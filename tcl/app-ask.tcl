@@ -683,9 +683,14 @@ proc ::application::ask::MissingSlot {row} {
  variable Query
  variable Priv
  set slot [lindex [dict get $row missing] 0]
- set Query [::commandline::CompleteText [dict get $row template] [dict get $row args]]
+ set completed [::commandline::CompleteText [dict get $row template] [dict get $row args] [dict get $row missing]]
  set marker <$slot>
- set start [string first $marker $Query]
+ set start [string first $marker $completed]
+ if {$start < 0} {
+  set completed "[string trim $Query] $marker"
+  set start [string first $marker $completed]
+ }
+ set Query $completed
  [Entry] selection range $start [expr {$start+[string length $marker]}]
  [Entry] icursor $start
  focus -force [Entry]

@@ -213,6 +213,35 @@ proc ::fix::repertoireRow {} {
 } -result {1 {Thomas, Michael} 0 1 0}
 
 # ----------------------------------------------------------------------
+# F-10: completing a missing free-form slot keeps the typed text and never
+# corrupts Query; the prepare-against colour is shown as the user's side.
+# ----------------------------------------------------------------------
+proc ::fix::row {text id} {
+ foreach row [::commandline::Match $text] {
+  if {[dict get $row id] == $id} {return $row}
+ }
+ error "no row $id for '$text'"
+}
+::tcltest::test F-10-missing-slot {completing an event slot keeps the text and inserts its marker} -body {
+ set row [::fix::row {find games event} 15]
+ set ::application::ask::Query {find games event}
+ ::application::ask::MissingSlot $row
+ set q $::application::ask::Query
+ list [string match {*<event>*} $q] [string match {find games*} $q] [string first Bielames $q]
+} -result {1 1 -1}
+
+::tcltest::test F-10-criteria-complete {a filled criteria tail is runnable and names its slot} -body {
+ set row [::fix::row {find games min elo 2600 wins} 15]
+ list [llength [dict get $row missing]] [dict get [dict get $row args] min_elo] [dict get [dict get $row args] result]
+} -result {0 2600 win}
+
+::tcltest::test F-10-colour-completion {completed prepare-against text keeps the user's colour} -body {
+ set row [::fix::row {prepare against Carlsen i have white} 28]
+ set text [::commandline::CompleteText [dict get $row template] [dict get $row args] [dict get $row missing]]
+ list [string match {*i have white*} $text] [dict get [dict get $row args] colour]
+} -result {1 black}
+
+# ----------------------------------------------------------------------
 # F-07: "set <engine> threads <n>" changes the saved engine option and does
 # not start analysis or a second engine process.
 # ----------------------------------------------------------------------
