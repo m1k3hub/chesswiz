@@ -81,8 +81,10 @@ proc open {parent} {
 	wm withdraw $dlg
 	set title $mc::MarksPalette
 
-	set top [ttk::frame $dlg.top -relief raised -borderwidth 2]
-	pack $dlg.top -fill both -expand yes
+	# Like the Annotation Editor, the palette's body sits in the shared
+	# playing viewport and is placed beside the board by the shared helper.
+	set top [ttk::frame [::util::place::playingBody $dlg].top -relief raised -borderwidth 2]
+	pack $top -fill both -expand yes
 	bind $dlg <<LanguageChanged>> [namespace code [list LanguageChanged $dlg %W]]
 
 	if {[tk windowingsystem] ne "win32"} {
@@ -222,22 +224,6 @@ proc open {parent} {
 			bind $dlg <FocusOut> [namespace code [list Focus $dlg out]]
 		}
 	}
-	if {[llength $Position] == 2} {
-		::update idletasks
-		if {[scan [winfo geometry [winfo toplevel $parent]] "%dx%d+%d+%d" tw th tx ty] == 4} {
-			set rx [expr {$tx + [lindex $Position 0]}]
-			set ry [expr {$ty + [lindex $Position 1]}]
-			set rw [winfo reqwidth $dlg]
-			set rh [winfo reqheight $dlg]
-			set sw [winfo workareawidth $dlg]
-			set sh [winfo workareaheight $dlg]
-			set rx [expr {max(min($rx, $sw - $rw), 0)}]
-			set ry [expr {max(min($ry, $sh - $rh), 0)}]
-			wm geometry $dlg +$rx+$ry
-		}
-	} else {
-		::util::place $dlg -parent $parent -position center
-	}
 	if {[tk windowingsystem] eq "aqua"} {
 		::tk::unsupported::MacWindowStyle style $dlg plain {}
 	} elseif {[tk windowingsystem] eq "win32"} {
@@ -247,7 +233,14 @@ proc open {parent} {
 		::scidb::tk::wm frameless $dlg
 	}
 	Init $dlg
+	# The shared helper owns the placement (GAP-004). A remembered Position
+	# is only a preferred spot, kept when it stays clear of the board.
+	::util::place::besideBoard $dlg $parent
 	wm deiconify $dlg
+	update
+	if {[llength $Position] == 2} {
+		::util::place::besideSavedPosition $dlg $parent $Position
+	}
 }
 
 
@@ -408,6 +401,14 @@ proc TracePosition {frame parent} {
 	set Position [list [expr {$fx - $tx}] [expr {$fy - $ty}]]
 }
 
+# The palette body, whether the shared viewport has been built or not.
+proc BodyFrame {dlg} {
+	if {[winfo exists $dlg.__viewport.canvas.body.top]} {
+		return $dlg.__viewport.canvas.body.top
+	}
+	return $dlg.top
+}
+
 
 proc StartMotion {frame x y} {
 	variable Vars
@@ -440,8 +441,9 @@ proc Focus {dlg mode} {
 		set fg $Defaults(floating:frame:foreground)
 	}
 
-	$dlg.top.decor configure -background $bg -foreground $fg
-	$dlg.top.decor.close configure \
+	set frame [BodyFrame $dlg]
+	$frame.decor configure -background $bg -foreground $fg
+	$frame.decor.close configure \
 		-background $bg \
 		-foreground $fg \
 		-activebackground $bg \
@@ -453,7 +455,8 @@ proc Focus {dlg mode} {
 
 proc LanguageChanged {dlg w} {
 	if {$dlg eq $w} {
-		$dlg.top.decor configure -text "$::scidb::app: $mc::MarksPalette"
+		set frame [BodyFrame $dlg]
+		$frame.decor configure -text "$::scidb::app: $mc::MarksPalette"
 	}
 }
 
