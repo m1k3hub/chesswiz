@@ -136,6 +136,31 @@ close $f
  list $before [::scidb::view::count games $::fix::Base Normal 0]
 } -result {2 0}
 
+# ----------------------------------------------------------------------
+# F-04: an opening name resolves to its whole ECO family, an explicit code
+# stays exact.
+# ----------------------------------------------------------------------
+::tcltest::test F-04-eco-family {opening names resolve to their ECO family range} -body {
+ list \
+  [lindex [::commandline::EcoLookup eco Sicilian] 0] \
+  [lindex [::commandline::EcoLookup eco Najdorf] 0] \
+  [lindex [::commandline::EcoLookup eco {King's Indian}] 0] \
+  [lindex [::commandline::EcoLookup eco B90] 0]
+} -result {B20-B99 B90-B99 E60-E99 B90}
+
+::tcltest::test F-04-eco-score {a Sicilian query counts the B90 game} -setup {
+ set ::fix::Notices {}
+ rename ::dialog::notice::post ::fix::realPost
+ proc ::dialog::notice::post {kind message args} {lappend ::fix::Notices [list $kind $message]}
+} -body {
+ ::fix::run {score of Sicilian for Kasparov} 24
+ set text [lindex $::fix::Notices 0 1]
+ list [string match {*1 games*} $text] [string match {*B20-B99*} $text]
+} -cleanup {
+ catch {rename ::dialog::notice::post {}}
+ rename ::fix::realPost ::dialog::notice::post
+} -result {1 1}
+
 trace remove execution ::action::run enter ::fix::trace
 foreach position [::game::usedPositions?] {catch {::game::release $position}}
 catch {::application::database::closeBase .application $::fix::Base}

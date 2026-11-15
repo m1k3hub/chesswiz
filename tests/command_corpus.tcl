@@ -28,13 +28,13 @@ set InScopeCommandCorpus {
 	find-years J2 {Games from 2015 to 2018 rated over 2600.}
 		{find games from 2015 to 2018 min elo 2600} 15 command.find {from 2015 to 2018 min_elo 2600}
 	find-eco J2 {Najdorf games in this database.}
-		{find games opening Najdorf} 15 command.find {eco B9*}
+		{find games opening Najdorf} 15 command.find {eco B90-B99}
 	find-event J2 {Games from the Karvina 5th tournament.}
 		{find games event Karvina} 15 command.find {event {Karvina 5th}}
 	find-both-elo J2 {Games where both players are rated 2600 or more.}
 		{find games both elo 2600} 15 command.find {both_min_elo 2600}
 	find-endgames-opening J2 {All endgames that arise from the London System.}
-		{find games opening London System motif endgame} 15 command.find {eco D02* pattern endgame}
+		{find games opening London System motif endgame} 15 command.find {eco D02 pattern endgame}
 	open-last-game J6 {Open Carlsen's last game.}
 		{open last game of Carlsen} 17 open_game {player {Carlsen, Magnus}}
 	event-story J10 {Tell me the story of the Biel tournament.}
@@ -50,7 +50,7 @@ set InScopeCommandCorpus {
 	pane-dock J1 {Dock the tree window.}
 		{dock tree} 50 pane {action dock pane tree}
 	find-draws J2 {All draws since 2020.}
-		{find games draws from 2020} 15 command.find {result 1/2-1/2 from 2020}
+		{find games draws from 2020} 15 command.find {result draw from 2020}
 	find-similar-games J2 {Find games like the one on the board.}
 		{games like this one} 18 command.similar {}
 
@@ -96,11 +96,11 @@ set InScopeCommandCorpus {
 		{find motif pawn fork from 2020} 19 command.find {pattern pawn_fork from 2020}
 
 	open-najdorf J4 {Set up the Najdorf after 6.Bg5.}
-		{set up Najdorf after 6.Bg5} 22 command.setup {opening *Najdorf* after 6.Bg5}
+		{set up Najdorf after 6.Bg5} 22 command.setup {opening {Sicilian, Sicilian Defence, Najdorf Variation} after 6.Bg5}
 	open-tree J4 {What is played in this position?}
 		{opening tree} 23 pane {action show pane tree}
 	open-score J4 {How does White score in the Sicilian?}
-		{score of Sicilian} 24 opening_score {eco B*}
+		{score of Sicilian} 24 opening_score {eco B20-B99}
 	open-report J4 {Open the opening report for this position.}
 		{opening report} 25 open_view {kind opening_report}
 	open-trend J4 {Which openings are getting more popular here?}
@@ -169,7 +169,7 @@ set InScopeCommandCorpus {
 	find-2700 J2 {Only games where both players are above 2700.}
 		{find games both elo 2700} 15 command.find {both_min_elo 2700}
 	find-kid J2 {All King's Indian games.}
-		{find games opening King's Indian} 15 command.find {eco E[6-9]*}
+		{find games opening King's Indian} 15 command.find {eco E60-E99}
 	find-like-5 J2 {Which games resemble game 5?}
 		{games like game 5} 18 command.similar {number 5}
 	game-like-board J2 {Are there games like the one I'm looking at?}
@@ -179,11 +179,11 @@ set InScopeCommandCorpus {
 	pos-d5-knight J3 {Knights on d5 that can't be chased away.}
 		{find motif knight outpost} 19 command.find {pattern knight_outpost}
 	open-kid-score J4 {What's White's score against the King's Indian here?}
-		{score of King's Indian} 24 opening_score {eco E[6-9]*}
+		{score of King's Indian} 24 opening_score {eco E60-E99}
 	open-player-eco J4 {How does Kasparov do in the Sicilian?}
-		{score of Sicilian for Kasparov} 24 opening_score {eco B* player {Kasparov, Garry}}
+		{score of Sicilian for Kasparov} 24 opening_score {eco B20-B99 player {Kasparov, Garry}}
 	board-dragon J4 {Put the Dragon on the board after 9.Bc4.}
-		{set up Sicilian, Dragon after 9.Bc4} 22 command.setup {opening *Dragon* after 9.Bc4}
+		{set up Sicilian, Dragon after 9.Bc4} 22 command.setup {opening {Sicilian, Sicilian Defence, Dragon Variation, Yugoslav Attack} after 9.Bc4}
 	prep-card J5 {Pull up Caruana's player card.}
 		{player card Caruana} 29 open_view {kind player_card name {Caruana, Fabiano}}
 	prep-white J5 {I play Corti next round and I have White. Prepare me.}

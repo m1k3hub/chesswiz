@@ -8,7 +8,7 @@ namespace eval ::commandE2E {variable Calls {}; variable State {}; variable Orig
 # Actual app effects are exercised separately by test_app_command_effects.tcl.
 proc ::commandE2E::source {type query} {
  set state {player {{Kasparov, Garry} {Kasparov, Sergei} {Carlsen, Magnus} {Caruana, Fabiano} {Corti, Horacio} {Thomas, Michael}} database {Main Other} engine {Stockfish} motif {knight_fork} tab {board database} pane {tree} opening {Najdorf {London System}} eco {B} event {{Karvina 5th} Biel} move {e4}}
- if {$type eq "eco" && $query eq "Sicilian"} {return B}
+ if {$type eq "eco"} {return [::commandline::EcoLookup eco $query]}
  set out {}
  if {[dict exists $state $type]} {foreach v [dict get $state $type] {if {[::commandline::NameMatch $query $v]} {lappend out $v}}}
  return $out

@@ -23,7 +23,7 @@ set CommandCases {
  21 {search by material} open_search {kind material}
  22 {set up Najdorf after 6.Bg5} command.setup {opening Najdorf after 6.Bg5}
  23 {opening tree} pane {action show pane tree}
- 24 {score of Sicilian for Kasparov} opening_score {eco B player {Kasparov, Garry}}
+ 24 {score of Sicilian for Kasparov} opening_score {eco B20-B99 player {Kasparov, Garry}}
  25 {opening report} open_view {kind opening_report}
  26 {opening trends} command.trends {}
  27 {repertoire add this line} add_to_repertoire {}

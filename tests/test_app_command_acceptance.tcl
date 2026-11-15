@@ -229,7 +229,7 @@ proc ::commandAccept::validSlotValues {row} {
 						break
 					}
 					set actualVal [dict get $row args $k]
-					if {$actualVal ne $v && ![string match -nocase $v $actualVal]} {
+					if {$actualVal ne $v} {
 						set matchArgs 0
 						break
 					}

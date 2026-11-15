@@ -65,14 +65,59 @@ proc ::commandline::EcoCandidates {qwords} {
  }
  return [lsort -unique -integer $candidates]
 }
+# The comma-separated components of an opening name, lowercased. The opening
+# table names a family and its lines hierarchically: "Sicilian, Sicilian
+# Defence, Najdorf Variation, ...".
+proc ::commandline::EcoComponents {label} {
+ set out {}
+ foreach part [split $label ,] {lappend out [string tolower [string trim $part]]}
+ return $out
+}
+# The shortest leading run of components that covers every typed word. This
+# keeps "Najdorf" inside the Sicilian family and "King's Indian" out of the
+# Réti and Neo-King's Indian names that merely mention it.
+proc ::commandline::EcoFamilyPrefix {label qwords} {
+ set comps [EcoComponents $label]
+ set n [llength $comps]
+ for {set k 1} {$k <= [llength $comps]} {incr k} {
+  set tokens [Tokenize [join [lrange $comps 0 [expr {$k-1}]] ,]]
+  set all 1
+  foreach word $qwords {
+   set hit 0
+   foreach token $tokens {if {[WordMatch $word $token]} {set hit 1; break}}
+   if {!$hit} {set all 0; break}
+  }
+  if {$all} {set n $k; break}
+ }
+ return [lrange $comps 0 [expr {$n-1}]]
+}
+# Every ECO code whose name shares the prefix, as "B90-B99" (or one code).
+proc ::commandline::EcoFamilyRange {prefix} {
+ variable EcoIndex
+ set plen [llength $prefix]
+ set codes {}
+ foreach entry $EcoIndex {
+  lassign $entry code label
+  set comps [EcoComponents $label]
+  if {[llength $comps] < $plen} {continue}
+  set ok 1
+  for {set i 0} {$i < $plen} {incr i} {
+   if {[lindex $comps $i] ne [lindex $prefix $i]} {set ok 0; break}
+  }
+  if {$ok} {lappend codes $code}
+ }
+ if {![llength $codes]} {return ""}
+ set codes [lsort -unique $codes]
+ set from [lindex $codes 0]; set to [lindex $codes end]
+ return [expr {$from eq $to ? $from : "$from-$to"}]
+}
 proc ::commandline::EcoLookup {type query} {
  variable EcoIndex
  EnsureEco
  set values {}
- if {$type eq "eco" && [regexp -nocase {^[A-E][0-9]{0,2}$} $query]} {
-  if {![catch {::scidb::misc::lookup opening [string toupper $query] Normal} entry] && [llength $entry]} {
-   lappend values [string toupper $query]
-  }
+ set explicit [expr {$type eq "eco" && [regexp -nocase {^[A-E][0-9]{0,2}(-[A-E][0-9]{2})?$} [string trim $query]]}]
+ if {$explicit} {
+  lappend values [string toupper [string map {" " ""} [string trim $query]]]
  }
  set qlow [string map [list \x27 "" \u2019 ""] [string tolower [string trim $query]]]
  set qwords [Tokenize $query]
@@ -83,12 +128,16 @@ proc ::commandline::EcoLookup {type query} {
   if {$qlow eq "" || [WordListMatch $qwords $words]} {
    set rank [expr {$qlow eq "" ? 6 : ($qlow eq $first ? 0 : ([string first $qlow $first] == 0 ? 1 : ([string first $qlow $second] == 0 ? 2 : ([string first $qlow $third] == 0 ? 3 : ([string first $qlow $first] >= 0 ? 4 : ([string first $qlow $llow] >= 0 ? 5 : 6))))))}]
    set penalty [expr {$type eq "eco" ? $flank * 50000 : 0}]
-   lappend ranked [list [expr {$rank * 10000 + $penalty + $len}] [expr {$type eq "eco" ? $code : $label}]]
+   lappend ranked [list [expr {$rank * 10000 + $penalty + $len}] [expr {$type eq "eco" ? $code : $label}] $label]
   }
  }
  set sorted [lsort -integer -index 0 $ranked]
  foreach item $sorted {
   set v [lindex $item 1]
+  if {$type eq "eco" && !$explicit && [llength $qwords]} {
+   set family [EcoFamilyRange [EcoFamilyPrefix [lindex $item 2] $qwords]]
+   if {$family ne ""} {set v $family}
+  }
   if {$v ni $values} {lappend values $v}
   if {[llength $values] >= 8} {break}
  }
