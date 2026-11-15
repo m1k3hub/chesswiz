@@ -279,4 +279,36 @@ tcltest::test gap005-online-and-float-clamped {online and floating panes are ins
 	::layoutGaps::settle 500
 } -result {1 1 1 1}
 
+# REVIEW4 GAP-005: coordinates above 99 (and negatives) are numeric, not
+# ASCII, so the fold handle does not land on the visible board canvas.
+tcltest::test review4-gap005-beside-pack-numeric {numeric candidate order places the fold handle clear of the board view} -body {
+	set view {1 126 398 217}
+	set packed [::util::place::besidePack {99 129 202 202} {{56 26}} {1 98 398 245} 4 {}]
+	set rect [lindex $packed 0]
+	list $rect [::layoutGaps::overlap $rect $view]
+} -result {{1 98 56 26} 0}
+
+# REVIEW4 GAP-005: the embedded 3D view keeps the folded Media button's top
+# clearance instead of resetting it to zero.
+tcltest::test review4-gap005-3d-media-button-clear {the 3D view reserves the Media button's height} 		-constraints embed3d -setup {
+	catch { .application.nb select .application.nb.board }
+	catch { ::application::board::show3D 0 }
+	::mediainset::RefreshMediaButton
+	::layoutGaps::settle 300
+} -body {
+	set pane [::mediainset::Pane]
+	set button $pane.mediaButton
+	set wanted [expr {[winfo reqheight $button] + 8}]
+	::application::board::show3D 1
+	::layoutGaps::settle 500
+	set view $::application::board::Vars(3dwin)
+	set info [pack info $view]
+	set at [lsearch -exact $info -pady]
+	set pady [expr {$at >= 0 ? [lindex $info [expr {$at+1}]] : {0 0}}]
+	expr {[lindex $pady 0] >= $wanted}
+} -cleanup {
+	catch { ::application::board::show3D 0 }
+	::layoutGaps::settle 300
+} -result 1
+
 tcltest::cleanupTests

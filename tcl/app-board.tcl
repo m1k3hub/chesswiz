@@ -1510,10 +1510,20 @@ proc ApplyReserve3D {} {
 	if {![info exists Vars(3d)] || !$Vars(3d)} { return }
 	set x {0 0}
 	set y {0 0}
+	# The board pane's folded Media button is placed over the top-right of
+	# the canvas, so the 2D slot reserves its height as top padding. The 3D
+	# view inherits that slot and must keep the same clearance; otherwise
+	# hidden top toolbars let it slide under the button (GAP-005).
+	set top 0
+	set pane [winfo parent $Vars(widget:frame)]
+	if {[winfo exists $pane.mediaButton] && [winfo manager $pane.mediaButton] eq "place"} {
+		set top [expr {[winfo reqheight $pane.mediaButton] + 8}]
+	}
+	set y [list $top 0]
 	switch $ReserveSide {
 		left { set x [list $ReservePixels 0] }
 		right { set x [list 0 $ReservePixels] }
-		bottom { set y [list 0 $ReservePixels] }
+		bottom { set y [list $top $ReservePixels] }
 	}
 	pack configure $Vars(3dwin) -padx $x -pady $y
 }

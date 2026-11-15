@@ -2690,8 +2690,11 @@ proc besidePack {board sizes workarea gap {placed {}}} {
 		lappend xs $x [expr {$x+$pw+$gap}] [expr {$x-$gap-$w}]
 		lappend ys [expr {$y+$ph+$gap}] [expr {$y-$gap-$h}] $y
 	}
-	foreach x [lsort -unique $xs] {
-		foreach y [lsort -unique $ys] {
+	# Coordinates are integers: "129" must not sort before "98" (and
+	# "-100" not before "-600"). Numeric order also keeps the candidate
+	# sweep deterministic across negative-origin and 4-digit coordinates.
+	foreach x [lsort -integer -unique $xs] {
+		foreach y [lsort -integer -unique $ys] {
 			set rect [list $x $y $w $h]
 			if {![besideInside $rect $limits] || [besideOverlap $rect $board]} { continue }
 			set clear 1
