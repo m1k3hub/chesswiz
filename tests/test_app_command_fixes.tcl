@@ -188,6 +188,31 @@ close $f
 } -result {0 1}
 
 # ----------------------------------------------------------------------
+# F-08: "repertoire check against my games" checks the user's games, not
+# everybody's, and is not runnable when the user has not said who they are.
+# ----------------------------------------------------------------------
+proc ::fix::repertoireRow {} {
+ foreach row [::commandline::Match {repertoire check against my games}] {
+  if {[dict get $row id] == 27 && [dict get $row action] eq "repertoire_check"} {return $row}
+ }
+ return {}
+}
+::tcltest::test F-08-repertoire-my-games {repertoire check injects the remembered player and refuses without one} -setup {
+ set ::fix::SavedMe [expr {[info exists ::application::ai::Settings(me)] ? $::application::ai::Settings(me) : ""}]
+} -body {
+ set ::application::ai::Settings(me) {Thomas, Michael}
+ set row [::fix::repertoireRow]
+ set args [dict get $row args]
+ set withPlayer [list [dict exists $args player] [dict get $args player] [llength [dict get $row missing]]]
+ unset ::application::ai::Settings(me)
+ set row [::fix::repertoireRow]
+ set missing [dict get $row missing]
+ list {*}$withPlayer [expr {"player" in $missing}] [dict exists [dict get $row args] player]
+} -cleanup {
+ if {$::fix::SavedMe eq ""} {catch {unset ::application::ai::Settings(me)}} else {set ::application::ai::Settings(me) $::fix::SavedMe}
+} -result {1 {Thomas, Michael} 0 1 0}
+
+# ----------------------------------------------------------------------
 # F-07: "set <engine> threads <n>" changes the saved engine option and does
 # not start analysis or a second engine process.
 # ----------------------------------------------------------------------
