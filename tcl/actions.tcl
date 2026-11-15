@@ -934,8 +934,13 @@ proc ::action::_ObserveState {id visible enabled} {
 	variable AskCachedStamp
 	variable AskStateMap
 	variable AskBuilding
-	if {$AskBuilding || $AskCachedStamp eq ""} { return }
-	if {![dict exists $AskStateMap $id]} { return }
+	# Some embedders copy these procedure bodies into a fresh interpreter
+	# without running this namespace's initializer. There an unset variable
+	# means the same thing as a cold cache: no build in progress and no
+	# snapshot to compare against.
+	if {[info exists AskBuilding] && $AskBuilding} { return }
+	if {![info exists AskCachedStamp] || $AskCachedStamp eq ""} { return }
+	if {![info exists AskStateMap] || ![dict exists $AskStateMap $id]} { return }
 	set now [expr {$visible && $enabled ? 1 : 0}]
 	if {$now != [dict get $AskStateMap $id]} { set AskCachedStamp "" }
 }
@@ -1130,6 +1135,11 @@ proc ::action::AskRows {query} {
 	variable AskCachedStamp
 	variable AskCachedRows
 	variable AskBuilding
+
+	# A fresh interpreter may lack the namespace initializer (see
+	# _ObserveState); treat that as a cold cache rather than an error.
+	if {![info exists AskCachedStamp]} { set AskCachedStamp "" }
+	if {![info exists AskCachedRows]} { set AskCachedRows {} }
 
 	# Context resolution reads live menus; its own state reads are not an
 	# external change and must not invalidate the snapshot we are building.
