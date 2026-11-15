@@ -60,6 +60,7 @@ namespace eval ::commandline {
   {48 td.workspace {} {{tournament director}}}
   {49 command.tab {} {{go to @tab}}}
   {50 pane {} {{@pane_action @pane}}}
+  {51 command.open_result {} {{open result @result_index}}}
  }
  variable Types {
   path inputfile file pgnfile output outputfile name filename
@@ -70,7 +71,7 @@ namespace eval ::commandline {
   min_elo rating both_min_elo rating move move opening_move opening_move
   colour color color color after color result result scope scope format format
   dbformat dbformat training_source training_source time_control time_control system system
-  pane_action pane_action
+  pane_action pane_action result_index result_index
  }
  variable Keys {person name opponent name move_number move colour colour file files output filename dbformat format training_source source opening_move after pane_action action}
  variable Enums {

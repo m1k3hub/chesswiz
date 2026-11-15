@@ -53,6 +53,10 @@ set InScopeCommandCorpus {
 		{find games draws from 2020} 15 command.find {result draw from 2020}
 	find-similar-games J2 {Find games like the one on the board.}
 		{games like this one} 18 command.similar {}
+	game-open-match J3 {Show me the second position you found.}
+		{open result 2} 51 command.open_result {result_index 2}
+	ask-back J1 {Open that one.}
+		{open result 1} 51 command.open_result {result_index 1}
 
 	pos-fork J3 {Find games where a knight forks king and queen.}
 		{find motif knight fork} 19 command.find {pattern knight_fork}
@@ -219,10 +223,8 @@ set OutOfScopeCorpusIds {
 	open-prep        {opening preparation dialog not in the 50-command table}
 	me-explain       {generation ("Ask a question" mode: "Explain the position on the board")}
 	play-events      {event_types query not in the 50-command table}
-	game-open-match  {conversation memory ("Show me the second position you found")}
 	check-results    {check_results audit not in the 50-command table}
 	factcheck        {generation ("Ask a question" mode: "Check the annotations of this game")}
-	ask-back         {conversation memory ("Open that one")}
 	pos-german       {German language (Plan §6: English first, German later from the same tables)}
 	pos-windmill     {arbitrary custom tactic outside the 40-pattern index}
 	me-annotate-plain {free-form style generation ("no fancy words")}

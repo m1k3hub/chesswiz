@@ -187,7 +187,7 @@ proc ::commandAccept::validSlotValues {row} {
 		if {$id ni $covered} { lappend missing $id }
 	}
 	list [llength $allIds] [llength $inIds] [llength $outIds] $missing
-} -result {111 94 17 {}}
+} -result {111 96 15 {}}
 
 ::tcltest::test command-accept-corpus-top3-and-state {every in-scope corpus request reaches expected command in top 3, runs 0 commands without Enter, and invents 0 slot values} -body {
 	set ::commandAccept::Calls {}

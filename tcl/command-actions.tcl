@@ -30,6 +30,7 @@ proc ::commandline::RegisterActions {} {
   training {source pattern player} {Create puzzles}
   tournament {system engine_count time_control opening} {Run tournament}
   tab {tab} {Go to tab}
+  open_result {result_index} {Open search result}
  } {
   set id command.$name
   if {[dict exists $::action::Registry $id]} {continue}
@@ -129,6 +130,15 @@ proc ::commandline::Action {name arguments} {
   }
   tournament {return [Tournament $arguments]}
   tab {::application::switchTab [Get $arguments tab]; return {}}
+  open_result {
+   lassign [::application::assistant::ActiveBase] base variant
+   if {$base eq ""} {error "no database is open"}
+   set n [Get $arguments result_index]
+   set count [::scidb::view::count games $base $variant 0]
+   if {$n < 1 || $n > $count} {error "the visible game list has only $count games"}
+   set number [::scidb::db::get gameNumber $base $variant [expr {$n-1}] 0]
+   return [::application::assistant::DoOpenGame [expr {$number+1}]]
+  }
  }
  error "unknown command adapter $name"
 }

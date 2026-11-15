@@ -331,6 +331,70 @@ proc ::fix::noop {args} {return {}}
  catch {dict unset ::action::Registry fix.palette}
 } -result {1 1}
 
+# ----------------------------------------------------------------------
+# F-12: the last result list is a typed slot, file slots use the platform
+# picker, and a quoted path with spaces is one word.
+# ----------------------------------------------------------------------
+::tcltest::test F-12-open-result {open result N opens the Nth game of the visible list and is bounded by it} -setup {
+ set ::fix::Opened {}
+ rename ::application::assistant::DoOpenGame ::fix::realOpenGame
+ proc ::application::assistant::DoOpenGame {number args} {set ::fix::Opened $number; return "opened $number"}
+} -body {
+ ::application::assistant::DoClearSearch
+ set count [::scidb::view::count games $::fix::Base Normal 0]
+ set calls [::fix::run {open result 2} 51]
+ set over [expr {[::commandline::Values result_index 3] eq ""}]
+ list $count $::fix::Opened $calls $over
+} -cleanup {
+ catch {rename ::application::assistant::DoOpenGame {}}
+ rename ::fix::realOpenGame ::application::assistant::DoOpenGame
+} -result {2 2 {{command.open_result {result_index 2}}} 1}
+
+::tcltest::test F-12-quoted-path {a quoted file name with spaces stays one word and matches} -body {
+ set path [file join $::fix::Dir "my games.pgn"]
+ set f [open $path w]
+ puts $f {[Event "Quoted"]
+[White "A"]
+[Black "B"]
+[Result "1-0"]
+
+1. e4 1-0}
+ close $f
+ set words [::commandline::Words "\"$path\""]
+ set row {}
+ foreach r [::commandline::Match "import \"$path\" into Main"] {
+  if {[dict get $r id] == 7} {set row $r; break}
+ }
+ list [llength $words] [expr {[lindex $words 0] eq $path}] [expr {$row ne {}}] \
+  [expr {$row ne {} && [dict get $row args files] eq $path && ![llength [dict get $row missing]]}]
+} -result {1 1 1 1}
+
+::tcltest::test F-12-file-picker {Enter on a missing file slot opens the picker and completes the sentence} -setup {
+ set ::fix::PickCalls {}
+ rename ::commandline::PickFile ::fix::realPickFile
+ proc ::commandline::PickFile {slot} {
+  lappend ::fix::PickCalls $slot
+  return [file join $::fix::Dir "picked database.pgn"]
+ }
+} -body {
+ set row [::fix::row {open database} 1]
+ set ::application::ask::Query {open database}
+ ::application::ask::MissingSlot $row
+ set query $::application::ask::Query
+ set picksAfterFile [llength $::fix::PickCalls]
+ set playerRow [::fix::row {find games player} 15]
+ set ::application::ask::Query {find games player}
+ ::application::ask::MissingSlot $playerRow
+ list $picksAfterFile [llength $::fix::PickCalls] \
+  [string match {open database "*} $query] [string match {*picked database.pgn*} $query] \
+  [expr {[::commandline::Values result_index 1] ne {}}]
+} -cleanup {
+ catch {rename ::commandline::PickFile {}}
+ rename ::fix::realPickFile ::commandline::PickFile
+ set ::application::ask::Query {}
+ ::application::ask::HideList
+} -result {1 1 1 1 1}
+
 trace remove execution ::action::run enter ::fix::trace
 foreach position [::game::usedPositions?] {catch {::game::release $position}}
 catch {::application::database::closeBase .application $::fix::Base}

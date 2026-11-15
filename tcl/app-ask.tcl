@@ -690,6 +690,21 @@ proc ::application::ask::MissingSlot {row} {
   set completed "[string trim $Query] $marker"
   set start [string first $marker $completed]
  }
+ # A file slot has no useful typed candidates: open the platform picker and
+ # drop the chosen path into the sentence, quoted when it contains spaces.
+ if {[::commandline::FileSlot? $slot]} {
+  set picked [::commandline::PickFile $slot]
+  if {$picked ne ""} {
+   set quoted [::commandline::QuoteArgument $picked]
+   set Query [string replace $completed $start [expr {$start+[string length $marker]-1}] $quoted]
+   catch { [Entry] selection clear }
+   catch { [Entry] icursor end }
+   focus -force [Entry]
+   unset -nocomplain Priv(filtered)
+   Typed
+   return
+  }
+ }
  set Query $completed
  [Entry] selection range $start [expr {$start+[string length $marker]}]
  [Entry] icursor $start

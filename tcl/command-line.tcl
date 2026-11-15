@@ -175,7 +175,63 @@ proc ::commandline::EcoMovesTokens {moves} {
  return [regexp -all -inline {[^\s]+} $s]
 }
 proc ::commandline::Words {text} {
- return [regexp -all -inline {[^\s]+} [string trim $text]]
+ # Split on whitespace but keep a double-quoted path as one word, so a
+ # typed or picked file name with spaces reaches Values intact.
+ set out {}
+ set word ""
+ set quoted 0
+ set started 0
+ foreach ch [split [string trim $text] {}] {
+  if {$ch eq "\""} {set quoted [expr {!$quoted}]; set started 1; continue}
+  if {!$quoted && [string is space $ch]} {
+   if {$started || $word ne ""} {lappend out $word; set word ""; set started 0}
+   continue
+  }
+  append word $ch
+  set started 1
+ }
+ if {$started || $word ne ""} {lappend out $word}
+ return $out
+}
+proc ::commandline::QuoteArgument {value} {
+ if {$value eq "" || [regexp {[\s"]} $value]} {
+  return "\"[string map {\" \\\"} $value]\""
+ }
+ return $value
+}
+proc ::commandline::FileSlot? {slot} {
+ variable Types
+ if {![dict exists $Types $slot]} {return 0}
+ return [expr {[dict get $Types $slot] in {inputfile pgnfile outputfile filename}}]
+}
+# A file slot names its value with the platform's own picker; tests replace
+# this procedure so no modal dialog is ever opened off screen.
+proc ::commandline::PickFile {slot} {
+ variable Types
+ set type [dict get $Types $slot]
+ set pgn [list [list "PGN files" {.pgn .pgn.gz .zip}] [list "All files" *]]
+ switch -- $type {
+  inputfile {return [dialog::openFile -parent .application -title "Open database" -filetypes $pgn]}
+  pgnfile {return [dialog::openFile -parent .application -title "Import games" -filetypes $pgn]}
+  outputfile {
+   set types [list [list "PGN files" {.pgn}] [list "HTML files" {.html}] [list "PDF files" {.pdf}] [list "All files" *]]
+   return [dialog::saveFile -parent .application -title "Export games" -filetypes $types]
+  }
+  filename {
+   return [dialog::saveFile -parent .application -title "Save database" -filetypes $pgn]
+  }
+ }
+ return ""
+}
+# The visible game list is the last result list; 1 counts from its top.
+proc ::commandline::ResultCount {} {
+ if {[llength [info commands ::application::assistant::ActiveBase]] == 0} {return 0}
+ if {[catch {
+  lassign [::application::assistant::ActiveBase] base variant
+  if {$base eq ""} {return 0}
+  ::scidb::view::count games $base $variant 0
+ } count]} {return 0}
+ return $count
 }
 proc ::commandline::Key {slot} {
  variable Keys
@@ -224,6 +280,11 @@ proc ::commandline::Values {slot query} {
   if {[regexp {^[1-9][0-9]{0,3}\+[0-9]{1,3}$} $query]} {set values [list $query]}
  } elseif {$type eq "opening_move"} {
   if {[regexp {^([1-9][0-9]*\.)?([KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](=[QRBN])?[+#]?|O-O(-O)?)$} $query]} {set values [list $query]}
+ } elseif {$type eq "result_index"} {
+  if {[regexp {^[0-9]+$} $query] && [string length $query] < 10} {
+   scan $query %d n
+   if {$n >= 1 && $n <= [ResultCount]} {set values [list $n]}
+  }
  } elseif {$type in {inputfile pgnfile outputfile filename}} {
   set q [string trim $query \" ]
   if {$q ne "" && ![regexp {[\x00-\x1f]} $q]} {
@@ -454,6 +515,7 @@ proc ::commandline::CompleteText {template arguments {missing {}}} {
     }
    } elseif {[dict exists $arguments $key]} {
     set value [dict get $arguments $key]
+    if {[FileSlot? $slot]} {set value [QuoteArgument $value]}
     # Match stores the opponent's colour; the sentence the user types is
     # their own side, so put it back before it is matched again.
     if {$key eq "colour"} {set value [expr {$value eq "white" ? "black" : "white"}]}
