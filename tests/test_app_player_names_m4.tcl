@@ -699,16 +699,70 @@ tcltest::test VAL-PD5-i18n-de {German session localizes maintenance button, prev
  ::playerdata::InvalidateNames
  ::playerdata::revertNames .application $uibase
  set undoConflictMsg [lindex $::m4names::deInfos end]
+ ::scidb::db::close $uibase
+
+ # Exercise real menu.db.maintenance.fix_names skip/error reasons in German:
+ # 1) collision ("the database has a player of that name") + duplicate target ("another player of this database is renamed to it")
+ set reasonBase [::m4names::openUiBase pi18n_reasons {[Event "CollideDup"]
+[Site "Fixture"]
+[Date "2026.01.03"]
+[Round "3"]
+[White "Alpha, Canonical A"]
+[Black "Beta, Canonical"]
+[WhiteElo "2600"]
+[BlackElo "2400"]
+[Result "1-0"]
+
+1. c4 c5 1-0}]
+ ::scidb::db::close $reasonBase
+ ::application::database::openBase .application $reasonBase 0 -readonly 0
+ update
+ ::playerdata::link $reasonBase
+ set ::m4names::deInfos {}
+ proc ::dialog::question {args} { return yes }
+ ::action::run menu.db.maintenance.fix_names
+ set deSkipMsg [lindex $::m4names::deInfos end]
+ catch { $::application::database::Vars(switcher) remove $reasonBase }
+ ::scidb::db::close $reasonBase
+
+ # 2) read-only error ("the database is read-only") via real menu.db.maintenance.fix_names
+ set roBase [::m4names::openUiBase pi18n_ro]
+ ::scidb::db::close $roBase
+ ::application::database::openBase .application $roBase 0 -readonly 1
+ update
+ ::playerdata::link $roBase
+ set ::m4names::deInfos {}
+ ::action::run menu.db.maintenance.fix_names
+ set deReadonlyMsg [lindex $::m4names::deInfos end]
+ catch { $::application::database::Vars(switcher) remove $roBase }
+ ::scidb::db::close $roBase
+
+ # Switch back to English and verify English defaults (including skip reasons) are restored
+ ::mc::setLang en
+ set enMaintBtn $::application::database::mc::Refresh
+ set enReasonBase [::m4names::openUiBase pi18n_en {[Event "CollideEn"]
+[Site "Fixture"]
+[Date "2026.01.04"]
+[Round "1"]
+[White "Beta, Canonical"]
+[Black "Unlinked, Mystery"]
+[Result "1-0"]
+
+1. e4 e5 1-0}]
+ ::scidb::db::close $enReasonBase
+ ::application::database::openBase .application $enReasonBase 0 -readonly 0
+ update
+ ::playerdata::link $enReasonBase
+ set ::m4names::deInfos {}
+ ::action::run menu.db.maintenance.fix_names
+ set enSkipMsg [lindex $::m4names::deInfos end]
+ catch { $::application::database::Vars(switcher) remove $enReasonBase }
+ ::scidb::db::close $enReasonBase
 
  rename ::dialog::question {}
  rename ::m4names::realQuestion ::dialog::question
  rename ::dialog::info {}
  rename ::m4names::realInfo ::dialog::info
- ::scidb::db::close $uibase
-
- # Switch back to English and verify English defaults are restored
- ::mc::setLang en
- set enMaintBtn $::application::database::mc::Refresh
 
  list \
   [expr {$menuFix ne "Fix player names\u2026" && $menuFix ne ""}] \
@@ -722,11 +776,28 @@ tcltest::test VAL-PD5-i18n-de {German session localizes maintenance button, prev
   [expr {[lindex $::m4names::deConfirmBtns 1 1] ne "Cancel"}] \
   [expr {$staleMsg ne "The database or reference data changed. Open a fresh preview." && $staleMsg ne ""}] \
   [expr {$undoConflictMsg ne "Undo conflicts with a database or reference-data change. No names changed." && $undoConflictMsg ne ""}] \
-  [expr {$enMaintBtn eq "Refresh"}]
+  [expr {$enMaintBtn eq "Refresh"}] \
+  [expr {[string match "*ein Spieler dieses Namens*" $deSkipMsg] && [string match "*ein anderer Spieler*" $deSkipMsg] && ![string match "*database has a player*" $deSkipMsg] && ![string match "*another player*" $deSkipMsg]}] \
+  [expr {[string match "*schreibgesch*" $deReadonlyMsg] && ![string match "*read-only*" $deReadonlyMsg] && ![string match "*renamePlayers*" $deReadonlyMsg]}] \
+  [expr {[string match "*the database has a player of that name*" $enSkipMsg]}]
 } -cleanup {
+ if {[llength [info commands ::m4names::realQuestion]]} {
+  catch { rename ::dialog::question {} }
+  rename ::m4names::realQuestion ::dialog::question
+ }
+ if {[llength [info commands ::m4names::realInfo]]} {
+  catch { rename ::dialog::info {} }
+  rename ::m4names::realInfo ::dialog::info
+ }
+ foreach b {uibase reasonBase roBase enReasonBase} {
+  if {[info exists $b]} {
+   catch { $::application::database::Vars(switcher) remove [set $b] }
+   catch { ::scidb::db::close [set $b] }
+  }
+ }
  catch { ::mc::setLang $::m4names::savedLang }
  set ::scidb::dir::share $::m4names::savedShare
-} -result {1 1 1 1 1 1 1 1 1 1 1 1}
+} -result {1 1 1 1 1 1 1 1 1 1 1 1 1 1 1}
 
 ::scidb::db::close $base
 file delete -force $::m4names::dir [::playerdata::Dir]

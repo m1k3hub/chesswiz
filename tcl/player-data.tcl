@@ -136,6 +136,14 @@ set FixNamesApplyConfirm	"Apply %s selected name fixes (%s game references)?"
 set FixNamesApplyButton	"Apply selected name fixes"
 set FixNamesStale	"The database or reference data changed. Open a fresh preview."
 set FixNamesUndoConflict	"Undo conflicts with a database or reference-data change. No names changed."
+set FixNamesReasonNoPlayer	"no player of that index"
+set FixNamesReasonInvalidName	"not a name a database can hold"
+set FixNamesReasonNameExists	"the database has a player of that name"
+set FixNamesReasonDuplicateTarget	"another player of this database is renamed to it"
+set FixNamesReasonReadonly	"the database is read-only"
+set FixNamesReasonDuplicateSource	"duplicate source index"
+set FixNamesReasonStalePlayer	"stale preview: player name changed"
+set FixNamesReasonBadArgs	"<renames> needs <index> <expected-name> <name> for each player"
 
 set ::playerdata::DefaultMC {}
 foreach _name [lsort [info vars ::playerdata::mc::*]] {
@@ -1012,6 +1020,24 @@ proc ::playerdata::AddNameFixButtons {sid base f} {
 }
 
 
+proc ::playerdata::FormatRenameReason {reason} {
+	variable mc
+
+	regsub {^::scidb::db::renamePlayers:\s*} [string trim $reason] {} key
+	switch -- $key {
+		"no player of that index" { return $mc::FixNamesReasonNoPlayer }
+		"not a name a database can hold" { return $mc::FixNamesReasonInvalidName }
+		"the database has a player of that name" { return $mc::FixNamesReasonNameExists }
+		"another player of this database is renamed to it" { return $mc::FixNamesReasonDuplicateTarget }
+		"the database is read-only" { return $mc::FixNamesReasonReadonly }
+		"duplicate source index" { return $mc::FixNamesReasonDuplicateSource }
+		"stale preview: player name changed" { return $mc::FixNamesReasonStalePlayer }
+		"<renames> needs <index> <expected-name> <name> for each player" { return $mc::FixNamesReasonBadArgs }
+	}
+	return $reason
+}
+
+
 # Rename the ticked rows, all of a variant in one step: renaming sorts the
 # namebase, so an index is only valid until then.
 proc ::playerdata::ApplyNameFixes {sid parent base} {
@@ -1046,7 +1072,8 @@ proc ::playerdata::ApplyNameFixes {sid parent base} {
 	set reasons {}
 	foreach variant [dict keys $byVariant] {
 		if {[catch { ::scidb::db::renamePlayers $base $variant [dict get $byVariant $variant] } result]} {
-			lappend reasons $result
+			set localized [FormatRenameReason $result]
+			if {[lsearch -exact $reasons $localized] < 0} { lappend reasons $localized }
 			continue
 		}
 		incr renamed [dict get $result renamed]
@@ -1056,7 +1083,8 @@ proc ::playerdata::ApplyNameFixes {sid parent base} {
 		}
 		foreach row [dict get $result skipped] {
 			lassign $row index name reason
-			if {[lsearch -exact $reasons $reason] < 0} { lappend reasons $reason }
+			set localized [FormatRenameReason $reason]
+			if {[lsearch -exact $reasons $localized] < 0} { lappend reasons $localized }
 		}
 	}
 
