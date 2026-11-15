@@ -1399,9 +1399,11 @@ proc ::mediainset::RefreshMediaButton {} {
 	if {$pane eq ""} { return }
 	set w $pane.mediaButton
 	if {![winfo exists $w]} {
-		ttk::button $w -text Media -command [list ::mediainset::PostMediaMenu $w]
+		ttk::button $w -text $::application::media::mc::Title \
+			-command [list ::mediainset::PostMediaMenu $w]
 		menu $w.menu -tearoff 0
 	}
+	$w configure -text $::application::media::mc::Title
 	PopulateMenu $w.menu
 	if {[winfo manager $w] ne "place"} {
 		place $w -relx 1 -x -4 -y 4 -anchor ne
@@ -1440,9 +1442,19 @@ proc ::mediainset::MediaMenuLabels {} {
 		lassign $entry row type title
 		lappend labels "$title ($type)"
 	}
-	lappend labels "Stop"
-	lappend labels "Open stream..."
+	lappend labels $::application::media::mc::Stop
+	if {[::mediainset::StreamAvailable]} {
+		lappend labels $::application::media::mc::OpenStream
+	}
 	return $labels
+}
+
+# A missing stream module removes its entry instead of leaving a dead row.
+proc ::mediainset::StreamAvailable {} {
+	if {[llength [info commands ::capability::present]]} {
+		return [::capability::present stream]
+	}
+	return 1
 }
 
 # The board button always lists the current game's entries and the stream
@@ -1450,18 +1462,25 @@ proc ::mediainset::MediaMenuLabels {} {
 # VAL-BRD-015: Stop follows the separator and precedes Open stream..., so
 # playback stays reachable while the video is folded to its handle. Its
 # state tracks the player, not the inset's mapping (folded or not).
+# Every row dispatches through a registered id: the media rows carry their
+# row as a typed argument, Stop and Open stream... are registry actions.
 proc ::mediainset::PopulateMenu {menu} {
 	$menu delete 0 end
 	set entries {}
 	catch { set entries [Entries] }
 	foreach entry $entries {
 		lassign $entry row type title path index
-		$menu add command -label "$title ($type)" -command [list ::mediainset::Choose $row]
+		$menu add command -label "$title ($type)" \
+			-command [list ::action::run media.play_entry [dict create row $row]]
 	}
 	if {[llength $entries]} { $menu add separator }
-	$menu add command -label "Stop" -command [list ::application::media::Stop] \
+	$menu add command -label $::application::media::mc::Stop \
+		-command [list ::action::run media.stop] \
 		-state [expr {[::mediainset::Playing?] ? "normal" : "disabled"}]
-	$menu add command -label "Open stream..." -command [list ::application::media::OpenStream [Pane]]
+	if {[::mediainset::StreamAvailable]} {
+		$menu add command -label $::application::media::mc::OpenStream \
+			-command [list ::action::run open_stream]
+	}
 }
 
 # C7 is the Media pane's own entry context menu. It is posted on right-click

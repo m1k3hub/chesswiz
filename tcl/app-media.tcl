@@ -2473,6 +2473,40 @@ proc application::media::DoOpenStream {cargs} {
 	doc "Open a video stream or a live tournament broadcast. With a link, play it; without one, open the stream dialog with the live sites." \
 ]
 
+# Registry handlers receive the validated argument dictionary. The board
+# Media button's popup posts these ids rather than calling the leaf
+# procedures, so every row is validated, gated and reachable by id.
+proc ::mediainset::RunStop {cargs} {
+	::application::media::Stop
+}
+
+proc ::mediainset::RunChoose {cargs} {
+	::mediainset::Choose [dict get $cargs row]
+}
+
+proc application::media::MediaStopLabel {} {
+	return $::application::media::mc::Stop
+}
+
+::action::register media.stop [dict create \
+	label $::application::media::mc::Stop \
+	label-command ::application::media::MediaStopLabel \
+	object {} \
+	what {} \
+	handler ::mediainset::RunStop \
+	enabled ::mediainset::Playing? \
+	doc "Stop the media player." \
+]
+
+::action::register media.play_entry [dict create \
+	label media.play_entry \
+	object {} \
+	what {} \
+	args {{row {type string required 1 description {the media row to play}}}} \
+	handler ::mediainset::RunChoose \
+	doc "Play one row listed by the board's Media button." \
+]
+
 proc application::media::PlayStream {url} {
 	variable Priv
 	variable StreamOptions

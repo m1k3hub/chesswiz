@@ -31,6 +31,40 @@ tcltest::test donate-menu-links {Donate dispatches the exact PayPal and Ko-fi de
 	unset -nocomplain ::donateTestURL
 } -result {PayPal https://paypal.me/MGThomas Ko-fi https://ko-fi.com/michaelthomas13477}
 
+# The top-strip button and the assistant both dispatch this row through
+# ::action::run. Posting the menu inside that call runs native menu tracking
+# synchronously on Windows and macOS, so the caller never returns. The row
+# must return at once (under 1 s) and post only from the event loop.
+tcltest::test donate-action-returns {::action::run menu.help.donate returns before its popup is posted} -body {
+	set m [winfo parent $::application::Vars(donate)].donate_menu
+	catch { ::tk::MenuUnpost $m }
+	update
+	set t0 [clock milliseconds]
+	set result [::action::run menu.help.donate]
+	set elapsed [expr {[clock milliseconds] - $t0}]
+	set posted [winfo ismapped $m]
+	list $result [expr {$elapsed < 1000}] $posted
+} -cleanup {
+	update idletasks
+	catch { ::tk::MenuUnpost [winfo parent $::application::Vars(donate)].donate_menu }
+	update
+} -result {{} 1 0}
+
+tcltest::test donate-knowledge-run-action-returns {assistant run_action menu.help.donate returns before its popup is posted} -body {
+	set m [winfo parent $::application::Vars(donate)].donate_menu
+	catch { ::tk::MenuUnpost $m }
+	update
+	set t0 [clock milliseconds]
+	set result [::knowledge::RunAction menu.help.donate {}]
+	set elapsed [expr {[clock milliseconds] - $t0}]
+	set posted [winfo ismapped $m]
+	list [expr {![string match {error:*} $result]}] [expr {$elapsed < 1000}] $posted
+} -cleanup {
+	update idletasks
+	catch { ::tk::MenuUnpost [winfo parent $::application::Vars(donate)].donate_menu }
+	update
+} -result {1 1 0}
+
 if {[info exists ::env(DONATE_SHOT)]} {
 	catch { exec import -display $::env(DISPLAY) -window root $::env(DONATE_SHOT) }
 }

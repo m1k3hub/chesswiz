@@ -2530,11 +2530,28 @@ proc ::menu::Invoke {id {argsDict {}}} {
 	return $result
 }
 
+# Post the Donate menu below its button from an idle callback, the same
+# ordering ::mediainset::PostMenuAt uses for the board's Media button. The
+# button may have gone away (another window closed the app) before the idle
+# runs, so every widget is checked first.
+proc ::menu::PostDonateMenu {} {
+	catch {
+		set b $::application::Vars(donate)
+		if {![winfo exists $b] || ![winfo ismapped $b]} { return }
+		set menu [winfo parent $b].donate_menu
+		if {![winfo exists $menu]} { return }
+		tk_popup $menu [winfo rootx $b] [expr {[winfo rooty $b] + [winfo height $b]}]
+	}
+}
+
 proc ::menu::Do {id} {
 	switch -- $id {
 		menu.help.donate {
-			set b $::application::Vars(donate)
-			tk_popup [winfo parent $b].donate_menu [winfo rootx $b] [expr {[winfo rooty $b] + [winfo height $b]}]
+			# A click and the assistant both reach this row through
+			# ::action::run. Posting the menu here would run native menu
+			# tracking inside that call on Windows and macOS, so it would
+			# never return. Post after the caller's stack has unwound.
+			after idle [list ::menu::PostDonateMenu]
 			return
 		}
 		menu.help.donate_paypal { return [::web::open .application [dict get $::menu::DonateURLs PayPal]] }
