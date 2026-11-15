@@ -631,7 +631,9 @@ proc ::application::ask::Move {direction} {
 		if {$direction < 0} { return [HistoryStep -1] }
 		return [HistoryStep 1]
 	}
-	set count [expr {max(1, [llength $Priv(rows)])}]
+ # ShowList always appends the "Ask the assistant" row, so the navigable
+ # count is one more than the matched commands (and one when none match).
+ set count [expr {[llength $Priv(rows)] + 1}]
 	set index [expr {$Priv(index) + $direction}]
 	if {$index < 0} { set index 0 }
 	if {$index >= $count} { set index [expr {$count - 1}] }

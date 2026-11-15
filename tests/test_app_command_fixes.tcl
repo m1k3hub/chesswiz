@@ -387,6 +387,30 @@ proc ::fix::noop {args} {return {}}
 } -result {1 1}
 
 # ----------------------------------------------------------------------
+# RF-06: the trailing "Ask the assistant" row is reachable with <Down>.
+# ----------------------------------------------------------------------
+::tcltest::test RF-06-assistant-row-reachable {keyboard navigation reaches the assistant row of a non-empty list} -setup {
+ set ::fix::Sent 0
+ rename ::application::ask::SendToAssistant ::fix::realSendToAssistant
+ proc ::application::ask::SendToAssistant {} {incr ::fix::Sent; return break}
+} -body {
+ set ::application::ask::Mode command
+ set ::application::ask::Query {database summary}
+ unset -nocomplain ::application::ask::Priv(filtered)
+ ::application::ask::Typed
+ set rows [llength $::application::ask::Priv(rows)]
+ for {set i 0} {$i <= $rows} {incr i} {::application::ask::Move 1}
+ set index $::application::ask::Priv(index)
+ ::application::ask::Choose
+ list [expr {$rows >= 1}] [expr {$index == $rows}] $::fix::Sent
+} -cleanup {
+ catch {rename ::application::ask::SendToAssistant {}}
+ rename ::fix::realSendToAssistant ::application::ask::SendToAssistant
+ set ::application::ask::Query {}
+ ::application::ask::HideList
+} -result {1 1 1}
+
+# ----------------------------------------------------------------------
 # F-12: the last result list is a typed slot, file slots use the platform
 # picker, and a quoted path with spaces is one word.
 # ----------------------------------------------------------------------
