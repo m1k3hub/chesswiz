@@ -174,9 +174,10 @@ array set ListSource {
 	}
 }
 
-# The proposals of a name fix, their ticks, and the way back
+# The proposals of a name fix, their ticks (per dialog session), and the way back
 variable NameFix
 array set NameFix {}
+variable NameFixSeq 0
 
 } ;# namespace playerdata
 
@@ -841,6 +842,7 @@ proc ::playerdata::NameState {base} {
 
 proc ::playerdata::fixNames {parent {base {}}} {
 	variable NameFix
+	variable NameFixSeq
 	variable mc
 
 	if {$base eq ""} { set base [::scidb::db::get name] }
@@ -856,40 +858,45 @@ proc ::playerdata::fixNames {parent {base {}}} {
 		return
 	}
 
-	set NameFix(state) [NameState $base]
-	set NameFix(base) $base
-	set NameFix(rows) $rows
-	set NameFix(tree) {}
+	set sid [incr NameFixSeq]
+	set NameFix($sid,state) [NameState $base]
+	set NameFix($sid,base) $base
+	set NameFix($sid,rows) $rows
+	set NameFix($sid,tree) {}
 	for {set i 0} {$i < [llength $rows]} {incr i} {
-		set NameFix(tick,$i) [lindex [lindex $rows $i] 6]
+		set NameFix($sid,tick,$i) [lindex [lindex $rows $i] 6]
 	}
 
-	set msg [format $mc::FixNamesConfirm [::locale::formatNumber [llength $rows]] \
-		[::util::databaseName $base]]
-	append msg "\n\n<embed>"
+	try {
+		set msg [format $mc::FixNamesConfirm [::locale::formatNumber [llength $rows]] \
+			[::util::databaseName $base]]
+		append msg "\n\n<embed>"
 
-	set reply [::dialog::question -parent $parent -title $mc::FixNamesTitle -default no \
-		-message $msg -detail $mc::FixNamesDetail \
-		-embed [namespace code EmbedNameFixes] \
-		-addbuttons [namespace code [list AddNameFixButtons $base]]]
+		set reply [::dialog::question -parent $parent -title $mc::FixNamesTitle -default no \
+			-message $msg -detail $mc::FixNamesDetail \
+			-embed [namespace code [list EmbedNameFixes $sid]] \
+			-addbuttons [namespace code [list AddNameFixButtons $sid $base]]]
 
-	switch -- $reply {
-		yes {
-			set selected 0
-			set games 0
-			set i 0
-			foreach row $rows {
-				if {$NameFix(tick,$i)} { incr selected; incr games [lindex $row 4] }
-				incr i
+		switch -- $reply {
+			yes {
+				set selected 0
+				set games 0
+				set i 0
+				foreach row $rows {
+					if {$NameFix($sid,tick,$i)} { incr selected; incr games [lindex $row 4] }
+					incr i
+				}
+				if {$selected && [::dialog::question -parent $parent -default no \
+					-title $mc::FixNamesTitle \
+					-message "Apply $selected selected name fixes ($games game references)?" \
+					-buttons {{yes "Apply selected name fixes"} {no Cancel}}] eq "yes"} {
+					ApplyNameFixes $sid $parent $base
+				}
 			}
-			if {$selected && [::dialog::question -parent $parent -default no \
-				-title $mc::FixNamesTitle \
-				-message "Apply $selected selected name fixes ($games game references)?" \
-				-buttons {{yes "Apply selected name fixes"} {no Cancel}}] eq "yes"} {
-				ApplyNameFixes $parent $base
-			}
+			revert	{ revertNames $parent $base }
 		}
-		revert	{ revertNames $parent $base }
+	} finally {
+		array unset NameFix $sid,*
 	}
 	return
 }
@@ -897,11 +904,11 @@ proc ::playerdata::fixNames {parent {base {}}} {
 
 # The rows of the preview, one tick per row: old name, new name, games
 # affected, and the list the new name comes from.
-proc ::playerdata::EmbedNameFixes {w infoFont alertFont} {
+proc ::playerdata::EmbedNameFixes {sid w infoFont alertFont} {
 	variable NameFix
 	variable mc
 
-	set rows $NameFix(rows)
+	set rows $NameFix($sid,rows)
 	ttk::frame $w.box
 	set tree [ttk::treeview $w.box.tree -show headings -selectmode none \
 		-height [expr {min(12, max(3, [llength $rows]))}] \
@@ -929,8 +936,8 @@ proc ::playerdata::EmbedNameFixes {w infoFont alertFont} {
 		incr i
 	}
 
-	bind $tree <Button-1> [namespace code [list ClickNameFix $tree %x %y]]
-	set NameFix(tree) $tree
+	bind $tree <Button-1> [namespace code [list ClickNameFix $sid $tree %x %y]]
+	set NameFix($sid,tree) $tree
 
 	grid $tree $w.box.scroll -sticky ns
 	grid rowconfigure $w.box 0 -weight 1
@@ -939,39 +946,40 @@ proc ::playerdata::EmbedNameFixes {w infoFont alertFont} {
 }
 
 
-proc ::playerdata::ClickNameFix {tree x y} {
+proc ::playerdata::ClickNameFix {sid tree x y} {
 	variable NameFix
 
 	set row [$tree identify row $x $y]
-	if {![string length $row] || ![info exists NameFix(tick,$row)]} { return }
-	set NameFix(tick,$row) [expr {!$NameFix(tick,$row)}]
-	$tree set $row pick [Mark $NameFix(tick,$row)]
+	if {![string length $row] || ![info exists NameFix($sid,tick,$row)]} { return }
+	set NameFix($sid,tick,$row) [expr {!$NameFix($sid,tick,$row)}]
+	$tree set $row pick [Mark $NameFix($sid,tick,$row)]
 }
 
 
-proc ::playerdata::TickNameFixes {pick} {
+proc ::playerdata::TickNameFixes {sid pick} {
 	variable NameFix
 
-	for {set i 0} {$i < [llength $NameFix(rows)]} {incr i} {
-		set NameFix(tick,$i) $pick
+	if {![info exists NameFix($sid,rows)]} { return }
+	for {set i 0} {$i < [llength $NameFix($sid,rows)]} {incr i} {
+		set NameFix($sid,tick,$i) $pick
 	}
-	if {[string length $NameFix(tree)] && [winfo exists $NameFix(tree)]} {
-		for {set i 0} {$i < [llength $NameFix(rows)]} {incr i} {
-			$NameFix(tree) set $i pick [Mark $pick]
+	if {[info exists NameFix($sid,tree)] && [string length $NameFix($sid,tree)] && [winfo exists $NameFix($sid,tree)]} {
+		for {set i 0} {$i < [llength $NameFix($sid,rows)]} {incr i} {
+			$NameFix($sid,tree) set $i pick [Mark $pick]
 		}
 	}
 }
 
 
 # Tick all, tick none, and the way back of the last renaming.
-proc ::playerdata::AddNameFixButtons {base f} {
+proc ::playerdata::AddNameFixButtons {sid base f} {
 	variable NameFix
 	variable mc
 
 	::tk::AmpWidget ::ttk::button $f.all -text " $mc::FixNamesPickAll" \
-		-command [namespace code [list TickNameFixes 1]]
+		-command [namespace code [list TickNameFixes $sid 1]]
 	::tk::AmpWidget ::ttk::button $f.none -text " $mc::FixNamesPickNone" \
-		-command [namespace code [list TickNameFixes 0]]
+		-command [namespace code [list TickNameFixes $sid 0]]
 	pack $f.all $f.none -side left -padx {0 6}
 
 	if {[info exists NameFix(undo,$base)] && [llength $NameFix(undo,$base)]} {
@@ -984,12 +992,12 @@ proc ::playerdata::AddNameFixButtons {base f} {
 
 # Rename the ticked rows, all of a variant in one step: renaming sorts the
 # namebase, so an index is only valid until then.
-proc ::playerdata::ApplyNameFixes {parent base} {
+proc ::playerdata::ApplyNameFixes {sid parent base} {
 	variable NameFix
 	variable mc
 
-	if {![info exists NameFix(state)] || [catch {NameState $base} state]
-		|| $state ne $NameFix(state)} {
+	if {![info exists NameFix($sid,state)] || [catch {NameState $base} state]
+		|| $state ne $NameFix($sid,state)} {
 		::dialog::info -parent $parent -message "The database or reference data changed. Open a fresh preview."
 		return 0
 	}
@@ -998,9 +1006,9 @@ proc ::playerdata::ApplyNameFixes {parent base} {
 	set picked 0
 	set i 0
 
-	foreach row $NameFix(rows) {
+	foreach row $NameFix($sid,rows) {
 		lassign $row variant index old new games source tick
-		if {$NameFix(tick,$i)} {
+		if {$NameFix($sid,tick,$i)} {
 			incr picked
 			dict lappend byVariant $variant $index $old $new
 		}

@@ -153,12 +153,12 @@ tcltest::test VAL-PD5-001-002-005 {Direct maintenance action and report open pre
   if {[dict exists $args -embed]} {
    uplevel #0 [dict get $args -embed] [list $w TkDefaultFont TkDefaultFont]
   }
-  set tree $::playerdata::NameFix(tree)
+  set tree $w.box.tree
   set items {}
   foreach item [$tree children {}] {
    lappend items [$tree item $item -values]
   }
-  set ::m4names::captured [list $::playerdata::NameFix(base) $items]
+  set ::m4names::captured [list [dict get $args -message] $items]
   destroy $w
   return no
  }
@@ -170,8 +170,8 @@ tcltest::test VAL-PD5-001-002-005 {Direct maintenance action and report open pre
  rename ::dialog::question {}
  rename ::m4names::realQuestion ::dialog::question
  ::scidb::db::close $uibase
- lassign $::m4names::captured capBase items
- list $hasButton [expr {$capBase eq $uibase}] $items
+ lassign $::m4names::captured capMsg items
+ list $hasButton [string match "*[::util::databaseName $uibase]*" $capMsg] $items
 } -result {1 1 {{{[x]} {Alpha, C} {Alpha, Canonical} 1 {FIDE 999600001} Normal} {{[x]} {Beta, C} {Beta, Canonical} 1 {FIDE 999600002} Normal}}}
 
 tcltest::test VAL-PD5-003 {Cancel, close, or empty selection performs zero renames} -body {
@@ -192,9 +192,18 @@ tcltest::test VAL-PD5-003 {Cancel, close, or empty selection performs zero renam
  }
  ::playerdata::fixNames .application $uibase
  set afterConfirmNo [::m4names::names $uibase]
- # 3) Empty selection (untick all)
+ # 3) Empty selection (untick all via dialog button)
  proc ::dialog::question {args} {
-  ::playerdata::TickNameFixes 0
+  set w [toplevel .m4_empty_probe]
+  if {[dict exists $args -embed]} {
+   uplevel #0 [dict get $args -embed] [list $w TkDefaultFont TkDefaultFont]
+  }
+  if {[dict exists $args -addbuttons]} {
+   ttk::frame $w.btns
+   uplevel #0 [dict get $args -addbuttons] [list $w.btns]
+   $w.btns.none invoke
+  }
+  destroy $w
   return yes
  }
  ::playerdata::fixNames .application $uibase
@@ -217,9 +226,15 @@ tcltest::test VAL-PD5-004-012 {Only explicitly confirmed selected rows change an
  proc ::dialog::question {args} {
   incr ::m4names::step
   if {$::m4names::step == 1} {
-   # Select only row 0 (Alpha, C), untick row 1 (Beta, C)
-   set ::playerdata::NameFix(tick,0) 1
-   set ::playerdata::NameFix(tick,1) 0
+   # Select only row 0 (Alpha, C), untick row 1 (Beta, C) via embedded tree click
+   set w [toplevel .m4_pick_probe]
+   wm geometry $w 760x320+20+20
+   uplevel #0 [dict get $args -embed] [list $w TkDefaultFont TkDefaultFont]
+   update
+   lassign [$w.box.tree bbox 1 pick] bx by bw bh
+   event generate $w.box.tree <Button-1> -x [expr {$bx + $bw / 2}] -y [expr {$by + $bh / 2}]
+   update idletasks
+   destroy $w
    return yes
   }
   return yes
@@ -234,6 +249,68 @@ tcltest::test VAL-PD5-004-012 {Only explicitly confirmed selected rows change an
  ::scidb::db::close $uibase
  list [expr {{Alpha, Canonical} in $after}] [expr {{Beta, C} in $after}] [expr {{Beta, Canonical} ni $after}] $dirty
 } -result {1 1 1 1}
+
+tcltest::test VAL-PD5-004-nested-preview {Opening and cancelling a second preview does not clobber the first dialog's selection} -body {
+ set uibase [::m4names::openUiBase p4nested]
+ rename ::dialog::question ::m4names::realQuestion
+ rename ::dialog::info ::m4names::realInfo
+ proc ::dialog::info {args} {}
+ set ::m4names::dlgSeq 0
+ set ::m4names::nestedDone 0
+ set ::m4names::uiClicks {}
+ proc ::dialog::question {args} {
+  if {![dict exists $args -embed]} {
+   return yes
+  }
+  set id [incr ::m4names::dlgSeq]
+  set w [toplevel .m4_nested_$id]
+  wm geometry $w 760x320+20+20
+  uplevel #0 [dict get $args -embed] [list $w TkDefaultFont TkDefaultFont]
+  if {[dict exists $args -addbuttons]} {
+   ttk::frame $w.btns
+   pack $w.btns -side bottom -fill x
+   uplevel #0 [dict get $args -addbuttons] [list $w.btns]
+  }
+  update
+  set tree $w.box.tree
+  if {$id == 1} {
+   # Dialog 1: untick row 1 (Beta, C) so only row 0 (Alpha, C) stays selected.
+   lassign [$tree bbox 1 pick] bx by bw bh
+   event generate $tree <Button-1> -x [expr {$bx + $bw / 2}] -y [expr {$by + $bh / 2}]
+   update idletasks
+   lappend ::m4names::uiClicks [$tree set 0 pick] [$tree set 1 pick]
+   # Open a second preview on the same base while Dialog 1 is still open,
+   # flip selection there, and cancel it.
+   if {!$::m4names::nestedDone} {
+    set ::m4names::nestedDone 1
+    ::playerdata::fixNames .application $::m4names::nestedBase
+   }
+   destroy $w
+   return yes
+  } else {
+   # Dialog 2: untick row 0 (Alpha, C) so only row 1 (Beta, C) is ticked, then cancel.
+   lassign [$tree bbox 0 pick] bx by bw bh
+   event generate $tree <Button-1> -x [expr {$bx + $bw / 2}] -y [expr {$by + $bh / 2}]
+   update idletasks
+   lappend ::m4names::uiClicks [$tree set 0 pick] [$tree set 1 pick]
+   destroy $w
+   return no
+  }
+ }
+ set ::m4names::nestedBase $uibase
+ ::playerdata::fixNames .application $uibase
+ set after [::m4names::names $uibase]
+ rename ::dialog::question {}
+ rename ::m4names::realQuestion ::dialog::question
+ rename ::dialog::info {}
+ rename ::m4names::realInfo ::dialog::info
+ ::scidb::db::close $uibase
+ list \
+  $::m4names::uiClicks \
+  [expr {{Alpha, Canonical} in $after}] \
+  [expr {{Beta, C} in $after}] \
+  [expr {{Beta, Canonical} ni $after}]
+} -result {{{[x]} {[  ]} {[  ]} {[x]}} 1 1 1}
 
 tcltest::test VAL-PD5-006-ui {Changed database or source revision invalidates preview before apply} -body {
  set uibase [::m4names::openUiBase p6]
