@@ -140,7 +140,9 @@ proc ::commandline::Action {name arguments} {
    return "the structure profile of $player is open in the Report pane"
   }
   find {
-   set result [::application::assistant::DoSearchGames $arguments]
+   # Route through the registered search_games action so CheckArgs normalizes
+   # colour, ECO ranges and player-relative results before BuildQuery sees them.
+   set result [::action::run search_games $arguments]
    if {[string match "error:*" $result]} {return $result}
    set shown [::application::assistant::DoShowSearch]
    return "$result\n$shown"

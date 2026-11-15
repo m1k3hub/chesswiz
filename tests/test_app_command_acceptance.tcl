@@ -273,8 +273,12 @@ proc ::commandAccept::validSlotValues {row} {
 	set ::commandAccept::ProviderCalls 0
 	::commandAccept::typeInAsk {find games player Kasparov wins white}
 	::application::ask::Choose
-	list [llength $::commandAccept::Calls] [lindex [lindex $::commandAccept::Calls 0] 0] $::commandAccept::ProviderCalls [::ai::systemone::enabled]
-} -result {1 command.find 0 0}
+	# command.find delegates to the registered search_games adapter so its
+	# CheckArgs normalization runs; both dispatch hops are visible here.
+	list [llength $::commandAccept::Calls] \
+		[lmap call $::commandAccept::Calls {lindex $call 0}] \
+		$::commandAccept::ProviderCalls [::ai::systemone::enabled]
+} -result {2 {command.find search_games} 0 0}
 
 ::tcltest::test command-accept-no-sync-rerank {suggestions and keystrokes never call the classifier synchronously} -setup {
 	set ::commandAccept::Calls {}

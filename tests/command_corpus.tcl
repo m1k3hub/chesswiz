@@ -50,7 +50,7 @@ set InScopeCommandCorpus {
 	pane-dock J1 {Dock the tree window.}
 		{dock tree} 50 pane {action dock pane tree}
 	find-draws J2 {All draws since 2020.}
-		{find games draws from 2020} 15 command.find {result draw from 2020}
+		{find games draws from 2020} 15 command.find {result 1/2-1/2 from 2020}
 	find-similar-games J2 {Find games like the one on the board.}
 		{games like this one} 18 command.similar {}
 	game-open-match J3 {Show me the second position you found.}

@@ -410,8 +410,12 @@ proc ::commandline::Match {text} {
       lappend missing player
      }
     }
-    if {$action eq "search_games" && [dict exists $arguments result] && ![dict exists $arguments player]} {
-     if {[dict get $arguments result] eq "draw"} {dict set arguments result 1/2-1/2} else {lappend missing player}
+    if {$action in {search_games command.find} && ![dict exists $arguments player]} {
+     if {[dict exists $arguments result] && [dict get $arguments result] eq "draw"} {
+      dict set arguments result 1/2-1/2
+     } elseif {[dict exists $arguments result] || [dict exists $arguments color] || [dict exists $arguments opponent]} {
+      lappend missing player
+     }
     }
     if {$id == 22 && ![llength $missing] && $::commandline::Source eq "::commandline::AppSource" && [llength [info commands ::commandline::OpeningMoves]]} {
      if {[catch {OpeningMoves $arguments}]} {continue}

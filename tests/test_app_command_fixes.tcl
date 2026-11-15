@@ -33,6 +33,13 @@ proc ::fix::run {text id} {
 proc ::fix::trace {command op} {lappend ::fix::Calls [lrange $command 1 end]}
 trace add execution ::action::run enter ::fix::trace
 
+proc ::fix::callArgs {calls name} {
+ foreach call $calls {
+  if {[lindex $call 0] eq $name} {return [lindex $call 1]}
+ }
+ return {}
+}
+
 set ::fix::Base [file join $::fix::Dir Main.pgn]
 set f [open $::fix::Base w]
 puts $f {[Event "Karvina 5th"]
@@ -278,6 +285,42 @@ proc ::fix::row {text id} {
  set text [::commandline::CompleteText [dict get $row template] [dict get $row args] [dict get $row missing]]
  list [string match {*i have white*} $text] [dict get [dict get $row args] colour]
 } -result {1 black}
+
+# ----------------------------------------------------------------------
+# RF-01: every find-games query that Enter can run goes through the real
+# search_games validation, so colour, ECO ranges and results are normalized.
+# ----------------------------------------------------------------------
+::tcltest::test RF-01-find-games-normalization {player, opening and draw searches run from Enter and narrow the list} -setup {
+ set ::fix::Notices {}
+ rename ::dialog::notice::post ::fix::realPost
+ proc ::dialog::notice::post {kind message args} {lappend ::fix::Notices [list $kind $message]}
+} -body {
+ ::fix::run {clear filter} 6
+ set playerCalls [::fix::run {find games player Kasparov} 15]
+ set playerCount [::scidb::view::count games $::fix::Base Normal 0]
+ ::fix::run {clear filter} 6
+ set openingCalls [::fix::run {find games opening Sicilian} 15]
+ set openingCount [::scidb::view::count games $::fix::Base Normal 0]
+ ::fix::run {clear filter} 6
+ set drawRow [::fix::row {find games draws from 2020} 15]
+ set drawCalls [::fix::run {find games draws from 2020} 15]
+ set drawCount [::scidb::view::count games $::fix::Base Normal 0]
+ set minRow [::fix::row {find games min elo 2600 wins} 15]
+ set kinds [lmap n $::fix::Notices {lindex $n 0}]
+ set playerArgs [::fix::callArgs $playerCalls search_games]
+ set openingArgs [::fix::callArgs $openingCalls search_games]
+ set drawArgs [::fix::callArgs $drawCalls search_games]
+ list $playerCount $openingCount $drawCount \
+  [expr {[dict get $playerArgs player] eq {Kasparov, Garry}}] \
+  [expr {[dict get $openingArgs eco] eq {B20-B99}}] \
+  [expr {[dict get [dict get $drawRow args] result] eq {1/2-1/2}}] \
+  [expr {[dict get $drawArgs result] eq {1/2-1/2} && [dict get $drawArgs from] eq {2020}}] \
+  [expr {"player" in [dict get $minRow missing]}] \
+  [expr {[lsearch -exact $kinds error] < 0}]
+} -cleanup {
+ catch {rename ::dialog::notice::post {}}
+ rename ::fix::realPost ::dialog::notice::post
+} -result {2 1 1 1 1 1 1 1 1}
 
 # ----------------------------------------------------------------------
 # F-07: "set <engine> threads <n>" changes the saved engine option and does
