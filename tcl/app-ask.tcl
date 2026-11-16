@@ -55,7 +55,7 @@ set Placeholder		"Ask or tell Chesswiz what to do (Ctrl+K)"
 set AskAssistant		"Ask the assistant"
 set Send				"Send to the assistant"
 set Mic				"Speak"
-set Recording		"Recording… click to stop"
+set Recording		"Recording… click to cancel"
 set Transcribing	"Transcribing… click to cancel"
 set Heard			"Heard: %s"
 set NothingHeard	"Nothing heard"
@@ -691,7 +691,7 @@ namespace eval mc {
 set Install		"Speech input needs sherpa-onnx-offline and a sherpa-onnx model folder (or whisper-cli with a ggml model), and arecord or ffmpeg. Set them in Preferences > Assistant."
 set InstallMac	"macOS uses the system dictation: turn it on in System Settings > Keyboard > Dictation, then press the dictation key (or Fn Fn)."
 set InstallWin	"Windows uses the system dictation: press Win+H while the Ask field has focus."
-set Listening	"Recording… click to stop"
+set Listening	"Recording… click to cancel"
 set Working		"Transcribing… click to cancel"
 set Nothing		"Nothing heard"
 set Failed		"Speech failed: %s"
@@ -1094,9 +1094,7 @@ proc ::application::speech::toggle {} {
 		idle {
 			Start
 		}
-		recording {
-			StopRecording
-		}
+		recording -
 		transcribing {
 			Cancel
 		}
@@ -1245,7 +1243,7 @@ proc ::application::speech::WaitRecorder {file deadline} {
 	StartTranscribe $file
 }
 
-# Cancel (button while transcribing, Esc, or the API): insert nothing.
+# Cancel (button while recording/transcribing, Esc, or the API): insert nothing.
 proc ::application::speech::Cancel {} {
 	variable Priv
 

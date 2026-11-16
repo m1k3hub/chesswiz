@@ -126,7 +126,7 @@ tcltest::test speech-stub-inserts-at-cursor {a transcript is inserted at the cur
 		$entry icursor end
 		::application::speech::toggle
 		set recording [set ::application::speech::Priv(state)]
-		::application::speech::toggle
+		::application::speech::RecordTimeout $::application::speech::Priv(recordFile)
 		set transcribing [set ::application::speech::Priv(state)]
 		set micWhile [[::application::ask::Mic] cget -text]
 		set idle [::scidb::test::speech::WaitIdle]
@@ -139,7 +139,7 @@ tcltest::test speech-stub-transcript-is-editable {the inserted transcript stays 
 	::scidb::test::speech::isolated {
 		::application::speech::configure stub {return "open the last game"}
 		::application::speech::toggle
-		::application::speech::toggle
+		::application::speech::RecordTimeout $::application::speech::Priv(recordFile)
 		::scidb::test::speech::WaitIdle
 		set entry [::application::ask::Entry]
 		$entry insert end " now"
@@ -151,7 +151,7 @@ tcltest::test speech-transcript-enter-sends-once {only Enter submits the editabl
 	::scidb::test::speech::isolated {
 		::application::speech::configure stub {return "open the last game"}
 		::application::speech::toggle
-		::application::speech::toggle
+		::application::speech::RecordTimeout $::application::speech::Priv(recordFile)
 		::scidb::test::speech::WaitIdle
 		set before $::scidb::test::speech::Asked
 		set entry [::application::ask::Entry]
@@ -171,7 +171,7 @@ tcltest::test speech-cancel-inserts-nothing {cancelling a transcription inserts 
 	::scidb::test::speech::isolated {
 		::application::speech::configure stub {return "open the last game"}
 		::application::speech::toggle
-		::application::speech::toggle
+		::application::speech::RecordTimeout $::application::speech::Priv(recordFile)
 		# still transcribing: the stub finish is 120 ms away
 		set state [set ::application::speech::Priv(state)]
 		::application::speech::Cancel
@@ -187,7 +187,7 @@ tcltest::test speech-stub-cleans-temp {the stub path leaves no recording behind 
 		::scidb::test::speech::ClearTemp
 		::application::speech::configure stub {return "open the last game"}
 		::application::speech::toggle
-		::application::speech::toggle
+		::application::speech::RecordTimeout $::application::speech::Priv(recordFile)
 		::scidb::test::speech::WaitIdle
 		glob -nocomplain [file join [::application::speech::TempDir] *]
 	}
@@ -219,7 +219,7 @@ tcltest::test speech-session-directory-isolated {each session has its own subdir
 		# Running speech stub must leave its own session directory empty without touching otherDir
 		::application::speech::configure stub {return "open the last game"}
 		::application::speech::toggle
-		::application::speech::toggle
+		::application::speech::RecordTimeout $::application::speech::Priv(recordFile)
 		::scidb::test::speech::WaitIdle
 
 		set ownLeftover [glob -nocomplain [file join [::application::speech::TempDir] *]]
@@ -578,5 +578,30 @@ tcltest::test speech-xplat-no-device {an empty device list fails without startin
 	rename ::application::speech::RealDevices ::application::speech::WindowsAudioDevices
 	set result
 } -result {No DirectShow audio recording device found}
+
+
+# Exercise the actual Tk button binding, not the Cancel API.
+tcltest::test speech-second-mic-click-cancels {second recording click inserts nothing and never transcribes} -body {
+ ::scidb::test::speech::isolated {
+  set ::speechRecognised 0
+  ::application::speech::configure stub {incr ::speechRecognised; return "must not be inserted"}
+  ::application::ask::SyncMic
+  update
+  set mic [::application::ask::Mic]
+  set entry [::application::ask::Entry]
+  $entry insert 0 "keep this"
+  foreach phase {start cancel} {
+   event generate $mic <Enter>
+   event generate $mic <ButtonPress-1> -x 3 -y 3
+   event generate $mic <ButtonRelease-1> -x 3 -y 3
+   update
+   if {$phase eq "start"} {set recording $::application::speech::Priv(state)}
+  }
+  after 500
+  update
+  list $recording $::application::speech::Priv(state) [$entry get] \
+   $::speechRecognised [llength $::scidb::test::speech::Asked]
+ }
+} -cleanup {unset -nocomplain ::speechRecognised} -result {recording idle {keep this} 0 0}
 
 tcltest::cleanupTests
