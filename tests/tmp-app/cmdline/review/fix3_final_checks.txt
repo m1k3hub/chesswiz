@@ -1,0 +1,12 @@
+$ git branch --show-current
+cmdline
+
+$ git rev-parse HEAD
+f2d69e80e0cbe7144f5b503465fda5b262807d7a
+
+$ git status --short
+
+$ git diff --check
+
+Running Stockfish/tkchesswiz/fake-uci processes owned by this worktree: none.
+Unrelated processes in other checkouts were not changed.
