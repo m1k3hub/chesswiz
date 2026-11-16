@@ -592,12 +592,59 @@ proc ::m4names::privacyViolations {txt {stripPaths {}}} {
  return $hits
 }
 
-tcltest::test VAL-PD5-017 {Fixtures, touched player-data test files, and logs contain no real player personal data or personal paths} -body {
- set testDir [file normalize [file dirname [info script]]]
- set repoRoot [file dirname $testDir]
- set violations {}
+proc ::m4names::mkdirTrack {targetDir} {
+ set created {}
+ set parts [file split [file normalize $targetDir]]
+ set cur [lindex $parts 0]
+ foreach part [lrange $parts 1 end] {
+  set cur [file join $cur $part]
+  if {![file exists $cur]} {
+   file mkdir $cur
+   lappend created $cur
+  }
+ }
+ return $created
+}
 
- # 1) Scan all player-data, rating-list, and name-fix test files
+proc ::m4names::findFilesRecursive {rootDir patterns} {
+ if {![file isdirectory $rootDir]} {
+  return {}
+ }
+ set found [glob -nocomplain -directory $rootDir -types f {*}$patterns]
+ foreach sub [glob -nocomplain -directory $rootDir -types d *] {
+  set base [file tail $sub]
+  if {$base in {. ..}} continue
+  if {[catch {file type $sub} ftype] || $ftype eq "link"} continue
+  lappend found {*}[::m4names::findFilesRecursive $sub $patterns]
+ }
+ lsort -unique $found
+}
+
+proc ::m4names::collectPrivacyLogFiles {testDir} {
+ set pdRoot [file normalize [file join $testDir tmp-app player-data]]
+ set reviewDir [file join $pdRoot review]
+ set pdFiles {}
+ foreach f [::m4names::findFilesRecursive $pdRoot {*.log *.tcl *.sh *.info *.csv *.txt}] {
+  set norm [file normalize $f]
+  set tail [file tail $norm]
+  if {[file dirname $norm] eq $reviewDir && (
+      [string match codex-*.log $tail]
+      || [string match agy-*.log $tail]
+      || [string match *-BRIEF.txt $tail])} {
+   continue
+  }
+  lappend pdFiles $norm
+ }
+ lsort -unique [concat \
+  [list [file join $testDir app_test_report.txt]] \
+  [expr {[info exists ::env(SCIDB_ERROR_LOG)] ? [list $::env(SCIDB_ERROR_LOG)] : {}}] \
+  [glob -nocomplain [file join $testDir tmp-app errors-*.log]] \
+  $pdFiles \
+  [::m4names::findFilesRecursive $::scidb::dir::user {*.log *.txt *.info *.csv}]]
+}
+
+proc ::m4names::runPrivacyAudit {testDir repoRoot} {
+ set violations {}
  set testFiles [lsort -unique [concat \
   [glob -nocomplain [file join $testDir test_app_player*.tcl]] \
   [list [file join $testDir test_app_rating_lists.tcl] [file join $testDir test_app_name_fixes.tcl]]]]
@@ -610,18 +657,7 @@ tcltest::test VAL-PD5-017 {Fixtures, touched player-data test files, and logs co
   }
  }
 
- # 2) Scan runtime reports, test logs, user-dir text/log artifacts, and in-memory log buffer
- set logFiles [lsort -unique [concat \
-  [list [file join $testDir app_test_report.txt]] \
-  [expr {[info exists ::env(SCIDB_ERROR_LOG)] ? [list $::env(SCIDB_ERROR_LOG)] : {}}] \
-  [glob -nocomplain \
-   [file join $testDir tmp-app player-data *.log] \
-   [file join $testDir tmp-app player-data review test_*.log] \
-   [file join $testDir tmp-app player-data review probe_*.log] \
-   [file join $::scidb::dir::user *.log] \
-   [file join $::scidb::dir::user * *.log] \
-   [file join $::scidb::dir::user ratings *.txt] \
-   [file join $::scidb::dir::user ratings *.info]]]]
+ set logFiles [::m4names::collectPrivacyLogFiles $testDir]
  set strip [list $repoRoot]
  if {[info exists ::env(HOME)] && [string match /tmp/* $::env(HOME)]} {
   lappend strip $::env(HOME)
@@ -640,13 +676,53 @@ tcltest::test VAL-PD5-017 {Fixtures, touched player-data test files, and logs co
    lappend violations [list app_log_widget $hits]
   }
  }
+ dict create testFiles $testFiles logFiles $logFiles violations $violations
+}
 
- # 3) Canary check: prove the scanner rejects disallowed names, IDs, and home paths
- set canary [::m4names::privacyViolations \
-  "[string cat Arth urton] [string cat 1503 014] [string cat /home/ sampleuser/.chesswiz]"]
+tcltest::test VAL-PD5-017 {Fixtures, touched player-data test files, and nested review/user logs contain no real player personal data or personal paths} -body {
+ set testDir [file normalize [file dirname [info script]]]
+ set repoRoot [file dirname $testDir]
 
- list [expr {[llength $testFiles] >= 8}] [expr {[llength $canary] >= 3}] $violations
-} -result {1 1 {}}
+ # 1) Audit live test files, recursive review/runtime logs, user-dir artifacts, and app log widget
+ set cleanAudit [::m4names::runPrivacyAudit $testDir $repoRoot]
+ set testFiles [dict get $cleanAudit testFiles]
+ set violations [dict get $cleanAudit violations]
+
+ # 2) Prove file discovery (not only privacyViolations) catches nested review and user logs
+ set rrCanaryDir [file join $testDir tmp-app player-data review rr2-logs]
+ set deepCanaryDir [file join $rrCanaryDir canary-[pid]]
+ set userCanaryDir [file join $::scidb::dir::user canary-[pid] nested]
+ set rrCanaryFile [file join $rrCanaryDir privacy-canary-[pid].log]
+ set deepCanaryFile [file join $deepCanaryDir deep-canary-[pid].log]
+ set userCanaryFile [file join $userCanaryDir user-canary-[pid].log]
+ set createdDirs {}
+ try {
+  lappend createdDirs {*}[::m4names::mkdirTrack $deepCanaryDir]
+  lappend createdDirs {*}[::m4names::mkdirTrack $userCanaryDir]
+  set ch [open $rrCanaryFile w]
+  puts $ch "[string cat /home/ sampleuser/synthetic-private-path]"
+  close $ch
+  set ch [open $deepCanaryFile w]
+  puts $ch "[string cat Arth urton] [string cat 1503 014]"
+  close $ch
+  set ch [open $userCanaryFile w]
+  puts $ch "[string cat /home/ sampleuser/user-nested-private]"
+  close $ch
+  set canaryAudit [::m4names::runPrivacyAudit $testDir $repoRoot]
+  set canaryViolations [dict get $canaryAudit violations]
+ } finally {
+  file delete -force $rrCanaryFile $deepCanaryFile $userCanaryFile
+  foreach d [lreverse $createdDirs] {
+   catch {file delete $d}
+  }
+ }
+ set flaggedNames [lmap v $canaryViolations {lindex $v 0}]
+ set rrFound [expr {[file tail $rrCanaryFile] in $flaggedNames}]
+ set deepFound [expr {[file tail $deepCanaryFile] in $flaggedNames}]
+ set userFound [expr {[file tail $userCanaryFile] in $flaggedNames}]
+
+ list [expr {[llength $testFiles] >= 8}] $rrFound $deepFound $userFound $violations
+} -result {1 1 1 1 {}}
 
 tcltest::test VAL-PD5-i18n-de {German session localizes maintenance button, preview headings, apply confirmation, stale preview, and undo conflict} -setup {
  set ::m4names::savedShare $::scidb::dir::share
