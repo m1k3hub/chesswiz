@@ -1726,13 +1726,14 @@ proc newAnalysisPane {analysisNumber} {
 # notebook page, or its toplevel when undocked). Returns the twm frame,
 # or {} when the board layout is not available. Automatic content callers
 # pass explicit=false so they do not create a persistent user reopen override.
-proc openPane {uid {explicit true}} {
+proc openPane {uid {explicit true} {yieldEvents false}} {
 	variable PaneOptions
 	variable Vars
 	variable MapTerminalToAnalysis
 
 	if {![info exists Vars(board:twm)]} { return {} }
 	set twm $Vars(board:twm)
+	if {$yieldEvents} { set initialTab [$Vars(notebook) select] }
 	# A game list can live on both pages. Showing it must preserve the
 	# user's database page rather than raise the board's duplicate pane.
 	if {![catch { set current [twm] }] && $uid in [$current leaves]} {
@@ -1749,15 +1750,26 @@ proc openPane {uid {explicit true}} {
 		} else {
 			$twm new frame $uid $PaneOptions($name)
 		}
-		update idletasks
+		# The native pane is complete. Automatic startup may service input
+		# between construction and mapping instead of draining only paint.
+		if {$yieldEvents} { update } else { update idletasks }
 	}
 	if {[catch { set frame [$twm leaf $uid] }] || ![winfo exists $frame]} { return {} }
 
+	if {$yieldEvents && [$Vars(notebook) select] ne $initialTab} { return $frame }
 	if {$twm eq $Vars(board:twm)} {
-		if {![string match {*.board} [$Vars(notebook) select]]} { switchTab board }
+		if {![string match {*.board} [$Vars(notebook) select]]} {
+			if {$yieldEvents} {
+				$Vars(notebook) select .application.nb.board
+				update
+			} else {
+				switchTab board
+			}
+		}
 		if {$explicit} { reflow::explicitOpen $twm $uid }
 		reflow::onPaneStateChange
 	}
+	if {![winfo exists $twm] || ![winfo exists $frame]} { return {} }
 	set parent [$twm parent $frame]
 	if {[$twm ismultiwindow $parent] || [$twm isnotebook $parent]} {
 		$twm select $parent $frame
@@ -2492,6 +2504,13 @@ proc Startup {main args} {
 
 
 proc Startup2 {} {
+	# Let background dictionary chunks finish before restoring databases,
+	# whose native open requires the complete player dictionary.
+	if {!$::load::DataLoaded} {
+		::load::startBackgroundData
+		after 1 [namespace code Startup2]
+		return
+	}
 	set app .application
 	set nb $app.nb
 

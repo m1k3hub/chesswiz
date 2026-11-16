@@ -98,4 +98,19 @@ tcltest::test window-geometry-keep-size {a fitting restored layout keeps its req
 	::windowGeometryTest::settle
 } -result {1 1}
 
+tcltest::test window-geometry-layout-fullscreen-noop {layout notifications do not reapply unchanged fullscreen state} -setup {
+    set ::windowGeometryFullscreenCalls 0
+    proc ::windowGeometryCountFullscreen {args} {incr ::windowGeometryFullscreenCalls}
+    trace add execution ::menu::setFullscreen enter ::windowGeometryCountFullscreen
+} -body {
+    set flag [::menu::fullscreen?]
+    event generate $::application::Vars(board:twm) <<TwmFullscreen>> -data $flag
+    update idletasks
+    list $::windowGeometryFullscreenCalls [expr {[::menu::fullscreen?] == $flag}]
+} -cleanup {
+    trace remove execution ::menu::setFullscreen enter ::windowGeometryCountFullscreen
+    rename ::windowGeometryCountFullscreen {}
+    unset ::windowGeometryFullscreenCalls
+} -result {0 1}
+
 tcltest::cleanupTests

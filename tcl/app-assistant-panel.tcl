@@ -237,13 +237,15 @@ proc ::application::assistant::panel::DeferredStartup {initialTab} {
 	# A native layout rebuild can move focus internally. Active composition
 	# takes precedence; sending the request will open the assistant normally.
 	if {$previous eq $entry && $entry ne "" && [$entry get] ne ""} { return }
-	Startup
-	if {$previous eq $entry && $entry ne "" && [winfo exists $entry]} {
+	Startup true
+	set current [focus]
+	if {$previous eq $entry && $entry ne "" && [winfo exists $entry]
+		&& ($current in [list "" .application $entry] || [string match .application.nb.board.board.* $current])} {
 		focus $entry
 	}
 }
 
-proc ::application::assistant::panel::Startup {} {
+proc ::application::assistant::panel::Startup {{yieldEvents false}} {
 	if {![Enabled]} { return }
 	set twm [Twm]
 	if {$twm eq ""} { return }
@@ -258,8 +260,13 @@ proc ::application::assistant::panel::Startup {} {
 	}
 
 	set ::application::assistant::Priv(startup) 1
-	if {[catch { ::application::openPane assistant false } frame]} { return }
+	if {[catch { ::application::openPane assistant false $yieldEvents } frame]} { return }
 	if {$frame eq "" || ![winfo exists $frame]} { return }
+	if {$yieldEvents} {
+		if {![Enabled] || [::application::activeTab] ne "board"} { return }
+		set entry [::application::ask::Entry]
+		if {$entry ne "" && [winfo exists $entry] && [$entry get] ne ""} { return }
+	}
 	PlaceBesideBoard $twm
 	after idle [namespace code Render]
 	after 100 [namespace code StartupFocus]

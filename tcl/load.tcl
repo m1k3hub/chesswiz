@@ -136,7 +136,13 @@ proc load {msg type path} {
 		lappend Log info "$msg: $path"
 	}
 
-	update idletasks
+	# Background startup loads one dictionary per event-loop turn. A caller
+	# that needs the data synchronously drains this coroutine in ensureData.
+	if {[info coroutine] eq "::load::DataLoader"} {
+		yield
+	} else {
+		update idletasks
+	}
 }
 
 
@@ -244,7 +250,11 @@ foreach pattern {::scidb::game::* ::scidb::db::* ::scidb::app::lookup
 proc ::load::ensureData {args} {
 	variable DataLoaded
 	variable DataGuards
-	if {$DataLoaded} { return }
+	if {$DataLoaded || [info coroutine] eq "::load::DataLoader"} { return }
+	if {[llength [info commands ::load::DataLoader]]} {
+		while {[llength [info commands ::load::DataLoader]]} { ::load::DataLoader }
+		return
+	}
 	set DataLoaded 1
 	foreach cmd $DataGuards {
 		trace remove execution $cmd enter ::load::ensureData
@@ -266,8 +276,32 @@ proc ::load::dataWhenUp {} {
 	if {![winfo exists .application] || ![winfo ismapped .application]} {
 		after 100 ::load::dataWhenUp
 	} else {
-		after idle ::load::ensureData
+		after idle ::load::startBackgroundData
 	}
+}
+
+# Keep dictionary consumers guarded until the last file has been loaded.
+# No nested update loop: startup returns to Tk between independent files.
+proc ::load::startBackgroundData {} {
+	if {$::load::DataLoaded || [llength [info commands ::load::DataLoader]]} { return }
+	coroutine ::load::DataLoader ::load::backgroundData
+	after 1 ::load::resumeBackgroundData
+}
+
+proc ::load::resumeBackgroundData {} {
+	if {![llength [info commands ::load::DataLoader]]} { return }
+	::load::DataLoader
+	after 1 ::load::resumeBackgroundData
+}
+
+proc ::load::backgroundData {} {
+	::load::ensureEco
+	LoadData
+	set ::load::DataLoaded 1
+	foreach cmd $::load::DataGuards {
+		trace remove execution $cmd enter ::load::ensureData
+	}
+	trace remove execution ::scidb::app::load enter ::load::ensureDataForLoad
 }
 
 proc ::load::LoadData {} {

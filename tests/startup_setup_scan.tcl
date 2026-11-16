@@ -10,7 +10,7 @@ foreach key [array names env] {
     if {[string match *API_KEY $key] || [string match CHESSWIZ_NO_* $key]} {unset env($key)}
 }
 set env(SCIDB_AI_PROVIDER) openai
-set env(SCIDB_AI_MODEL) {}
+unset -nocomplain env(SCIDB_AI_MODEL)
 set env(SCIDB_AI_CLASSIFIER) off
 set env(SCIDB_AI_ROUTE) off
 set env(SCIDB_AI_TRIAGE) 0
@@ -18,29 +18,15 @@ set f [open [file join $env(SCIDB_USERDIR) config options.dat] w]
 puts $f {namespace eval ::application {array set Options {assistant:startup 1}}}
 puts $f {namespace eval ::tips {array set Options {mode neverShow}}}
 close $f
-# Discoverable on hosts without engines. Deliberately slow: startup should
-# report this executable, leaving the protocol probe for explicit setup.
-file mkdir [file join $scanHome bin]
-set f [open [file join $scanHome bin igel] w]
-puts $f {#!/bin/sh
-sleep 2
-while read line; do
-    case "$line" in
-        uci) printf 'id name Startup Test Engine\nuciok\n';;
-        isready) printf 'readyok\n';;
-        quit) exit 0;;
-        xboard) exit 0;;
-    esac
-done}
-close $f
-file attributes [file join $scanHome bin igel] -permissions 0755
+# Observe this machine's real discovery result; a Unix fake executable is
+# neither portable nor representative of a machine without new engines.
 set argv {--single-process}
 set argc 1
 set scanMapped -1
 set scanViolations {}
 set scanSamples 0
 set scanInteraction 0
-set scanPrevious -1
+set scanPrevious 0
 set scanMaxGap 0
 proc scanCheck {{event sample}} {
     if {$::scanMapped < 0} {return}
@@ -77,6 +63,26 @@ proc scanMap {w} {
     scanCheck first-map
     after 0 scanSample
 }
+proc scanCandidates {command code result op} {
+    if {$code != 0} {return}
+    set ::scanCandidates $result
+    set ::scanListed [string tolower [lmap e $::engine::Engines {
+        set n [expr {[dict exists $e Name] ? [dict get $e Name] : ""}]
+        if {[dict exists $e Identifier]} {append n " " [dict get $e Identifier]}
+        set n
+    }]]
+}
+proc scanDiscoveryReported {text} {
+    if {![info exists ::scanCandidates]} {return 0}
+    set names {}
+    foreach {kind path} $::scanCandidates {
+        if {[string first $kind $::scanListed] < 0} {lappend names [file tail $path]}
+    }
+    if {![llength $names]} {
+        return [expr {[string first {Chess engines: no new engine found;} $text] >= 0}]
+    }
+    return [expr {[string first "Chess engines: found [join $names {, }]." $text] >= 0}]
+}
 proc scanFinish {} {
     set text [$::application::assistant::Priv(text) get 1.0 end]
     set checks [list \
@@ -86,10 +92,11 @@ proc scanFinish {} {
         [::menu::PaneChecked assistant] \
         $::application::setupscan::Options(done) \
         [expr {!$::application::setupscan::Priv(running)}] \
-        [expr {[string first {Chess engines: found} $text] >= 0 && [string first igel $text] >= 0}] \
-        [expr {[string first {run setup again from the Information tab} $text] >= 0}] \
+        [scanDiscoveryReported $text] \
+        [expr {[string first {Done. Run this again any time from the Information tab.} $text] >= 0}] \
         [expr {[$::scanEntry get] eq {x} && [focus] eq $::scanEntry}] \
         [expr {$::scanMaxGap < 1000}]]
+    puts [list DISCOVERY candidates [expr {[info exists ::scanCandidates] ? $::scanCandidates : {unobserved}}] pane $text]
     puts [list STARTUP-SCAN checks $checks samples $::scanSamples max_gap_ms $::scanMaxGap violations $::scanViolations]
     flush stdout
     exit [expr {0 in $checks}]
@@ -103,4 +110,12 @@ source $scanBundle
 # Suppress only the unrelated first-language wizard, as startup_timing does.
 # Greet, firstStart and every scan step remain intact.
 set ::scidb::dir::setup 0
+trace add execution ::application::setupscan::EngineCandidates leave scanCandidates
+# Optional diagnostic timing, without replacing any startup operation.
+if {[info exists env(STARTUP_SCAN_TRACE)]} {
+    proc scanTrace {args} {puts [list TIMING [clock milliseconds] {*}$args]}
+    foreach cmd {::application::sample::maybeOpen ::application::database::openBase ::scidb::db::load ::application::setupscan::EngineCandidates ::application::setupscan::Glob ::application::setupscan::StepSpeech ::application::setupscan::StepDatabases ::application::setupscan::StepFonts} {
+        trace add execution $cmd {enter leave} scanTrace
+    }
+}
 vwait scanForever

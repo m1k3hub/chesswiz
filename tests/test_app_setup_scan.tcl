@@ -83,4 +83,41 @@ done}
     file delete $::setupScanExe
 } -result {{1 0} 1 1 0 {}}
 
+# The startup pane must report an actual result even on machines with no
+# candidates. Exercise both result branches, independent of host installs.
+foreach discovery {empty found} {
+    tcltest::test setup-scan-report-$discovery {discovery and rerun advice reach the assistant pane} -setup {
+        ::application::openPane assistant false
+        update
+        set savedEngines $::engine::Engines
+        set savedPriv [array get ::application::setupscan::Priv]
+        set ::engine::Engines {}
+        rename ::application::setupscan::EngineCandidates ::application::setupscan::SavedEngineCandidates
+        set ::setupScanCandidates {}
+        if {$discovery eq "found"} {
+            set ::setupScanCandidates {stockfish {/example/stockfish-17.exe} crafty {/example/crafty.exe}}
+        }
+        proc ::application::setupscan::EngineCandidates {} {return $::setupScanCandidates}
+        set textWidget $::application::assistant::Priv(text)
+        set start [$textWidget index end-1c]
+    } -body {
+        ::application::setupscan::run 1
+        set deadline [expr {[clock milliseconds]+15000}]
+        while {$::application::setupscan::Priv(running) && [clock milliseconds]<$deadline} {update; after 10}
+        set text [$textWidget get $start end]
+        set expected {Chess engines: no new engine found; 0 already in the engine list.}
+        if {$discovery eq "found"} {set expected {Chess engines: found stockfish-17.exe, crafty.exe.}}
+        list [expr {[string first $expected $text]>=0}] \
+            [expr {[string first {Done. Run this again any time from the Information tab.} $text]>=0}] \
+            [expr {$::engine::Engines eq {}}] $::application::setupscan::Priv(running)
+    } -cleanup {
+        rename ::application::setupscan::EngineCandidates {}
+        rename ::application::setupscan::SavedEngineCandidates ::application::setupscan::EngineCandidates
+        set ::engine::Engines $savedEngines
+        array unset ::application::setupscan::Priv
+        array set ::application::setupscan::Priv $savedPriv
+        unset ::setupScanCandidates
+    } -result {1 1 1 0}
+}
+
 tcltest::cleanupTests

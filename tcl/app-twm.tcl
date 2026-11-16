@@ -1253,6 +1253,10 @@ proc restoreLayout {twm layoutVariant name currenLayout savedLayout} {
 proc Fullscreen {twm flag} {
 	variable [namespace parent]::Vars
 
+	# Layout rebuilds announce their saved state even when it is unchanged.
+	# Reapplying it on Windows repeats a native fullscreen transition and
+	# drains the board's pending paint work inside the rebuild.
+	if {$flag == [::menu::fullscreen?]} { return }
 	::menu::setFullscreen $flag
 	update idletasks
 }

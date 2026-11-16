@@ -148,5 +148,35 @@ tcltest::test cache-load-rating-precedence {each federation loads once, preferri
     }
     set observed
 } -result {{{dwz dwz-ratings.txt} {ecf ecf-ratings.txt} {iccf iccf-ratings.txt}} {{installed ratings/dwz-ratings.txt} {installed ratings/ecf-ratings.txt} {installed ratings/iccf-ratings.txt}} {{dwz dwz-ratings.txt} {ecf ecf-ratings.txt} {iccf iccf-ratings.txt}}}
+# Background startup yields between dictionary files, but a native consumer
+# must still see the complete dictionary, never the partially loaded prefix.
+foreach mode {background consumer} {
+    tcltest::test cache-load-chunks-$mode {background chunks preserve load order and synchronous first use} -setup {
+        proc winfo {args} {return 1}
+        namespace eval ::scidb::engine {
+            proc info {} {return $::load::DataLoaded}
+        }
+        captureAfter
+    } -body {
+        runCacheLoad {} 0
+        ::load::ensureEco
+        ::load::startBackgroundData
+        set partial [list $::load::DataLoaded [lmap c $::cacheTestCalls {lindex $c 0}]]
+        if {$mode eq "consumer"} {
+            set complete [::scidb::engine::info]
+        } else {
+            drainDeferred
+            set complete $::load::DataLoaded
+        }
+        drainDeferred
+        list $partial $complete [llength [info commands ::load::DataLoader]] \
+            [lmap c $::cacheTestCalls {lindex $c 0}] \
+            [trace info execution ::scidb::engine::info]
+    } -cleanup {
+        rename winfo {}
+        rename ::scidb::engine::info {}
+        releaseAfter
+    } -result {{0 {eco cache-read ssp}} 1 0 {eco cache-read ssp ssp comp fide ips dwz ecf iccf wiki wiki cgdc site done cache-write} {}}
+}
 file delete -force $cacheTestRoot
 tcltest::cleanupTests

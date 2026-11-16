@@ -135,4 +135,32 @@ tcltest::test board-reserve-contract {right/bottom/left, restore, refusal and re
     set results
 } -result {1 1 1 1 1 1 1 1 1 1 1 1}
 
+tcltest::test board-rebuild-yield-coalesces {a resize delivered while yielding waits for the current rebuild} -setup {
+    set c $::application::board::Vars(widget:frame)
+    set w [winfo width $c]
+    set h [winfo height $c]
+    set ::brQueued 0
+    set ::brDepth 0
+    set ::brMaxDepth 0
+    proc brDepth {args} {
+        if {[lindex $args end] eq "enter"} {
+            incr ::brDepth
+            set ::brMaxDepth [expr {max($::brMaxDepth,$::brDepth)}]
+        } else {incr ::brDepth -1}
+    }
+    trace add execution ::application::board::RebuildBoardNow {enter leave} brDepth
+} -body {
+    after 0 [list apply {{c w h} {
+        ::application::board::RebuildBoard $c $w $h true
+        set ::brQueued [info exists ::application::board::PendingRebuild]
+    }} $c $w $h]
+    ::application::board::RebuildBoard $c $w $h true
+    update
+    list $::brQueued $::brMaxDepth $::application::board::Rebuilding \
+        [info exists ::application::board::PendingRebuild]
+} -cleanup {
+    trace remove execution ::application::board::RebuildBoardNow {enter leave} brDepth
+    rename brDepth {}
+} -result {1 1 0 0}
+
 tcltest::cleanupTests

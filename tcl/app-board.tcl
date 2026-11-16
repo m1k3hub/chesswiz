@@ -1536,7 +1536,31 @@ proc ConfigureReserve3D {width height} {
 	}]]
 }
 
+# Native layout callbacks can arrive while another rebuild is yielding.
+# Keep only the newest pending size, and never reenter a half-built board.
 proc RebuildBoard {canv width height {force false}} {
+	variable Rebuilding
+	variable PendingRebuild
+	if {[info exists Rebuilding] && $Rebuilding} {
+		set PendingRebuild [list $canv $width $height $force]
+		return
+	}
+	set Rebuilding 1
+	try {
+		# Service input/timers before the bounded rendering batch. Draining
+		# only idle work can chain multiple Windows paints without a tick.
+		if {[winfo exists .application] && [winfo ismapped .application]} { ::update }
+		RebuildBoardNow $canv $width $height $force
+	} finally {
+		set Rebuilding 0
+		if {[info exists PendingRebuild]} {
+			after 0 [namespace code [list RebuildBoard {*}$PendingRebuild]]
+			unset PendingRebuild
+		}
+	}
+}
+
+proc RebuildBoardNow {canv width height {force false}} {
 	variable ::board::layout
 	variable Layouts
 	variable Dim
@@ -1611,7 +1635,6 @@ proc RebuildBoard {canv width height {force false}} {
 	}
 
 	if {$squareSize != $Dim($sqsize) || $edgeThickness != $Dim(edgethickness)} {
-		::update idletasks
 		foreach l $Layouts {
 			if {$l ne $Vars(layout) && [llength $Vars(inuse:$l)] && !$Vars(registered:$l)} {
 				::board::registerSize $Vars(inuse:$l)
@@ -1748,9 +1771,8 @@ proc ComputeLayout {canvWidth canvHeight {bordersize -1}} {
 	variable Dim
 	variable Vars
 
-	if {$bordersize > 0} {
-		::update idletasks
-	}
+	# Use the supplied dimensions without recursively draining pending
+	# paints while a board rebuild is still in progress.
 
 	variable ReserveSide
 	variable ReservePixels
