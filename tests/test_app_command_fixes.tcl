@@ -430,6 +430,26 @@ proc ::fix::row {text id} {
 # ----------------------------------------------------------------------
 # F-05: the registry palette stays reachable beside the typed commands.
 # ----------------------------------------------------------------------
+::tcltest::test R2F-01-hidden-adapters {real Ask suggestions never expose argumentless internal adapters} -body {
+ set leaked {}
+ foreach text {{Replace exported file} {Go to tab} {Switch database} {Open search result} {Set engine threads} {Create puzzles} {Play engine} {Run tournament}} {
+  set ::application::ask::Mode command
+  set ::application::ask::Query $text
+  unset -nocomplain ::application::ask::Priv(filtered)
+  ::application::ask::Typed
+  foreach row $::application::ask::Priv(commands) {
+   if {[dict exists $row palette] && [string match command.* [dict get $row action]]} {
+    lappend leaked [dict get $row action]
+   }
+  }
+ }
+ foreach row [::action::labels asklist {}] {
+  if {[string match command.* [lindex $row 0]]} {lappend leaked [lindex $row 0]}
+ }
+ set row [::fix::row {set} 40]
+ list [lsort -unique $leaked] [expr {[llength [dict get $row missing]] > 0}]
+} -result {{} 1}
+
 proc ::fix::noop {args} {return {}}
 ::tcltest::test F-05-palette {registry actions still appear in the Ask list} -setup {
  ::action::register fix.palette [dict create label "Zebra Palette Action" object {} \

@@ -517,7 +517,7 @@ proc ::application::ask::Typed {{key ""}} {
 		foreach row $Priv(commands) { dict set seen [dict get $row action] 1 }
 		foreach paletteRow [::action::labels asklist $text] {
 			lassign $paletteRow id label accel enabled visible
-			if {[dict exists $seen $id]} { continue }
+			if {[string match command.* $id] || [dict exists $seen $id]} { continue }
 			dict set seen $id 1
 			lappend Priv(commands) [dict create id $id action $id args {} missing {} \
 				template {} label $label input $text palette 1]

@@ -39,7 +39,7 @@ proc ::commandline::RegisterActions {} {
   set spec {}
   foreach key $keys {lappend spec [list $key {type string default {}}]}
   ::action::register $id [dict create label $label object {} what $label doc $label \
-   args $spec handler [list ::commandline::Action $name] ai 0 operator 0 confirm [expr {$name eq "export.replace"}]]
+   args $spec handler [list ::commandline::Action $name] ai 0 operator 0 visible {expr {0}} confirm [expr {$name eq "export.replace"}]]
  }
 }
 proc ::commandline::RequireSuccess {result} {
