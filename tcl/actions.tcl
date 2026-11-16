@@ -951,6 +951,74 @@ proc ::action::_stampOf {cmd} {
 	return $value
 }
 
+# Read predicate RESULTS, not a hand-maintained list of their variables.
+# Predicates are arbitrary scripts: a new action must not need a matching
+# cache invalidation hook. Deduplicate shared predicates across aliases.
+proc ::action::AskLiveInputs {ctxObjects ctxMenus} {
+	variable Registry
+	set scripts [dict create]
+	dict for {id rec} $Registry {
+		if {[dict get $rec ai] eq "debug" || $id eq "context.ask"} { continue }
+		set object {}
+		set contexts [dict get $rec context]
+		if {[llength $contexts] && [dict get $rec dropdown] eq ""} {
+			set included 0
+			foreach cid $contexts {
+				if {[dict exists $ctxMenus $cid] && $id in [dict get $ctxMenus $cid]} {
+					set included 1
+				}
+			}
+			if {!$included} { continue }
+			foreach cid $contexts {
+				if {[dict exists $ctxObjects $cid]} {
+					if {$cid eq "C5" && $id ni [dict get $ctxMenus $cid]} { continue }
+					set object [dict get $ctxObjects $cid]
+					break
+				}
+			}
+		}
+		foreach field {visible enabled} {
+			set script [dict get $rec $field]
+			if {$script eq ""} { continue }
+			if {[dict get $rec $field-args] && $object ne {}} {
+				lappend script [dict create object $object]
+			}
+			dict set scripts $script 1
+		}
+		if {[string match {c[0-9]*} $id] && [llength [info commands ::context::ObjectRule]]} {
+			dict set scripts [::list ::context::ObjectRule $id $object] 1
+		}
+	}
+	if {[info exists ::context::Predicates]} {
+		dict for {id predicates} $::context::Predicates {
+			dict for {field predicate} $predicates {
+				if {$field in {visible enabled}} {
+					dict set scripts [::list namespace eval ::context [::list expr $predicate]] 1
+				}
+			}
+		}
+	}
+	set values {}
+	foreach script [dict keys $scripts] {
+		set code [catch {uplevel #0 $script} value]
+		lappend values $script $code $value
+	}
+	# These are the complete inputs to actionAvailable's bare-call gate.
+	# Only readiness booleans are retained; credentials never enter a stamp.
+	if {[llength [info commands ::capability::present]]} {
+		foreach name {Modules Overrides ActionModuleById ActionCommands ArgumentModules ArgumentCommands} {
+			lappend values $name [set ::capability::$name]
+		}
+		foreach module [dict keys $::capability::Modules] {
+			lappend values $module [::capability::present $module]
+		}
+		dict for {id command} $::capability::ActionCommands {
+			lappend values $id [llength [info commands $command]]
+		}
+	}
+	return $values
+}
+
 # A cheap reading of the state inputs that decide availability. The
 # context objects and their posted rows are passed in because they change
 # per position/selection. Anything else menu::state reads is named here, so
@@ -1022,6 +1090,7 @@ proc ::action::AskStamp {ctxObjects ctxMenus} {
 	}
 	if {[info exists ::comment::Vars(langSet)]} { lappend parts clangs $::comment::Vars(langSet) }
 	if {[info exists ::comment::Vars(lang)]} { lappend parts clang $::comment::Vars(lang) }
+	lappend parts live [AskLiveInputs $ctxObjects $ctxMenus]
 	lappend parts ctx $ctxObjects $ctxMenus
 	return $parts
 }
@@ -1177,6 +1246,12 @@ proc ::action::AskRows {query} {
 			}
 		} else {
 			set rows $AskCachedRows
+			# Opt-in diagnostic for future changes to menu::state itself.
+			if {[info exists ::action::AskCacheCheck] && $::action::AskCacheCheck
+			 && [_BuildAskRows $ctxObjects $ctxMenus $ctxIds] ne $rows} {
+				set AskCachedStamp ""
+				error "Ask cache disagrees with live menu state"
+			}
 		}
 		set rows
 	} result]
