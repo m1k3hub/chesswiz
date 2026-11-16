@@ -887,6 +887,21 @@ test aipc-apikey-9.1 {the environment wins over -keys} -body {
 	return [list $a $b $c $d]
 } -result [list env-key file-key file-key oai-file]
 
+test aipc-apikey-unreadable {an unreadable environment entry falls back to configured keys} -setup {
+    ::ai::provider::configure -keys {anthropic configured-key}
+    set ::env(ANTHROPIC_API_KEY) unreadable
+    proc UnreadableKey {args} { error {environment value unavailable} }
+    trace add variable ::env(ANTHROPIC_API_KEY) read UnreadableKey
+} -body {
+    set configured [::ai::provider::apiKey anthropic]
+    ::ai::provider::configure -keys {}
+    list $configured [::ai::provider::apiKey anthropic]
+} -cleanup {
+    trace remove variable ::env(ANTHROPIC_API_KEY) read UnreadableKey
+    rename UnreadableKey {}
+    unset -nocomplain ::env(ANTHROPIC_API_KEY)
+} -result {configured-key {}}
+
 test aipc-apikey-missing-9.2 {no key reports through chatAsync without a request} -body {
 	MockStart
 	MockReset

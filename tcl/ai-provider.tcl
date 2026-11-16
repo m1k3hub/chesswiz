@@ -594,7 +594,9 @@ proc ::ai::provider::apiKey {provider} {
 
 	if {[info exists KeyEnv($provider)]} {
 		foreach var $KeyEnv($provider) {
-			if {[info exists ::env($var)] && [string length $::env($var)]} { return $::env($var) }
+			# On Windows an empty OS variable may still have a Tcl array
+			# entry whose read throws. Read once and fall through on failure.
+			if {![catch {set ::env($var)} key] && [string length $key]} { return $key }
 		}
 	}
 	if {[dict exists $Config(keys) $provider]} { return [dict get $Config(keys) $provider] }
