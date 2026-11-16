@@ -546,7 +546,12 @@ proc ::commandline::CompleteText {template arguments {missing {}}} {
   } elseif {[string index $word 0] eq "@"} {
    set slot [string range $word 1 end]; set key [Key $slot]
    if {$slot eq "criteria"} {
-    dict for {k v} $arguments {lappend words [CriteriaWord $k] $v}
+    dict for {k v} $arguments {
+     # Match normalizes playerless draws for action validation. Completion
+     # must serialize the grammar's word so the next keystroke can parse it.
+     if {$k eq "result" && $v eq "1/2-1/2"} {set v draw}
+     lappend words [CriteriaWord $k] $v
+    }
     if {[llength $missing]} {
      set first [lindex $missing 0]
      lappend words [CriteriaWord $first] <$first>

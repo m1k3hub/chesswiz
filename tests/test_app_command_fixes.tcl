@@ -309,6 +309,36 @@ proc ::fix::row {text id} {
  }
  error "no row $id for '$text'"
 }
+proc ::fix::enterMissing {text id} {
+ set ::application::ask::Mode command
+ set ::application::ask::Query $text
+ unset -nocomplain ::application::ask::Priv(filtered)
+ ::application::ask::Typed
+ set index 0
+ foreach row $::application::ask::Priv(commands) {
+  if {[dict get $row id] eq $id && [llength [dict get $row missing]]} {
+   set ::application::ask::Priv(index) $index
+   ::application::ask::ShowList
+   ::application::ask::Choose
+   return $::application::ask::Query
+  }
+  incr index
+ }
+ error "no incomplete row for $text"
+}
+::tcltest::test R2F-04-draw-completion {Enter completes draw criteria and the resulting query executes a real search} -body {
+ set results {}
+ foreach {slot value} {event Biel from 2020} {
+  ::fix::run {clear filter} 6
+  set query [::fix::enterMissing "find games draws $slot" 15]
+  set query [string map [list <$slot> $value] $query]
+  set calls [::fix::run $query 15]
+  set args [::fix::callArgs $calls search_games]
+  lappend results [dict get $args result] [::scidb::view::count games $::fix::Base Normal 0]
+ }
+ set results
+} -result {1/2-1/2 1 1/2-1/2 1}
+
 ::tcltest::test F-10-missing-slot {completing an event slot keeps the text and inserts its marker} -body {
  set row [::fix::row {find games event} 15]
  set ::application::ask::Query {find games event}
