@@ -237,8 +237,8 @@ set ::knowledge::Explicit [dict create \
 		keywords [list overwrite replace loaded game edited update] \
 	] \
 	search_games [dict create \
-		purpose "Search the database for games matching a player or filter." \
-		when "Use this when you want to find games in your database." \
+		purpose "Find matching games without changing the game list; call show_search to display them." \
+		when "Find games using top-level player, color, result, event or eco arguments. To show or filter games in the interface, follow with show_search. To also show the player card, then call open_view with kind player_card and name." \
 		examples [list "search my database for all games by a player" "find games with this filter"] \
 		related [list open_search find_positions show_search] \
 		keywords [list search database games player filter find] \

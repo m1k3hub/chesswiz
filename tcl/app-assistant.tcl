@@ -1269,7 +1269,13 @@ proc ::application::assistant::PreparePlan {calls} {
 		} else {
 			dict size $cargs
 		}
-		if {[dict exists $Actions $name]} { set cargs [CheckArgs $name $cargs] }
+		# CheckArgs returns positional handler arguments, which need not be
+		# valid public tool arguments (search_games wraps them in criteria).
+		# Keep both: dispatch revalidates the public input; approval binds to
+		# exactly the checked handler arguments shown at confirmation time.
+		set checked $cargs
+		if {[dict exists $Actions $name]} { set checked [CheckArgs $name $cargs] }
+		dict set call checkedArguments $checked
 		dict set call function arguments $cargs
 		lappend prepared $call
 	}
@@ -1284,7 +1290,8 @@ proc ::application::assistant::PlanText {calls} {
 		set name [dict get $fn name]
 		set cargs [expr {[dict exists $fn arguments] ? [dict get $fn arguments] : {}}]
 		set what [dict get [::action::get $name] what]
-		if {$what eq "" || [catch {set what [format $what {*}[dict values $cargs]]}]} {
+		set checked [dict get $call checkedArguments]
+		if {$what eq "" || [catch {set what [format $what {*}[dict values $checked]]}]} {
 			set what "perform action '$name'"
 		}
 		# Always include every checked argument, including the entire
@@ -1417,7 +1424,7 @@ proc ::application::assistant::ContinuePlan {round calls step} {
 		if {[info exists Priv(resultFacts)] && $Priv(resultFacts) ne ""} {
 			set reply "error: not performed; the game result analysis is complete, answer using its facts"
 		} else {
-			set approval [expr {$Priv(planConfirmed) ? [list $name $cargs] : {}}]
+			set approval [expr {$Priv(planConfirmed) ? [list $name [dict get $call checkedArguments]] : {}}]
 			set reply [runTool $name $cargs $approval]
 		}
 
@@ -3636,7 +3643,7 @@ proc ::application::assistant::DoSearchGames {criteria} {
 	set LastSearchCriteria $criteria
 	set lines [list "searched [::util::databaseName $base no] for: $summary" "$count games found"]
 	if {$count} {
-		lappend lines "first [llength $games]:"
+		lappend lines "first [llength $games] (game list unchanged; call show_search to display these matches):"
 		foreach game $games { lappend lines "  $game" }
 	}
 	return [join $lines \n]
