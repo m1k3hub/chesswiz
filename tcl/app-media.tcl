@@ -2476,6 +2476,8 @@ proc application::media::DoOpenStream {cargs} {
 # Registry handlers receive the validated argument dictionary. The board
 # Media button's popup posts these ids rather than calling the leaf
 # procedures, so every row is validated, gated and reachable by id.
+namespace eval ::mediainset {}
+
 proc ::mediainset::RunStop {cargs} {
 	::application::media::Stop
 }
@@ -2489,6 +2491,10 @@ proc application::media::MediaStopLabel {} {
 }
 
 ::action::register media.stop [dict create \
+	operator 1 \
+	purpose {Stop the audio or video playing with the game.} \
+	when {Use this when you want to end playback.} \
+	examples {{stop the video} {stop the game commentary}} \
 	label $::application::media::mc::Stop \
 	label-command ::application::media::MediaStopLabel \
 	object {} \
@@ -2499,7 +2505,11 @@ proc application::media::MediaStopLabel {} {
 ]
 
 ::action::register media.play_entry [dict create \
-	label media.play_entry \
+	label {Play game media} \
+	operator 1 \
+	purpose {Play an audio or video entry attached to the game.} \
+	when {Use this to watch a game video or listen to its commentary.} \
+	examples {{play this game video} {play the attached commentary}} \
 	object {} \
 	what {} \
 	args {{row {type string required 1 description {the media row to play}}}} \

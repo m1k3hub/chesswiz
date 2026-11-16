@@ -107,6 +107,13 @@ namespace eval ::scidb::test::kcover {
                 lappend rows [list toolbar $cls $state $label $cmd]
             }
         }
+        # Popup menus may belong to ordinary ttk buttons (the board Media
+        # button), not just the custom Toolbar class. Inspect without posting.
+        if {[winfo class $w] in {Button TButton Menubutton TMenubutton DropdownButton}} {
+            foreach child [winfo children $w] {
+                if {[winfo class $child] eq "Menu"} { WalkMenu $child rows button-menu }
+            }
+        }
         foreach child [winfo children $w] { ToolbarRows $child rows }
     }
 
@@ -416,5 +423,19 @@ tcltest::test knowledge-unreachable-standalone-guard {loading a standalone menu 
 tcltest::test knowledge-unreachable-bundle-guard {a bundled source cannot be disposed as standalone} -body {
     ::scidb::test::kcover::NotReachable tcl/application.tcl 1547 {standalone: false claim}
 } -result {standalone source is bundled}
+
+tcltest::test knowledge-button-popup {ordinary button popups are included in the coverage walk} -setup {
+    ttk::button .coverageMediaButton
+    menu .coverageMediaButton.menu -tearoff 0
+    foreach id {media.stop media.play_entry} {
+        .coverageMediaButton.menu add command -label $id -command [list ::action::run $id]
+    }
+} -body {
+    set rows {}
+    ::scidb::test::kcover::ToolbarRows .coverageMediaButton rows
+    set ids [lmap row $rows {lindex [lindex $row 4] 1}]
+    set errors [lmap id $ids {::scidb::test::kcover::CheckAction $id}]
+    list $ids $errors
+} -cleanup {destroy .coverageMediaButton} -result {{media.stop media.play_entry} {{} {}}}
 
 tcltest::cleanupTests
