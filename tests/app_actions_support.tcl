@@ -32,6 +32,14 @@ namespace eval ::scidb::test::actions {
         catch { set ::application::assistant::LastFind {} }
         catch { set ::application::assistant::LastPositions {} }
         update
+        # Deferred startup data maps the window before every tab has finished
+        # its first geometry pass. Wait for the board to become viewable
+        # instead of sampling one instant; still fail if it never maps.
+        set mapDeadline [expr {[clock milliseconds] + 2000}]
+        while {![winfo viewable .application.nb.board] && [clock milliseconds] <= $mapDeadline} {
+            after 10
+            update
+        }
         if {![winfo viewable .application.nb.board]} { error "main board is not mapped" }
         if {![winfo exists $::application::board::board]} { error "board was not built" }
     }

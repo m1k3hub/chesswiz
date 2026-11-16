@@ -51,7 +51,10 @@ void parse(std::string const& root,char const* file,void (*fn)(mstl::istream&),c
 int benchmark(Tcl_Interp* ti,std::string const& root,char const* cachePath) {
     struct Source { char const* name; void (*fn)(mstl::istream&); char const* suffix; };
     Source files[]={
-        {"ratings_utf8.ssp.zip",db::Player::parseSpellcheckFile,"ssp"},
+        {"ratings_utf8-1.ssp.zip",db::Player::parseSpellcheckFile,"ssp"},
+        {"ratings_utf8-2.ssp.zip",db::Player::parseSpellcheckFile,"ssp"},
+        {"ratings_utf8-3.ssp.zip",db::Player::parseSpellcheckFile,"ssp"},
+        {"ratings_utf8-4.ssp.zip",db::Player::parseSpellcheckFile,"ssp"},
         {"ratings-additional.ssp",db::Player::parseSpellcheckFile,"ssp"},
         {"engines.txt",db::Player::parseComputerList,"txt"},
         {"players_list.zip",db::Player::parseFideRating,"txt"},

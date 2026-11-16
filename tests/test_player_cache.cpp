@@ -130,7 +130,9 @@ int main(int argc,char** argv) {
         require(Tcl_Init(tcl::bits::interp)==TCL_OK,"Tcl initialization failed");
         char const* root=argc>1?argv[1]:"src/data";
         auto started=std::chrono::steady_clock::now();
-        parse(root,"ratings_utf8.ssp.zip",db::Player::parseSpellcheckFile,"ssp");
+        for (char const* part : {"ratings_utf8-1.ssp.zip","ratings_utf8-2.ssp.zip",
+                                 "ratings_utf8-3.ssp.zip","ratings_utf8-4.ssp.zip"})
+            parse(root,part,db::Player::parseSpellcheckFile,"ssp");
         parse(root,"ratings-additional.ssp",db::Player::parseSpellcheckFile,"ssp");
         parse(root,"engines.txt",db::Player::parseComputerList);
         parse(root,"players_list.zip",db::Player::parseFideRating);

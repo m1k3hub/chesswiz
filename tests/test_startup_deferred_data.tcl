@@ -26,6 +26,10 @@ namespace eval scidb::game {proc new {args} {lappend ::calls game}}
 namespace eval scidb::dir {}
 set fixture [file normalize [file join [file dirname [info script]] tmp-app deferred-data-[pid]]]
 file mkdir $fixture
+foreach part {ratings_utf8-1.ssp.zip ratings_utf8-2.ssp.zip \
+		ratings_utf8-3.ssp.zip ratings_utf8-4.ssp.zip} {
+	close [open [file join $fixture $part] w]
+}
 foreach dir {data user config share} {set ::scidb::dir::$dir $fixture}
 set loader [file join [file dirname [info script]] .. tcl load.tcl]
 set mapped 0
@@ -36,7 +40,8 @@ proc winfo {option w} {
 rename after realAfter
 proc after {args} {lappend ::pending [lindex $args end]}
 proc drain {} {
-    for {set i 0} {$i < 5 && [llength $::pending]} {incr i} {
+    # Complete the simulated event loop: every dictionary file is one turn.
+    for {set i 0} {$i < 64 && [llength $::pending]} {incr i} {
         set scripts $::pending
         set ::pending {}
         foreach script $scripts {uplevel #0 $script}
@@ -62,7 +67,7 @@ tcltest::test deferred-data-after-map {miss preserves load order and writes afte
     set ::mapped 1
     drain
     lrange $::calls 2 end
-} -result {cache-read ssp ssp comp fide ips dwz ecf iccf wiki wiki cgdc site done cache-write}
+} -result {cache-read ssp ssp ssp ssp ssp comp fide ips dwz ecf iccf wiki wiki cgdc site done cache-write}
 tcltest::test deferred-data-first-use {database consumer gets complete cached data before entry} -body {
     startLoader 1
     set result [::scidb::db::open fixture]

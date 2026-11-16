@@ -304,6 +304,31 @@ proc ::load::backgroundData {} {
 	trace remove execution ::scidb::app::load enter ::load::ensureDataForLoad
 }
 
+# The shipped spellcheck dictionary is stored in equal shards. The startup
+# coroutine yields after every file, so no single event-loop turn parses more
+# than one shard; the native parser appends each shard to the same list.
+set ::load::SpellcheckShards {
+	ratings_utf8-1.ssp.zip
+	ratings_utf8-2.ssp.zip
+	ratings_utf8-3.ssp.zip
+	ratings_utf8-4.ssp.zip
+}
+
+
+# An install made before the shards existed only has the monolithic file, and
+# install-data does not remove files it no longer ships. Keep that layout
+# working instead of failing to start.
+proc ::load::SpellcheckFiles {} {
+	set dir $::scidb::dir::data
+	foreach name $::load::SpellcheckShards {
+		if {![file readable [file join $dir $name]]} {
+			return {ratings_utf8.ssp.zip ratings-additional.ssp}
+		}
+	}
+	return [concat $::load::SpellcheckShards {ratings-additional.ssp}]
+}
+
+
 proc ::load::LoadData {} {
 	# These startup scripts historically execute in the global namespace.
 	uplevel #0 {
@@ -319,7 +344,10 @@ if {![::process::testOption fast-load]} {
 	if {![file readable $::load::FideList]} {
 		set ::load::FideList [file join $::scidb::dir::data players_list.zip]
 	}
-	foreach name {ratings_utf8.ssp.zip ratings-additional.ssp engines.txt} {
+	foreach name [::load::SpellcheckFiles] {
+		lappend ::load::CacheSources [file join $::scidb::dir::data $name]
+	}
+	foreach name {engines.txt} {
 		lappend ::load::CacheSources [file join $::scidb::dir::data $name]
 	}
 	lappend ::load::CacheSources $::load::FideList
@@ -347,7 +375,7 @@ if {![::process::testOption fast-load]} {
 if {![::process::testOption fast-load] && !$::load::CacheHit} {
 
 # --- Load spellcheck files --------------------------------------------
-foreach file {ratings_utf8.ssp.zip ratings-additional.ssp} {
+foreach file [::load::SpellcheckFiles] {
 	load::load	[format $load::mc::Loading $load::mc::SpellcheckFile] \
 					ssp \
 					[file join $scidb::dir::data $file] \

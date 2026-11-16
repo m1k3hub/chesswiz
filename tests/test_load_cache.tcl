@@ -27,6 +27,12 @@ namespace eval ::scidb::app {
 }
 set cacheTestRoot [file join [tcltest::temporaryDirectory] cache-load-[pid]]
 file mkdir $cacheTestRoot
+# The sharded dictionary is the default. Contents are never read here:
+# ::scidb::app::load is stubbed.
+foreach part {ratings_utf8-1.ssp.zip ratings_utf8-2.ssp.zip \
+		ratings_utf8-3.ssp.zip ratings_utf8-4.ssp.zip} {
+	close [open [file join $cacheTestRoot $part] w]
+}
 namespace eval ::scidb::dir {}
 foreach n {user config data share} { set ::scidb::dir::$n $cacheTestRoot }
 set cacheTestScript [file join [file dirname [info script]] .. tcl load.tcl]
@@ -75,7 +81,7 @@ proc runCacheLoadDraining {options hit {error {}}} {
 
 tcltest::test cache-load-miss {miss retains every parse and defers the write} -body {
     runCacheLoad {} 0
-} -result {eco cache-read ssp ssp comp fide ips dwz ecf iccf wiki wiki cgdc site done}
+} -result {eco cache-read ssp ssp ssp ssp ssp comp fide ips dwz ecf iccf wiki wiki cgdc site done}
 tcltest::test cache-load-miss-write {the deferred write still writes the cache} -body {
     lrange [runCacheLoadDraining {} 0] end-1 end
 } -result {done cache-write}
@@ -114,14 +120,14 @@ tcltest::test cache-load-elo {elo-only keeps its original parse behavior} -body 
 tcltest::test cache-load-manifest {shipped and user rating locations are both tracked} -body {
     runCacheLoad {} 1
     lmap p $::load::CacheSources { string range $p [expr {[string length $::cacheTestRoot]+1}] end }
-} -result {ratings_utf8.ssp.zip ratings-additional.ssp engines.txt players_list.zip ratings/fide-players.txt ips-ratings.txt dwz-ratings.txt ecf-ratings.txt iccf-ratings.txt ratings/dwz-ratings.txt ratings/ecf-ratings.txt ratings/iccf-ratings.txt wikipedia-de.txt wikipedia-en.txt chessgames.com.zip cities.txt}
+} -result {ratings_utf8-1.ssp.zip ratings_utf8-2.ssp.zip ratings_utf8-3.ssp.zip ratings_utf8-4.ssp.zip ratings-additional.ssp engines.txt players_list.zip ratings/fide-players.txt ips-ratings.txt dwz-ratings.txt ecf-ratings.txt iccf-ratings.txt ratings/dwz-ratings.txt ratings/ecf-ratings.txt ratings/iccf-ratings.txt wikipedia-de.txt wikipedia-en.txt chessgames.com.zip cities.txt}
 tcltest::test cache-load-option-manifest {elo-only omits other ratings from fingerprint} -body {
     runCacheLoad elo-only 1
     lmap p $::load::CacheSources { file tail $p }
-} -result {ratings_utf8.ssp.zip ratings-additional.ssp engines.txt players_list.zip fide-players.txt wikipedia-de.txt wikipedia-en.txt chessgames.com.zip cities.txt}
+} -result {ratings_utf8-1.ssp.zip ratings_utf8-2.ssp.zip ratings_utf8-3.ssp.zip ratings_utf8-4.ssp.zip ratings-additional.ssp engines.txt players_list.zip fide-players.txt wikipedia-de.txt wikipedia-en.txt chessgames.com.zip cities.txt}
 tcltest::test cache-load-errors {parse failures do not produce reusable partial caches} -body {
     runCacheLoadDraining {} 0 fide
-} -result {eco cache-read ssp ssp comp fide ips dwz ecf iccf wiki wiki cgdc site done}
+} -result {eco cache-read ssp ssp ssp ssp ssp comp fide ips dwz ecf iccf wiki wiki cgdc site done}
 tcltest::test cache-load-user-fide {readable user list replaces shipped FIDE input} -body {
     file mkdir [file join $cacheTestRoot ratings]
     close [open [file join $cacheTestRoot ratings fide-players.txt] w]
@@ -176,7 +182,15 @@ foreach mode {background consumer} {
         rename winfo {}
         rename ::scidb::engine::info {}
         releaseAfter
-    } -result {{0 {eco cache-read ssp}} 1 0 {eco cache-read ssp ssp comp fide ips dwz ecf iccf wiki wiki cgdc site done cache-write} {}}
+} -result {{0 {eco cache-read ssp}} 1 0 {eco cache-read ssp ssp ssp ssp ssp comp fide ips dwz ecf iccf wiki wiki cgdc site done cache-write} {}}
+
+# Installs made before the shards existed only ship the monolithic file.
+tcltest::test cache-load-legacy-dictionary {monolithic installs still load} -body {
+    file delete [file join $cacheTestRoot ratings_utf8-1.ssp.zip]
+    set calls [runCacheLoad {} 0]
+    close [open [file join $cacheTestRoot ratings_utf8-1.ssp.zip] w]
+    lrange $calls 0 6
+} -result {eco cache-read ssp ssp comp fide ips}
 }
 file delete -force $cacheTestRoot
 tcltest::cleanupTests
