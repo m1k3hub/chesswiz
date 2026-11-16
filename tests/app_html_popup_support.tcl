@@ -34,12 +34,34 @@ proc ::scidb::test::htmlpop::inspect {surface} {
 }
 proc ::scidb::test::htmlpop::capture {surface script} {
     variable rows {};variable mapped {};variable done 0;variable timer
-    set timer [after 200 [list [namespace current]::inspect $surface]]
-    set code [catch {uplevel 1 $script} result options]
-    if {!$done && !$code} {vwait [namespace current]::done}
-    after cancel $timer
+    if {[tk windowingsystem] in {win32 aqua}} {
+        # Native popup loops do not service Tcl's inspection timer. Let the
+        # real builders finish, and inspect the menu at the posting boundary.
+        set ::scidb::test::htmlpop::surface $surface
+        rename ::tk_popup ::scidb::test::htmlpop::NativePopup
+        proc ::tk_popup {menu args} {
+            set post [$menu cget -postcommand]
+            if {$post ne ""} {uplevel #0 $post}
+            # A click can run multiple bindings; the final popup replaces
+            # its predecessor, as in the mapped-menu census on X11.
+            set ::scidb::test::htmlpop::mapped [list $menu]
+            set ::scidb::test::htmlpop::rows {}
+            ::scidb::test::htmlpop::walk $menu $::scidb::test::htmlpop::surface
+        }
+        try {
+            set code [catch {uplevel 1 $script} result options]
+        } finally {
+            rename ::tk_popup {}
+            rename ::scidb::test::htmlpop::NativePopup ::tk_popup
+        }
+    } else {
+        set timer [after 200 [list [namespace current]::inspect $surface]]
+        set code [catch {uplevel 1 $script} result options]
+        if {!$done && !$code} {vwait [namespace current]::done}
+        after cancel $timer
+    }
     if {$code} {return -options $options $result}
-    if {![llength $mapped]} {error "$surface did not post a native menu"}
+    if {![llength $mapped]} {error "$surface did not build a popup menu"}
     puts [list HTML_DRAWABLE_CENSUS surface $surface mapped $mapped rows [llength $rows] exemptions 0]
     foreach row $rows {
         set cmd [lindex $row 4]

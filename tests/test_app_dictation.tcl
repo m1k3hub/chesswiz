@@ -44,13 +44,21 @@ tcltest::test dictation-mac-click {mic focuses input and displays the system sho
 } -cleanup {
     ::scidb::test::dictation::Restore
 } -result {1 {Réti opening} 1 1 1 1 {}}
+proc ::scidb::test::dictation::HideNative {} {
+    if {[llength [info commands ::chesswiz::win::dictateEdit]]
+        && ![llength [info commands ::scidb::test::dictation::RealNative]]} {
+        rename ::chesswiz::win::dictateEdit ::scidb::test::dictation::RealNative
+    }
+}
 proc ::scidb::test::dictation::StubHelper {} {
+    ::scidb::test::dictation::HideNative
     proc ::application::speech::open {args} {
         set ::scidb::test::dictation::activation [string range [lindex $args 0] 1 end]
         error {no powershell in tests}
     }
 }
 proc ::scidb::test::dictation::StubNative {} {
+    ::scidb::test::dictation::HideNative
     # The native Win32 EDIT is the only stub; it records calls and exposes its text.
     namespace eval ::chesswiz::win {}
     set ::scidb::test::dictation::native {}
@@ -74,6 +82,9 @@ proc ::scidb::test::dictation::StubNative {} {
 proc ::scidb::test::dictation::RestoreNative {} {
     catch { rename ::chesswiz::win::dictateEdit {} }
     catch { rename ::application::speech::open {} }
+    if {[llength [info commands ::scidb::test::dictation::RealNative]]} {
+        rename ::scidb::test::dictation::RealNative ::chesswiz::win::dictateEdit
+    }
 }
 tcltest::test dictation-win-click {without the native field the mic requests Win+H with SendInput} -setup {
     ::scidb::test::dictation::Install windows

@@ -44,6 +44,7 @@ for {set i 0} {$i < [llength $argv]} {incr i} {
 	switch -- [lindex $argv $i] {
 		--out { incr i; set opt(-out) [lindex $argv $i] }
 		--check { set opt(-check) 1 }
+		--single-process { }
 		default {
 			puts stderr "build-knowledge.tcl: unknown option [lindex $argv $i]"
 			knowledgeBuildExit 2

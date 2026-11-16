@@ -12,6 +12,10 @@ package require Tcl 8.5
 package require tcltest 2.5
 
 namespace eval ::scidb::test::mac {}
+proc ::scidb::test::mac::Expected {value} {
+    if {[tk windowingsystem] eq "aqua"} {return [string map {Ctrl+ Cmd+} $value]}
+    return $value
+}
 catch { namespace eval ::tk::mac {} }
 
 proc ::scidb::test::mac::Called {} { return [set ::scidb::test::mac::called] }
@@ -89,7 +93,7 @@ tcltest::test mac-accel-format {Aqua shows Cmd for Control, X11 keeps Ctrl} -bod
 	foreach spec $specs { lappend aqua [::menu::FormatAccel $spec] }
 	::scidb::test::mac::RealAqua
 	list $x11 $aqua
-} -result {{Ctrl+O Ctrl+Q Ctrl+Shift+N Ctrl+Down Ctrl+Shift++ F11 Alt+Shift+X} {Cmd+O Cmd+Q Cmd+Shift+N Cmd+Down Cmd+Shift++ F11 Alt+Shift+X}}
+} -result [list [::scidb::test::mac::Expected {Ctrl+O Ctrl+Q Ctrl+Shift+N Ctrl+Down Ctrl+Shift++ F11 Alt+Shift+X}] {Cmd+O Cmd+Q Cmd+Shift+N Cmd+Down Cmd+Shift++ F11 Alt+Shift+X}]
 
 tcltest::test mac-accel-rows {Drop-down rows carry key specs, not Ctrl+ strings} -body {
 	set bad {}
@@ -107,7 +111,7 @@ tcltest::test mac-accel-rows {Drop-down rows carry key specs, not Ctrl+ strings}
 		}
 	}
 	list $bad [::menu::Label menu.file.open] [::menu::Accel menu.file.open] [::menu::Accel app-quit]
-} -result [list {} [::menu::Label menu.file.open] Ctrl+O Ctrl+Q]
+} -result [list {} [::menu::Label menu.file.open] [::scidb::test::mac::Expected Ctrl+O] [::scidb::test::mac::Expected Ctrl+Q]]
 
 tcltest::test mac-accel-binding {Aqua mirrors Control bindings to Command and follows rebinds} -setup {
 	toplevel .mactest
@@ -136,7 +140,7 @@ tcltest::test mac-accel-binding {Aqua mirrors Control bindings to Command and fo
 	set ::application::board::Vars(need-binding) $savedNeed
 	array unset ::menu::Mirrored .mactest,*
 	destroy .mactest
-} -result {open moved 1 1}
+} -result [list open moved 1 [expr {[tk windowingsystem] ne "aqua"}]]
 
 tcltest::test mac-about-dialog-hook {::tkAboutDialog opens the About dialog} -setup {
 	rename ::info::openDialog ::scidb::test::mac::RealAbout

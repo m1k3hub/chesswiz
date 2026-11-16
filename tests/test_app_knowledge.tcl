@@ -268,7 +268,7 @@ tcltest::test knowledge-drift {a changed purpose makes the pack stale until rege
 tcltest::test knowledge-cli-status {real CLI rejects a stale pack and accepts a current pack} -body {
     set dir "$::scidb::test::knowledge::pack-cli"
     ::knowledge::Generate $dir
-    set command [list [info nameofexecutable] [file join $::scidb::test::knowledge::root scripts build-knowledge.tcl] --check --out $dir]
+    set command [list [info nameofexecutable] [file join $::scidb::test::knowledge::root scripts build-knowledge.tcl] --single-process --check --out $dir]
     set good [catch {exec {*}$command 2>@1} output]
     set f [open [file join $dir registry.sha256] w]
     puts $f stale

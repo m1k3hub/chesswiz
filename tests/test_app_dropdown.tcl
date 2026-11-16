@@ -25,6 +25,7 @@ proc ::scidb::test::dd::FixtureBody {} {
 		if {!$started} {
 			if {[string match "MENU *" $line]} { set started 1 } else { continue }
 		}
+		if {[tk windowingsystem] eq "aqua"} {set line [string map {Ctrl+ Cmd+} $line]}
 		lappend body $line
 	}
 	while {[llength $body] && [lindex $body end] eq ""} {

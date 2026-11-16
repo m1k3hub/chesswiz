@@ -22,7 +22,14 @@ set ::scidb::test::rgw::base [::scidb::test::actions::fixture]
 
 # Ordinary posting includes lazy dynamic cascades, unlike Dump mode.
 proc ::scidb::test::rgw::PostTree {menu} {
-    $menu post 20 20
+    if {[tk windowingsystem] eq "x11"} {
+        $menu post 20 20
+    } else {
+        # Native post blocks inside the OS menu loop. Populate the same lazy
+        # entries through their postcommand, then inspect without posting.
+        set command [$menu cget -postcommand]
+        if {$command ne ""} {uplevel #0 $command}
+    }
     update idletasks
     set last [$menu index end]
     if {$last ne "none"} {
@@ -33,7 +40,7 @@ proc ::scidb::test::rgw::PostTree {menu} {
             }
         }
     }
-    $menu unpost
+    if {[tk windowingsystem] eq "x11"} {$menu unpost}
 }
 
 proc ::scidb::test::rgw::WalkMenu {menu rowsVar {surface ""}} {

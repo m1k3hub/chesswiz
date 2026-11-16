@@ -15,7 +15,16 @@ foreach {name script window} {
         ::application::switchTab board
         uplevel #0 $script
         ::scidb::test::menuarea::settle
-        lassign [::scidb::tk::wm frame $window] x y w h
+        set frame [::scidb::tk::wm frame $window]
+        if {[llength $frame] != 4} {
+            # The X11 frame extension returns no frame on native Tk.
+            lassign [winfo extents $window] left right top bottom
+            set frame [list [expr {[winfo rootx $window]-$left}] \
+                [expr {[winfo rooty $window]-$top}] \
+                [expr {[winfo width $window]+$left+$right}] \
+                [expr {[winfo height $window]+$top+$bottom}]]
+        }
+        lassign $frame x y w h
         lassign [winfo workarea $window] ax ay aw ah
         set fits [expr {$x >= $ax && $y >= $ay && $x+$w <= $ax+$aw && $y+$h <= $ay+$ah}]
         set canvas $window.__viewport.canvas

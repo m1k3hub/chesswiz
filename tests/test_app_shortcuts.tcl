@@ -17,6 +17,11 @@ namespace eval ::shortcutTest {
 	variable Dir [file dirname [file normalize [info script]]]
 }
 
+proc ::shortcutTest::Expected {value} {
+    if {[tk windowingsystem] eq "aqua"} {return [string map {Ctrl+ Cmd+} $value]}
+    return $value
+}
+
 # The binding an event would run on <w>: the first tag with a binding wins.
 proc ::shortcutTest::effective {w key} {
 	foreach tag [bindtags $w] {
@@ -168,7 +173,7 @@ tcltest::test shortcuts-saved-overrides {overrides saved before the redesign sti
 		[::shortcutTest::CascadeAccel NewGame]
 } -cleanup {
 	::shortcutTest::Restore
-} -result {Control-g Control-g 1 0 Control-j 1 F9 1 Control-Alt-g Ctrl+G Ctrl+J F9 Ctrl+Alt+G}
+} -result [::shortcutTest::Expected {Control-g Control-g 1 0 Control-j 1 F9 1 Control-Alt-g Ctrl+G Ctrl+J F9 Ctrl+Alt+G}]
 
 
 tcltest::test shortcuts-rebind-moves-menu-label {rebinding changes the posted menu accelerator and reset restores it} -setup {
@@ -185,7 +190,7 @@ tcltest::test shortcuts-rebind-moves-menu-label {rebinding changes the posted me
 } -cleanup {
 	destroy $menu
 	::shortcutTest::Restore
-} -result {Ctrl+S Ctrl+G Ctrl+S}
+} -result [::shortcutTest::Expected {Ctrl+S Ctrl+G Ctrl+S}]
 
 
 tcltest::test shortcuts-new-database-new-game {Ctrl+Shift+N/G are the real New Database/New Game bindings} -setup {
@@ -200,7 +205,7 @@ tcltest::test shortcuts-new-database-new-game {Ctrl+Shift+N/G are the real New D
 		[::shortcutTest::CascadeAccel NewGame]
 } -cleanup {
 	::shortcutTest::Restore
-} -result {1 1 1 1 Ctrl+Shift+N Ctrl+Shift+G}
+} -result [::shortcutTest::Expected {1 1 1 1 Ctrl+Shift+N Ctrl+Shift+G}]
 
 
 tcltest::test shortcuts-ctrl-n-hidden-alias {Ctrl+N starts a new game but is shown nowhere} -setup {
@@ -222,7 +227,8 @@ tcltest::test shortcuts-ctrl-n-hidden-alias {Ctrl+N starts a new game but is sho
 	set current [::application::keyEditor::CurrentKey game-new]
 	set shown [expr {"Control-n" in $accels || "Ctrl+N" in $accels
 		|| "Control-n" in $paletteAccels || "Ctrl+N" in $paletteAccels
-		|| "Control-n" in $dropdownAccels || "Ctrl+N" in $dropdownAccels}]
+		|| "Control-n" in $dropdownAccels || "Ctrl+N" in $dropdownAccels
+        || "Cmd+N" in $accels || "Cmd+N" in $paletteAccels || "Cmd+N" in $dropdownAccels}]
 	# the hidden alias still runs new game
 	::application::switchTab database
 	catch { ::application::ShortcutApplicationCommand .application new }
@@ -235,7 +241,7 @@ tcltest::test shortcuts-ctrl-n-hidden-alias {Ctrl+N starts a new game but is sho
 } -cleanup {
 	destroy $menu
 	::shortcutTest::Restore
-} -result {1 Control-Shift-G 0 Ctrl+Shift+G .application.nb.board}
+} -result [::shortcutTest::Expected {1 Control-Shift-G 0 Ctrl+Shift+G .application.nb.board}]
 
 
 tcltest::test shortcuts-prev-next-both-keys {prev/next stay bound to both pairs and show the scheme key} -setup {
@@ -258,7 +264,7 @@ tcltest::test shortcuts-prev-next-both-keys {prev/next stay bound to both pairs 
 	list $chesswiz $chessbase
 } -cleanup {
 	::shortcutTest::Restore
-} -result {{Control-Down Control-Up 1 1 Ctrl+Down} {F10 Control-F10 1 1 F10}}
+} -result [::shortcutTest::Expected {{Control-Down Control-Up 1 1 Ctrl+Down} {F10 Control-F10 1 1 F10}}]
 
 
 tcltest::test shortcuts-focus-labels {Ctrl+A/Ctrl+C labels follow the focus} -setup {
@@ -306,7 +312,7 @@ tcltest::test shortcuts-chessbase-new-keys {the ChessBase scheme gets the same n
 		[::application::keyEditor::Conflict game-new Control-Shift-G]
 } -cleanup {
 	::shortcutTest::Restore
-} -result {1 1 1 1 Ctrl+Shift+N Ctrl+Shift+G Ctrl+F10 {}}
+} -result [::shortcutTest::Expected {1 1 1 1 Ctrl+Shift+N Ctrl+Shift+G Ctrl+F10 {}}]
 
 
 tcltest::test shortcuts-conflict-check {the new keys add no key-editor conflicts} -setup {
