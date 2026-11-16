@@ -3395,13 +3395,9 @@ proc ::application::assistant::CompareFrequency {a b} {
 
 
 proc ::application::assistant::DoDatabaseProperties {} {
-	# The properties window is a registry action of its own (ai=0 for the
-	# model); run it through the registry so the call is logged and gated
-	# exactly like the menu item.
-	set reply [runTool run_action [dict create id menu.db.properties]]
-	if {[string match error:* $reply]} { return $reply }
-	lassign [ActiveBase] base variant
-	return "the Properties window of [::util::databaseName $base no] is open"
+	# Clipbase has properties too, although the file-database menu is hidden.
+	# The assistant action is already logged and gated by runTool.
+	return [::menu::DbProperties]
 }
 
 
