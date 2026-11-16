@@ -45,6 +45,12 @@ set Illegal				"That move is not legal here."
 set NotYourTurn		"Wait for your opponent's move."
 set Promote				"Promote to"
 
+set ::online::view::DefaultMC {}
+foreach name [info vars ::online::view::mc::*] {
+    lappend ::online::view::DefaultMC [namespace tail $name] [set $name]
+}
+unset name
+
 }
 
 array set Options {
@@ -61,6 +67,26 @@ variable Files {a b c d e f g h}
 variable TickInterval 100
 variable StartFen "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
+
+proc ResetMC {} {
+    foreach {name value} $::online::view::DefaultMC {
+        set ::online::view::mc::$name $value
+    }
+}
+::mc::addDefaultReset ::online::view::ResetMC
+
+# Update existing views, including controls currently hidden by game state.
+proc Relabel {w} {
+    foreach {path key} {
+        actions.resign Resign actions.draw OfferDraw actions.takeback Takeback
+        actions.abort Abort actions.claim ClaimVictory actions.flip Flip
+        live Live offer.accept AcceptDraw offer.decline DeclineDraw
+        result.analyse Analyse result.close CloseTab chat Chat chat.send Send
+        autoqueen AutoQueen
+    } {
+        $w.side.$path configure -text [set mc::$key]
+    }
+}
 
 proc create {w backend side} {
 	namespace eval [namespace current]::${w} {}
@@ -175,6 +201,7 @@ proc create {w backend side} {
 	grid columnconfigure $w 0 -weight 1
 	grid rowconfigure $w 0 -weight 1
 	bind $w <Destroy> [list [namespace current]::Destroyed $w %W]
+	bind $w <<LanguageChanged>> [list [namespace current]::Relabel $w]
 	if {$V(side) eq ""} { actions $w {} }
 	Draw $w
 	return $w
@@ -796,6 +823,7 @@ proc RegisterActions {} {
 		set id toolbar.online.$key
 		if {[dict exists $::action::Registry $id]} { continue }
 		::action::register $id [dict create label [set ::online::view::mc::$label] \
+			label-command [list set ::online::view::mc::$label] \
 			object {} what $purpose doc $purpose ai 0 operator 1 \
 			handler [list ::online::view::RunControl $key] \
 			visible [list ::online::view::Available $key] enabled [list ::online::view::Available $key] \

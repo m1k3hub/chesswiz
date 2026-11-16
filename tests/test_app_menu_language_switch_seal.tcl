@@ -29,7 +29,20 @@ namespace eval ::scidb::test::seal {
 	}
 	variable AppKeys {Donate DonateTip}
 	variable AskKeys {StartupAssistant PathSherpa PathSherpaModel PathHotwords}
-	variable MenuKeys {Donate TournamentDirector}
+	variable MenuKeys {Donate TournamentDirector FocusFollowsSize OpeningLine EnginePlay}
+    variable OnlineKeys {
+        Resign ResignConfirm OfferDraw AcceptDraw DeclineDraw Takeback Abort
+        ClaimVictory Flip Live Chat Send Analyse CloseTab AutoQueen Premove
+        Illegal NotYourTurn Promote
+    }
+    variable OnlineControls {
+        resign actions.resign Resign draw actions.draw OfferDraw
+        takeback actions.takeback Takeback abort actions.abort Abort
+        claim actions.claim ClaimVictory flip actions.flip Flip live live Live
+        accept offer.accept AcceptDraw decline offer.decline DeclineDraw
+        analyse result.analyse Analyse close result.close CloseTab
+        chat chat.send Send autoqueen autoqueen AutoQueen
+    }
 
 	proc ready {} {
 		set deadline [expr {[clock milliseconds] + 20000}]
@@ -55,11 +68,13 @@ namespace eval ::scidb::test::seal {
 		variable AskKeys
 		variable MenuKeys
 		variable TdKeys
+        variable OnlineKeys
 		set out {}
 		foreach k $AppKeys { lappend out ::application::mc::$k }
 		foreach k $MenuKeys { lappend out ::menu::mc::$k }
 		foreach k $AskKeys { lappend out ::application::ask::mc::$k }
 		foreach k $TdKeys { lappend out ::td::actions::mc::$k }
+        foreach k $OnlineKeys { lappend out ::online::view::mc::$k }
 		return $out
 	}
 
@@ -215,5 +230,70 @@ tcltest::test seal-language-return-restores-english {switching back to English r
 	::mc::setLang $saved
 	list $english $back $td
 } -result [list "\u2665 Donate" "\u2665 Donate" "Create tournament"]
+
+tcltest::test seal-online-live-controls {all 13 actions and existing controls follow every language and return to English} -setup {
+    ::scidb::test::seal::ready
+    set saved $::mc::langID
+    ::mc::setLang en
+    # Bound the host like the real Online window; otherwise Aqua geometry
+    # propagation can continuously resize the responsive board.
+    toplevel .sealOnline
+    wm geometry .sealOnline 900x650
+    ::online::view::create .sealOnline.view {error {unexpected backend call}} w
+    pack .sealOnline.view -fill both -expand 1
+    update
+    set english {}
+    foreach key $::scidb::test::seal::OnlineKeys {
+        dict set english $key [set ::online::view::mc::$key]
+    }
+} -body {
+    set bad {}
+    foreach lang {de es it hu sv en} {
+        ::mc::setLang $lang
+        update idletasks
+        foreach {id path key} $::scidb::test::seal::OnlineControls {
+            set expected [set ::online::view::mc::$key]
+            set label [dict get [::action::get toolbar.online.$id] label]
+            set text [.sealOnline.view.side.$path cget -text]
+            if {$text ne $expected || $label ne $expected} {
+                lappend bad [list $lang $id $expected $label $text]
+            }
+            if {$lang ne "en" && $expected eq [dict get $english $key]} {
+                lappend bad [list $lang $id untranslated]
+            }
+        }
+        if {[.sealOnline.view.side.chat cget -text] ne $::online::view::mc::Chat} {
+            lappend bad [list $lang chat-title]
+        }
+    }
+    foreach key $::scidb::test::seal::OnlineKeys {
+        if {[set ::online::view::mc::$key] ne [dict get $english $key]} {
+            lappend bad [list en $key not-restored]
+        }
+    }
+    list [expr {[llength $::scidb::test::seal::OnlineControls] / 3}] $bad
+} -cleanup {
+    destroy .sealOnline
+    ::mc::setLang $saved
+} -result {13 {}}
+
+tcltest::test seal-additional-menu-labels {the additional menu actions translate and reset} -setup {
+    set saved $::mc::langID
+} -body {
+    set results {}
+    foreach lang {en de en} {
+        ::mc::setLang $lang
+        ::menu::RegisterExtras
+        set labels {}
+        foreach id {view.focus_follows_size opening_line engine_play} {
+            lappend labels [dict get [::action::get $id] label]
+        }
+        lappend results $labels
+    }
+    list [expr {[lindex $results 0] eq [lindex $results 2]}] [lindex $results 1]
+} -cleanup {
+    ::mc::setLang $saved
+} -result [list 1 [list "Fokus folgt der Größe beim Ändern der Fenstergröße" \
+    "Eine Eröffnungsvariante nachschlagen" "Die Engine spielen lassen"]]
 
 ::tcltest::cleanupTests
