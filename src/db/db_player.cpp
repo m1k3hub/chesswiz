@@ -3564,7 +3564,7 @@ hasInstalledRecordSeparator(mstl::string const& s)
 {
 	for (unsigned i = 0; i < s.size(); ++i)
 	{
-		if (s[i] == '|' || s[i] == '\r' || s[i] == '\n')
+		if (s[i] == '|' || s[i] == '\r' || s[i] == '\n' || s[i] == '\0')
 			return true;
 	}
 
@@ -3857,7 +3857,14 @@ fieldOf(mstl::vector<mstl::string> const& fields, int column)
 bool
 readListRecord(mstl::string const& text, ListRecord& r)
 {
-	mstl::string line(stripped(text));
+	mstl::string::size_type n = text.size();
+
+	if (n && text[n - 1] == '\n')
+		--n;
+	if (n && text[n - 1] == '\r')
+		--n;
+
+	mstl::string line(n == text.size() ? text : text.substr(0, n));
 
 	if (line.empty() || line[0] == '#')
 		return false;
@@ -3878,6 +3885,12 @@ readListRecord(mstl::string const& text, ListRecord& r)
 
 	if (f.size() != 8)
 		return false;
+
+	for (unsigned i = 0; i < f.size(); ++i)
+	{
+		if (hasInstalledRecordSeparator(f[i]))
+			return false;
+	}
 
 	r = ListRecord();
 	mstl::string idField(trimmed(f[0]));
@@ -4037,7 +4050,10 @@ convertDwzList(	mstl::istream& stream,
 		mstl::string memberNr(trimmed(fieldOf(f, nr)));
 		unsigned memberNum = 0;
 
-		if (	!isValidDwzZps(zpsCode)
+		if (	hasInstalledRecordSeparator(fieldOf(f, zps))
+			|| hasInstalledRecordSeparator(fieldOf(f, nr))
+			|| hasInstalledRecordSeparator(fieldOf(f, name))
+			|| !isValidDwzZps(zpsCode)
 			|| !isNumber(memberNr)
 			|| !parseOptionalNumber(memberNr, memberNum)
 			|| memberNum == 0
@@ -4138,7 +4154,9 @@ convertEcfList(	mstl::istream& stream,
 		r.id			= trimmed(fieldOf(f, code));
 		r.name		= personName(fieldOf(f, name));
 
-		if (	!isValidEcfCode(r.id)
+		if (	hasInstalledRecordSeparator(fieldOf(f, code))
+			|| hasInstalledRecordSeparator(fieldOf(f, name))
+			|| !isValidEcfCode(r.id)
 			|| r.name.empty()
 			|| !sys::utf8::validate(r.name)
 			|| hasInstalledRecordSeparator(r.name))
@@ -4241,6 +4259,12 @@ convertIccfList(	mstl::istream& stream,
 			utf8 = line;
 		else
 			codec.convertFromWindows(line, utf8);
+
+		for (unsigned i = 0; i < utf8.size(); ++i)
+		{
+			if (utf8[i] == '\r' || utf8[i] == '\n' || utf8[i] == '\0')
+				return false;
+		}
 
 		f.clear();
 

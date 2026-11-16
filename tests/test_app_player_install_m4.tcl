@@ -285,6 +285,61 @@ tcltest::test VAL-PD4-013-016 {Successful update is usable after isolated restar
  file delete -force $probe [file join $::scidb::dir::user cache]
  list $idempotent $res
 } -result {1 0:499811B:499812C}
+tcltest::test VAL-PD4-013-separator-startup {Real startup rejects installed records with embedded CR in raw fields while loading valid CRLF records} -body {
+ file mkdir [::playerdata::Dir]
+ file delete -force [file join $::scidb::dir::user cache]
+ set ecfPath [::playerdata::listFile ecf]
+ set f [open $ecfPath wb]
+ puts -nonewline $f [encoding convertto utf-8 "#chesswiz-rating-list v1 kind=ecf date=2026-01-01 read=2 kept=2\r\n#source synthetic\r\n499001A|0|M\rX|0|2100|ENG|-|Crsexplayer, Bad\n499007G|0|M|0|2125|ENG|-|Crlfplayer, Valid\r\n"]
+ close $f
+ set pgn $::m4install::dir/cr-startup.pgn
+ set f [open $pgn w]
+ puts $f {[Event "Synthetic"]
+[Site "Fixture"]
+[Date "2026.01.01"]
+[Round "1"]
+[White "Crsexplayer, B"]
+[Black "Crlfplayer, V"]
+[WhiteElo "2100"]
+[BlackElo "2125"]
+[Result "1/2-1/2"]
+
+1. d4 d5 1/2-1/2}
+ close $f
+ set probe $::m4install::dir/probe-cr.tcl
+ set f [open $probe w]
+ puts $f [format {
+  set argv {--single-process}
+  set argc 1
+  set ::env(SCIDB_AI_TRIAGE) 0
+  set ::env(SCIDB_AI_CLASSIFIER) off
+  source -encoding utf-8 [file join [pwd] tcl chesswiz]
+  set ::scidb::dir::setup 0
+  source -encoding utf-8 [file join [pwd] tests app_wait.tcl]
+  ::scidb::test::wait::ready
+  proc ::probeNop {args} {return 0}
+  set pgn %s
+  ::scidb::db::open $pgn ::probeNop {} ::probeNop {}
+  ::scidb::db::linkPlayers $pgn Normal
+  set badLookup [::scidb::player::lookup -name "Crsexplayer, Bad"]
+  set goodLookup [::scidb::player::lookup -name "Crlfplayer, Valid"]
+  set links [::scidb::db::playerLinks $pgn Normal]
+  set badRow [lsearch -inline -index 0 $links "Crsexplayer, B"]
+  set goodRow [lsearch -inline -index 0 $links "Crlfplayer, V"]
+  puts "CR_STARTUP:[expr {$badLookup eq ""}]:[expr {$goodLookup ne "" && [dict get $goodLookup ecf] eq "499007G"}]:[lindex $badRow 2]:[lindex $goodRow 2]"
+  catch { ::scidb::db::close $pgn }
+  catch { destroy .application }
+  catch { destroy . }
+  exit 0
+ } [list $pgn]]
+ close $f
+ set out [exec src/tkchesswiz $probe]
+ regexp {CR_STARTUP:([^\r\n]+)} $out -> res
+ file delete -force $probe $pgn $ecfPath [file join $::scidb::dir::user cache]
+ set v1 $::m4install::dir/ecf-v2.csv
+ ::playerdata::installList ecf $v1
+ set res
+} -result {1:1:0:1}
 tcltest::test VAL-PD4-017 {Downloading/importing/linking never changes database stored names or dirty state} -body {
  set f [open $input w]
  puts $f {ECF_code,full_name,revised_standard

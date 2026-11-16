@@ -9,6 +9,14 @@ namespace eval ::m4 {
   puts $f $text; close $f
   return $path
  }
+ proc writeRaw {name text} {
+  variable dir
+  set path [file join $dir $name]
+  set f [open $path wb]
+  puts -nonewline $f [encoding convertto utf-8 $text]
+  close $f
+  return $path
+ }
  proc convert {kind text} {
   variable dir
   set in [write input.csv $text]
@@ -141,27 +149,40 @@ tcltest::test VAL-PD4-011-required-fields {DWZ, ECF, and ICCF rows with empty, n
  {1 0 0} {1 0 0} {1 0 0} {1 0 0} {1 0 0} {1 0 0} {1 0 0} {1 0 0} \
  {1 0 0} {1 0 0} {1 0 0} {1 0 0} {1 0 0} {1 0 0} {1 0 0} {1 0 0} \
  {1 0 0} {1 0 0} {1 0 0} 1]
-tcltest::test VAL-PD4-011-pipe-delimiters {Pipe and delimiter injection in DWZ/ECF/ICCF fields and extra pipe fields in installed lists are rejected} -body {
+tcltest::test VAL-PD4-011-pipe-delimiters {Pipe and CR/LF separator injection in CSV and all raw installed-list fields are rejected while normal CRLF lines load} -body {
  set dwzPipeZps  [::m4::write dwz-pipe-zps.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n\"99|999\",2,\"Fixture, PipeZps\",1900\n"]
  set dwzDashZps  [::m4::write dwz-dash-zps.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n99-99,2,\"Fixture, DashZps\",1900\n"]
  set dwzAlphaZps [::m4::write dwz-alpha-zps.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\nB000A,2,\"Fixture, AlphaZps\",1900\n"]
  set ecfPipeId   [::m4::write ecf-pipe-id.csv "ECF_code,full_name,revised_standard\n999001A,\"Fixture, Valid\",1900\n\"99|002B\",\"Fixture, PipeEcf\",1900\n"]
  set iccfPipeNm  [::m4::write iccf-pipe-name.csv "990098;ENG;IM;Fixture, ValidIccf;20;2200;90;\n990099;ENG;IM;Fixture, Pipe|Name;20;2200;90;\n"]
+ set ecfCrCsvNm  [::m4::writeRaw ecf-cr-name.csv "ECF_code,full_name,revised_standard\n999001A,\"Fixture\r, CrCsvName\",1900\n"]
  set dwzPipeOut  $::m4::dir/dwz-pipe-out.txt
  set ecfPipeOut  $::m4::dir/ecf-pipe-out.txt
  set iccfPipeOut $::m4::dir/iccf-pipe-out.txt
- file delete -force $dwzPipeOut $ecfPipeOut $iccfPipeOut
+ set ecfCrOut    $::m4::dir/ecf-cr-out.txt
+ file delete -force $dwzPipeOut $ecfPipeOut $iccfPipeOut $ecfCrOut
  set extraPipeInstalled [::m4::write extra-pipe.txt "#chesswiz-rating-list v1 kind=dwz date=2026-01-01 read=1 kept=1\n#source synthetic\n10614-799|0|M|1990|2100|GER|-|Pipeinj, Trailing|EXTRA\n"]
+ set crInstalled [::m4::writeRaw cr-fields.txt "#chesswiz-rating-list v1 kind=ecf date=2026-01-01 read=7 kept=7\n#source synthetic\n499001A|0|M\rX|0|2100|ENG|-|Fixture, Crsex\n499002B|0|M|0|2100|ENG\r|-|Fixture, Crfed\n499003C|0|M|0|2100|ENG|GM\rIM|Fixture, Crtitles\n499004D|0|M|0|2100\r|ENG|-|Fixture, Crrating\n499005E|0|M|0|2100|ENG|-|Fixture\r, Crname\n499006F|0|M|0|2100|ENG|-|Fixture, Crtrail\r\r\n499007G|0|M|0|2100|ENG|-|Fixture, CrlfValid\r\n"]
  ::scidb::app::load installed $extraPipeInstalled
+ ::scidb::app::load installed $crInstalled
  ::scidb::app::load done
+ set crlfRec [::scidb::player::lookup -name "Fixture, CrlfValid"]
  list \
   [catch {::scidb::app::filterRatingList dwz $dwzPipeZps $dwzPipeOut 1800}] [file exists $dwzPipeOut] \
   [catch {::scidb::app::filterRatingList dwz $dwzDashZps $::m4::dir/dwz-dash-out.txt 1800}] \
   [catch {::scidb::app::filterRatingList dwz $dwzAlphaZps $::m4::dir/dwz-alpha-out.txt 1800}] \
   [catch {::scidb::app::filterRatingList ecf $ecfPipeId $ecfPipeOut 1800}] [file exists $ecfPipeOut] \
   [catch {::scidb::app::filterRatingList iccf $iccfPipeNm $iccfPipeOut 1800}] [file exists $iccfPipeOut] \
-  [expr {[::scidb::player::lookup -name "Pipeinj, Trailing"] eq ""}]
-} -result {1 0 1 0 1 0 1 0 1}
+  [::m4::checkReject ecf $ecfCrCsvNm $ecfCrOut] \
+  [expr {[::scidb::player::lookup -name "Pipeinj, Trailing"] eq ""}] \
+  [expr {[::scidb::player::lookup -name "Fixture, Crsex"] eq ""}] \
+  [expr {[::scidb::player::lookup -name "Fixture, Crfed"] eq ""}] \
+  [expr {[::scidb::player::lookup -name "Fixture, Crtitles"] eq ""}] \
+  [expr {[::scidb::player::lookup -name "Fixture, Crrating"] eq ""}] \
+  [expr {[::scidb::player::lookup -name "Fixture, Crname"] eq ""}] \
+  [expr {[::scidb::player::lookup -name "Fixture, Crtrail"] eq ""}] \
+  [expr {$crlfRec ne "" && [dict get $crlfRec ecf] eq "499007G"}]
+} -result {1 0 1 0 1 0 1 0 {1 0 0} 1 1 1 1 1 1 1 1}
 tcltest::test VAL-PD4-014 {Same FIDE identity joins without overwriting authoritative spelling; conflicting IDs remain distinct} -body {
  set fideHdr "ID Number      Name                                                         Fed Sex Tit  WTit OTit           FOA SRtng SGm SK RRtng RGm Rk BRtng BGm BK B-day Flag"
  set r1 [format "%-15s%-61s%-4s%-4s%-5s%-5s%-15s%-4s%-6s%-4s%-3s%-6s%-4s%-3s%-6s%-4s%-3s%-6s%-4s" 999700001 {Authoritative, One} GER M GM "" "" "" 2500 0 10 0 0 10 0 0 10 1985 ""]
