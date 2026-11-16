@@ -3,16 +3,9 @@ source [file join [file dirname [info script]] app_wait.tcl]
 ::scidb::test::wait::ready
 source [file join [file dirname [info script]] command_cases.tcl]
 namespace eval ::commandE2E {variable Calls {}; variable State {}; variable Originals {}; variable Stubbed {}; variable Seen {}; variable Before}
-# External/app services have a deterministic fixture state. Real registry validation
-# and dispatch run; only terminal handlers are replaced in this contract suite.
-# Actual app effects are exercised separately by test_app_command_effects.tcl.
-proc ::commandE2E::source {type query} {
- set state {player {{Kasparov, Garry} {Kasparov, Sergei} {Carlsen, Magnus} {Caruana, Fabiano} {Corti, Horacio} {Thomas, Michael}} database {Main Other} engine {Stockfish} motif {knight_fork} tab {board database} pane {tree} opening {Najdorf {London System}} eco {B} event {{Karvina 5th} Biel} move {e4}}
- if {$type eq "eco"} {return [::commandline::EcoLookup eco $query]}
- set out {}
- if {[dict exists $state $type]} {foreach v [dict get $state $type] {if {[::commandline::NameMatch $query $v]} {lappend out $v}}}
- return $out
-}
+# This contract suite runs real matching, validation and dispatch. Network,
+# heavy and modal terminal operations use recorded calls, not claims of real
+# effects. Local database opening and query/state actions run without stubs.
 proc ::commandE2E::effect {id arguments} {
  lappend ::commandE2E::Calls [list $id $arguments]
  dict set ::commandE2E::State lastAction $id
@@ -28,7 +21,7 @@ proc ::commandE2E::recordRun {command op} {
 trace add execution ::action::run enter ::commandE2E::recordRun
 proc ::commandE2E::realAction {action} {
  if {[string match "command.*" $action]} {return 1}
- return [expr {$action in {database_summary list_open_databases clear_search remember_me
+ return [expr {$action in {open_database database_summary list_open_databases clear_search remember_me
   current_game list_engines new_game pane open_view opening_score player_stats
   structure_profile opponent_brief maintenance_report find_similar open_game}}]
 }
@@ -48,8 +41,8 @@ proc ::commandE2E::argsOf {id} {
  return {}
 }
 proc ::commandE2E::checkState {number} {
- # Every command must finish without an error notice and leave a real state
- # behind; stubbed terminal actions must have received the validated arguments.
+ # Every command must finish without an error notice. Local actions assert
+ # real state; stubbed terminal actions assert only their validated dispatch.
  if {[string match "error:*" $::commandE2E::Message]} {return 0}
  switch -- $number {
   1 {return [expr {[::scidb::db::get open? $::commandE2E::Fixture]}]}
@@ -166,9 +159,7 @@ puts $other {[Event "Other Event"]
 
 1. d4 d5 0-1}
 close $other
-::action::run open_database [dict create path $::commandE2E::Fixture]
 ::action::run open_database [dict create path $::commandE2E::Other]
-::action::run command.database.select [dict create database $::commandE2E::Fixture]
 ::application::switchTab board
 set ::commandE2E::SavedEngines $::engine::Engines
 set ::engine::Engines [list [dict merge $::engine::EmptyEngine {
@@ -200,6 +191,9 @@ foreach {number input action expected} $CommandCases {
  if {![::commandE2E::realAction $action]} {::commandE2E::stub $action}
  ::tcltest::test command-e2e-$number {input -> suggestion -> Enter -> real registry action, arguments, state} -body {
   set ::commandE2E::Message ""
+  if {$number == 1} {
+   if {[::scidb::db::get open? $::commandE2E::Fixture]} {error {fixture must be closed before Enter}}
+  }
   if {$number == 31} {catch {unset ::application::ai::Settings(me)}}
   if {$number == 49} {::application::switchTab board}
   # "open result 2" indexes the visible list; make it the full fixture.

@@ -887,6 +887,77 @@ proc ::fix::noop {args} {return {}}
   [::scidb::view::count games $::fix::Base Normal 0]
 } -result {Karvina 0 1 1}
 
+# Exercise the actual platform dialog and its return value, without replacing
+# the picker, action, converter, or validation procedures.
+proc ::fix::drivePicker {path {attempt 0}} {
+ set w .application.__filedialog
+ set grab [grab current]
+ if {[string match .application.alert* $grab] && [winfo exists $grab.buttonFrame.bt-yes]} {
+  $grab.buttonFrame.bt-yes invoke
+ }
+ if {$attempt > 200} {
+  puts "Picker timeout: grab=[grab current], windows=[winfo children .application]"
+  error {file picker did not appear}
+ }
+ if {![winfo exists $w] || ![winfo viewable $w]} {
+  set ::fix::PickerTimer [after 10 [list ::fix::drivePicker $path [expr {$attempt+1}]]]
+  return
+ }
+ if {$path eq ""} {$w.fsbox.buttons.cancel invoke; return}
+ $w.fsbox.top.ent_filename delete 0 end
+ $w.fsbox.top.ent_filename insert 0 $path
+ $w.fsbox.buttons.ok invoke
+}
+proc ::fix::pickerBgError {command op} {lappend ::fix::PickerErrors [lindex $command 1]}
+proc ::fix::pickerReturn {command code result op} {set ::fix::PickerResult $result}
+proc ::fix::convertTrace {command op} {lappend ::fix::Formats [lindex $command 1]}
+::tcltest::test R2F-06-real-file-picker {real open dialog pair completes Ask and Enter opens the selected database} -setup {
+ set ::fix::Picked [file join $::fix::Dir {real picked database.pgn}]
+ file copy -force $::fix::Base $::fix::Picked
+ set ::fix::PickerResult {}
+ set ::fix::PickerErrors {}
+ trace add execution ::scidb::bgerror enter ::fix::pickerBgError
+ trace add execution ::dialog::openFile leave ::fix::pickerReturn
+} -body {
+ set ::fix::PickerTimer [after 10 [list ::fix::drivePicker $::fix::Picked]]
+ set query [::fix::enterMissing {open database} 1]
+ ::fix::run $query 1
+ list [llength $::fix::PickerResult] [expr {[lindex $::fix::PickerResult 0] eq $::fix::Picked}] \
+  [::scidb::db::get open? $::fix::Picked] [::scidb::db::count games $::fix::Picked Normal] $::fix::PickerErrors
+} -cleanup {
+ catch {after cancel $::fix::PickerTimer}
+ trace remove execution ::scidb::bgerror enter ::fix::pickerBgError
+ trace remove execution ::dialog::openFile leave ::fix::pickerReturn
+ catch {::application::database::closeBase .application $::fix::Picked}
+ ::application::database::switchToBase $::fix::Base
+ update
+} -result {2 1 1 2 {}}
+
+::tcltest::test R2F-06-real-convert-dispatch {both formats reach the real converter and its real save dialog can be cancelled} -setup {
+ set ::fix::Formats {}
+ trace add execution ::application::assistant::DoConvertDatabase enter ::fix::convertTrace
+} -body {
+ set types {}
+ foreach format {sci cbh} {
+  set ::fix::PickerTimer [after 10 [list ::fix::drivePicker {}]]
+  ::fix::run "convert Main to $format" 13
+  lappend types [lindex $::dialog::fsbox::__filedialog(-filetypes) 0 1]
+ }
+ list $::fix::Formats $types
+} -cleanup {
+ catch {after cancel $::fix::PickerTimer}
+ trace remove execution ::application::assistant::DoConvertDatabase enter ::fix::convertTrace
+} -result {{sci cbh} {.sci .cbh}}
+
+::tcltest::test R2F-06-playerless-wins {Enter prompts for the missing player and then runs the completed search} -body {
+ set ::fix::Calls {}
+ set query [::fix::enterMissing {find games min elo 2600 wins} 15]
+ set noDispatch [expr {$::fix::Calls eq {}}]
+ set calls [::fix::run [string map {<player> Kasparov} $query] 15]
+ set args [::fix::callArgs $calls search_games]
+ list $noDispatch [dict get $args player] [dict get $args result] [dict get $args min_elo]
+} -result {1 {Kasparov, Garry} win 2600}
+
 trace remove execution ::action::run enter ::fix::trace
 foreach position [::game::usedPositions?] {catch {::game::release $position}}
 catch {::application::database::closeBase .application $::fix::Base}

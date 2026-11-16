@@ -1012,7 +1012,7 @@ proc RecordGeometry {dlg window width class} {
 		set rw [winfo reqwidth $dlg]
 		set rh [winfo reqheight $dlg]
 
-		if {$gw != $rw || $gh != $rh} {
+		if {![info exists Priv(geometry:$class)] || $gw != $rw || $gh != $rh} {
 			set Priv(geometry:$class) $g
 		} elseif {[llength $Priv(geometry:$class)]} {
 			scan $Priv(geometry:$class) "%ux%u" pw ph
