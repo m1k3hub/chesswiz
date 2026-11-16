@@ -197,7 +197,7 @@ variable Actions {
 	}
 	current_game {
 		0 0 "read the current game"
-		"The game on the board: its header, moves and comments as PGN, current position as FEN, last move and the FEN before that move. For alternatives to the last move, pass the position before last move to engine_evaluate. Use it to summarize or discuss the game, check whose turn it is, or view position details."
+		"The game on the board: its header, moves and comments as PGN, current position as FEN, last move and the FEN before that move, plus attached media titles and 1-based indices for media.play_entry. For alternatives to the last move, pass the position before last move to engine_evaluate. Use it to summarize or discuss the game, check whose turn it is, or view position details."
 		{{"type":"object","properties":{}}}
 		::application::assistant::DoCurrentGame
 	}
@@ -3217,6 +3217,13 @@ proc ::application::assistant::DoCurrentGame {} {
 		append reply "\nlast move: [::scidb::game::query move $key]"
 		append reply "\nposition before last move: $before"
 	}
+	append reply "\n\nAttached media (use media.play_entry with title or index):"
+	set index 0
+	foreach entry [::mediainset::CurrentEntries] {
+		lassign $entry row type title
+		append reply "\n[list index [incr index] title $title type $type]"
+	}
+	if {!$index} { append reply " none" }
 	return $reply
 }
 

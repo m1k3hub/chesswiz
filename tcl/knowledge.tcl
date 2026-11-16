@@ -106,9 +106,9 @@ set ::knowledge::Explicit [dict create \
 		related {how_do_i run_action} \
 	] \
 	current_game [dict create \
-		purpose "Read the moves, players and comments of the game on the board." \
-		when "Use this to inspect or discuss the game you are viewing." \
-		examples [list "Show me the moves in this game" "Who is playing the game on the board?"] \
+		purpose "Read the moves, players, comments and attached media titles and numbers of the game on the board." \
+		when "Use this to inspect the current game or find an attached image, video or commentary to open by title or number." \
+		examples [list "Show me the moves in this game" "List the media attached to this game"] \
 	] \
 	list_procs [dict create \
 		purpose "List the program functions whose names match a pattern." \

@@ -98,7 +98,7 @@ proc application::media::Ensure {} {
 	if {[winfo exists .application.mediaBackend]} { return }
 	ttk::frame .application.mediaBackend
 	BuildBackend {} .application.mediaBackend 400 300
-	after 1 {::application::media::Update [::scidb::game::current]}
+	set ::application::media::Priv(afterid) [after 1 {::application::media::Update [::scidb::game::current]}]
 }
 
 proc application::media::build {twm frame width height} {
@@ -2482,8 +2482,53 @@ proc ::mediainset::RunStop {cargs} {
 	::application::media::Stop
 }
 
+# Read the same entries the Media button offers, including interactive clips.
+# Flush only a pending game refresh: an ordinary read must not stop playback.
+proc ::mediainset::CurrentEntries {} {
+	::application::media::Ensure
+	set position [::scidb::game::current]
+	if {$position < 0 || $position == 9} { return {} }
+	upvar #0 ::application::media::Priv priv
+	if {$priv(position) != $position || $priv(afterid) ne ""} {
+		::application::media::Update $position
+	}
+	return [Entries]
+}
+
 proc ::mediainset::RunChoose {cargs} {
-	::mediainset::Choose [dict get $cargs row]
+	set selectors {}
+	foreach key {title index row} {
+		if {[dict exists $cargs $key] && [dict get $cargs $key] ne ""} {
+			lappend selectors $key
+		}
+	}
+	if {[llength $selectors] != 1} {
+		error "give one media title or 1-based index; read current_game to see the entries"
+	}
+	set key [lindex $selectors 0]
+	set value [dict get $cargs $key]
+	# Existing UI callers also select gallery rows when no game is open.
+	if {$key eq "row"} {
+		set entries [Entries]
+	} else {
+		set entries [CurrentEntries]
+	}
+	if {$key eq "index"} {
+		if {$value < 1 || $value > [llength $entries]} {
+			error "media index is out of range; read current_game to see the entries"
+		}
+		set matches [list [lindex $entries [expr {$value - 1}]]]
+	} else {
+		set column [expr {$key eq "title" ? 2 : 0}]
+		set matches [lsearch -all -inline -exact -index $column $entries $value]
+	}
+	if {![llength $matches]} {
+		error "no attached media matches; read current_game to see the titles and indices"
+	}
+	if {[llength $matches] > 1} {
+		error "more than one media entry has that title; choose its index from current_game"
+	}
+	Choose [lindex [lindex $matches 0] 0]
 }
 
 proc application::media::MediaStopLabel {} {
@@ -2507,14 +2552,14 @@ proc application::media::MediaStopLabel {} {
 ::action::register media.play_entry [dict create \
 	label {Play game media} \
 	operator 1 \
-	purpose {Play an audio or video entry attached to the game.} \
-	when {Use this to watch a game video or listen to its commentary.} \
-	examples {{play this game video} {play the attached commentary}} \
+	purpose {Open an attached game image, video, commentary or report by title or number.} \
+	when {Use this to open an attachment after reading the current game for its media titles and numbers.} \
+	examples {{Open the attached image titled Opening position} {Play media entry number 1 from this game}} \
 	object {} \
 	what {} \
-	args {{row {type string required 1 description {the media row to play}}}} \
+	args {{title {type string required 0 description {exact entry title from current_game}}} {index {type integer required 0 description {1-based entry number from current_game}}} {row {type string required 0 description {internal row for existing Media button callers; prefer title or index}}}} \
 	handler ::mediainset::RunChoose \
-	doc "Play one row listed by the board's Media button." \
+	doc "Open game media by its title or 1-based index. Read current_game for available titles and indices. Give exactly one selector." \
 ]
 
 proc application::media::PlayStream {url} {
