@@ -376,7 +376,7 @@ proc ::commandAccept::noop {args} {}
 		set max [lindex $sorted end]
 		puts [format "  \[4.8M-game DB benchmark: games=%d n=%d p50=%.2fms p95=%.2fms max=%.2fms\]" $numGames $n $p50 $p95 $max]
 
-		list [expr {$numGames >= 4800000}] [expr {$p95 < 10.0}] $topKasp [expr {[llength $kaspPrefixRows] > 0}]
+		list [expr {$numGames >= 4800000}] [expr {$p95 < 10.0 && $max < 25.0}] $topKasp [expr {[llength $kaspPrefixRows] > 0}]
 	} finally {
 		if {[llength [info commands ::commandAccept::realActiveBase]]} {
 			rename ::application::assistant::ActiveBase {}

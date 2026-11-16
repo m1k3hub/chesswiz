@@ -5,12 +5,16 @@ namespace eval ::commandline {
  variable Cache {}
  variable EcoIndex {}
  variable EcoTokenMap {}
+ variable EcoRanges {}
  variable OpeningLines {}
  variable MotifIndex {}
  # Async handlers (Tablebase, SimilarGames, ...) answer later through
  # ::application::assistant::Resolve; remember the command row for each token
  # so the reply reaches the user instead of being dropped.
  variable Pending {}
+}
+proc ::commandline::EcoFold {text} {
+ return [string map {é e è e á a à a ö o ó o ü u í i ř r} [string tolower $text]]
 }
 proc ::commandline::Tokenize {text} {
  return [regexp -all -inline {[^\s,;:()]+} [string map [list \x27 "" \u2019 ""] [string tolower $text]]]
@@ -24,9 +28,11 @@ proc ::commandline::WordListMatch {qwords hwords} {
  return 1
 }
 proc ::commandline::EnsureEco {} {
- variable EcoIndex; variable EcoTokenMap; variable OpeningLines
+ variable EcoIndex; variable EcoTokenMap; variable OpeningLines; variable EcoRanges
  if {[llength $EcoIndex]} {return}
  set seen {}
+ set families {}
+ set EcoTokenMap {}; set OpeningLines {}; set EcoRanges {}
  set idx 0
  foreach letter {a e i o u y} {
   foreach row [::scidb::ai::ecoLines [list $letter] 50000] {
@@ -35,20 +41,42 @@ proc ::commandline::EnsureEco {} {
    set key [list $code $label]
    if {![dict exists $seen $key]} {
     dict set seen $key 1
-    set llow [string map [list \x27 "" \u2019 ""] [string tolower $label]]
+    set llow [string map [list \x27 "" \u2019 ""] [EcoFold $label]]
     set parts [split $llow ,]
     set first [string trim [lindex $parts 0]]
     set second [string trim [lindex $parts 1]]
     set third [string trim [lindex $parts 2]]
-    set cwords [Tokenize "$code $label"]
-    set lwords [Tokenize $label]
+    set cwords [Tokenize "$code [EcoFold $label]"]
+    set lwords [Tokenize [EcoFold $label]]
     set flank [expr {[string index $code 0] eq "A" ? 1 : 0}]
     lappend EcoIndex [list $code $label $llow $first $second $third [string length $label] $flank $cwords $lwords]
+    set prefix {}
+    foreach component [EcoComponents $label] {
+     lappend prefix $component
+     dict lappend families $prefix $code
+    }
     foreach tok [lsort -unique $cwords] {dict lappend EcoTokenMap $tok $idx}
     incr idx
    }
   }
  }
+ # Compile each hierarchy prefix once. Split at gaps and volume boundaries;
+ # an ambiguous family must never include unrelated ECO codes between runs.
+ dict for {prefix codes} $families {
+  set ranges {}; set from {}; set previous {}; set lastNumber -2
+  foreach code [lsort -unique $codes] {
+   scan [string range $code 1 end] %d number
+   if {$from ne "" && ([string index $code 0] ne [string index $previous 0] || $number != $lastNumber+1)} {
+    lappend ranges [expr {$from eq $previous ? $from : "$from-$previous"}]
+    set from {}
+   }
+   if {$from eq ""} {set from $code}
+   set previous $code; set lastNumber $number
+  }
+  if {$from ne ""} {lappend ranges [expr {$from eq $previous ? $from : "$from-$previous"}]}
+  dict set EcoRanges $prefix $ranges
+ }
+
 }
 proc ::commandline::EcoCandidates {qwords} {
  variable EcoIndex; variable EcoTokenMap
@@ -69,7 +97,7 @@ proc ::commandline::EcoCandidates {qwords} {
 # Defence, Najdorf Variation, ...".
 proc ::commandline::EcoComponents {label} {
  set out {}
- foreach part [split $label ,] {lappend out [string tolower [string trim $part]]}
+ foreach part [split $label ,] {lappend out [EcoFold [string trim $part]]}
  return $out
 }
 # The shortest leading run of components that covers every typed word. This
@@ -90,25 +118,11 @@ proc ::commandline::EcoFamilyPrefix {label qwords} {
  }
  return [lrange $comps 0 [expr {$n-1}]]
 }
-# Every ECO code whose name shares the prefix, as "B90-B99" (or one code).
-proc ::commandline::EcoFamilyRange {prefix} {
- variable EcoIndex
- set plen [llength $prefix]
- set codes {}
- foreach entry $EcoIndex {
-  lassign $entry code label
-  set comps [EcoComponents $label]
-  if {[llength $comps] < $plen} {continue}
-  set ok 1
-  for {set i 0} {$i < $plen} {incr i} {
-   if {[lindex $comps $i] ne [lindex $prefix $i]} {set ok 0; break}
-  }
-  if {$ok} {lappend codes $code}
- }
- if {![llength $codes]} {return ""}
- set codes [lsort -unique $codes]
- set from [lindex $codes 0]; set to [lindex $codes end]
- return [expr {$from eq $to ? $from : "$from-$to"}]
+# Precomputed, disjoint ranges for a hierarchical opening family.
+proc ::commandline::EcoFamilyRanges {prefix} {
+ variable EcoRanges
+ if {[dict exists $EcoRanges $prefix]} {return [dict get $EcoRanges $prefix]}
+ return {}
 }
 proc ::commandline::EcoLookup {type query} {
  variable EcoIndex
@@ -118,24 +132,38 @@ proc ::commandline::EcoLookup {type query} {
  if {$explicit} {
   lappend values [string toupper [string map {" " ""} [string trim $query]]]
  }
- set qlow [string map [list \x27 "" \u2019 ""] [string tolower [string trim $query]]]
- set qwords [Tokenize $query]
+ set qlow [string map [list \x27 "" \u2019 ""] [EcoFold [string trim $query]]]
+ set qwords [Tokenize [EcoFold $query]]
+ # Conventional short names disambiguate homonymous subvariations in the
+ # ECO catalog. Resolve the canonical hierarchy, not a label-length guess.
+ if {$type eq "eco"} {
+  set aliases [dict create london {{queen's pawn} {queen's pawn game} {london system}} \
+   sveshnikov {sicilian {sicilian defence} {pelikán (lasker/sveshnikov) variation}}]
+  dict set aliases {london system} [dict get $aliases london]
+  dict set aliases {sveshnikov variation} [dict get $aliases sveshnikov]
+  if {[dict exists $aliases $qlow]} {
+   set prefix [lmap part [dict get $aliases $qlow] {EcoFold $part}]
+   set values [EcoFamilyRanges $prefix]
+   if {[llength $values]} {return $values}
+  }
+ }
  set ranked {}
  foreach idx [EcoCandidates $qwords] {
   lassign [lindex $EcoIndex $idx] code label llow first second third len flank codeWords labelWords
   set words [expr {$type eq "eco" ? $codeWords : $labelWords}]
   if {$qlow eq "" || [WordListMatch $qwords $words]} {
    set rank [expr {$qlow eq "" ? 6 : ($qlow eq $first ? 0 : ([string first $qlow $first] == 0 ? 1 : ([string first $qlow $second] == 0 ? 2 : ([string first $qlow $third] == 0 ? 3 : ([string first $qlow $first] >= 0 ? 4 : ([string first $qlow $llow] >= 0 ? 5 : 6))))))}]
-   set penalty [expr {$type eq "eco" ? $flank * 50000 : 0}]
-   lappend ranked [list [expr {$rank * 10000 + $penalty + $len}] [expr {$type eq "eco" ? $code : $label}] $label]
+   lappend ranked [list [expr {$rank * 10000 + $len}] [expr {$type eq "eco" ? $code : $label}] $label]
   }
  }
  set sorted [lsort -integer -index 0 $ranked]
  foreach item $sorted {
   set v [lindex $item 1]
   if {$type eq "eco" && !$explicit && [llength $qwords]} {
-   set family [EcoFamilyRange [EcoFamilyPrefix [lindex $item 2] $qwords]]
-   if {$family ne ""} {set v $family}
+   set family [EcoFamilyRanges [EcoFamilyPrefix [lindex $item 2] $qwords]]
+   foreach range $family {if {$range ni $values} {lappend values $range}}
+   if {[llength $values] >= 8} {break}
+   continue
   }
   if {$v ni $values} {lappend values $v}
   if {[llength $values] >= 8} {break}

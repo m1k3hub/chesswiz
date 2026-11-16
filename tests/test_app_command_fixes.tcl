@@ -147,6 +147,36 @@ close $f
 # F-04: an opening name resolves to its whole ECO family, an explicit code
 # stays exact.
 # ----------------------------------------------------------------------
+::tcltest::test R2F-02-eco-names {real suggestions resolve common opening names without cross-volume ranges} -body {
+ set actual {}
+ foreach name {Sicilian Najdorf {King's Indian} English Dutch Reti London Sveshnikov} {
+  set rows [::commandline::Suggest "find games opening $name"]
+  lappend actual [dict get [lindex $rows 0] args eco]
+ }
+ set safe 1
+ foreach name {{Queen's Pawn} Indian} {
+  foreach row [::commandline::Suggest "find games opening $name"] {
+   set range [dict get $row args eco]
+   if {[regexp {^([A-E])[0-9]+-([A-E])[0-9]+$} $range -> a b] && $a ne $b} {set safe 0}
+  }
+ }
+ ::fix::run {find games opening London} 15
+ list $actual $safe [::scidb::view::count games $::fix::Base Normal 0]
+} -result {{B20-B99 B90-B99 E60-E99 A10-A39 A80-A99 A04-A09 D02 B33} 1 1}
+
+::tcltest::test R2F-02-eco-latency {every warm Sicilian keystroke stays below 25ms through Suggest} -body {
+ ::commandline::Suggest {score of Sicilian for Kasparov}
+ set worst 0
+ foreach opening {Sicil Sicilia Sicilian} {
+  set start [clock microseconds]
+  ::commandline::Suggest "score of $opening for Kasparov"
+  set elapsed [expr {([clock microseconds]-$start)/1000.0}]
+  set worst [expr {max($worst,$elapsed)}]
+ }
+ puts "R2F-02 maximum keystroke latency: $worst ms"
+ expr {$worst < 25.0}
+} -result 1
+
 ::tcltest::test F-04-eco-family {opening names resolve to their ECO family range} -body {
  list \
   [lindex [::commandline::EcoLookup eco Sicilian] 0] \
