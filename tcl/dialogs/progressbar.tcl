@@ -80,13 +80,18 @@ proc open {w args} {
 	if {[llength $parent] == 0} {
 		set parent [winfo parent $w]
 	}
+	if {[winfo exists $parent]} {
+		set parent [winfo toplevel $parent]
+	} else {
+		set parent .
+	}
 	set Priv(interrupted:$w) 0
 	set Priv(interruptable:$w) $opts(-interrupt)
 	setTitle $w $opts(-title)
 	wm iconname $w ""
 	wm resizable $w false false
 	wm protocol $w WM_DELETE_WINDOW {#}
-	if {[string length $parent]} {
+	if {[winfo exists $parent] && [winfo ismapped $parent]} {
 		if {$opts(-transient)} { wm transient $w $parent }
 		wm group $w $parent
 	}
@@ -146,25 +151,24 @@ proc open {w args} {
 	wm withdraw $w
 	update idletasks
 
+	if {![winfo exists $w]} { return }
 	set rw [winfo reqwidth $w]
 	set rh [winfo reqheight $w]
-	set sw [winfo workareawidth  $parent]
-	set sh [winfo workareaheight $parent]
-	if {$parent eq "."} {
-		set x0 [expr {($sw - $rw)/2 - [winfo vrootx $parent]}]
-		set y0 [expr {($sh - $rh)/2 - [winfo vrooty $parent]}]
+	# Idle callbacks can destroy or unmap the original parent.
+	if {![winfo exists $w]} { return }
+	if {![winfo exists $parent] || ![winfo ismapped $parent]} { set parent . }
+	lassign [::util::place::workAreaFor $parent] sx sy sw sh
+	if {$parent eq "." || ![winfo ismapped $parent]} {
+		set x0 [expr {$sx + ($sw - $rw)/2}]
+		set y0 [expr {$sy + ($sh - $rh)/2}]
 	} else {
-		set x0 [expr {[winfo rootx $parent] + ([winfo width  $parent] - $rw)/2}]
+		set x0 [expr {[winfo rootx $parent] + ([winfo width $parent] - $rw)/2}]
 		set y0 [expr {[winfo rooty $parent] + ([winfo height $parent] - $rh)/2}]
 	}
+	set x0 [expr {max($sx, min($x0, $sx + $sw - $rw))}]
+	set y0 [expr {max($sy, min($y0, $sy + $sh - $rh))}]
 	set x "+$x0"
 	set y "+$y0"
-	if {$::tcl_platform(platform) ne "win32"} {
-		if {$x0 + $rw > $sw}	{ set x "-0"; set x0 [expr {$sw - $rw}] }
-		if {$x0 < 0}			{ set x "+0" }
-		if {$y0 + $rh > $sh}	{ set y "-0"; set y0 [expr {$sh - $rh}] }
-		if {$y0 < 0}			{ set y "+0" }
-	}
 	wm geometry $w ${x}${y}
 	wm deiconify $w
 	if {[tk windowingsystem] == "x11"} {

@@ -3954,6 +3954,8 @@ proc getWmWorkArea {w} {
 # to the main window only while it has neither (GAP-001).
 proc workAreaFor {window} {
 	variable mainWindow
+	# Callers may pass a child widget, including an unmapped HTML view.
+	if {[winfo exists $window]} { set window [winfo toplevel $window] }
 	if {[winfo exists $window]} {
 		if {[winfo ismapped $window]} {
 			return [getWmWorkArea $window]
@@ -3989,8 +3991,11 @@ proc workAreaFor {window} {
 			}
 		}
 	}
-	if {[winfo exists $mainWindow]} { return [getWmWorkArea $mainWindow] }
-	return [getWmWorkArea $window]
+	if {[winfo exists $mainWindow] && [winfo ismapped $mainWindow]} {
+		return [getWmWorkArea [winfo toplevel $mainWindow]]
+	}
+	# A destroyed parent or an unrealised root has no native monitor handle.
+	return [list 0 0 [winfo screenwidth .] [winfo screenheight .]]
 }
 
 } ;# namespace place
