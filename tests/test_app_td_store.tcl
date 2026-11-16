@@ -52,7 +52,7 @@ tcltest::test td-capability-gate {td actions are refused when capability is abse
 	::knowledge::RunAction td.status {}
 } -cleanup {
 	::capability::ClearOverrides
-} -match glob -result {error:*td*unavailable*}
+} -match glob -result {error: precondition: 'td.status' is not available in this build, so nothing was done;*}
 
 tcltest::test td-berger-exact {Berger tables match C.05 annex order and colours} -body {
 	set players {}
