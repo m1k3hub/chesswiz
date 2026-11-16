@@ -14,6 +14,36 @@ package require tcltest 2.5
 source [file join [file dirname [info script]] app_wait.tcl]
 ::scidb::test::wait::ready
 
+# The placeholder overlays the entry, so it must forward clicks in every theme.
+foreach theme {clam dark} {
+    tcltest::test ask-placeholder-focus-$theme {clicking the empty field focuses its entry} -setup {
+        set savedTheme [::theme::currentTheme]
+        set savedQuery $::application::ask::Query
+        set savedFocus [focus]
+        ::theme::setTheme $theme
+        set ::application::ask::Query {}
+        ::application::ask::PlaceholderState
+        ::application::ask::HideList
+        focus -force .application
+        update
+    } -body {
+        set label .application.nb.ask.placeholder
+        focus -force .application
+        set before [focus]
+        set mapped [winfo ismapped $label]
+        event generate $label <ButtonPress-1> -x 5 -y 5
+        update
+        list [expr {$before ne ".application.nb.ask.entry"}] $mapped [focus]
+    } -cleanup {
+        ::application::ask::HideList
+        set ::application::ask::Query $savedQuery
+        ::application::ask::PlaceholderState
+        ::theme::setTheme $savedTheme
+        if {$savedFocus ne "" && [winfo exists $savedFocus]} { focus $savedFocus }
+        update
+    } -result {1 1 .application.nb.ask.entry}
+}
+
 namespace eval ::scidb::test::ask {
 	variable Ran {}
 	variable Sent {}
