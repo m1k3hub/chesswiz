@@ -54,7 +54,8 @@ proc ::td::ui::Open {path {tab event}} {
 	wm title $Dialog "Tournament Director"
 	wm transient $Dialog .application
 	wm protocol $Dialog WM_DELETE_WINDOW ::td::ui::Close
-	set Notebook [ttk::notebook $Dialog.tabs]
+	set body [::util::place::playingBody $Dialog]
+	set Notebook [ttk::notebook $body.tabs]
 	pack $Notebook -fill both -expand yes -padx 6 -pady 6
 	foreach name {event players pairings results standings} {
 		ttk::frame $Notebook.$name
@@ -67,7 +68,9 @@ proc ::td::ui::Open {path {tab event}} {
 	BuildStandings $Notebook.standings
 	Select $tab
 	Refresh
-	wm geometry $Dialog 1100x720
+	update idletasks
+	::util::place::besideBoard $Dialog .application
+	::util::place::fitWindow $Dialog
 	wm deiconify $Dialog
 	return $Dialog
 }

@@ -289,7 +289,7 @@ proc Poll {} {
 # pages still lag behind.
 proc ShowDelay {live} {
 	variable Priv
-	set label $Priv(window).f.delay.now
+	set label $Priv(window).__viewport.canvas.body.delay.now
 	if {![winfo exists $label]} { return }
 	set text ""
 	if {$live > 0} {
@@ -611,8 +611,8 @@ proc open {parent} {
 	toplevel $top -class ChesswizStream
 	wm title $top $mc::Title
 	wm transient $top [winfo toplevel $parent]
-	set f [ttk::frame $top.f -padding 12]
-	pack $f -fill both -expand yes
+	set f [::util::place::playingBody $top]
+	$f configure -padding 12
 	ttk::label $f.explain -text $mc::Explain -wraplength 560 -justify left
 	ttk::label $f.private -text $mc::Private -wraplength 560 -justify left -foreground #555555
 	set r [ttk::frame $f.run]
@@ -670,6 +670,9 @@ proc open {parent} {
 	set Priv(window) $top
 	Refresh
 	ChatShow
+	update idletasks
+	::util::place::besideBoard $top [winfo toplevel $parent]
+	::util::place::fitWindow $top
 	return $top
 }
 
@@ -694,7 +697,7 @@ proc Refresh {{message {}}} {
 	variable Pages
 	set top $Priv(window)
 	if {![winfo exists $top]} { return }
-	set r $top.f.run
+	set r $top.__viewport.canvas.body.run
 	$r.toggle configure -text [expr {[running?] ? $mc::Stop : $mc::Start}]
 	$r.port configure -state [expr {[running?] ? "disabled" : "normal"}]
 	if {$message eq "" && [running?]} { set message [format $mc::Running $Options(port)] }
@@ -723,7 +726,7 @@ proc ChatToggle {{message {}}} {
 
 proc ChatShow {{message {}}} {
 	variable Priv
-	set c $Priv(window).f.chat
+	set c $Priv(window).__viewport.canvas.body.chat
 	if {![winfo exists $c]} { return }
 	set st [::stream::chat::state]
 	$c.b configure -text [expr {$st eq "off" ? $mc::ChatConnect : $mc::ChatDisconnect}]

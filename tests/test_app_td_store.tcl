@@ -164,9 +164,9 @@ tcltest::test td-workspace {all five TD tabs and journal crosstable are reachabl
 	create $path {A B C D}
 	pairAll $path
 	set dlg [commit td.workspace [dict create operation open path $path tab players]]
-	set tabs [winfo children $dlg.tabs]
+	set tabs [winfo children $dlg.__viewport.canvas.body.tabs]
 	commit td.workspace {operation select tab standings}
-	set selected [$dlg.tabs select]
+	set selected [$dlg.__viewport.canvas.body.tabs select]
 	set cross [commit td.crosstable [dict create path $path open 1]]
 	set window [dict get $cross window]
 	set exists [winfo exists $window]
@@ -174,7 +174,7 @@ tcltest::test td-workspace {all five TD tabs and journal crosstable are reachabl
 	destroy $window
 	commit td.workspace {operation close}
 	list [llength $tabs] $selected $exists [winfo exists $dlg]
-} -result {5 .application.tournamentDirector.tabs.standings 1 0}
+} -result {5 .application.tournamentDirector.__viewport.canvas.body.tabs.standings 1 0}
 
 tcltest::test td-workspace-buttons {workspace buttons commit through Mutate with the current revision} -body {
 	set path [fresh]

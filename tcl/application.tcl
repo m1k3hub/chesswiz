@@ -725,8 +725,10 @@ proc KeepInWorkArea {w} {
 proc FloatingWindows {} {
 	variable Vars
 	set windows {}
-	if {[winfo exists .online] && [wm state .online] eq "normal"} {
-		lappend windows .online
+	foreach top {.online .stream .application.tournamentDirector} {
+		if {[winfo exists $top] && [wm state $top] eq "normal"} {
+			lappend windows $top
+		}
 	}
 	if {[info exists Vars(twm)]} {
 		foreach twm $Vars(twm) {
