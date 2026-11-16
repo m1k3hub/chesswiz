@@ -221,4 +221,22 @@ tcltest::test bounds-plan-decline-needs-user-decision {a model cannot invent use
  array set ::application::assistant::Priv $savedPriv
 } -result {1 1 1}
 
+
+# Real knowledge index: a dispatch verb must not suggest generic dispatchers.
+tcltest::test bounds-concrete-alternatives {unsupported commands name concrete registered operations} -body {
+ set bad {}; set empty {}
+ foreach request {{Run rm -rf /tmp on my computer.} {Run a shell command.} {Run an unsupported task.}} {
+  # Do not let BoundsNearest's defensive catch hide a search error.
+  set nearest [::knowledge::NearestActions $request]
+  set pairs [::application::assistant::BoundsNearest $request]
+  puts [list BOUNDS_ALTERNATIVES $request nearest $nearest reply $pairs]
+  if {![llength $pairs]} {lappend empty $request}
+  foreach pair $pairs {
+   set id [lindex $pair 1]
+   if {$id in {run_action run_job} || ![dict exists $::action::Registry $id]} {lappend bad $id}
+  }
+ }
+ list $bad $empty
+} -result {{} {}}
+
 tcltest::cleanupTests

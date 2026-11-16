@@ -1463,7 +1463,7 @@ proc ::knowledge::Score {tokens cap} {
 	return $score
 }
 
-proc ::knowledge::Search {request {limit 4}} {
+proc ::knowledge::Search {request {limit 4} {exclude {}}} {
 	Load
 
 	set tokens [Tokenize $request]
@@ -1472,6 +1472,7 @@ proc ::knowledge::Search {request {limit 4}} {
 	if {![llength $tokens]} { return {} }
 	set scored {}
 	foreach cap $::knowledge::Index {
+		if {[dict get $cap data id] in $exclude} { continue }
 		set score [Score $tokens $cap]
 		if {$score > 0} { lappend scored [list $score $cap] }
 	}
@@ -1613,13 +1614,17 @@ proc ::knowledge::FindCapability {request {limit 4}} {
 # come from the registry, never from the model's own knowledge.
 proc ::knowledge::NearestActions {request {limit 2}} {
 	set out {}
-	foreach cap [Search $request [expr {$limit > 3 ? $limit : 3}]] {
+	# Dispatch wrappers need an operation chosen first; they are not
+	# concrete alternatives to an unsupported request. Filter before the
+	# result limit so wrappers cannot crowd out matching app operations.
+	set wrappers {run_action run_job}
+	foreach cap [Search $request [expr {$limit > 3 ? $limit : 3}] $wrappers] {
 		if {[dict get $cap kind] eq "topic"} {
 			set data [dict get $cap data]
 			set id ""
 			foreach step [dict get $data steps] {
 				lassign [Runnable [dict get $step action]] ok
-				if {$ok} { set id [dict get $step action]; break }
+				if {$ok && [dict get $step action] ni $wrappers} { set id [dict get $step action]; break }
 			}
 			if {$id eq ""} continue
 			lappend out [list [dict get $data title] $id]
