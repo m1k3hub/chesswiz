@@ -50,6 +50,7 @@ set ::RequestEval::SkipDone 0
 # the corpus has its own model class; no System One triage
 set ::env(SCIDB_AI_TRIAGE) 0
 
+source [file join $root tests no_open_stub.tcl]
 source -encoding utf-8 [file join $root tcl chesswiz]
 # A fresh user directory is a first run, whose language chooser waits for a
 # click; the evaluation is not one. Startup2 has not run yet (it is a timer).
