@@ -111,10 +111,10 @@ tcltest::test cache-load-fast {fast-load neither reads nor writes player cache} 
 tcltest::test cache-load-elo {elo-only keeps its original parse behavior} -body {
     lrange [runCacheLoadDraining elo-only 0] end-1 end
 } -result {done cache-write}
-tcltest::test cache-load-manifest {own FIDE, engine, links and city sources tracked} -body {
+tcltest::test cache-load-manifest {shipped and user rating locations are both tracked} -body {
     runCacheLoad {} 1
-    lmap p $::load::CacheSources { file tail $p }
-} -result {ratings_utf8.ssp.zip ratings-additional.ssp engines.txt players_list.zip fide-players.txt ips-ratings.txt dwz-ratings.txt ecf-ratings.txt iccf-ratings.txt wikipedia-de.txt wikipedia-en.txt chessgames.com.zip cities.txt}
+    lmap p $::load::CacheSources { string range $p [expr {[string length $::cacheTestRoot]+1}] end }
+} -result {ratings_utf8.ssp.zip ratings-additional.ssp engines.txt players_list.zip ratings/fide-players.txt ips-ratings.txt dwz-ratings.txt ecf-ratings.txt iccf-ratings.txt ratings/dwz-ratings.txt ratings/ecf-ratings.txt ratings/iccf-ratings.txt wikipedia-de.txt wikipedia-en.txt chessgames.com.zip cities.txt}
 tcltest::test cache-load-option-manifest {elo-only omits other ratings from fingerprint} -body {
     runCacheLoad elo-only 1
     lmap p $::load::CacheSources { file tail $p }
@@ -128,5 +128,25 @@ tcltest::test cache-load-user-fide {readable user list replaces shipped FIDE inp
     runCacheLoadDraining {} 0
     file tail [lindex [lsearch -inline -index 0 $::cacheTestCalls fide] 1]
 } -result fide-players.txt
+# Inspect actual loader calls, not the fingerprint's deliberately duplicated names.
+tcltest::test cache-load-rating-precedence {each federation loads once, preferring the user copy} -body {
+    set observed {}
+    foreach installed {0 1 0} {
+        foreach type {dwz ecf iccf} {
+            set path [file join $cacheTestRoot ratings $type-ratings.txt]
+            if {$installed} { close [open $path w] } else { file delete $path }
+        }
+        runCacheLoadDraining {} 0
+        set ratings {}
+        foreach call $::cacheTestCalls {
+            if {[lindex $call 0] in {dwz ecf iccf installed}} {
+                lappend ratings [list [lindex $call 0] [string range [lindex $call 1] \
+                    [expr {[string length $::cacheTestRoot]+1}] end]]
+            }
+        }
+        lappend observed $ratings
+    }
+    set observed
+} -result {{{dwz dwz-ratings.txt} {ecf ecf-ratings.txt} {iccf iccf-ratings.txt}} {{installed ratings/dwz-ratings.txt} {installed ratings/ecf-ratings.txt} {installed ratings/iccf-ratings.txt}} {{dwz dwz-ratings.txt} {ecf ecf-ratings.txt} {iccf iccf-ratings.txt}}}
 file delete -force $cacheTestRoot
 tcltest::cleanupTests
