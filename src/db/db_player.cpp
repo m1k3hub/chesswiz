@@ -4174,8 +4174,11 @@ convertEcfList(	mstl::istream& stream,
 			// the export until 2020 published grades: convert them to Elo
 			unsigned ecfGrade = 0;
 
-			if (!parseOptionalNumber(fieldOf(f, grade), ecfGrade))
+			if (	!parseOptionalNumber(fieldOf(f, grade), ecfGrade)
+				|| ecfGrade > (rating::Max_Value - 600u)/8u)
+			{
 				return false;
+			}
 
 			r.rating = rating::convertEcfToElo(ecfGrade);
 		}
@@ -4260,6 +4263,7 @@ convertIccfList(	mstl::istream& stream,
 			o = 0;
 
 		ListRecord r;
+		unsigned idNum = 0;
 
 		if (o >= 0)
 		{
@@ -4273,16 +4277,27 @@ convertIccfList(	mstl::istream& stream,
 				: ct == "LGM" ? title::Mask_CLGM
 				: ct == "LIM" ? title::Mask_CLIM : 0;
 			r.name		= personName(f[o + 3]);
-			r.rating		= numberOf(f[o + 5]);
+
+			unsigned games = 0;
+			unsigned rd = 0;
 
 			// RD is uncertainty, not sex; the dictionary has no RD field.
-			if (f.size() <= unsigned(o) + 6 || !isNumber(f[o + 6])) return false;
+			if (	f.size() <= unsigned(o) + 6
+				|| !parseOptionalNumber(f[o + 4], games)
+				|| !isNumber(f[o + 5])
+				|| !parseOptionalNumber(f[o + 5], r.rating)
+				|| !isNumber(f[o + 6])
+				|| !parseOptionalNumber(f[o + 6], rd))
+			{
+				return false;
+			}
 		}
 
 		if (	o < 0
 			|| r.federation == country::Unknown
 			|| !isNumber(r.id)
-			|| numberOf(r.id) == 0
+			|| !parseOptionalNumber(r.id, idNum)
+			|| idNum == 0
 			|| r.id.size() > 7
 			|| hasInstalledRecordSeparator(r.id)
 			|| r.name.size() < 3

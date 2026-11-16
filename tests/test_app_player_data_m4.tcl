@@ -16,6 +16,11 @@ namespace eval ::m4 {
   set f [open $dir/output.txt]; set result [read $f]; close $f
   return $result
  }
+ proc checkReject {kind in out} {
+  file delete -force $out $out.part
+  set rc [catch {::scidb::app::filterRatingList $kind $in $out 1800}]
+  list $rc [file exists $out] [file exists $out.part]
+ }
 }
 tcltest::test VAL-PD4-007 {Revised standard takes priority independent of header order} -body {
  set result [::m4::convert ecf {ECF_code,full_name,original_standard,revised_standard
@@ -84,47 +89,58 @@ tcltest::test VAL-PD4-011-corrupt-zip {Corrupt ZIP and HTML 403 bodies are rejec
       [catch {::scidb::app::filterRatingList ecf $html403 $::m4::dir/bad2.txt}] \
       [catch {::scidb::app::filterRatingList iccf $html403 $::m4::dir/bad3.txt}]
 } -result {1 1 1}
-tcltest::test VAL-PD4-011-required-fields {DWZ and ECF rows with empty or non-numeric required/typed fields reject whole import} -body {
- set ecfEmpty      [::m4::write ecf-empty.csv "ECF_code,full_name,revised_standard\n999001A,\"Fixture, Valid\",1900\n999002B,,1900\n"]
- set dwzEmpty      [::m4::write dwz-empty.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n99999,2,,1900\n"]
- set dwzComma      [::m4::write dwz-comma.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n99999,2,\",GivenOnly\",1900\n"]
- set dwzNoId       [::m4::write dwz-noid.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n,2,\"Fixture, MissingZps\",1900\n"]
- set ecfNoId       [::m4::write ecf-noid.csv "ECF_code,full_name,revised_standard\n999001A,\"Fixture, Valid\",1900\n,\"Fixture, MissingCode\",1900\n"]
- set dwzBadMember  [::m4::write dwz-bad-member.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n99999,abc,\"Fixture, BadMember\",1900\n"]
- set dwzZeroMember [::m4::write dwz-zero-member.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n99999,0,\"Fixture, ZeroMember\",1900\n"]
- set dwzBadRating  [::m4::write dwz-bad-rating.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n99999,2,\"Fixture, BadRating\",abc\n"]
- set dwzHugeRating [::m4::write dwz-huge-rating.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n99999,2,\"Fixture, HugeRating\",99999\n"]
- set dwzBadFide    [::m4::write dwz-bad-fide.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ,FIDE-ID\n99999,1,\"Fixture, Valid\",1900,\n99999,2,\"Fixture, BadFide\",1500,xyz\n"]
- set dwzBadBirth   [::m4::write dwz-bad-birth.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ,Geburtsjahr\n99999,1,\"Fixture, Valid\",1900,\n99999,2,\"Fixture, BadBirth\",1900,19x5\n"]
- set dwzDupBad     [::m4::write dwz-dup-bad.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n99999,1,\"Fixture, Valid\",abc\n"]
- set ecfBadRating  [::m4::write ecf-bad-rating.csv "ECF_code,full_name,revised_standard,FIDE_no\n999001A,\"Fixture, Valid\",1900,\n999002B,\"Fixture, BadRating\",abc,\n"]
- set ecfBadOrig    [::m4::write ecf-bad-orig.csv "ECF_code,full_name,revised_standard,original_standard\n999001A,\"Fixture, Valid\",1900,1850\n999002B,\"Fixture, BadOrig\",1900,abc\n"]
- set ecfBadGrade   [::m4::write ecf-bad-grade.csv "ECF_code,full_name,grade\n999001A,\"Fixture, Valid\",150\n999002B,\"Fixture, BadGrade\",abc\n"]
- set ecfBadFide    [::m4::write ecf-bad-fide.csv "ECF_code,full_name,revised_standard,FIDE_no\n999001A,\"Fixture, Valid\",1900,\n999002B,\"Fixture, BadFide\",1500,xyz\n"]
- set ecfOut $::m4::dir/ecf-empty-out.txt
- set dwzOut $::m4::dir/dwz-empty-out.txt
- set dwzBadMemberOut $::m4::dir/dwz-bad-member-out.txt
- set dwzBadRatingOut $::m4::dir/dwz-bad-rating-out.txt
- set ecfBadRatingOut $::m4::dir/ecf-bad-rating-out.txt
- file delete -force $ecfOut $dwzOut $dwzBadMemberOut $dwzBadRatingOut $ecfBadRatingOut
- list \
-  [catch {::scidb::app::filterRatingList ecf $ecfEmpty $ecfOut 1800}] [file exists $ecfOut] \
-  [catch {::scidb::app::filterRatingList dwz $dwzEmpty $dwzOut 1800}] [file exists $dwzOut] \
-  [catch {::scidb::app::filterRatingList dwz $dwzComma $::m4::dir/dwz-comma-out.txt 1800}] \
-  [catch {::scidb::app::filterRatingList dwz $dwzNoId $::m4::dir/dwz-noid-out.txt 1800}] \
-  [catch {::scidb::app::filterRatingList ecf $ecfNoId $::m4::dir/ecf-noid-out.txt 1800}] \
-  [catch {::scidb::app::filterRatingList dwz $dwzBadMember $dwzBadMemberOut 1800}] [file exists $dwzBadMemberOut] \
-  [catch {::scidb::app::filterRatingList dwz $dwzZeroMember $::m4::dir/dwz-zero-member-out.txt 1800}] \
-  [catch {::scidb::app::filterRatingList dwz $dwzBadRating $dwzBadRatingOut 1800}] [file exists $dwzBadRatingOut] \
-  [catch {::scidb::app::filterRatingList dwz $dwzHugeRating $::m4::dir/dwz-huge-rating-out.txt 1800}] \
-  [catch {::scidb::app::filterRatingList dwz $dwzBadFide $::m4::dir/dwz-bad-fide-out.txt 1800}] \
-  [catch {::scidb::app::filterRatingList dwz $dwzBadBirth $::m4::dir/dwz-bad-birth-out.txt 1800}] \
-  [catch {::scidb::app::filterRatingList dwz $dwzDupBad $::m4::dir/dwz-dup-bad-out.txt 1800}] \
-  [catch {::scidb::app::filterRatingList ecf $ecfBadRating $ecfBadRatingOut 1800}] [file exists $ecfBadRatingOut] \
-  [catch {::scidb::app::filterRatingList ecf $ecfBadOrig $::m4::dir/ecf-bad-orig-out.txt 1800}] \
-  [catch {::scidb::app::filterRatingList ecf $ecfBadGrade $::m4::dir/ecf-bad-grade-out.txt 1800}] \
-  [catch {::scidb::app::filterRatingList ecf $ecfBadFide $::m4::dir/ecf-bad-fide-out.txt 1800}]
-} -result {1 0 1 0 1 1 1 1 0 1 1 0 1 1 1 1 1 0 1 1 1}
+tcltest::test VAL-PD4-011-required-fields {DWZ, ECF, and ICCF rows with empty, non-numeric, or overflowing numeric/grade fields reject whole import} -body {
+ set ecfEmpty        [::m4::write ecf-empty.csv "ECF_code,full_name,revised_standard\n999001A,\"Fixture, Valid\",1900\n999002B,,1900\n"]
+ set dwzEmpty        [::m4::write dwz-empty.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n99999,2,,1900\n"]
+ set dwzComma        [::m4::write dwz-comma.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n99999,2,\",GivenOnly\",1900\n"]
+ set dwzNoId         [::m4::write dwz-noid.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n,2,\"Fixture, MissingZps\",1900\n"]
+ set ecfNoId         [::m4::write ecf-noid.csv "ECF_code,full_name,revised_standard\n999001A,\"Fixture, Valid\",1900\n,\"Fixture, MissingCode\",1900\n"]
+ set dwzBadMember    [::m4::write dwz-bad-member.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n99999,abc,\"Fixture, BadMember\",1900\n"]
+ set dwzZeroMember   [::m4::write dwz-zero-member.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n99999,0,\"Fixture, ZeroMember\",1900\n"]
+ set dwzBadRating    [::m4::write dwz-bad-rating.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n99999,2,\"Fixture, BadRating\",abc\n"]
+ set dwzHugeRating   [::m4::write dwz-huge-rating.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n99999,2,\"Fixture, HugeRating\",99999\n"]
+ set dwzBadFide      [::m4::write dwz-bad-fide.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ,FIDE-ID\n99999,1,\"Fixture, Valid\",1900,\n99999,2,\"Fixture, BadFide\",1500,xyz\n"]
+ set dwzBadBirth     [::m4::write dwz-bad-birth.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ,Geburtsjahr\n99999,1,\"Fixture, Valid\",1900,\n99999,2,\"Fixture, BadBirth\",1900,19x5\n"]
+ set dwzDupBad       [::m4::write dwz-dup-bad.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n99999,1,\"Fixture, Valid\",abc\n"]
+ set ecfBadRating    [::m4::write ecf-bad-rating.csv "ECF_code,full_name,revised_standard,FIDE_no\n999001A,\"Fixture, Valid\",1900,\n999002B,\"Fixture, BadRating\",abc,\n"]
+ set ecfBadOrig      [::m4::write ecf-bad-orig.csv "ECF_code,full_name,revised_standard,original_standard\n999001A,\"Fixture, Valid\",1900,1850\n999002B,\"Fixture, BadOrig\",1900,abc\n"]
+ set ecfBadGrade     [::m4::write ecf-bad-grade.csv "ECF_code,full_name,grade\n999001A,\"Fixture, Valid\",150\n999002B,\"Fixture, BadGrade\",abc\n"]
+ set ecfBadFide      [::m4::write ecf-bad-fide.csv "ECF_code,full_name,revised_standard,FIDE_no\n999001A,\"Fixture, Valid\",1900,\n999002B,\"Fixture, BadFide\",1500,xyz\n"]
+ set ecfGradeWrap    [::m4::write ecf-grade-wrap.csv "ECF_code,full_name,grade\n999001A,\"Fixture, Valid\",150\n999002B,\"Fixture, Overflow\",536871087\n"]
+ set ecfGradeTooHigh [::m4::write ecf-grade-high.csv "ECF_code,full_name,grade\n999001A,\"Fixture, Valid\",150\n999002B,\"Fixture, GradeHigh\",426\n"]
+ set iccfWrapRating  [::m4::write iccf-wrap-rating.csv "990001;ENG;IM;Fixture, ValidIccf;20;2200;90;\n990002;ENG;IM;Fixture, WrapIccf;20;4294969496;90;\n"]
+ set gradeMaxOut     [::m4::convert ecf "ECF_code,full_name,grade\n999001A,\"Fixture, GradeMax\",425\n"]
+ set cases [list \
+  [list ecf $ecfEmpty        $::m4::dir/ecf-empty-out.txt] \
+  [list dwz $dwzEmpty        $::m4::dir/dwz-empty-out.txt] \
+  [list dwz $dwzComma        $::m4::dir/dwz-comma-out.txt] \
+  [list dwz $dwzNoId         $::m4::dir/dwz-noid-out.txt] \
+  [list ecf $ecfNoId         $::m4::dir/ecf-noid-out.txt] \
+  [list dwz $dwzBadMember    $::m4::dir/dwz-bad-member-out.txt] \
+  [list dwz $dwzZeroMember   $::m4::dir/dwz-zero-member-out.txt] \
+  [list dwz $dwzBadRating    $::m4::dir/dwz-bad-rating-out.txt] \
+  [list dwz $dwzHugeRating   $::m4::dir/dwz-huge-rating-out.txt] \
+  [list dwz $dwzBadFide      $::m4::dir/dwz-bad-fide-out.txt] \
+  [list dwz $dwzBadBirth     $::m4::dir/dwz-bad-birth-out.txt] \
+  [list dwz $dwzDupBad       $::m4::dir/dwz-dup-bad-out.txt] \
+  [list ecf $ecfBadRating    $::m4::dir/ecf-bad-rating-out.txt] \
+  [list ecf $ecfBadOrig      $::m4::dir/ecf-bad-orig-out.txt] \
+  [list ecf $ecfBadGrade     $::m4::dir/ecf-bad-grade-out.txt] \
+  [list ecf $ecfBadFide      $::m4::dir/ecf-bad-fide-out.txt] \
+  [list ecf $ecfGradeWrap    $::m4::dir/ecf-grade-wrap-out.txt] \
+  [list ecf $ecfGradeTooHigh $::m4::dir/ecf-grade-high-out.txt] \
+  [list iccf $iccfWrapRating $::m4::dir/iccf-wrap-rating-out.txt]]
+ set results {}
+ foreach c $cases {
+  lassign $c kind in out
+  lappend results [::m4::checkReject $kind $in $out]
+ }
+ lappend results [string match {*|4000|*} $gradeMaxOut]
+ set results
+} -result [list \
+ {1 0 0} {1 0 0} {1 0 0} {1 0 0} {1 0 0} {1 0 0} {1 0 0} {1 0 0} \
+ {1 0 0} {1 0 0} {1 0 0} {1 0 0} {1 0 0} {1 0 0} {1 0 0} {1 0 0} \
+ {1 0 0} {1 0 0} {1 0 0} 1]
 tcltest::test VAL-PD4-011-pipe-delimiters {Pipe and delimiter injection in DWZ/ECF/ICCF fields and extra pipe fields in installed lists are rejected} -body {
  set dwzPipeZps  [::m4::write dwz-pipe-zps.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n\"99|999\",2,\"Fixture, PipeZps\",1900\n"]
  set dwzDashZps  [::m4::write dwz-dash-zps.csv "ZPS,Mitgliedsnummer,\"Name,Vorname\",DWZ\n99999,1,\"Fixture, Valid\",1900\n99-99,2,\"Fixture, DashZps\",1900\n"]

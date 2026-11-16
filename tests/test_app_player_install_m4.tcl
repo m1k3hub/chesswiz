@@ -1,9 +1,15 @@
 package require tcltest 2.5
+source -encoding utf-8 [file join [file dirname [file normalize [info script]]] app_wait.tcl]
 namespace eval ::m4install {
  variable dir [file join $::env(HOME) m4-install]
  file mkdir $dir
  variable requests 0
  proc contents {path} {set f [open $path rb]; set s [read $f]; close $f; return $s}
+ proc walk {w} {
+  set out [list $w]
+  foreach child [winfo children $w] {lappend out {*}[walk $child]}
+  return $out
+ }
 }
 set input $::m4install::dir/input.csv
 set f [open $input w]
@@ -87,6 +93,84 @@ with zipfile.ZipFile(sys.argv[1], 'w') as z:
  rename ::dialog::info {}
  rename ::m4install::realInfo ::dialog::info
 } -result {2 0 1 0}
+tcltest::test VAL-PD4-012-grade-overflow-ui {Real modal menu.db.player.lists dialog rejects overflowing legacy ECF grade and preserves installed cache} -setup {
+ ::scidb::test::wait::ready
+ set ::m4install::validPriorCsv [file join $::m4install::dir valid-prior.csv]
+ set ch [open $::m4install::validPriorCsv w]
+ puts $ch "ECF_code,full_name,revised_standard\n999002B,\"Fixture, Prior\",1900"
+ close $ch
+ ::playerdata::installList ecf $::m4install::validPriorCsv
+ foreach c $::dialog::notice::Cards {
+  ::dialog::notice::Dismiss [lindex $c 0]
+ }
+ set ::m4install::gradeRequests 0
+ set ::m4install::gradeClicked 0
+ set ::m4install::gradeAnswer {}
+ set ::m4install::gradeTimer {}
+ set ::m4install::reportTrace [list apply {{cmd op} {set ::m4install::gradeAnswer [lindex $cmd 3]}}]
+ trace add execution ::playerdata::ReportList enter $::m4install::reportTrace
+ rename ::dialog::question ::m4install::stubQuestion
+ rename ::m4install::realQuestion ::dialog::question
+ proc ::m4install::clickRealEcfFetch {} {
+  foreach w [::m4install::walk .] {
+   if {[string match *.buttonecf $w] && [winfo exists $w]} {
+    set ::m4install::gradeClicked 1
+    $w invoke
+    set ::m4install::gradeTimer [after 50 ::m4install::closeRealListsDialog]
+    return
+   }
+  }
+  set ::m4install::gradeTimer [after 50 ::m4install::clickRealEcfFetch]
+ }
+ proc ::m4install::closeRealListsDialog {} {
+  if {$::m4install::gradeAnswer eq ""} {
+   set ::m4install::gradeTimer [after 50 ::m4install::closeRealListsDialog]
+   return
+  }
+  foreach w [::m4install::walk .] {
+   if {[string match *.bt-cancel $w] && [winfo exists $w]} {
+    $w invoke
+    return
+   }
+  }
+  error {No real dialog Close button found}
+ }
+} -body {
+ set beforeEcf [::m4install::contents [::playerdata::listFile ecf]]
+ set beforeInfo [::m4install::contents [::playerdata::listInfoFile ecf]]
+ proc ::application::download::Get {url done} {
+  incr ::m4install::gradeRequests
+  set payload "ECF_code,full_name,grade\n999001A,\"Fixture, Overflow\",536871087\n"
+  after idle [list {*}$done [dict create ok 1 code 200 data $payload]]
+ }
+ ::application::switchTab database
+ set ::m4install::gradeTimer [after 50 ::m4install::clickRealEcfFetch]
+ ::action::run menu.db.player.lists
+ set afterEcf [::m4install::contents [::playerdata::listFile ecf]]
+ set afterInfo [::m4install::contents [::playerdata::listInfoFile ecf]]
+ set cardKinds [lmap c $::dialog::notice::Cards {lindex $c 1}]
+ set leftovers [glob -nocomplain [::playerdata::listFile ecf].* [::playerdata::listInfoFile ecf].*]
+ list \
+  $::m4install::gradeClicked \
+  $::m4install::gradeRequests \
+  [dict get $::m4install::gradeAnswer ok] \
+  $cardKinds \
+  [expr {$beforeEcf eq $afterEcf}] \
+  [expr {$beforeInfo eq $afterInfo}] \
+  [string match {*|2000|*} $afterEcf] \
+  [llength $leftovers]
+} -cleanup {
+ if {$::m4install::gradeTimer ne ""} {
+  catch {after cancel $::m4install::gradeTimer}
+ }
+ catch {trace remove execution ::playerdata::ReportList enter $::m4install::reportTrace}
+ foreach c $::dialog::notice::Cards {
+  ::dialog::notice::Dismiss [lindex $c 0]
+ }
+ rename ::dialog::question ::m4install::realQuestion
+ rename ::m4install::stubQuestion ::dialog::question
+ proc ::application::download::Get {args} {incr ::m4install::requests; error {Network forbidden in tests}}
+} -result {1 1 0 error 1 1 0 0}
 tcltest::test VAL-PD4-012-pipe-ui {Real menu.db.player.lists Fetch and Choose File actions reject pipe-containing DWZ/ECF/ICCF records} -setup {
  set ::m4install::errMsgs {}
  set ::m4install::infoMsgs {}
