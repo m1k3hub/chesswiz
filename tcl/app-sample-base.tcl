@@ -54,7 +54,7 @@ proc maybeOpen {parent} {
 		if {$file ne $path && [file readable $file]} { return }
 	}
 
-	if {[::application::database::openBase $parent $path no -readonly 1 -switchToBase 1]} {
+	if {[::application::database::openBase $parent $path no -readonly 1 -switchToBase 1 -progress 0]} {
 		::application::database::LogOpen "Sample games: opened read-only"
 	}
 }

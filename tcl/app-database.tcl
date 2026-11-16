@@ -530,6 +530,10 @@ proc switcherWidget {} {
 }
 
 
+# The bundled startup sample must not take focus or a grab. Native loaders
+# still require a progress callback, including numeric replies.
+proc QuietLoadProgress {args} { return 0 }
+
 proc openBase {parent file byUser args} {
 	variable Vars
 	variable RecentFiles
@@ -568,7 +572,7 @@ proc openBase {parent file byUser args} {
 		return [::remote::busyOperation { OpenArchive $parent $file $byUser {*}$args }]
 	}
 
-	array set opts { -readonly -1 -encoding "" -switchToBase 1 -variant Undetermined }
+	array set opts { -readonly -1 -encoding "" -switchToBase 1 -variant Undetermined -progress 1 }
 	array set opts $args
 
 	if {$opts(-encoding) eq $::encoding::mc::AutoDetect} {
@@ -618,7 +622,11 @@ proc openBase {parent file byUser args} {
 				if {[llength $opts(-encoding)]} { lappend args -encoding $opts(-encoding) }
 				set cmd [list ::scidb::db::load $file]
 				set options [list -message $msg -interrupt yes]
-				set rc [::util::catchException { ::progress::start $parent $cmd $args $options }]
+				if {$opts(-progress)} {
+					set rc [::util::catchException { ::progress::start $parent $cmd $args $options }]
+				} else {
+					set rc [::util::catchException { {*}$cmd [namespace current]::QuietLoadProgress {} {*}$args }]
+				}
 				if {$rc != 0} { LogOpen "openBase: load failed (rc=$rc): $file"; return 0 }
 			}
 			bpgn - bpgn.gz {
