@@ -212,7 +212,23 @@ proc ::ai::engine::ensure {} {
 	variable Proc
 	variable Config
 
-	if {$Proc ne "" && [catch {eof $Proc} dead] == 0 && !$dead} { return }
+	variable AppliedThreads
+	# SetThreads may run during a search's vwait. Apply saved options here,
+	# before the next search, rather than interrupting the in-flight request.
+	if {$Proc ne "" && [catch {eof $Proc} dead] == 0 && !$dead} {
+		set profileName [expr {[name] ne "" ? [name] : "Stockfish"}]
+		set threads ""
+		if {[llength [info commands ::engine::DefaultThreads]]} {
+			set threads [::engine::DefaultThreads $profileName]
+		}
+		if {$threads ne "" && (![info exists AppliedThreads] || $threads ne $AppliedThreads)} {
+			send "setoption name Threads value $threads"
+			send "isready"
+			readUntil "readyok"
+			set AppliedThreads $threads
+		}
+		return
+	}
 	kill
 	set resolved [Resolve]
 	if {![llength $resolved]} {
@@ -240,6 +256,7 @@ proc ::ai::engine::ensure {} {
 		set threads [expr {max(1, min(8, $cores / 2))}]
 	}
 	send "setoption name Threads value $threads"
+	set AppliedThreads $threads
 	send "setoption name Hash value 256"
 	# endgame tablebases: the folder set on the engine's profile (Engine
 	# options, SyzygyPath), so the facts are perfect in endgames too

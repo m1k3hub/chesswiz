@@ -373,6 +373,53 @@ proc ::fix::row {text id} {
 # F-07: "set <engine> threads <n>" changes the saved engine option and does
 # not start analysis or a second engine process.
 # ----------------------------------------------------------------------
+proc ::fix::uciTrace {command op} {lappend ::fix::UciLines [lindex $command 1]}
+::tcltest::test R2F-03-running-engine-threads {real best-move Enter reapplies threads to a live Stockfish pipe} -setup {
+ set ::fix::SavedEngines $::engine::Engines
+ set ::fix::EngineConfig [array get ::ai::engine::Config]
+ set ::fix::EngineChoice $::ai::engine::Options(engine)
+ set ::fix::Cores [array get ::engine::Options *:cores]
+ set executable [lindex [auto_execok stockfish] 0]
+ if {$executable eq ""} {error {Stockfish is required for the running-engine regression}}
+ set ::engine::Engines [list [dict merge $::engine::EmptyEngine [dict create \
+  Name Stockfish Command $executable Protocol UCI Features:UCI {threads {1 128}}]]]
+ set ::fix::UciLines {}
+ trace add execution ::ai::engine::send enter ::fix::uciTrace
+ ::ai::engine::kill
+ ::fix::run {new game} 43
+} -body {
+ set answers {}
+ foreach named {0 1} {
+  ::ai::engine::kill
+  ::ai::engine::configure -engine [expr {$named ? "auto" : $executable}]
+  ::ai::engine::choose [expr {$named ? "Stockfish" : ""}]
+  ::fix::run {set Stockfish threads 1} 40
+  ::fix::run {best move with Stockfish} 36
+  if {$::ai::engine::Proc eq ""} {error {best move did not start the real engine}}
+  set ::fix::UciLines {}
+  ::fix::run {set Stockfish threads 2} 40
+  ::fix::run {best move with Stockfish} 36
+  lappend answers [expr {{setoption name Threads value 2} in $::fix::UciLines}]
+  set ::fix::UciLines {}
+  # SetThreads arrives while evaluate is pumping Tk's event loop. The
+  # in-flight search finishes; the next evaluation applies the new value.
+  set ::fix::ThreadTimer [after 0 {::fix::run {set Stockfish threads 3} 40}]
+  ::fix::run {best move with Stockfish} 36
+  ::fix::run {best move with Stockfish} 36
+  lappend answers [expr {{setoption name Threads value 3} in $::fix::UciLines}]
+ }
+ set answers
+} -cleanup {
+ catch {after cancel $::fix::ThreadTimer}
+ catch {::ai::engine::shutdown}
+ trace remove execution ::ai::engine::send enter ::fix::uciTrace
+ array set ::ai::engine::Config $::fix::EngineConfig
+ set ::ai::engine::Options(engine) $::fix::EngineChoice
+ set ::engine::Engines $::fix::SavedEngines
+ array unset ::engine::Options *:cores
+ array set ::engine::Options $::fix::Cores
+} -result {1 1 1 1}
+
 ::tcltest::test F-07-set-threads {set engine threads saves the count without starting analysis} -setup {
  set ::fix::SavedEngines $::engine::Engines
  set ::engine::Engines [list [dict merge $::engine::EmptyEngine {
