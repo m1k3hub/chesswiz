@@ -604,4 +604,84 @@ tcltest::test speech-second-mic-click-cancels {second recording click inserts no
  }
 } -cleanup {unset -nocomplain ::speechRecognised} -result {recording idle {keep this} 0 0}
 
+# These gestures go through the real mapped Mic widget on each platform.
+proc ::scidb::test::speech::MicEvent {event} {
+ set mic [::application::ask::Mic]
+ event generate $mic <Enter>
+ event generate $mic $event -x 3 -y 3
+ update
+}
+proc ::scidb::test::speech::Delay {ms} {
+ set ::scidb::test::speech::wait 0
+ after $ms {set ::scidb::test::speech::wait 1}
+ vwait ::scidb::test::speech::wait
+}
+proc ::scidb::test::speech::GestureSetup {backend seconds} {
+ if {$backend eq "whisper"} {
+  # Replace the physical microphone with the frozen audio, retaining the
+  # recorder process lifetime, StopRecording and real CPU whisper path.
+  set recorder [file join $::env(HOME) speech-fixture-recorder]
+  set f [open $recorder w]
+  puts $f {#!/bin/sh}
+  puts $f {for output do :; done}
+  puts $f [format {cp '%s' "$output"} [Wav]]
+  puts $f {read stop}
+  close $f
+  file attributes $recorder -permissions 0755
+  ::application::speech::configure stub "" sherpaCli /missing/sherpa \
+   sherpaModel /missing/model whisperCli [WhisperCli] whisperModel [Model] \
+   recorder $recorder maxSeconds $seconds
+ } else {
+  ::application::speech::configure stub {return "open the last game"} maxSeconds $seconds
+ }
+ ::application::ask::SyncMic
+ update
+}
+foreach backend {stub whisper} {
+ set constraint [expr {$backend eq "whisper" ? "whisperBuilt" : ""}]
+ tcltest::test speech-mic-hold-$backend {press records while held; release transcribes and cleans audio} -constraints $constraint -body [string map [list @BACKEND@ $backend] {
+  ::scidb::test::speech::isolated {
+   ::scidb::test::speech::GestureSetup @BACKEND@ 60
+   ::scidb::test::speech::MicEvent <ButtonPress-1>
+   set initial $::application::speech::Priv(state)
+   set audio $::application::speech::Priv(recordFile)
+   ::scidb::test::speech::Delay 1100
+   set held $::application::speech::Priv(state)
+   set before $::application::ask::Query
+   ::scidb::test::speech::MicEvent <ButtonRelease-1>
+   set released $::application::speech::Priv(state)
+   set idle [::scidb::test::speech::WaitIdle]
+   list $initial $held $before $released $idle \
+    [::scidb::test::speech::Words $::application::ask::Query] \
+    [file exists $audio] [llength $::scidb::test::speech::Asked]
+  }
+ }] -result {recording recording {} transcribing 1 {open the last game} 0 0}
+ tcltest::test speech-mic-timeout-$backend {quick click automatically transcribes on the actual time limit} -constraints $constraint -body [string map [list @BACKEND@ $backend] {
+  ::scidb::test::speech::isolated {
+   ::scidb::test::speech::GestureSetup @BACKEND@ 1
+   ::scidb::test::speech::MicEvent <ButtonPress-1>
+   ::scidb::test::speech::MicEvent <ButtonRelease-1>
+   set started $::application::speech::Priv(state)
+   set audio $::application::speech::Priv(recordFile)
+   set idle [::scidb::test::speech::WaitIdle]
+   list $started $idle [::scidb::test::speech::Words $::application::ask::Query] \
+    [file exists $audio] [llength $::scidb::test::speech::Asked]
+  }
+ }] -result {recording 1 {open the last game} 0 0}
+ tcltest::test speech-mic-cancel-$backend {a second click cancels the recording with no delayed insertion} -constraints $constraint -body [string map [list @BACKEND@ $backend] {
+  ::scidb::test::speech::isolated {
+   ::scidb::test::speech::GestureSetup @BACKEND@ 1
+   [::application::ask::Entry] insert 0 "keep this"
+   ::scidb::test::speech::MicEvent <ButtonPress-1>
+   ::scidb::test::speech::MicEvent <ButtonRelease-1>
+   set audio $::application::speech::Priv(recordFile)
+   ::scidb::test::speech::MicEvent <ButtonPress-1>
+   ::scidb::test::speech::MicEvent <ButtonRelease-1>
+   ::scidb::test::speech::Delay 1500
+   list $::application::speech::Priv(state) $::application::ask::Query \
+    [file exists $audio] [llength $::scidb::test::speech::Asked]
+  }
+ }] -result {idle {keep this} 0 0}
+}
+
 tcltest::cleanupTests

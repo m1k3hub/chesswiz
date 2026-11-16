@@ -152,6 +152,9 @@ proc ::application::ask::Build {notebook} {
 	set mic [ttk::button $frame.mic -text $::application::ask::mc::Mic \
 		-takefocus 0 -command ::application::speech::toggle]
 	pack $mic -side right -padx {2 2} -pady 1
+	# Own mouse gestures; the class binding invokes -command only on release.
+	bind $mic <ButtonPress-1> {::application::speech::Press %W; break}
+	bind $mic <ButtonRelease-1> {::application::speech::Release %W; break}
 	pack $entry -side left -fill x -expand yes -padx {2 2} -pady 1
 
 	set placeholder [ttk::label $frame.placeholder \
@@ -1086,6 +1089,32 @@ proc ::application::speech::status {} {
 # ----------------------------------------------------------------------
 # The microphone button.
 # ----------------------------------------------------------------------
+# A quick gesture leaves recording running; a hold transcribes on release.
+# Remember the session so a late release after timeout/cancel cannot restart it.
+proc ::application::speech::Press {button} {
+	variable Priv
+	if {[$button instate disabled]} { return }
+	$button state pressed
+	unset -nocomplain Priv(pressSession) Priv(pressTime)
+	if {$Priv(state) ne "idle"} { Cancel; return }
+	Start
+	if {$Priv(state) eq "recording"} {
+		set Priv(pressSession) $Priv(generation)
+		set Priv(pressTime) [clock milliseconds]
+	}
+}
+
+proc ::application::speech::Release {button} {
+	variable Priv
+	$button state !pressed
+	if {[info exists Priv(pressSession)]} {
+		set held [expr {[clock milliseconds] - $Priv(pressTime) >= 300}]
+		set current [expr {$Priv(pressSession) == $Priv(generation)}]
+		unset Priv(pressSession) Priv(pressTime)
+		if {$held && $current && $Priv(state) eq "recording"} { StopRecording }
+	}
+}
+
 proc ::application::speech::toggle {} {
 	variable Priv
 	variable Settings
@@ -1134,6 +1163,7 @@ proc ::application::speech::Start {} {
 	if {$mode eq "stub"} {
 		# The deterministic path: no recorder, the stub supplies the text.
 		set Priv(recordPids) {}
+		Schedule [expr {1000 * $Settings(maxSeconds)}] [list RecordTimeout $file]
 		return
 	}
 	set pids {}
