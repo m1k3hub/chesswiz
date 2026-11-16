@@ -1848,7 +1848,12 @@ proc ::application::ask::Aliases {} {
  variable mc
  ::commandline::LoadLearning
  set Priv(aliasRow) {}
- if {[info exists Priv(commands)] && [llength $Priv(commands)]} {set Priv(aliasRow) [lindex $Priv(commands) $Priv(index)]}
+ if {[info exists Priv(commands)] && [llength $Priv(commands)]} {
+  set row [lindex $Priv(commands) $Priv(index)]
+  # Aliases persist grammar input and re-match it before execution. A raw
+  # registry palette row has no such command text; use the normal prompt.
+  if {$row ne "" && ![dict exists $row palette]} {set Priv(aliasRow) $row}
+ }
  set w .application.commandAliases
  if {[winfo exists $w]} {raise $w; return}
  toplevel $w

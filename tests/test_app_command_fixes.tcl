@@ -558,6 +558,28 @@ proc ::fix::uciTrace {command op} {lappend ::fix::UciLines [lindex $command 1]}
 } -result {{} 1}
 
 proc ::fix::noop {args} {return {}}
+::tcltest::test R2F-05-palette-alias {Aliases explains that a palette row is not a complete grammar command} -body {
+ set ::application::ask::Mode command
+ set ::application::ask::Query {Assistant Preferences}
+ unset -nocomplain ::application::ask::Priv(filtered)
+ ::application::ask::Typed
+ set index 0; set chosen -1
+ foreach row $::application::ask::Priv(commands) {
+  if {[dict get $row action] eq "app.preferences.assistant" && [dict exists $row palette]} {set chosen $index; break}
+  incr index
+ }
+ if {$chosen < 0} {error {real preferences palette row missing}}
+ set ::application::ask::Priv(index) $chosen
+ ::application::ask::Aliases
+ set w .application.commandAliases
+ $w.name insert 0 {my preferences}
+ $w.save invoke
+ list [expr {[$w.status cget -text] eq $::application::ask::mc::AliasesNeedCommand}] \
+  [dict exists $::commandline::Aliases {my preferences}]
+} -cleanup {
+ catch {destroy .application.commandAliases}
+} -result {1 0}
+
 ::tcltest::test F-05-palette {registry actions still appear in the Ask list} -setup {
  ::action::register fix.palette [dict create label "Zebra Palette Action" object {} \
   handler ::fix::noop what {} doc {}]
