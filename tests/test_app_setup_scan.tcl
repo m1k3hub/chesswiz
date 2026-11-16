@@ -26,4 +26,61 @@ tcltest::test setup-scan-engine-where {the scan names the folders of this platfo
 	expr {[string match *Program\ Files* [::application::setupscan::EngineWhere]] == ($::tcl_platform(platform) eq "windows")}
 } -result 1
 
+
+# Use a real, slow UCI subprocess so a modal probe is observable. Candidate
+# enumeration has its own filesystem test; isolate this scan from host engines.
+tcltest::testConstraint setupScanUnix [expr {$::tcl_platform(platform) eq "unix"}]
+proc setupScanWatch {} {
+    if {[winfo exists .application.wait] && [grab current] eq ".application.wait"} {
+        set ::setupScanSawModal 1
+    }
+    set ::setupScanWatchId [after 20 setupScanWatch]
+}
+tcltest::test setup-scan-discover-then-explicit {startup reports candidates; explicit rerun still probes modally and adds the engine} -constraints setupScanUnix -setup {
+    set savedEngines $::engine::Engines
+    set savedOptions [array get ::application::setupscan::Options]
+    set savedPriv [array get ::application::setupscan::Priv]
+    set ::setupScanExe [file join [file normalize ~] scan-test-engine]
+    set f [open $::setupScanExe w]
+    puts $f {#!/bin/sh
+sleep 1
+while read line; do
+    case "$line" in
+        uci) printf 'id name SetupScanTest\nuciok\n';;
+        isready) printf 'readyok\n';;
+        quit|xboard) exit 0;;
+    esac
+done}
+    close $f
+    file attributes $::setupScanExe -permissions 0755
+    rename ::application::setupscan::EngineCandidates ::application::setupscan::SavedEngineCandidates
+    proc ::application::setupscan::EngineCandidates {} {return [list igel $::setupScanExe]}
+    set ::setupScanSawModal 0
+    setupScanWatch
+} -body {
+    ::application::setupscan::run 1
+    set deadline [expr {[clock milliseconds]+15000}]
+    while {$::application::setupscan::Priv(running) && [clock milliseconds]<$deadline} {update; after 10}
+    set discovery [list [expr {$::engine::Engines eq $savedEngines}] $::setupScanSawModal]
+    # Default run is what Information invokes; it must reset discovery-only.
+    ::application::setupscan::run
+    while {$::application::setupscan::Priv(running) && [clock milliseconds]<$deadline} {update; after 10}
+    set found 0
+    foreach e $::engine::Engines {
+        if {[dict get $e Command] eq $::setupScanExe && "UCI" in [dict get $e Protocol]} {set found 1}
+    }
+    list $discovery $::setupScanSawModal $found $::application::setupscan::Priv(running) [grab current]
+} -cleanup {
+    after cancel $::setupScanWatchId
+    rename ::application::setupscan::EngineCandidates {}
+    rename ::application::setupscan::SavedEngineCandidates ::application::setupscan::EngineCandidates
+    set ::engine::Engines $savedEngines
+    ::engine::SaveEngineList
+    array unset ::application::setupscan::Options
+    array set ::application::setupscan::Options $savedOptions
+    array unset ::application::setupscan::Priv
+    array set ::application::setupscan::Priv $savedPriv
+    file delete $::setupScanExe
+} -result {{1 0} 1 1 0 {}}
+
 tcltest::cleanupTests

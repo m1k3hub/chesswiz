@@ -70,15 +70,19 @@ proc ::application::setupscan::firstStart {} {
 	# probe engine programs) or when switched off
 	if {[namespace exists ::scidb::test::app] || [info exists ::env(CHESSWIZ_NO_SETUP_SCAN)]} { return }
 	set Options(done) 1
-	run
+	run 1
 }
 
 
-proc ::application::setupscan::run {} {
+# Startup discovers candidates, but leaves modal engine installation to an
+# explicit scan from Information. An idle callback alone does not make the
+# installer's nested probe/wait dialog nonmodal.
+proc ::application::setupscan::run {{discoveryOnly 0}} {
 	variable Priv
 	variable Steps
 	if {$Priv(running)} { return }
 	set Priv(running) 1
+	set Priv(discoveryOnly) $discoveryOnly
 	Say "Looking for what Chesswiz can set up for you: the AI model, speech input, chess engines, chess fonts and game files…"
 	after 50 [list ::application::setupscan::Next $Steps]
 }
@@ -242,6 +246,7 @@ proc ::application::setupscan::EngineCandidates {} {
 
 proc ::application::setupscan::StepEngines {} {
 	variable Options
+	variable Priv
 	Say "Chess engines: looking in [EngineWhere]…"
 	set have [llength $::engine::Engines]
 	# a kind already in the list (Stockfish, Lc0, ...) is not added again
@@ -260,6 +265,11 @@ proc ::application::setupscan::StepEngines {} {
 	}
 	if {![llength $candidates]} {
 		Say "Chess engines: no new engine found; $have already in the engine list."
+		return
+	}
+	if {[info exists Priv(discoveryOnly)] && $Priv(discoveryOnly)} {
+		set names [lmap path $candidates { file tail $path }]
+		Say "Chess engines: found [join $names {, }]. To test and add them, run setup again from the Information tab."
 		return
 	}
 	if {[::engine::adminIsOpen?]} {
