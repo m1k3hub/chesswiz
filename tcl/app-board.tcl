@@ -1554,7 +1554,16 @@ proc RebuildBoard {canv width height {force false}} {
 	} finally {
 		set Rebuilding 0
 		if {[info exists PendingRebuild]} {
-			after 0 [namespace code [list RebuildBoard {*}$PendingRebuild]]
+			lassign $PendingRebuild pendingCanv pendingWidth pendingHeight pendingForce
+			# A Configure that arrived during this rebuild may ask for the
+			# size we just laid out. The board is already at that geometry,
+			# so replaying it would be a no-op rebuild (and could leak into
+			# the next measured resize). Forced requests still replay: they
+			# refresh a layout whose reserve or theme changed in place.
+			if {$pendingCanv ne $canv || $pendingWidth != $width
+				|| $pendingHeight != $height || $pendingForce} {
+				after 0 [namespace code [list RebuildBoard {*}$PendingRebuild]]
+			}
 			unset PendingRebuild
 		}
 	}
