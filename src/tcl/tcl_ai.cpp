@@ -237,6 +237,41 @@ cmdClaimFor(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	return TCL_OK;
 }
 
+// eco.bin stores opening names in ISO-8859-1. Tcl strings are UTF-8, so the
+// names are converted before they reach Tcl or are compared with Tcl words.
+static mstl::string
+latin1ToUtf8(mstl::string const& s)
+{
+	mstl::string out;
+	out.reserve(s.size() + 8);
+	for (unsigned k = 0; k < s.size(); ++k)
+	{
+		unsigned char c = static_cast<unsigned char>(s[k]);
+		if (c < 0x80)
+		{
+			out += char(c);
+		}
+		else
+		{
+			out += char(0xc0 | (c >> 6));
+			out += char(0x80 | (c & 0x3f));
+		}
+	}
+	return out;
+}
+
+
+// Case-fold UTF-8 text with Tcl's Unicode tables (never ::tolower on a
+// signed char), so query words and table names compare in one encoding.
+static mstl::string
+utf8Lower(mstl::string const& s)
+{
+	mstl::string buf(s);
+	int n = Tcl_UtfToLower(const_cast<char*>(buf.c_str()));
+	return mstl::string(buf.c_str(), unsigned(n));
+}
+
+
 static int
 cmdEco(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
@@ -319,6 +354,7 @@ cmdEco(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 	Tcl_Obj* dict = Tcl_NewDictObj();
 	Tcl_DictObjPut(ti, dict, Tcl_NewStringObj("code", -1), Tcl_NewStringObj(code.c_str(), int(code.size())));
+	name = latin1ToUtf8(name);
 	Tcl_DictObjPut(ti, dict, Tcl_NewStringObj("name", -1), Tcl_NewStringObj(name.c_str(), int(name.size())));
 	Tcl_SetObjResult(ti, dict);
 	return TCL_OK;
@@ -359,8 +395,7 @@ cmdEcoLines(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	mstl::vector<mstl::string> wanted;
 	for (int i = 0; i < nwords; ++i)
 	{
-		mstl::string w(Tcl_GetString(words[i]));
-		for (unsigned k = 0; k < w.size(); ++k) w[k] = ::tolower(w[k]);
+		mstl::string w(utf8Lower(Tcl_GetString(words[i])));
 		if (!w.empty()) wanted.push_back(w);
 	}
 
@@ -387,8 +422,8 @@ cmdEcoLines(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			name += opening.part[i];
 		}
 
-		mstl::string lower(name);
-		for (unsigned k = 0; k < lower.size(); ++k) lower[k] = ::tolower(lower[k]);
+		name = latin1ToUtf8(name);
+		mstl::string lower(utf8Lower(name));
 
 		bool all = true;
 		for (unsigned i = 0; all && i < wanted.size(); ++i)

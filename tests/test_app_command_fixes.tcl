@@ -257,6 +257,93 @@ close $f
 } -result {1 1 1}
 
 # ----------------------------------------------------------------------
+# R4F-01: eco.bin holds Latin-1 names; ecoLines must return and match UTF-8
+# so every accented label resolves, and #47 Enter must create the event.
+# td.create runs for real; only the game pump is held so no engine starts.
+# ----------------------------------------------------------------------
+proc ::fix::tournamentEnter {text} {
+ set ::fix::Calls {}; set ::fix::Message {}
+ set ::application::ask::Mode command
+ set ::application::ask::Query $text
+ unset -nocomplain ::application::ask::Priv(filtered)
+ ::application::ask::Typed
+ set i 0; set chosen -1
+ foreach row $::application::ask::Priv(commands) {
+  if {[dict get $row id] == 47 && ![llength [dict get $row missing]]} {set chosen $i; break}
+  incr i
+ }
+ if {$chosen < 0} {error "no runnable #47 row for $text"}
+ set ::application::ask::Priv(index) $chosen
+ ::application::ask::ShowList
+ set entry $::application::ask::Priv(entry)
+ focus -force $entry; update
+ event generate $entry <Return>
+ update
+ if {[string match {error:*} $::fix::Message]} {error $::fix::Message}
+ set creates [lmap call $::fix::Calls {expr {[lindex $call 0] eq "td.create" ? [lindex $call 1] : [continue]}}]
+ if {[llength $creates] != 2} {error "Enter ran td.create [llength $creates] times: $::fix::Message"}
+ set path [dict get [lindex $creates 1] path]
+ lappend ::fix::Tournaments $path
+ set state [dict get [::td::store::Read $path] state]
+ list [dict get [lindex $creates 1] opening] [dict get $state opening_name] [expr {[llength [lindex [dict get $state opening] 0]] > 0}] [dict get $state status]
+}
+
+::tcltest::test R4F-01-eco-utf8 {ecoLines returns UTF-8 names and matches accented query words} -body {
+ set rows [::scidb::ai::ecoLines {Grünfeld}]
+ set label [lindex $rows 0 1]
+ list [expr {[llength $rows] > 0}] [string match *Grünfeld* $label] [string is ascii [encoding convertto utf-8 $label]] \
+  [expr {[llength [::scidb::ai::ecoLines {GRÜNFELD}]] == [llength $rows]}] [string match *Réti* [dict get [::scidb::ai::eco {Nf3}] name]]
+} -result {1 1 0 1 1}
+
+::tcltest::test R4F-01-all-labels-resolve {every EcoIndex label resolves through ::td::openings::Named} -body {
+ ::commandline::EnsureEco
+ set failed {}; set accented 0; set total 0
+ foreach entry $::commandline::EcoIndex {
+  set label [lindex $entry 1]
+  if {[dict exists $seen $label]} continue
+  dict set seen $label 1
+  if {[join [dict get $::commandline::OpeningLines $label] ""] eq ""} continue
+  incr total
+  if {![string is ascii $label]} {incr accented}
+  if {[catch {::td::openings::Named $label} lines] || ![llength [lindex $lines 0]]} {lappend failed $label}
+ }
+ puts "R4F-01 sweep: $total labels with moves, $accented accented, [llength $failed] failed"
+ list [expr {$accented >= 517}] [lrange $failed 0 9]
+} -setup {set seen {}} -result {1 {}}
+
+::tcltest::test R4F-01-tournament-enter {Enter on #47 creates the event for accented openings} -setup {
+ set ::fix::Tournaments {}
+ set engines $::engine::Engines
+ set ::engine::Engines [list [dict merge $::engine::EmptyEngine {Name StubEngine Command /bin/true Protocol UCI Features:UCI {}}]]
+ rename ::td::event::SchedulePump ::fix::realPump
+ proc ::td::event::SchedulePump {path} {}
+ rename ::ui::message ::fix::realUiMessage
+ proc ::ui::message {text args} {set ::fix::Message $text}
+} -body {
+ set out {}
+ foreach {query pattern} {
+  Sveshnikov {Sicilian, Sicilian Defence, Pelikán*Sveshnikov Variation}
+  Samisch *Sämisch* Samis *Sämisch* Grunfeld *Grünfeld* Reti *Réti*
+ } {
+  lassign [::fix::tournamentEnter "run double round robin of 4 engines 3+2 opening $query"] arg name hasMoves status
+  lappend out [list $query [string match $pattern $arg] [expr {$name eq $arg}] $hasMoves $status]
+ }
+ set out
+} -cleanup {
+ foreach path $::fix::Tournaments {
+  catch {::td::event::StopRunners $path}
+  foreach f [glob -nocomplain -- $path [file rootname $path].*] {file delete -force $f}
+ }
+ rename ::ui::message {}
+ rename ::fix::realUiMessage ::ui::message
+ rename ::td::event::SchedulePump {}
+ rename ::fix::realPump ::td::event::SchedulePump
+ set ::engine::Engines $engines
+ set ::application::ask::Query {}
+ catch {::application::ask::HideList}
+} -result {{Sveshnikov 1 1 1 active} {Samisch 1 1 1 active} {Samis 1 1 1 active} {Grunfeld 1 1 1 active} {Reti 1 1 1 active}}
+
+# ----------------------------------------------------------------------
 # F-06: suggestion never makes a synchronous classifier call, even when a
 # cloud reranker is configured; ordering stays the deterministic Match order.
 # ----------------------------------------------------------------------
