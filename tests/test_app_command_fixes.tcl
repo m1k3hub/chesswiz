@@ -30,6 +30,21 @@ proc ::fix::run {text id} {
  return $::fix::Calls
 }
 
+# Press Enter on the top suggestion, whatever command it is. Used where the
+# ranking itself is under test (the reviewer's R3F-01 case).
+proc ::fix::enterTop {text} {
+ set ::fix::Calls {}
+ set ::application::ask::Mode command
+ set ::application::ask::Query $text
+ unset -nocomplain ::application::ask::Priv(filtered)
+ ::application::ask::Typed
+ if {[llength $::fix::Calls]} {error {typing executed an action}}
+ set ::application::ask::Priv(index) 0
+ ::application::ask::ShowList
+ ::application::ask::Choose
+ return $::fix::Calls
+}
+
 proc ::fix::trace {command op} {lappend ::fix::Calls [lrange $command 1 end]}
 trace add execution ::action::run enter ::fix::trace
 
@@ -197,6 +212,24 @@ close $f
  catch {rename ::dialog::notice::post {}}
  rename ::fix::realPost ::dialog::notice::post
 } -result {1 1}
+
+# ----------------------------------------------------------------------
+# R3F-01: opening criteria (#22 set up, #47 tournament) rank the canonical
+# London/Sveshnikov hierarchy first, and accented openings fold to ASCII.
+# ----------------------------------------------------------------------
+::tcltest::test R3F-01-opening-canonical {opening suggestions and Enter use the canonical London and Sveshnikov lines} -body {
+ set london [lindex [::commandline::Suggest {set up London}] 0]
+ set tournament [lindex [::commandline::Suggest {run double round robin of 4 engines 3+2 opening London}] 0]
+ set sveshnikov [lindex [::commandline::Suggest {set up Sveshnikov}] 0]
+ set samisGames [::commandline::Suggest {find games opening Samis}]
+ set samisSetup [::commandline::Suggest {set up Samis}]
+ set calls [::fix::enterTop {set up London}]
+ list [dict get $london args opening] [dict get $tournament args opening] \
+  [string match {Sicilian, Sicilian Defence, Pelik*Variation, Sveshnikov Variation} [dict get $sveshnikov args opening]] \
+  [llength $samisGames] [llength $samisSetup] [lindex $calls 0]
+} -cleanup {
+ catch {::action::run new_game}
+} -result {{Queen's Pawn, Queen's Pawn Game, London System} {Queen's Pawn, Queen's Pawn Game, London System} 1 7 8 {command.setup {opening {Queen's Pawn, Queen's Pawn Game, London System}}}}
 
 # ----------------------------------------------------------------------
 # F-06: suggestion never makes a synchronous classifier call, even when a

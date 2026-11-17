@@ -14,7 +14,7 @@ namespace eval ::commandline {
  variable Pending {}
 }
 proc ::commandline::EcoFold {text} {
- return [string map {é e è e á a à a ö o ó o ü u í i ř r} [string tolower $text]]
+ return [string map {é e è e á a à a ä a ö o ó o ø o ü u í i ñ n å a ř r} [string tolower $text]]
 }
 proc ::commandline::Tokenize {text} {
  return [regexp -all -inline {[^\s,;:()]+} [string map [list \x27 "" \u2019 ""] [string tolower $text]]]
@@ -124,6 +124,13 @@ proc ::commandline::EcoFamilyRanges {prefix} {
  if {[dict exists $EcoRanges $prefix]} {return [dict get $EcoRanges $prefix]}
  return {}
 }
+# Whether a label's leading components are exactly the canonical hierarchy
+# (Queen's Pawn / Queen's Pawn Game / London System, for example).
+proc ::commandline::EcoHasPrefix {label prefix} {
+ set comps [EcoComponents $label]
+ if {[llength $comps] < [llength $prefix]} {return 0}
+ return [expr {[lrange $comps 0 [expr {[llength $prefix]-1}]] eq $prefix}]
+}
 proc ::commandline::EcoLookup {type query} {
  variable EcoIndex
  EnsureEco
@@ -136,14 +143,15 @@ proc ::commandline::EcoLookup {type query} {
  set qwords [Tokenize [EcoFold $query]]
  # Conventional short names disambiguate homonymous subvariations in the
  # ECO catalog. Resolve the canonical hierarchy, not a label-length guess.
- if {$type eq "eco"} {
-  set aliases [dict create london {{queen's pawn} {queen's pawn game} {london system}} \
-   sveshnikov {sicilian {sicilian defence} {pelikán (lasker/sveshnikov) variation}}]
-  dict set aliases {london system} [dict get $aliases london]
-  dict set aliases {sveshnikov variation} [dict get $aliases sveshnikov]
-  if {[dict exists $aliases $qlow]} {
-   set prefix [lmap part [dict get $aliases $qlow] {EcoFold $part}]
-   set values [EcoFamilyRanges $prefix]
+ set aliases [dict create london {{queen's pawn} {queen's pawn game} {london system}} \
+  sveshnikov {sicilian {sicilian defence} {pelikán (lasker/sveshnikov) variation}}]
+ dict set aliases {london system} [dict get $aliases london]
+ dict set aliases {sveshnikov variation} [dict get $aliases sveshnikov]
+ set canonical {}
+ if {[dict exists $aliases $qlow]} {
+  set canonical [lmap part [dict get $aliases $qlow] {EcoFold $part}]
+  if {$type eq "eco"} {
+   set values [EcoFamilyRanges $canonical]
    if {[llength $values]} {return $values}
   }
  }
@@ -153,6 +161,7 @@ proc ::commandline::EcoLookup {type query} {
   set words [expr {$type eq "eco" ? $codeWords : $labelWords}]
   if {$qlow eq "" || [WordListMatch $qwords $words]} {
    set rank [expr {$qlow eq "" ? 6 : ($qlow eq $first ? 0 : ([string first $qlow $first] == 0 ? 1 : ([string first $qlow $second] == 0 ? 2 : ([string first $qlow $third] == 0 ? 3 : ([string first $qlow $first] >= 0 ? 4 : ([string first $qlow $llow] >= 0 ? 5 : 6))))))}]
+   if {$type ne "eco" && $canonical ne "" && [EcoHasPrefix $label $canonical]} {set rank -1}
    lappend ranked [list [expr {$rank * 10000 + $len}] [expr {$type eq "eco" ? $code : $label}] $label]
   }
  }

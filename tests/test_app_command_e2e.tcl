@@ -214,6 +214,7 @@ foreach {number input action expected} $CommandCases {
    incr i
   }
   if {$chosen < 0} {error "missing expected suggestion for $input: $rows"}
+  if {$chosen != 0} {error "expected suggestion for '$input' at row 0, found it at row $chosen: $rows"}
   if {$::commandE2E::Calls ne {} || $::commandE2E::Seen ne {}} {error {typing ran a command}}
   set ::application::ask::Priv(index) $chosen
   ::application::ask::ShowList
