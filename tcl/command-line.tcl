@@ -34,8 +34,9 @@ proc ::commandline::EnsureEco {} {
  set families {}
  set EcoTokenMap {}; set OpeningLines {}; set EcoRanges {}
  set idx 0
- foreach letter {a e i o u y} {
-  foreach row [::scidb::ai::ecoLines [list $letter] 50000] {
+ # One native table scan: ecoLines with an empty word list returns every used
+ # opening. Scanning once per vowel made the first opening keystroke stall.
+ foreach row [::scidb::ai::ecoLines {} 50000] {
    lassign $row code label moves
    dict lappend OpeningLines $label $moves
    set key [list $code $label]
@@ -58,7 +59,6 @@ proc ::commandline::EnsureEco {} {
     foreach tok [lsort -unique $cwords] {dict lappend EcoTokenMap $tok $idx}
     incr idx
    }
-  }
  }
  # Compile each hierarchy prefix once. Split at gaps and volume boundaries;
  # an ambiguous family must never include unrelated ECO codes between runs.

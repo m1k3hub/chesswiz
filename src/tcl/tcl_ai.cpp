@@ -327,7 +327,9 @@ cmdEco(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 // ecoLines words ?max?: the ECO table's openings whose name contains every
 // word (case-insensitive), as {code name moves} with the moves in SAN from the
-// start. The lines come from Chesswiz's own opening table, never from a model.
+// start. An empty word list means every used opening, so callers can build an
+// index with one table scan. The lines come from Chesswiz's own opening table,
+// never from a model.
 static int
 cmdEcoLines(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
@@ -388,7 +390,7 @@ cmdEcoLines(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		mstl::string lower(name);
 		for (unsigned k = 0; k < lower.size(); ++k) lower[k] = ::tolower(lower[k]);
 
-		bool all = !wanted.empty();
+		bool all = true;
 		for (unsigned i = 0; all && i < wanted.size(); ++i)
 			all = lower.find(wanted[i]) != mstl::string::npos;
 		if (!all)

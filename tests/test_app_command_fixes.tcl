@@ -232,6 +232,31 @@ close $f
 } -result {{Queen's Pawn, Queen's Pawn Game, London System} {Queen's Pawn, Queen's Pawn Game, London System} 1 7 8 {command.setup {opening {Queen's Pawn, Queen's Pawn Game, London System}}}}
 
 # ----------------------------------------------------------------------
+# R3F-03: the first opening keystroke must not scan the ECO table once per
+# vowel (six synchronous passes). One native scan now returns every opening.
+# ----------------------------------------------------------------------
+::tcltest::test R3F-03-cold-eco-single-scan {the first opening keystroke builds the index with one native scan} -setup {
+ set ::fix::EcoScans 0
+ rename ::scidb::ai::ecoLines ::fix::realEcoLines
+ proc ::scidb::ai::ecoLines {args} {
+  incr ::fix::EcoScans
+  tailcall ::fix::realEcoLines {*}$args
+ }
+ set ::fix::SavedEcoIndex $::commandline::EcoIndex
+ set ::commandline::EcoIndex {}
+} -body {
+ set start [clock microseconds]
+ set rows [::commandline::Suggest {find games opening Sicilian}]
+ set coldMs [expr {([clock microseconds]-$start)/1000.0}]
+ puts [format "R3F-03 cold opening lookup after one-scan rebuild: %.2f ms" $coldMs]
+ list $::fix::EcoScans [expr {[llength $::commandline::EcoIndex] > 3000}] [expr {[llength $rows] > 0}]
+} -cleanup {
+ catch {rename ::scidb::ai::ecoLines {}}
+ rename ::fix::realEcoLines ::scidb::ai::ecoLines
+ set ::commandline::EcoIndex $::fix::SavedEcoIndex
+} -result {1 1 1}
+
+# ----------------------------------------------------------------------
 # F-06: suggestion never makes a synchronous classifier call, even when a
 # cloud reranker is configured; ordering stays the deterministic Match order.
 # ----------------------------------------------------------------------
