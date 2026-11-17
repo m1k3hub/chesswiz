@@ -538,6 +538,7 @@ proc openBase {parent file byUser args} {
 	variable Vars
 	variable RecentFiles
 
+	::application::StartupInteracted
 	set file [file normalize $file]
 	if {[string length [set ext [file extension $file]]]} {
 		set ext [::scidb::misc::mapExtension $ext]

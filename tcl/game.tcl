@@ -125,6 +125,7 @@ proc new {parent args} {
 	variable Vars
 	variable StartPositionFen
 
+	::application::StartupInteracted
 	array set opts {
 		-base			""
 		-view			-1
@@ -501,6 +502,8 @@ proc unfreeze {position} {
 proc load {parent position base args} {
 	variable ::scidb::scratchbaseName
 	variable Vars
+
+	::application::StartupInteracted
 
 	array set opts {
 		-view				-1

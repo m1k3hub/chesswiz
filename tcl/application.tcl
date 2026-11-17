@@ -1932,6 +1932,7 @@ proc prepareExit {{backup 1}} {
 
 
 proc switchTab {which} {
+	StartupInteracted
 	.application.nb select .application.nb.$which
 	update idletasks
 	${which}::setFocus
@@ -2495,7 +2496,12 @@ proc Startup {main args} {
 	bind $app <<Fullscreen>> +[namespace code {::util::place::besideSchedule}]
 	database::finish $app
 	::splash::close
+	set Vars(startup:interacted) 0
+	set Vars(startup:opening) 0
+	set Vars(startup:applyingView) 0
+	set Vars(startup:ownFocus) [focus]
 	set Vars(ready) 1
+	set Vars(startup:tab) [activeTab]
 
 	# we need a small timeout for HTML widget (tab "Information");
 	# for any reason "update idletasks" is not sufficient
@@ -2503,7 +2509,74 @@ proc Startup {main args} {
 }
 
 
+# A user or an action has used the live UI since startup became ready.
+# Deferred startup must then leave the tab and the keyboard where they are.
+proc StartupInteracted {} {
+	variable Vars
+
+	if {![info exists Vars(ready)] || !$Vars(ready)} { return }
+	if {$Vars(startup:opening) || $Vars(startup:applyingView)} { return }
+	set Vars(startup:interacted) 1
+}
+
+
+# True while focus is where startup left it, rather than a widget the user
+# chose. The splash and a just-closed dialog can leave focus on a dead path.
+proc StartupFocusIsDefault {} {
+	variable Vars
+
+	set current [focus]
+	if {$current eq "" || $current in {. .application}} { return 1 }
+	if {![winfo exists $current]} { return 1 }
+	if {[info exists Vars(startup:ownFocus)] && $current eq $Vars(startup:ownFocus)} { return 1 }
+	set entry ""
+	catch { set entry [::application::ask::Entry] }
+	return [expr {$entry ne "" && $current eq $entry}]
+}
+
+
+# Deferred startup keeps a view the user already chose.
+proc StartupKeepView {} {
+	variable Vars
+
+	if {[info exists Vars(startup:interacted)] && $Vars(startup:interacted)} { return 1 }
+	if {[info exists Vars(startup:tab)] && [activeTab] ne $Vars(startup:tab)} { return 1 }
+	return [expr {![StartupFocusIsDefault]}]
+}
+
+
+# Startup's own tab switch is not a user switch.
+proc StartupSelectTab {tab} {
+	variable Vars
+
+	# This runnable is scheduled at idle after the decision; a user or an
+	# action can still reach the display first.  Never undo their view.
+	if {[StartupKeepView]} { return }
+	set Vars(startup:applyingView) 1
+	try {
+		switchTab $tab
+		set Vars(startup:ownFocus) [focus]
+	} finally {
+		set Vars(startup:applyingView) 0
+	}
+}
+
+
+# The Ask field owns the keyboard after startup only while nobody else has
+# taken it.
+proc StartupApplyFocus {} {
+	variable Vars
+
+	if {$Vars(startup:interacted) || ![StartupFocusIsDefault]} { return }
+	if {[llength [info commands ::application::ask::StartupFocus]]} {
+		::application::ask::StartupFocus
+	}
+}
+
+
 proc Startup2 {} {
+	variable Vars
+
 	# Let background dictionary chunks finish before restoring databases,
 	# whose native open requires the complete player dictionary.
 	if {!$::load::DataLoaded} {
@@ -2512,23 +2585,32 @@ proc Startup2 {} {
 		return
 	}
 	set app .application
-	set nb $app.nb
 
-	ChooseLanguage $app
-	::load::writeLog
-	update idletasks
-	set ::scidb::intern::blocked 0
+	set keep [StartupKeepView]
+	set recovered 0
+	set Vars(startup:opening) 1
+	try {
+		ChooseLanguage $app
+		::load::writeLog
+		update idletasks
+		set ::scidb::intern::blocked 0
 
-	database::preOpen $app
+		database::preOpen $app
 
-	foreach file [::process::arguments] {
-		set path [::util::databasePath $file]
-		if {![::scidb::db::get open? $path]} {
-			database::openBase .application $path yes -encoding $::encoding::autoEncoding
+		foreach file [::process::arguments] {
+			set path [::util::databasePath $file]
+			if {![::scidb::db::get open? $path]} {
+				database::openBase .application $path yes -encoding $::encoding::autoEncoding
+			}
 		}
+
+		set recovered [expr {[::game::recover $app] + [::game::reopenLockedGames $app]}]
+	} finally {
+		set Vars(startup:opening) 0
 	}
- 
-	if {[::game::recover $app] + [::game::reopenLockedGames $app] > 0} {
+
+	if {$keep || $Vars(startup:interacted)} { set keep 1 }
+	if {$recovered > 0} {
 		set tab board
 	} elseif {[::process::testOption show-board]} {
 		set tab board
@@ -2537,16 +2619,13 @@ proc Startup2 {} {
 	} else {
 		set tab information
 	}
-	$nb select .application.nb.$tab
+	if {!$keep} {
+		after idle [namespace code [list StartupSelectTab $tab]]
+	}
 
-	after idle [namespace code [list switchTab $tab]]
 	after idle { ::tips::show .application }
 	# the Ask field owns the keyboard after startup unless a dialog is up
-	after idle {
-		if {[llength [info commands ::application::ask::StartupFocus]]} {
-			::application::ask::StartupFocus
-		}
-	}
+	if {!$keep} { after idle [namespace code StartupApplyFocus] }
 	#after idle [list ::beta::welcomeToScidb $app]
 	#::util::photos::checkForUpdate [namespace current]::InformAboutUpdates
 	reflow::Startup
