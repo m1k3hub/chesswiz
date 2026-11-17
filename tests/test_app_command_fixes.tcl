@@ -344,6 +344,24 @@ proc ::fix::tournamentEnter {text} {
 } -result {{Sveshnikov 1 1 1 active} {Samisch 1 1 1 active} {Samis 1 1 1 active} {Grunfeld 1 1 1 active} {Reti 1 1 1 active}}
 
 # ----------------------------------------------------------------------
+# R4F-02: the A00 root {Start position, Start position} has no moves, so it
+# must not be offered for @opening (it cannot seed #47); eco still lists A00.
+# ----------------------------------------------------------------------
+::tcltest::test R4F-02-no-empty-opening {openings without moves are never offered for @opening} -body {
+ ::commandline::EnsureEco
+ set empty {}
+ dict for {label lines} $::commandline::OpeningLines {
+  if {[join $lines ""] eq ""} {lappend empty $label}
+ }
+ set offered [::commandline::EcoLookup opening {Start position}]
+ set rows [::commandline::Suggest {run double round robin of 4 engines 3+2 opening Start position}]
+ set tournamentOpenings [lmap row $rows {expr {[dict get $row id] == 47 && [dict exists $row args opening] ? [dict get $row args opening] : [continue]}}]
+ set bad 0
+ foreach label [concat $offered $tournamentOpenings] {if {$label in $empty} {incr bad}}
+ list [expr {"Start position, Start position" in $empty}] $bad [expr {"A00" in [::commandline::EcoLookup eco A00]}]
+} -result {1 0 1}
+
+# ----------------------------------------------------------------------
 # F-06: suggestion never makes a synchronous classifier call, even when a
 # cloud reranker is configured; ordering stays the deterministic Match order.
 # ----------------------------------------------------------------------

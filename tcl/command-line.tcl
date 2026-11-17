@@ -132,7 +132,7 @@ proc ::commandline::EcoHasPrefix {label prefix} {
  return [expr {[lrange $comps 0 [expr {[llength $prefix]-1}]] eq $prefix}]
 }
 proc ::commandline::EcoLookup {type query} {
- variable EcoIndex
+ variable EcoIndex; variable OpeningLines
  EnsureEco
  set values {}
  set explicit [expr {$type eq "eco" && [regexp -nocase {^[A-E][0-9]{0,2}(-[A-E][0-9]{2})?$} [string trim $query]]}]
@@ -158,6 +158,9 @@ proc ::commandline::EcoLookup {type query} {
  set ranked {}
  foreach idx [EcoCandidates $qwords] {
   lassign [lindex $EcoIndex $idx] code label llow first second third len flank codeWords labelWords
+  # A root entry such as {Start position, Start position} has no moves, so it
+  # cannot seed a tournament or a setup: never offer it as an opening name.
+  if {$type ne "eco" && [join [dict get $OpeningLines $label] ""] eq ""} {continue}
   set words [expr {$type eq "eco" ? $codeWords : $labelWords}]
   if {$qlow eq "" || [WordListMatch $qwords $words]} {
    set rank [expr {$qlow eq "" ? 6 : ($qlow eq $first ? 0 : ([string first $qlow $first] == 0 ? 1 : ([string first $qlow $second] == 0 ? 2 : ([string first $qlow $third] == 0 ? 3 : ([string first $qlow $first] >= 0 ? 4 : ([string first $qlow $llow] >= 0 ? 5 : 6))))))}]
