@@ -21,7 +21,13 @@ proc ::reg6pv::insert {id} {
  ::scidb::game::go start
  ::scidb::game::go 1
  set reply [::action::run start_engine [dict create engine $::reg6pv::name lines 2 threads 1 hash 16]]
- if {![regexp {analysis pane (\d+)} $reply -> number]} {error $reply}
+ if {![regexp {analysis pane (\d+)} $reply -> label]} {error $reply}
+ # The reply names the pane title; the analysis number can differ when a
+ # previous file left a freed number on the list.
+ set number $label
+ if {[info exists ::application::MapTerminalToAnalysis($label)]} {
+  set number $::application::MapTerminalToAnalysis($label)
+ }
  set tree $::application::analysis::NumberToTree($number)
  ::application::analysis::SetMultiPV $tree 2
  set code [catch {

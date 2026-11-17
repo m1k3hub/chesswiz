@@ -169,4 +169,5 @@ rename ::dialog::info {}
 rename ::scidb::test::namedrows::savedInfo ::dialog::info
 catch {::application::database::closeBase .application $::scidb::test::namedrows::source}
 file delete -force [file join $::scidb::test::actions::Dir named-rows]
+::scidb::test::actions::release
 tcltest::cleanupTests

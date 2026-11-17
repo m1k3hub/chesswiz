@@ -54,6 +54,7 @@ tcltest::test admin-args-persistence {real UCI install, edit fields, logo/folder
 
 tcltest::test admin-args-comparison {two real native analysis engines produce lines, stop and close without chooser} -setup {
     ::scidb::test::actions::ready
+    set ::scidb::test::adminargs::initialLeaves [[::application::twm board] leaves]
     set engines $::engine::Engines
     set name [::engine::install [::scidb::test::actions::engineProgram]]
     set copy [lindex $::engine::Engines [::engine::FindIndex $name]]
@@ -73,6 +74,7 @@ tcltest::test admin-args-comparison {two real native analysis engines produce li
     list [llength $lines] $stopped $::application::analysis::compare::Vars(after) $::application::analysis::compare::Vars(engines) [winfo exists .compareEngines]
 } -cleanup {
     ::application::analysis::CloseComparison
+    catch {::scidb::test::actions::closeExtraPanes $::scidb::test::adminargs::initialLeaves}
     set ::engine::Engines $engines
     ::engine::SaveEngineList
 } -result {2 1 {} {} 0}

@@ -70,4 +70,5 @@ tcltest::test menu-operation-schemas {menu and context aliases expose typed file
     }
     set bad
 } -result {}
+::scidb::test::actions::release
 tcltest::cleanupTests

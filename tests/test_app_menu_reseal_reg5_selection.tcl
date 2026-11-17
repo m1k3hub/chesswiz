@@ -79,4 +79,5 @@ update
 set after [::scidb::test::askscope::AskContextIds C9]
 puts [list ASK_PANE beforePane $initial afterPane [dict get [::context::CurrentObject C9] paneUid] savedFocus $::application::ask::Priv(focusBefore) before $before after $after]
 tcltest::test ask-retains-pane-context {entering Ask retains the current notation pane context} -body {list [dict get [::context::CurrentObject C9] paneUid] [expr {$before eq $after}]} -result {editor 1}
+::scidb::test::actions::release
 ::tcltest::cleanupTests

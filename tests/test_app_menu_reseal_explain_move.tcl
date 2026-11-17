@@ -32,4 +32,5 @@ tcltest::test reseal-explain-empty-move {no selected move returns a clear error}
  puts [list MOVE_START_ERROR $reply]
  string match {error:*move*} $reply
 } -result 1
+::scidb::test::actions::release
 ::tcltest::cleanupTests

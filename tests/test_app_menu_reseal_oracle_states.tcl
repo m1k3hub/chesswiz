@@ -3,6 +3,7 @@ package require tcltest 2.5
 source tests/app_actions_support.tcl
 ::scidb::test::actions::ready
 source tests/app_menu_reseal_scope_support.tcl
+set initialBoard [::scidb::test::actions::captureBoard]
 namespace eval ::reseal {}
 proc ::reseal::snap {tag} {
  set ask {}; foreach row [::action::labels asklist {}] {lappend ask [lindex $row 0]}
@@ -78,7 +79,9 @@ proc ::reseal::snap {tag} {
  if {[llength $bad]} {error $bad}
 }
 
-tcltest::test reseal-rules-real-states {same live fixtures compare dropdown/context availability and Ask rows} -body {
+tcltest::test reseal-rules-real-states {same live fixtures compare dropdown/context availability and Ask rows} -setup {
+ set ::reseal::savedConfirmHook $::action::ConfirmHook
+} -body {
  ::reseal::snap R1-no-game-R3-clipbase-R5-no-base-R6-idle-R8-no-selection
  ::scidb::test::askscope::NewGame
  ::scidb::game::go start
@@ -175,5 +178,12 @@ tcltest::test reseal-rules-real-states {same live fixtures compare dropdown/cont
  if {![::menu::BoardOnlyLayout]} {error {board-only layout fixture was not active}}
  ::reseal::snap R16-board-only-layout
  return ok
+} -cleanup {
+ set ::action::ConfirmHook $::reseal::savedConfirmHook
+ ::scidb::test::actions::restoreBoard $initialBoard
+ foreach variant [list normal [::application::twm::CurrentLayoutVariant board]] {
+  catch {file delete [::application::twm::makeFilename board $variant {Generated Board only}]}
+ }
 } -result ok
+::scidb::test::actions::release
 ::tcltest::cleanupTests

@@ -25,7 +25,18 @@ proc ::scidb::test::pane::Suffixes {} {
 proc ::scidb::test::pane::Leaves {} {
 	set twm [::menu::PaneTWM]
 	if {$twm eq ""} { return {} }
-	return [$twm leaves]
+	set leaves [$twm leaves]
+	# A hidden pane is reopened at its minimum size. Record the layout a
+	# test found so Restore can put the widths back, not just the leaves.
+	variable Dims
+	set Dims {}
+	foreach uid $leaves {
+		if {[catch {set frame [$twm leaf $uid]} frame] || ![winfo exists $frame]} { continue }
+		if {[catch {$twm dimension $frame} dim]} { continue }
+		lassign $dim width height
+		dict set Dims $uid [list $width $height]
+	}
+	return $leaves
 }
 
 # Restore the layout a test found. A test must not leave a hidden or an
@@ -33,6 +44,7 @@ proc ::scidb::test::pane::Leaves {} {
 proc ::scidb::test::pane::Restore {initial} {
 	set twm [::menu::PaneTWM]
 	if {$twm eq ""} { return }
+	variable Dims
 	foreach uid [$twm leaves] {
 		if {$uid ni $initial} {
 			catch { ::application::twm::ChangeState $twm $uid }
@@ -42,6 +54,13 @@ proc ::scidb::test::pane::Restore {initial} {
 		if {$uid ni [$twm leaves]} {
 			catch { ::application::openPane $uid }
 		}
+	}
+	update idletasks
+	foreach uid $initial {
+		if {![dict exists $Dims $uid]} { continue }
+		if {[catch {set frame [$twm leaf $uid]} frame] || ![winfo exists $frame]} { continue }
+		lassign [dict get $Dims $uid] width height
+		catch { $twm resize $frame $width $height }
 	}
 	update idletasks
 }

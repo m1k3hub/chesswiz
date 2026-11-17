@@ -195,9 +195,13 @@ proc menuTextvarHook {m index var {args {}}} {
 	SetMenuLabel $m $index $var $args
 	set cmd [list [namespace current]::SetMenuLabel $m $index $var $args]
 	trace add variable $var write $cmd
-#	For some reasons this callback will be called although the menu is not destroyed
-#	(possibly some kind of copy operation).
-#	bind $m <Destroy> +[list trace remove variable $var write $cmd]
+	# A later language switch must not call entryconfigure on a menu that a
+	# popup or a board rebuild has already destroyed. Remove the trace with
+	# its menu; SetMenuLabel also drops it defensively when it sees a dead
+	# path (a copy operation can report Destroy before the widget is gone).
+	bind $m <Destroy> "+
+		if {{$m} eq {%W}} { catch { trace remove variable $var write {$cmd} } }
+	"
 }
 
 
@@ -514,10 +518,12 @@ proc buttonSetText {w var args} {
 	set type [lindex [split $w .] end]
 
 	if {$type eq "hlp"} {
-		if {[string first "&" [set $var]] >= 0} {
-			set var [mc::stripped $var]
-		}
-		::tooltip::tooltip $w "[set $var] <F1>"
+		# $var may be an array element (Label(help)); mc::stripped installs
+		# a scalar write trace, which cannot watch an element and breaks the
+		# next language switch. Strip for display and keep $var itself so
+		# the binding below refreshes the tooltip.
+		set text [::mc::stripAmpersand [set $var]]
+		::tooltip::tooltip $w "$text <F1>"
 		bind $w <<LanguageChanged>> [list buttonSetText $w $var]
 	} else {
 		if {[$w cget -compound] eq "left"} {
@@ -778,6 +784,10 @@ proc SetNotebookLabel {nb id var args} {
 
 
 proc SetMenuLabel {m index var args} {
+	if {![winfo exists $m]} {
+		catch { trace remove variable $var write [list ::widget::SetMenuLabel $m $index $var {*}$args] }
+		return
+	}
 	lassign [::tk::UnderlineAmpersand [format [set $var] {*}$args]] text ul
 	set text " $text"
 	incr ul

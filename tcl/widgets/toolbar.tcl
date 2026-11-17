@@ -374,6 +374,10 @@ proc addSeparator {toolbar} {
 proc remove {widget} {
 	variable Specs
 
+	# A toolbar can be rebuilt at the same path after its dialog is
+	# destroyed; callers may still hold the old widget path.
+	if {![winfo exists $widget]} { return }
+
 	set toolbar [winfo parent $widget]
 	pack forget $widget
 	catch { pack forget $Specs(child:$widget:$toolbar.floating.frame) }
@@ -921,6 +925,23 @@ proc ::toolbar::InvokeCheckbutton {toolbar w variable command} {
 	if {$command ne ""} {uplevel #0 $command}
 }
 
+# True while a live widget still maps this action id. Closing a pane
+# removes its toolbar widgets; reopening the pane must then reuse the
+# stable id instead of registering a duplicate. A second open instance of
+# the same toolbar keeps its old id while its widget exists.
+proc ::toolbar::ActionIdLive {id} {
+	variable Specs
+
+	foreach key [array names Specs registry:*] {
+		if {$Specs($key) ne $id} { continue }
+		set rest [string range $key 9 end]
+		set colon [string last : $rest]
+		if {$colon <= 0} { continue }
+		if {[winfo exists [string range $rest 0 [expr {$colon - 1}]]]} { return 1 }
+	}
+	return 0
+}
+
 proc ::toolbar::RegistryCommand {toolbar w command {label ""}} {
 	if {![info exists ::action::Registry]} { return $command }
 	set command [string trim $command]
@@ -943,6 +964,11 @@ proc ::toolbar::RegistryCommand {toolbar w command {label ""}} {
 		set seq [llength $::toolbar::Specs(children:$toolbar)]
 	}
 	set id "$base.$seq"
+	if {[dict exists $::action::Registry $id] && ![ActionIdLive $id] \
+	 && [::action::UpdateToolbarHandler $id [list ::toolbar::InvokeCommand $command]]} {
+		set ::toolbar::Specs(registry:$w:$toolbar) $id
+		return [list ::action::run $id]
+	}
 	set n 0
 	while {[dict exists $::action::Registry $id]} {
 		incr n
@@ -1410,7 +1436,6 @@ proc EnterButton {toolbar w} {
 		}
 	}
 }
-
 
 proc LeaveButton {toolbar w {var {}} {value {}}} {
 	variable Specs

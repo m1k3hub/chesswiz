@@ -140,4 +140,5 @@ tcltest::test session-args-collectors {omitted operation opens actual native col
     ::application::download::Close
     set ::engine::Engines $engines
 } -result {1 0 1 0 1 0 1 0 1 0}
+::scidb::test::actions::release
 tcltest::cleanupTests

@@ -1635,6 +1635,12 @@ Database::copyGames(	Database& destination,
 									progress);
 	}
 
+	// The consumers above insert namebase entries while copying; recompute
+	// the derived state so a caller (clipbase paste in particular) does not
+	// observe an inconsistent namebase.
+	if (count)
+		destination.m_namebases.update();
+
 	return count;
 }
 

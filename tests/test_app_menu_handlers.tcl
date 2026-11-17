@@ -1,5 +1,6 @@
 package require tcltest 2.5
 source [file join [file dirname [info script]] menu_handler_check.tcl]
+source [file join [file dirname [info script]] app_actions_support.tcl]
 tcltest::test menu-handlers-audit {registered handlers and dispatcher calls exist and have valid arity} -body {
     ::handlercheck::audit
 } -result {}
@@ -177,4 +178,5 @@ tcltest::test menu-handler-comment-symbols {real symbol builder populates the C1
     destroy .handlerSymbols .handlerText
 } -result {1 1}
 
+::scidb::test::actions::release
 tcltest::cleanupTests

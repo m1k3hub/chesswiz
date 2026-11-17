@@ -19,4 +19,5 @@ tcltest::test absent-stream-model-and-ask {Open Stream vanishes from all surface
  puts [list ABSENT_STREAM capability [::capability::present stream] tools_has_open_stream [expr {"open_stream" in $tools}] ask_has_open_stream [expr {"open_stream" in $ask}] ask_has_c9_stream [expr {"c9.media.stream" in $ask}] posted_has_c9_stream [expr {"c9.media.stream" in $posted}] context_state $ctx reply $reply]
  list [expr {"open_stream" in $tools}] [expr {"open_stream" in $ask}] [expr {"c9.media.stream" in $ask}] [expr {"c9.media.stream" in $posted}]
 } -cleanup {rename ::auditSavedOpenStream ::application::media::OpenStream;destroy .absentctx} -result {0 0 0 0}
+::scidb::test::actions::release
 ::tcltest::cleanupTests

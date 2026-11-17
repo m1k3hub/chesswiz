@@ -113,7 +113,7 @@ proc gamebar {path} {
 
 	$gamebar bind header <ButtonPress-3> [namespace code [list PopupMenu $gamebar]]
 
-	bind $gamebar <Destroy> [namespace code [list array unset Specs *:$gamebar]]
+	bind $gamebar <Destroy> [namespace code [list Destroyed $gamebar]]
 	bind $gamebar <Configure> [namespace code { Configure %W %w }]
 	bind $gamebar <<LanguageChanged>> [namespace code [list update $gamebar]]
 	bind $gamebar <<ThemeChanged>> [namespace code [list ThemeChanged $gamebar]]
@@ -139,6 +139,16 @@ proc gamebar {path} {
 	::scidb::db::subscribe gameInfo [list [namespace current]::Update $gamebar]
 
 	return $path
+}
+
+# A pane can be closed and rebuilt, and the replacement gamebar takes over
+# the global gameInfo subscription. Drop this instance's callback with the
+# widget, or a later database switch calls into a destroyed canvas.
+proc Destroyed {gamebar} {
+	variable Specs
+
+	catch { ::scidb::db::unsubscribe gameInfo [list [namespace current]::Update $gamebar] }
+	array unset Specs *:$gamebar
 }
 
 

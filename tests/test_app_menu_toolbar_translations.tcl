@@ -51,12 +51,24 @@ namespace eval ::scidb::test::toolbarTranslations {
     proc check {lang} {
         ::menu::SwitchLanguage $lang
         update
+        # Opening the base starts the tree pane's asynchronous search, which
+        # flips its button to "Stop search". Compare the steady labels, not a
+        # transient state that has nothing to do with translation.
+        if {[info exists ::application::tree::Vars(searching)]} {
+            ::scidb::test::actions::waitUntil \
+                {![set ::application::tree::Vars(searching)]} 30000
+        }
+        update
         ::application::board::UpdateSaveButton
         update
         set native [nativeLabels]
         set rows [::action::labels asklist]
         set ids {}
         foreach id [::action::list] {
+            # A dialog's toolbar keeps its stable registry ids after the dialog
+            # is destroyed (reopening reuses them), but its widgets are gone.
+            # Only live widgets can agree with a registry label.
+            if {![dict exists $native $id]} continue
             if {[string match toolbar.* $id]
                 && [lindex [dict get [::action::get $id] handler] 0] eq "::toolbar::InvokeCommand"} {
                 lappend ids $id
@@ -80,10 +92,6 @@ namespace eval ::scidb::test::toolbarTranslations {
         ::toolbar::forget $button
         dict unset ::action::Registry $freshId
         foreach id $ids {
-            if {![dict exists $native $id]} {
-                lappend errors [list $id missing-native-widget]
-                continue
-            }
             set expected [dict get $native $id]
             if {$expected eq ""} {
                 lappend errors [list $id empty-native-label]
@@ -125,6 +133,8 @@ foreach lang {de es} {
     } -result {}
 }
 
-::game::release [::scidb::game::current]
-::application::database::closeBase .application $toolbarTranslationBase
+# Release every game through both layers and close the database; a native
+# release alone leaves the game still on the editor's game bar, and the next
+# file in the shared process reuses the slot id and fails on the old items.
+::scidb::test::actions::release
 tcltest::cleanupTests

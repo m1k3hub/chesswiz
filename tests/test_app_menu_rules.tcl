@@ -12,6 +12,7 @@
 
 package require Tcl 8.5
 package require tcltest 2.5
+source [file join [file dirname [info script]] app_actions_support.tcl]
 
 namespace eval ::scidb::test::rules {
 	variable tmpDir [file join [file dirname [file normalize [info script]]] tmp-app]
@@ -482,4 +483,5 @@ tcltest::test rules-module-absent-all-surfaces {no surface shows an action of an
 	list [llength $leaks] [expr {[lsort $modules] eq [lsort [dict keys $::capability::Modules]]}]
 } -result {0 1}
 
+::scidb::test::actions::release
 tcltest::cleanupTests

@@ -108,4 +108,5 @@ tcltest::test rule-regression-board-fold {each listed board fold reverses withou
  }
  set bad
 } -result {}
+::scidb::test::actions::release
 ::tcltest::cleanupTests

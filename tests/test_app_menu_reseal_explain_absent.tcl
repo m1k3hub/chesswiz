@@ -7,6 +7,10 @@ source tests/app_actions_support.tcl
 ::scidb::test::actions::ready
 source tests/app_menu_reseal_scope_support.tcl
 ::scidb::test::askscope::NewGame
+set ::explainAbsentRestore(savedProvider) [array get ::ai::provider::Config]
+set ::explainAbsentRestore(savedConfig) [array get ::application::ai::Config]
+set ::explainAbsentRestore(savedSettings) [array get ::application::ai::Settings]
+set ::explainAbsentRestore(sawAnalyze) [llength [info commands ::application::ai::analyze]]
 rename ::application::ai::analyze ::application::ai::analyze__validatorSaved
 ::application::ai::configure -provider {} -model {}
 set ::application::ai::Settings(provider) {}
@@ -40,5 +44,19 @@ tcltest::test R14-module-ai-absent {unconfigured provider hides AI rows} -body {
   if {[dict get $state visible] || $id in $ask} {lappend leaks $id}
  }
  set leaks
+} -cleanup {
+ catch {destroy .noprov}
+ if {$::explainAbsentRestore(sawAnalyze)
+  && [llength [info commands ::application::ai::analyze__validatorSaved]]} {
+  rename ::application::ai::analyze__validatorSaved ::application::ai::analyze
+ }
+ array unset ::ai::provider::Config *
+ array set ::ai::provider::Config $::explainAbsentRestore(savedProvider)
+ array unset ::application::ai::Config *
+ array set ::application::ai::Config $::explainAbsentRestore(savedConfig)
+ array unset ::application::ai::Settings *
+ array set ::application::ai::Settings $::explainAbsentRestore(savedSettings)
+ catch {::action::InvalidateAskRows}
 } -result {}
+::scidb::test::actions::release
 ::tcltest::cleanupTests

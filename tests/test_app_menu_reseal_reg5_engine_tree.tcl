@@ -16,7 +16,14 @@ set argv [dict create engine $name lines 2 threads 1 hash 16]
 puts {REG5_ENGINE starting};flush stdout
 set reply [::action::run start_engine $argv]
 puts [list REG5_ENGINE reply $reply];flush stdout
-if {![regexp {analysis pane (\d+)} $reply -> number]} {error "engine did not start: $reply"}
+if {![regexp {analysis pane (\d+)} $reply -> label]} {error "engine did not start: $reply"}
+# The reply names the pane by its title (analysis pane 1). The tree is keyed
+# by the analysis number, which is only the same in a fresh app: an earlier
+# file can free a higher number that a new pane then reuses.
+set number $label
+if {[info exists ::application::MapTerminalToAnalysis($label)]} {
+ set number $::application::MapTerminalToAnalysis($label)
+}
 set tree $::application::analysis::NumberToTree($number)
 ::application::analysis::SetMultiPV $tree 2
 ::scidb::test::actions::waitUntil {[info exists ::application::analysis::${tree}::Vars(pv:1)] && [set ::application::analysis::${tree}::Vars(pv:1)] ne ""}
@@ -50,10 +57,18 @@ update
 set table $::application::tree::Vars(table)
 ::application::tree::DoSearch $table
 ::scidb::test::actions::waitUntil {[llength $::application::tree::Vars(data)] > 0}
+# The search data lands before the native tree rows; selecting a row the
+# widget does not have yet is a silent no-op. Wait for the rendered row.
+::scidb::test::actions::waitUntil {[$table.t numitems] > 0}
+# A rebuilt table can carry a remembered selection while the native widget
+# has none; clear it so selecting row 0 really reaches the widget.
+# Drain the tree's queued refresh before selecting: that refresh clears
+# the native selection, so it must happen before the row under test.
+update
+focus -force $table.t
+::table::select $table none
 ::table::select $table 0
 ::table::activate $table 0
-focus -force $table.t
-update
 tcltest::test reg5-tree-current-continuation {implicit tree copy includes the selected next move} -body {
  set next [::scidb::tree::move 0]
  set obj [::context::CurrentObject C8]

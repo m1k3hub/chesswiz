@@ -1,5 +1,6 @@
 # Real menu windows must remain reachable on laptop workareas.
 package require tcltest 2.5
+source [file join [file dirname [info script]] app_actions_support.tcl]
 namespace eval ::scidb::test::menuarea {}
 proc ::scidb::test::menuarea::settle {} {
     after 800 {set ::scidb::test::menuarea::settled 1}
@@ -37,4 +38,5 @@ foreach {name script window} {
             [expr {$x != 0 || $y != 0}]
     } -cleanup {destroy $window; update} -result {1 1 1 1}
 }
+::scidb::test::actions::release
 tcltest::cleanupTests

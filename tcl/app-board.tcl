@@ -2352,6 +2352,10 @@ proc GameSwitched2 {position} {
 	variable board
 
 	if {![winfo exists $Vars(widget:frame)]} { return }
+	# GameSwitched schedules this with after 1: the slot can be released
+	# before it runs (a closed game, or the next file in a shared test
+	# process). Querying it then trips containsGameAt in the native layer.
+	if {![::scidb::game::query $position open?]} { return }
 
 	# reset if position is 9 (all games closed)
 

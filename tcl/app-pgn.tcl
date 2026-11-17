@@ -2665,6 +2665,12 @@ proc DrawEvalStrip {position} {
 	set height [winfo height $w]
 	if {$width <= 1 || $height <= 1} { return }
 
+	# All nine game tabs have a strip, used or not. A Configure or
+	# ThemeChanged event can run while a native command pumps the event
+	# loop, after the slot has been released; evalProfile requires a live
+	# game there. Skipping is enough: the strip has nothing to show.
+	if {![::scidb::game::query $position open?]} { return }
+
 	set profile {}
 	catch { set profile [::scidb::game::evalProfile $position] }
 

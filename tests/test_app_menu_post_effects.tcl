@@ -56,4 +56,5 @@ tcltest::test posted-effect-history {recent history loads the real generated his
  puts [list POSTED_EFFECT menu.game.history.recent link $link expected [list $base $variant $number] reply $reply]
  list [string match error:* $reply] [expr {[lrange $link 0 2] eq [list $base $variant $number]}]
 } -result {0 1}
+if {![info exists ::postedKeepOpen]} {::scidb::test::actions::release}
 ::tcltest::cleanupTests

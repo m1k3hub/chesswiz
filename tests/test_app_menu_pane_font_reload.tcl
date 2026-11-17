@@ -42,4 +42,5 @@ tcltest::test pane-font-style-refresh {notation style refresh retains widget and
 ::context::PaneFont [dict create paneUid editor frame $fontFrame] reset
 unset -nocomplain ::font::Options(pane:editor:size)
 ::scidb::test::actions::cleanup
+::scidb::test::actions::release
 ::tcltest::cleanupTests

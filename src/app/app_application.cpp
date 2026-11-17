@@ -1195,7 +1195,9 @@ Application::setReferenceBase(Cursor* cursor, bool isUserSet)
 			m_referenceBase->setReferenceBase(false);
 		}
 
-		m_treeAdmin.signal(Thread::Stop);
+		// The cached tree belongs to the old reference base; fetch must not
+		// walk it after that base (and its namebase) has been closed.
+		m_treeAdmin.reset();
 		m_referenceBase = cursor;
 
 		if (m_referenceBase)

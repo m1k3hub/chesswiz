@@ -227,4 +227,5 @@ tcltest::test menu-html-merge {real merge-window drawable popup includes registr
     list [expr {"html.merge.font_inc" in $ids}] [expr {"html.merge.font_dec" in $ids}] [expr {"html.merge.notation" in $ids}]
 } -result {1 1 1}
 
+::scidb::test::actions::release
 tcltest::cleanupTests

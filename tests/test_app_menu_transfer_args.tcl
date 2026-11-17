@@ -181,4 +181,5 @@ tcltest::test transfer-args-all-download-modes {local HTTP transport runs every 
     file delete $::env(C2E_TWIC_ZIP)
     unset ::env(C2E_TWIC_ZIP)
 } -result {{1 1 1 1 1 1 1 1 1 1 1 1 1 1} 1 {} 0}
+::scidb::test::actions::release
 tcltest::cleanupTests

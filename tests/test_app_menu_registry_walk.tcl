@@ -17,6 +17,9 @@ namespace eval ::scidb::test::rgw {}
 source tests/app_actions_support.tcl
 ::scidb::test::actions::ready
 set ::scidb::test::rgw::base [::scidb::test::actions::fixture]
+# This file runs alone or after another probe in one process. Reopened
+# fixtures live in Open Recent and would add non-action rows to the walk.
+catch {::application::database::ClearHistory}
 ::action::run open_database [dict create path $::scidb::test::rgw::base]
 ::action::run open_game {number 1}
 
@@ -459,4 +462,5 @@ tcltest::test registry-walk-html-secondary {all other HTML/drawable branches ent
     list [expr {[llength $rows] > 50}] [::scidb::test::rgw::BadCommands $rows]
 } -result {1 {}}
 
+::scidb::test::actions::release
 tcltest::cleanupTests

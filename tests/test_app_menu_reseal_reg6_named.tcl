@@ -1,4 +1,7 @@
 # Named paste/merge/history effects retain the existing real-surface oracles.
+# This file extends post_effects and needs the base and game slot it sets up,
+# so suppress that file's standalone release until this file is finished.
+set ::postedKeepOpen 1
 source tests/test_app_menu_post_effects.tcl
 source tests/app_menu_reseal_effect_support.tcl
 
@@ -21,5 +24,9 @@ tcltest::test reg6-posted-iccf {native ICCF menu opens the actual editable setti
 } -cleanup {
  if {[winfo exists .application.iccfSettings]} {.application.iccfSettings.btns.cancel invoke}
 } -result {1 {ICCF XFCC Settings} ::iccf::xfcc::Config(username) * ::iccf::xfcc::Config(endpoint)}
+# The handoff to post_effects ends here; let later files run the normal
+# cleanupTests release again.
+unset -nocomplain ::postedKeepOpen
+::scidb::test::actions::release
 ::scidb::test::actions::cleanup
 ::tcltest::cleanupTests

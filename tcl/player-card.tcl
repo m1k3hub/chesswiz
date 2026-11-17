@@ -1367,6 +1367,11 @@ proc Destroy {dlg key w unsubscribe} {
 
 	catch { destroy $dlg.html }
 	catch { destroy $dlg.log }
+	if {![llength [array names Vars *:open]]} {
+		foreach operation {web font_inc font_dec trace_html trace_log} {
+			catch { ::action::Unregister html.playercard.$operation }
+		}
+	}
 
 	::scidb::db::unsubscribe dbInfo {} [list [namespace current]::Close $key]
 }

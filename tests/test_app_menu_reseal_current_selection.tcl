@@ -104,4 +104,5 @@ foreach kind {event site} {
   list [::context::CurrentObject C5] [::scidb::test::askscope::AskContextIds C5] [string match {error: precondition:*} $reply]
  } -cleanup {catch {destroy .native}} -result {{} {} 1}
 }
+::scidb::test::actions::release
 ::tcltest::cleanupTests

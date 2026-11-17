@@ -40,4 +40,5 @@ exec import -window root [file join $::env(OBJECT_EVIDENCE) REG007-stale-selecti
 tcltest::test reseal-selected-player-card-title {the bare action opens the second selected player rather than the popup snapshot} -body {
  list [string match error:* $reply] [llength $cards] [string match *Generated\ White* [wm title [lindex $cards 0]]]
 } -result {0 1 1}
+::scidb::test::actions::release
 ::tcltest::cleanupTests

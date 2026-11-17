@@ -106,4 +106,5 @@ if {[llength $bad]} {error $bad}
 return ok
 } -result ok
 
+catch {destroy .vp}
 ::tcltest::cleanupTests

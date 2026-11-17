@@ -6,6 +6,7 @@ source tests/app_actions_support.tcl
 ::scidb::test::actions::ready
 source tests/app_menu_reseal_scope_support.tcl
 ::scidb::test::askscope::NewGame
+set gameSlot [::scidb::game::current]
 namespace eval ::c9probe {variable seen {}; variable timer {}}
 proc ::c9probe::windows {{w .}} {
  set out {}
@@ -65,6 +66,8 @@ proc ::c9probe::value {id obj} {
  }
 }
 set pane [expr {[info exists ::env(RESEAL_PANE)] ? $::env(RESEAL_PANE) : "board"}]
+set initialLeaves [::scidb::test::askscope::InitialLeaves]
+set initialBoard [::scidb::test::actions::captureBoard]
 
 tcltest::test c9-every-listed-effect {every listed pane row opens choices/dialog or changes its native state} -body {
  ::scidb::test::askscope::FocusPane $pane
@@ -126,5 +129,11 @@ tcltest::test c9-every-listed-effect {every listed pane row opens choices/dialog
  }
  puts [list C9_COMPLETE $pane listed [llength $ids] bad $bad]
  set bad
+} -cleanup {
+ ::scidb::test::askscope::RestoreLayout $initialLeaves
+ ::scidb::test::actions::restoreBoard $initialBoard
+ ::scidb::test::askscope::Reset
+ catch { ::application::pgn::release $gameSlot }
+ catch { ::game::release $gameSlot }
 } -result {}
 ::tcltest::cleanupTests

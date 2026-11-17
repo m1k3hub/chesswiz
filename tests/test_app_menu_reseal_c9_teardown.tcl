@@ -35,4 +35,5 @@ tcltest::test populated-c9-no-bgerrors {each listed editor layout row runs witho
 tcltest::test populated-c9-reverse-replies {forward and reverse operations must not return action errors} -body {
  lsearch -all -inline -glob $::c9replies error:*
 } -result {}
+::scidb::test::actions::release
 ::tcltest::cleanupTests

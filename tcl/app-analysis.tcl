@@ -629,9 +629,29 @@ proc update {args} {
 		}
 		# a stopped pane does not follow the board with a new search
 		if {[::engine::active? $number] && !$Vars(engine:locked) && !$Vars(engine:stopped)} {
-			set Vars(after:id) [after $GlobalOptions(engine:delay) [list ::engine::startAnalysis $number]]
+			set Vars(after:id) [after $GlobalOptions(engine:delay) \
+				[list ::application::analysis::StartDeferred $number [::engine::id $number]]]
 		}
 	}
+}
+
+
+# An idle callback can outlive the pane which scheduled it: the pane may be
+# closed, or its number may be reused by a different engine (the test suite
+# reuses analysis numbers between files). Starting the old engine's analysis
+# then analyzes a stale position, and the native precondition failure is
+# reported against whatever command happens to be pumping events at that
+# moment. Start only the engine this callback was scheduled for.
+proc StartDeferred {number id} {
+	variable NumberToTree
+
+	if {$id == -1} { return }
+	if {![info exists NumberToTree($number)]} { return }
+	if {![winfo exists $NumberToTree($number)]} { return }
+	set ns ::engine::$number
+	if {![info exists ${ns}::Vars(engine:id)]} { return }
+	if {[set ${ns}::Vars(engine:id)] != $id} { return }
+	catch { ::engine::startAnalysis $number }
 }
 
 
@@ -1061,7 +1081,7 @@ proc EngineLock {tree} {
 
 	if {[::engine::active? $Vars(number)] && !$Vars(engine:locked)} {
 		after cancel $Vars(after:id)
-		after idle [list ::engine::startAnalysis $Vars(number)]
+		after idle [list ::application::analysis::StartDeferred $Vars(number) [::engine::id $Vars(number)]]
 	}
 }
 
@@ -1606,7 +1626,7 @@ proc IsReady {tree id} {
 	# a stop must not be undone by the answer to an earlier "isready"
 	if {$Vars(engine:stopped)} { return }
 
-	after idle [list ::engine::startAnalysis $Vars(number)]
+	after idle [list ::application::analysis::StartDeferred $Vars(number) [::engine::id $Vars(number)]]
 }
 
 

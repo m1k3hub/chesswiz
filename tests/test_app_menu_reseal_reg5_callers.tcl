@@ -93,4 +93,5 @@ tcltest::test reg5-browser-native-check-effect {native checkbutton arguments als
 } -result 1
 catch {destroy [winfo toplevel $board]}
 
+::scidb::test::actions::release
 ::tcltest::cleanupTests

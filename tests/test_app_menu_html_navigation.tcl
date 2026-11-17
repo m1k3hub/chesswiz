@@ -89,4 +89,5 @@ tcltest::test menu-html-navigation-help {Help history and topic availability fol
     dict size [::scidb::test::htmlpop::navigation $rows help $buttons]
 } -cleanup {catch {::help::Destroy}} -result 4
 
+::scidb::test::actions::release
 tcltest::cleanupTests

@@ -99,4 +99,5 @@ foreach state {end} {
  }
 }
 
+::scidb::test::actions::release
 ::tcltest::cleanupTests

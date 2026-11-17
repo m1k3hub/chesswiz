@@ -7,6 +7,9 @@ source tests/app_actions_support.tcl
 ::scidb::test::actions::ready
 source tests/app_menu_reseal_scope_support.tcl
 ::scidb::test::askscope::NewGame
+set ::explainUnconfiguredRestore(savedProvider) [array get ::ai::provider::Config]
+set ::explainUnconfiguredRestore(savedConfig) [array get ::application::ai::Config]
+set ::explainUnconfiguredRestore(savedSettings) [array get ::application::ai::Settings]
 ::application::ai::configure -provider {} -model {}
 set ::application::ai::Settings(provider) {}
 set ::application::ai::Settings(model) {}
@@ -39,5 +42,15 @@ tcltest::test R14-no-provider {unconfigured provider hides AI rows} -body {
   if {[dict get $state visible] || $id in $ask} {lappend leaks $id}
  }
  set leaks
+} -cleanup {
+ catch {destroy .noprov}
+ array unset ::ai::provider::Config *
+ array set ::ai::provider::Config $::explainUnconfiguredRestore(savedProvider)
+ array unset ::application::ai::Config *
+ array set ::application::ai::Config $::explainUnconfiguredRestore(savedConfig)
+ array unset ::application::ai::Settings *
+ array set ::application::ai::Settings $::explainUnconfiguredRestore(savedSettings)
+ catch {::action::InvalidateAskRows}
 } -result {}
+::scidb::test::actions::release
 ::tcltest::cleanupTests

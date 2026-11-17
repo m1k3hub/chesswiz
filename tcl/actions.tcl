@@ -220,6 +220,37 @@ proc ::action::register {id record} {
 	return $id
 }
 
+# Dynamic popup operations exist only while their surface does. Removing one
+# keeps the assistant's toolset equal to the approved set between dialogs.
+proc ::action::Unregister {id} {
+	variable Registry
+	variable RegistryVersion
+
+	if {![dict exists $Registry $id]} { return 0 }
+	dict unset Registry $id
+	incr RegistryVersion
+	InvalidateAskRows
+	return 1
+}
+
+# A pane can be closed and reopened. Its native toolbar keeps the stable
+# action id it was registered with, but the widget-bound command changes.
+# Update that handler in place; the toolbar caller only asks when no live
+# widget still owns the id (a second open instance gets its own id).
+proc ::action::UpdateToolbarHandler {id handler} {
+	variable Registry
+	variable RegistryVersion
+
+	if {![dict exists $Registry $id]} { return 0 }
+	set record [dict get $Registry $id]
+	if {[lindex [dict get $record handler] 0] ne "::toolbar::InvokeCommand"} { return 0 }
+	dict set record handler $handler
+	dict set Registry $id $record
+	incr RegistryVersion
+	InvalidateAskRows
+	return 1
+}
+
 # Direct ::action::Registry mutations (context rows, named sorts, menu
 # nodes) bypass register; they call this so the Ask snapshot sees them.
 proc ::action::NoteRegistryChange {} {

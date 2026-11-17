@@ -269,7 +269,10 @@ proc openDialog {parent primary secondary} {
 		$dlg.cancel configure -command [list destroy $dlg]
 		$dlg.saveAs configure -command [namespace code [list Save $dlg new]]
 		$dlg.save configure -command [namespace code [list Save $dlg replace]]
-		bind $dlg.cancel <Destroy> [namespace code [list Destroy $dlg]]
+		# Append: dialogButtonsSetup already bound <Destroy> to drop the
+		# language-label trace, and overwriting it would leave a stale trace
+		# that fails on the next language switch.
+		bind $dlg.cancel <Destroy> +[namespace code [list Destroy $dlg]]
 		::font::addChangeFontSizeBindings merge $dlg
 
 		wm protocol $dlg WM_DELETE_WINDOW [$dlg.cancel cget -command]

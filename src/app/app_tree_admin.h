@@ -62,6 +62,9 @@ public:
 
 	TreeP tree() const;
 
+	// Drop the cached tree: it is bound to the database it was built from.
+	void reset();
+
 	bool isUpToDate(Cursor const& cursor, db::Game const& game, Key const& key) const;
 	bool isRunning() const;
 

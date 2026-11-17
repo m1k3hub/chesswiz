@@ -579,6 +579,14 @@ proc application::media::Update {position} {
 	catch {after cancel $Priv(afterid)}
 	set Priv(afterid) {}
 	try {
+		# Update is scheduled with after 1 from gameSwitch, so the slot it
+		# names can already be released (a closed game or the next test
+		# file). A released slot has no media; show the independent gallery
+		# instead of asking the native layer about a game that is gone.
+		if {$position >= 0 && $position != 9
+			&& ![::scidb::game::query $position open?]} {
+			set position -1
+		}
 		set Priv(position) $position
 		set Priv(linksBase) {}
 		set Priv(selectedRow) {}

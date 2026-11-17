@@ -163,6 +163,14 @@ TreeAdmin::destroy()
 
 
 void
+TreeAdmin::reset()
+{
+	destroy();
+	m_currentTree.reset();
+}
+
+
+void
 TreeAdmin::signal(Signal signal)
 {
 	stop();

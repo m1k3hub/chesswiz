@@ -296,4 +296,11 @@ tcltest::test seal-additional-menu-labels {the additional menu actions translate
 } -result [list 1 [list "Fokus folgt der Größe beim Ändern der Fenstergröße" \
     "Eine Eröffnungsvariante nachschlagen" "Die Engine spielen lassen"]]
 
+# This file reads the worktree catalogs instead of the installed share
+# directory. Menu files share one process, so put the installed path back:
+# later player-card HTML resolves its scripts and CSS through it.
+if {[info exists ::scidb::test::seal::savedShare]} {
+	set ::scidb::dir::share $::scidb::test::seal::savedShare
+}
+
 ::tcltest::cleanupTests

@@ -200,4 +200,5 @@ tcltest::test dialog-args-tactics-retry {real CPU engine rejects a queen blunder
     array set ::ai::engine::Config $config
     file delete $path
 } -result {wrong playing 1 1 failed}
+::scidb::test::actions::release
 tcltest::cleanupTests

@@ -151,4 +151,5 @@ foreach answer {yes no} {
         array set ::application::assistant::Priv $savedPriv
     } -result {1 1}
 }
+::scidb::test::actions::release
 ::tcltest::cleanupTests

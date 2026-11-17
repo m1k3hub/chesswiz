@@ -59,4 +59,5 @@ tcltest::test reseal-configured-stub-provider {the built-in deterministic provid
  array set ::application::ai::Config $savedAI
  array set ::ai::provider::Config $savedProvider
 } -result {1 1 1}
+::scidb::test::actions::release
 ::tcltest::cleanupTests

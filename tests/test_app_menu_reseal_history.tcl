@@ -47,4 +47,5 @@ tcltest::test database-history-clear-native {database Clear History preserves ga
  ::action::run menu.file.recent.clear
  list [llength $::application::database::RecentFiles] [expr {$::game::History eq $gameBefore}]
 } -result {0 1}
+::scidb::test::actions::release
 ::tcltest::cleanupTests

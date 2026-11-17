@@ -10,6 +10,7 @@
 
 package require Tcl 8.5
 package require tcltest 2.5
+source [file join [file dirname [info script]] app_actions_support.tcl]
 
 namespace eval ::scidb::test::trn {}
 
@@ -311,4 +312,5 @@ tcltest::test translations-language-row-switches {the View > Language row switch
 	lappend got $::mc::langID
 } -result {Deutsch de Español es en}
 
+::scidb::test::actions::release
 tcltest::cleanupTests

@@ -26,7 +26,9 @@ namespace eval ::scidb::test::actions {
         after 10
         update
         catch {destroy .tipoftheday}
+        resetDatabasePage
         ::application::switchTab board
+        ensureBoardPane
         # Each real-action probe owns one process: clear the previous
         # search's positions so a probe cannot inherit another's result.
         catch { set ::application::assistant::LastFind {} }
@@ -42,15 +44,84 @@ namespace eval ::scidb::test::actions {
         }
         if {![winfo viewable .application.nb.board]} { error "main board is not mapped" }
         if {![winfo exists $::application::board::board]} { error "board was not built" }
+        normalizeMultiwindow [::application::twm board]
     }
 
-    proc fixture {} {
-        variable Dir
-        file mkdir $Dir
-        set path [file join $Dir generated.pgn]
-        if {[file exists $path]} { return $path }
-        set ch [open $path w]
-        puts $ch {[Event "Generated test"]
+    proc ensureBoardPane {} {
+        catch {set twm [::application::twm board]} twm
+        if {![info exists twm] || [catch {$twm leaf board} leaf]} {return}
+        if {[catch {$twm ispane $leaf} isPane]} {return}
+        if {$isPane} {return}
+        set layout [::application::twm::inspectLayout $twm]
+        catch {::application::twm::ChangeState $twm board}
+        update
+        catch {$twm load [::application::reflow::substTpl $::application::BoardLayout]}
+        update
+        catch {$twm load $layout}
+        update
+    }
+
+    # The database module keeps one page per object kind. A caller probe
+    # that opens an event/site/player page leaves that page selected, so a
+    # later file finds the games table unmapped. Return to the games page.
+    proc resetDatabasePage {} {
+        if {![info exists ::application::database::Vars(contents)]} {return}
+        set contents $::application::database::Vars(contents)
+        if {![winfo exists $contents]} {return}
+        catch {
+            if {[$contents select] ne "$contents.games"} {
+                $contents select $contents.games
+            }
+        }
+        update
+    }
+
+    # A multiwindow keeps the sizes of its hidden page frames from whatever
+    # tab was live before. Menu files share one process, so a save after an
+    # earlier file's tab switch would record those stale widths and no longer
+    # match the arrangement the load path produces. Align every page with the
+    # visible multiwindow so save/load round-trips in a shared process.
+    proc normalizeMultiwindow {twm} {
+        if {[catch {$twm leaves} leaves]} { return }
+        set groups [dict create]
+        foreach uid $leaves {
+            if {[catch {$twm leaf $uid} frame]} continue
+            if {[catch {$twm parent $frame} parent]} continue
+            if {[catch {$twm ismultiwindow $parent} is] || !$is} continue
+            dict lappend groups $parent $frame
+        }
+        dict for {parent frames} $groups {
+            # The visible page already has the multiwindow's real size; hidden
+            # pages keep whatever size they had when the tab was switched.
+            set canonical {}
+            foreach frame $frames {
+                if {[winfo ismapped $frame]} { set canonical $frame; break }
+            }
+            if {$canonical eq {}} {
+                set best -1
+                foreach frame $frames {
+                    if {[catch {$twm dimension $frame} cdim]} continue
+                    lassign $cdim cw ch
+                    if {$cw > $best} { set best $cw; set canonical $frame }
+                }
+            }
+            if {$canonical eq {}} continue
+            if {[catch {$twm dimension $canonical} dim]} continue
+            lassign $dim w h
+            foreach frame $frames {
+                if {$frame eq $canonical} continue
+                if {[catch {$twm dimension $frame} cdim]} continue
+                lassign $cdim cw ch
+                if {$cw != $w || $ch != $h} {
+                    catch {$twm resize $frame $w $h}
+                }
+            }
+        }
+        update
+    }
+
+    proc fixtureText {} {
+        return {[Event "Generated test"]
 [Site "Test"]
 [Date "2026.01.01"]
 [Round "1"]
@@ -59,8 +130,219 @@ namespace eval ::scidb::test::actions {
 [Result "*"]
 
 1. e4 e5 2. Nf3 Nc6 *}
-        close $ch
+    }
+
+    proc fixture {} {
+        variable Dir
+        file mkdir $Dir
+        set path [file join $Dir generated.pgn]
+        if {[file exists $path]} { return $path }
+        resetFixture
         return $path
+    }
+
+    # Some probes append a game to the shared fixture. That is part of their
+    # scenario, but menu files share one process: put the canonical single
+    # game back when the file is done, or the next file's count is wrong.
+    proc resetFixture {} {
+        variable Dir
+        file mkdir $Dir
+        set path [file join $Dir generated.pgn]
+        set ch [open $path w]
+        puts -nonewline $ch [fixtureText]
+        close $ch
+    }
+
+    # Restore the process-wide state a real-action probe can change: close
+    # the databases it opened and release the game tabs it loaded. Menu test
+    # files run in one process, so a file that leaves either behind changes
+    # the fixture every later file sees.
+    proc release {} {
+        # A probe may leave a real engine piping into a pane it closes. Power
+        # those down first; otherwise closing the database waits on a reply
+        # that will never come.
+        catch {
+            foreach number [array names ::application::analysis::NumberToTree] {
+                if {[::engine::active? $number]} {::engine::kill $number}
+            }
+        }
+        # Killing an engine does not cancel an "is ready" idle callback that
+        # was already scheduled. Drain those now, while this file's games are
+        # still present: if one runs during the next file's engine start it
+        # raises a precondition error inside the native activate command and
+        # leaves a stale after# timer id as that command's result.
+        catch { update }
+        if {[info exists ::application::database::Vars(switcher)]} {
+            set bases [$::application::database::Vars(switcher) bases]
+        } else {
+            set bases {}
+        }
+        if {[llength $bases]} {
+            set savedReleaseQuestion $::game::Options(askAgain:releaseAll)
+            set savedReleaseAnswer $::game::Options(answer:releaseAll)
+            set savedCloseQuestion $::game::Options(askAgain:closeAnyway)
+            set savedCloseAnswer $::game::Options(answer:closeAnyway)
+            set ::game::Options(askAgain:releaseAll) 0
+            set ::game::Options(answer:releaseAll) 1
+            set ::game::Options(askAgain:closeAnyway) 0
+            set ::game::Options(answer:closeAnyway) 1
+            # closeBase asks before discarding a modified game or an unsaved
+            # PGN. Nobody can click that modal in a headless run, so answer
+            # "yes" for the duration of the close only, then restore the real
+            # dialog. The forcing above does not suppress the question: the
+            # Options only record the checked checkbox and its last answer.
+            set savedQuestion ::scidb::test::actions::savedQuestion
+            set haveQuestion [expr {[llength [info commands ::dialog::question]] > 0}]
+            if {$haveQuestion} {
+                rename ::dialog::question $savedQuestion
+                proc ::dialog::question {args} { return yes }
+            }
+            try {
+                foreach base $bases {
+                    if {$base ne $::scidb::clipbaseName} {
+                        catch {::application::database::closeBase .application $base}
+                    }
+                }
+            } finally {
+                if {$haveQuestion} {
+                    rename ::dialog::question {}
+                    rename $savedQuestion ::dialog::question
+                }
+                set ::game::Options(askAgain:releaseAll) $savedReleaseQuestion
+                set ::game::Options(answer:releaseAll) $savedReleaseAnswer
+                set ::game::Options(askAgain:closeAnyway) $savedCloseQuestion
+                set ::game::Options(answer:closeAnyway) $savedCloseAnswer
+            }
+        }
+        # Release each occupied slot through both layers: gamebar::remove
+        # alone leaves ::game::List holding a slot the bar no longer shows,
+        # and the next replace fails on that stale index.
+        set position 0
+        foreach entry [::game::gameList] {
+            if {[lindex $entry 0] ne ""} {
+                catch {::application::pgn::release $position}
+                catch {::game::release $position}
+            }
+            incr position
+        }
+        # A probe may release only the native layer, leaving a game bar item
+        # without an occupied slot. The next file then reuses that slot id and
+        # the canvas rejects the duplicate tags, so drop anything stale.
+        catch {
+            set gb [::application::pgn::gamebar]
+            if {[winfo exists $gb]} {
+                set used [::game::usedPositions?]
+                foreach id [::gamebar::getIdList $gb] {
+                    if {$id ni $used} { ::gamebar::remove $gb $id no }
+                }
+            }
+        }
+        # Player cards register dynamic HTML actions. Closing the cards keeps
+        # the assistant toolset and later popup walks at the fresh value.
+        foreach child [winfo children .application] {
+            if {[string match .application.__card__* $child]} {catch {destroy $child}}
+        }
+        # Closing a base adds it to Open Recent. A later menu walk in the same
+        # process must not see fixtures opened by an earlier file.
+        catch {::application::database::ClearHistory}
+        catch {resetFixture}
+        resetDatabasePage
+        update
+    }
+
+    # Close panes a probe added without touching the ones that were already
+    # in the layout. Analysis panes are removed highest-numbered first so
+    # DestroyPane's renumbering never leaves a stale uid behind.
+    proc closeExtraPanes {initial} {
+        set twm ""
+        catch {set twm [::application::twm board]}
+        if {$twm eq ""} {return}
+        set extras {}
+        foreach uid [$twm leaves] {
+            if {$uid ni $initial} {lappend extras $uid}
+        }
+        foreach uid [lsort -decreasing $extras] {
+            if {[catch {set frame [$twm leaf $uid]} frame] || ![winfo exists $frame]} {continue}
+            catch {::application::reflow::explicitHide $twm $frame}
+            catch {destroy $frame}
+        }
+        update
+    }
+
+    # Capture the board's pane set, geometry and reflow intent before a test
+    # destroys panes or switches to a board-only layout. restoreBoard puts all
+    # of it back so the next file in the shared process starts from the same
+    # arrangement.
+    proc captureBoard {} {
+        set twm [::application::twm board]
+        set id $::application::Vars($twm:id)
+        return [dict create \
+            manager $twm id $id leaves [$twm leaves] \
+            layout [::application::twm::inspectLayout $twm] \
+            override $::application::reflow::S(override) \
+            name [::application::twm::currentLayoutName $twm]]
+    }
+
+    proc restoreBoard {state} {
+        set twm [dict get $state manager]
+        if {[catch {::application::twm board} live] || $live ne $twm} {
+            set twm $live
+        }
+        set leaves [dict get $state leaves]
+        foreach uid [$twm leaves] {
+            if {$uid ni $leaves} {catch {::application::twm::ChangeState $twm $uid}}
+        }
+        foreach uid $leaves {
+            if {$uid ni [$twm leaves]} {catch {::application::openPane $uid}}
+        }
+        update idletasks
+        ensureBoardPane
+        # Closing and reopening the board recreates it as a movable frame
+        # with an explicit flat header, while startup's BoardLayout pane has
+        # no flat attribute. A later Fold would then fold the board itself
+        # and leave a stale Extent. Destroy that rebuilt leaf so the layout
+        # load below recreates the fixed pane the captured layout describes.
+        if {[catch {$twm leaf board} leaf] == 0 && [winfo exists $leaf]
+         && [catch {$twm get $leaf flat}] == 0
+         && ![layoutHasAttr [dict get $state layout] board flat]} {
+            catch {destroy $leaf}
+            update
+        }
+        catch {$twm load [dict get $state layout]}
+        update
+        normalizeMultiwindow $twm
+        # openPane marks every restored pane as an explicit reopen and leaves
+        # an empty analysis pane visible at its minimum width. Put the original
+        # reflow intent back and let the normal collapse pass capture a fresh
+        # snapshot, so a later layout save records the settled arrangement
+        # instead of the overflowed one.
+        set override [dict get $state override]
+        foreach uid [$twm leaves] {
+            if {$uid in $override} continue
+            catch {::application::reflow::explicitHide $twm [$twm leaf $uid]}
+        }
+        ::application::reflow::onPaneStateChange
+        for {set i 0} {$i < 10} {incr i} {after 20; update}
+        set ::application::twm::Options([dict get $state id]:layout:name) [dict get $state name]
+        update
+    }
+
+    proc layoutHasAttr {layout uid attr} {
+        set length [llength $layout]
+        for {set i 0} {$i < $length} {} {
+            set type [lindex $layout $i]; incr i
+            set id [lindex $layout $i]; incr i
+            set attrs [lindex $layout $i]; incr i
+            if {$id eq $uid && [dict exists $attrs -attrs]
+             && [lsearch -exact [dict get $attrs -attrs] $attr] >= 0} {
+                return 1
+            }
+            if {$type ni {pane frame}} {
+                if {[layoutHasAttr [lindex $layout $i] $uid $attr]} {return 1}
+                incr i
+            }
+        }
+        return 0
     }
 
     # Only metadata: no process is started by the handler reachability tests.
@@ -292,13 +574,41 @@ proc ::scidb::test::actions::assertReal {name} {
 
 proc ::scidb::test::actions::cleanup {} {
     variable Dir
-    # The caller closes generated databases before deleting their files.
+    # Best effort: a file that reaches this point must still reach
+    # tcltest::cleanupTests even when a prior test left a slot or base in a
+    # shape the individual release paths cannot consume. release also closes
+    # bases with the release dialogs forced to "yes", so a base cannot stay
+    # open on the fixture directory that is deleted immediately afterwards.
+    catch { ::scidb::test::actions::release }
     foreach pos [::game::usedPositions?] {
-        ::application::pgn::release $pos
-        ::game::release $pos
+        catch { ::application::pgn::release $pos }
+        catch { ::game::release $pos }
     }
     if {[file exists [file join $Dir generated.pgn]] && [::scidb::db::get open? [file join $Dir generated.pgn]]} {
-        ::application::database::closeBase .application [file join $Dir generated.pgn]
+        catch { ::application::database::closeBase .application [file join $Dir generated.pgn] }
     }
-    file delete -force $Dir
+    catch { file delete -force $Dir }
+}
+
+# Every file that uses these probes shares one process with the next file.
+# Drain the process-wide state on every tcltest::cleanupTests, including the
+# files that do not call ::scidb::test::actions::cleanup themselves: a stopped
+# engine, an open base or a game slot left behind changes the next file's
+# fixture, and a deferred engine callback can then fire in the middle of the
+# next file's native engine start.
+# Keep the original command inside ::tcltest: its body resolves numTests and
+# the other test counters as namespace variables there. Renaming it into
+# another namespace would rebind those variables and break every following
+# file.
+if {![info exists ::scidb::test::actions::cleanupHook]} {
+    set ::scidb::test::actions::cleanupHook 1
+    rename ::tcltest::cleanupTests ::tcltest::cleanupTestsOrig
+    proc ::tcltest::cleanupTests {args} {
+        # A file that sources another test may deliberately keep its base and
+        # slots open across the inner cleanupTests; respect that handoff.
+        if {![info exists ::postedKeepOpen]} {
+            catch { ::scidb::test::actions::release }
+        }
+        uplevel 1 [list ::tcltest::cleanupTestsOrig {*}$args]
+    }
 }

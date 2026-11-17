@@ -103,4 +103,5 @@ tcltest::test reseal-C5-empty-selection {empty named popup clears selection and 
  set reply [::action::run c5.player_card]
  list $built [::context::CurrentObject C5] [::scidb::test::askscope::AskContextIds C5] [string match {error: precondition:*} $reply]
 } -cleanup {catch {destroy .named}} -result {0 {} {} 1}
+::scidb::test::actions::release
 ::tcltest::cleanupTests

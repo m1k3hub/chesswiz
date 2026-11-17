@@ -5,12 +5,18 @@ package require tcltest 2.5
 
 namespace eval ::scidb::test::app {
     variable testDir [file dirname [file normalize [info script]]]
+    variable rootDir [file dirname $testDir]
     variable reportFile [file join $testDir app_test_report.txt]
     variable totalPass 0
     variable totalFail 0
     variable totalSkip 0
     variable reportHandle {}
 }
+
+# Test files locate support modules and fixtures from the repository root
+# (``tests/...``).  The Makefile starts this runner with -C tests, while CI
+# users may start it from the root; use one directory for both.
+cd $::scidb::test::app::rootDir
 
 # Placement fixtures must fit the current display, including WM decorations.
 # Requested sizes retain the regression scenario on larger displays.
@@ -33,6 +39,24 @@ proc ::scidb::test::app::emit {line} {
 # after-handlers running or a grab held is not order-independent: the files
 # that follow can then fail though they pass alone.  This is a report, not a
 # reset -- the leaks are fixed where they are made.
+# Files share one process and nine game slots.  Once the action-probe support
+# module is loaded, use its process-wide reset (bases, slots, cards, engines)
+# after every file; before that, at least power down engines and drain the idle
+# callbacks they leave behind.  A stopped engine's deferred callback firing
+# inside the next file's native engine start aborts the whole suite.
+proc ::scidb::test::app::settle {} {
+    if {[llength [info commands ::scidb::test::actions::release]]} {
+        catch { ::scidb::test::actions::release }
+        return
+    }
+    catch {
+        foreach number [array names ::application::analysis::NumberToTree] {
+            catch { ::engine::kill $number }
+        }
+        update
+    }
+}
+
 proc ::scidb::test::app::checkCleanup {file} {
     set slots {}
     catch { set slots [::game::gameList] }
@@ -136,6 +160,12 @@ set startTime [clock seconds]
 foreach testFile $testFiles {
     ::scidb::test::app::emit "\n=== Running [file tail $testFile] ==="
 
+    # Some files import the whole tcltest namespace.  An import left by an
+    # earlier file points at the superseded cleanup command, which makes a
+    # second import fail; refresh the global link to the current wrapper.
+    catch { rename ::cleanupTests {} }
+    namespace import ::tcltest::cleanupTests
+
     tcltest::configure -match $matchPattern
     if {$verbose} {
         tcltest::configure -verbose {pass body error}
@@ -148,6 +178,7 @@ foreach testFile $testFiles {
         ::scidb::test::app::emit "ERROR in [file tail $testFile]: $err"
         incr ::scidb::test::app::totalFail 1
     }
+    ::scidb::test::app::settle
     catch { ::scidb::test::app::checkCleanup $testFile }
 }
 

@@ -71,4 +71,5 @@ tcltest::test reg5-optional-event-enum {absent event report removes only its own
 } -cleanup {
  rename ::ai::eventreport::report__reg5_saved ::ai::eventreport::report
 } -result {0 0 1}
+::scidb::test::actions::release
 ::tcltest::cleanupTests

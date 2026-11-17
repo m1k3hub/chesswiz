@@ -24,4 +24,5 @@ trace remove execution ::action::run enter recordAction
 tcltest::test toolbar-registry-contract {every executable toolbar control dispatches a registry action} -body {
  list [expr {$before ne $::board::hilite(show-suggested)}] [expr {[llength $::calls] == 1}]
 } -result {1 1}
+::scidb::test::actions::release
 ::tcltest::cleanupTests

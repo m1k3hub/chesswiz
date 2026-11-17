@@ -86,7 +86,9 @@ array set PaneOptions {
 	eco		{ -width 500 -height 520 -minwidth 150 -minheight 100 -expand both }
 	media		{ -width 400 -height 300 -minwidth 250 -minheight 200 -expand y }
 	report	{ -width 500 -height 400 -minwidth 250 -minheight 150 -expand both }
-	assistant	{ -width 400 -height 400 -minwidth 250 -minheight 150 -expand both }
+	# The input row (entry plus Send/Clear/Hide) needs the pane's natural
+	# width. At 250 px the entry collapsed to a single pixel.
+	assistant	{ -width 400 -height 400 -minwidth 400 -minheight 150 -expand both }
 	explorer	{ -width 360 -height 420 -minwidth 220 -minheight 200 -expand y }
 }
 

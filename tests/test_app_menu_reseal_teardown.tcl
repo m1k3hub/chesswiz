@@ -160,10 +160,12 @@ if {![llength [info commands $::reg6Bg]]} {auto_load $::reg6Bg}
 trace add execution $::reg6Bg enter ::reg6CaptureBg
 source tests/app_actions_support.tcl
 ::scidb::test::actions::ready
+set initialBoard [::scidb::test::actions::captureBoard]
 ::action::run open_database [dict create path [::scidb::test::actions::fixture]]
 ::action::run open_game {number 1 move 1 after white}
 ::application::openPane board
 update
+catch {destroy .vp}
 menu .vp -tearoff 0
 ::menu::BuildDropdown .vp
 set v [::scidb::test::pane::FillView .vp]
@@ -213,4 +215,7 @@ trace remove execution $::reg6Bg enter ::reg6CaptureBg
 tcltest::test reg6-full-native-pane-sequence {loaded default and absent panes toggle by id and physical click without bgerrors} -body {
  list $bad $::reg6PaneErrors
 } -result {{} {}}
+::scidb::test::actions::restoreBoard $initialBoard
+::application::reflow::reset
+::scidb::test::actions::release
 ::tcltest::cleanupTests

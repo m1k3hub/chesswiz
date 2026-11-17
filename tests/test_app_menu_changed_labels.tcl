@@ -148,6 +148,22 @@ namespace eval ::scidb::test::changedLabels {
         toolbar.tree_switcher.0
         view.focus_follows_size
     }
+    variable initialVisible {}
+
+    # The hidden-column guard deliberately shows every sortable column. Put
+    # back the table's own visibility afterwards: single-process runs share
+    # the widget's option state with every later menu file.
+    proc restoreColumns {table initial} {
+        foreach column [::table::visibleColumns $table] {
+            if {$column ni $initial} {catch {::table::hideColumn $table $column}}
+        }
+        foreach column $initial {
+            if {[catch {::table::visible? $table $column} visible] || !$visible} {
+                catch {::table::showColumn $table $column}
+            }
+        }
+        update idletasks
+    }
     proc offlineBackend {args} {return {}}
 proc oracleLabel {id} {
  if {$id in {c5.sort_ascending c5.sort_descending}} {
@@ -218,6 +234,7 @@ proc rememberAsk {} {
 }
     proc check {language} {
         variable ids; variable askSeen; variable proof; variable stage; variable lang
+        variable initialVisible
         set lang $language
         set askSeen {}; set proof {}; set stage startup
         ::menu::SwitchLanguage $lang
@@ -259,6 +276,10 @@ foreach kind {player event} {
  set frame [set ::application::database::${kind}::${manager}::Vars(frame:$kind)]
  set table $frame
  if {$kind eq "player"} {append table .table}
+ if {![dict exists $initialVisible $kind]} {
+  dict set initialVisible $kind [::table::visibleColumns $table.top.table]
+ }
+ set initiallyVisible [dict get $initialVisible $kind]
  set columns {}
  foreach id $ids {if {[string match c5.sort.$kind.* $id]} {lappend columns [lindex [split $id .] 3]}}
  foreach column [lsort -unique $columns] {::table::showColumn $table.top.table $column}
@@ -278,6 +299,7 @@ foreach kind {player event} {
   }
   ::table::showColumn $table.top.table $column
  }
+ restoreColumns $table.top.table $initiallyVisible
  destroy .entrynative
 }
         set missing {}
@@ -303,6 +325,9 @@ foreach lang {de es it hu sv} {
         ::menu::SwitchLanguage $savedLanguage
         set ::application::ai::Config(provider) $savedProvider
     } -result 140
+}
+foreach variant [list normal [::application::twm::CurrentLayoutVariant board]] {
+    catch {file delete -force [::application::twm::makeFilename board $variant {Generated REG011 layout}]}
 }
 if {[info exists ::scidb::test::changedLabels::base]} {
     # Only our generated, unmodified game is open. Close it without the
