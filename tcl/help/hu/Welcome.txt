@@ -61,7 +61,7 @@ Jó szórakozást kívánunk a Chesswiz használatához, amely a Scidb-re épül
 <h2>Amit a Chesswiz hozzáad</h2>
 
 <ul style="padding: 5px;">
-  <li class="space">Egy asszisztens, amellyel hétköznapi nyelven beszélhetsz: kérdezd meg, miért veszett el egy játszma, mit szokott játszani egy játékos, vagy hogyan készülj egy ellenfélre, és a táblán válaszol (<b>Main Menu &gt; Extras &gt; AI: Assistant</b>). A mesterséges intelligencia funkciói egy felhőalapú modellt használnak, amelyet az <b>AI: Choose Model</b> alatt választhatsz ki.</li>
+  <li class="space">Egy asszisztens, amellyel hétköznapi nyelven beszélhetsz: kérdezd meg, miért veszett el egy játszma, mit szokott játszani egy játékos, vagy hogyan készülj egy ellenfélre, és a táblán válaszol (<b>Tools &gt; Asszisztens</b>). A mesterséges intelligencia funkciói egy felhőalapú modellt használnak, amelyet az <b>Tools &gt; Modell kiválasztása&hellip;</b> alatt választhatsz ki.</li>
   <li class="space">Elemzés erős programokkal: a Stockfish mellékelve azonnal használható, és további UCI- és WinBoard-modulok is hozzáadhatók (<b>Main Menu &gt; Beállítások &gt; Elemző modulok</b>).</li>
   <li class="space">Egy 3D-s tábla a 2D-s tábla mellett (<b>Main Menu &gt; Extras &gt; Open 3D Board</b>).</li>
   <li class="space">A gyorsbillentyűk, amelyeket esetleg már ismersz: válts a ChessBase-stílusú sémára a <b>Main Menu &gt; Beállítások &gt; Keyboard Preferences</b> alatt.</li>

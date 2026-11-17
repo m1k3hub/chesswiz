@@ -615,7 +615,7 @@ proc ::ai::provider::NeedKey {provider} {
 
 	set key [apiKey $provider]
 	if {$key eq ""} {
-		error "no API key for [label $provider]: enter one in Extras > AI: Choose Model (or set [lindex $KeyEnv($provider) 0])"
+		error "no API key for [label $provider]: enter one in Tools > Choose Model\u2026 (or set [lindex $KeyEnv($provider) 0])"
 	}
 	return $key
 }
@@ -981,7 +981,7 @@ proc ::ai::provider::CloudError {provider code data} {
 	}
 	switch -- $code {
 		401 - 403 {
-			return "$provider rejected the API key ($text). Enter a valid key in Extras > AI: Choose Model."
+			return "$provider rejected the API key ($text). Enter a valid key in Tools > Choose Model\u2026."
 		}
 		429 { return "$provider is busy or the account's limit is reached ($text). Try again shortly." }
 	}
@@ -1125,7 +1125,7 @@ proc ::ai::provider::openaiReply {data} {
 proc ::ai::provider::openaiBody {messages tools} {
 	variable Config
 	set model [model]
-	if {$model eq ""} { error "no [label [Current]] model chosen: pick one in Extras > AI: Choose Model" }
+	if {$model eq ""} { error "no [label [Current]] model chosen: pick one in Tools > Choose Model\u2026" }
 	set body "\{\"model\":\"[jsonEscape $model]\",\"messages\":[openaiMessages $messages]"
 	if {$tools ne ""} { append body ",\"tools\":$tools" }
 	# GLM on Fireworks thinks for minutes unbounded; medium answers in seconds,

@@ -42,7 +42,7 @@ Have a lot of fun with Chesswiz, which is built on Scidb, whose development bega
 <h2>What Chesswiz adds</h2>
 
 <ul style="padding: 5px;">
-  <li class="space">An assistant you talk to in plain language: ask why a game was lost, what a player usually plays, or how to prepare for an opponent, and it answers on the board (<b>Main Menu &gt; Extras &gt; AI: Assistant</b>). The AI features use a cloud model you choose under <b>AI: Choose Model</b>.</li>
+  <li class="space">An assistant you talk to in plain language: ask why a game was lost, what a player usually plays, or how to prepare for an opponent, and it answers on the board (<b>Tools &gt; Assistant</b>). The AI features use a cloud model you choose under <b>Tools &gt; Choose Model&hellip;</b>.</li>
   <li class="space">Analysis with strong engines: Stockfish is included and ready to use, and further UCI and WinBoard engines can be added (<b>Main Menu &gt; Setup &gt; Engines</b>).</li>
   <li class="space">A 3D board alongside the 2D board (<b>Main Menu &gt; Extras &gt; Open 3D Board</b>).</li>
   <li class="space">The keyboard shortcuts you may already know: switch to the traditional shortcut scheme under <b>Main Menu &gt; Setup &gt; Keyboard Preferences</b>.</li>

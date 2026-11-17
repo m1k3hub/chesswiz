@@ -132,7 +132,7 @@ proc ::application::setupscan::StepAi {} {
 proc ::application::setupscan::AiFound {result} {
 	variable AiSetup
 	if {[dict get $result ok]} {
-		Say "AI model: using [::ai::provider::label [dict get $result provider]] [dict get $result model]. To use another, or one on this computer, choose it in Extras > AI: Choose Model."
+		Say "AI model: using [::ai::provider::label [dict get $result provider]] [dict get $result model]. To use another, or one on this computer, choose it in Tools > Choose Model\u2026."
 		return
 	}
 	set advice {}
@@ -140,9 +140,9 @@ proc ::application::setupscan::AiFound {result} {
 		if {[dict exists $AiSetup $provider]} { lappend advice "[dict get $AiSetup $provider] (for $model)" }
 	}
 	if {[llength $advice]} {
-		Say "AI model: none is ready. Easiest first: [join $advice {; }]. Then run this again. Or run a model on this computer: Extras > AI: Choose Model."
+		Say "AI model: none is ready. Easiest first: [join $advice {; }]. Then run this again. Or run a model on this computer: Tools > Choose Model\u2026."
 	} else {
-		Say "AI model: none found ([dict get $result error]). Choose one in Extras > AI: Choose Model, in the cloud or on this computer."
+		Say "AI model: none found ([dict get $result error]). Choose one in Tools > Choose Model\u2026, in the cloud or on this computer."
 	}
 }
 

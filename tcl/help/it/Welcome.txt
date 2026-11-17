@@ -70,7 +70,7 @@ Divertitevi con Chesswiz, che è costruito su Scidb, il cui sviluppo è iniziato
 <h2>Cosa aggiunge Chesswiz</h2>
 
 <ul style="padding: 5px;">
-  <li class="space">Un assistente con cui parli in linguaggio normale: chiedi perché una partita è stata persa, cosa gioca di solito un giocatore o come prepararsi per un avversario, e risponde sulla scacchiera (<b>Main Menu &gt; Extras &gt; AI: Assistant</b>). Le funzioni di IA usano un modello cloud che scegli in <b>AI: Choose Model</b>.</li>
+  <li class="space">Un assistente con cui parli in linguaggio normale: chiedi perché una partita è stata persa, cosa gioca di solito un giocatore o come prepararsi per un avversario, e risponde sulla scacchiera (<b>Strumenti &gt; Assistente</b>). Le funzioni di IA usano un modello cloud che scegli in <b>Strumenti &gt; Scegli modello&hellip;</b>.</li>
   <li class="space">Analisi con motori forti: Stockfish è incluso e pronto all'uso, e si possono aggiungere altri motori UCI e WinBoard (<b>Main Menu &gt; Imposta &gt; Motori</b>).</li>
   <li class="space">Una scacchiera 3D accanto a quella 2D (<b>Main Menu &gt; Extras &gt; Open 3D Board</b>).</li>
   <li class="space">Le scorciatoie da tastiera che forse conosci già: passa allo schema in stile ChessBase in <b>Main Menu &gt; Imposta &gt; Keyboard Preferences</b>.</li>
