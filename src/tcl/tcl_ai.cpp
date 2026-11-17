@@ -266,9 +266,18 @@ latin1ToUtf8(mstl::string const& s)
 static mstl::string
 utf8Lower(mstl::string const& s)
 {
-	mstl::string buf(s);
-	int n = Tcl_UtfToLower(const_cast<char*>(buf.c_str()));
-	return mstl::string(buf.c_str(), unsigned(n));
+	// Fold in an owned, writable Tcl_DString: an mstl::string copy may share
+	// its buffer (or point at a static empty string), so never write through
+	// c_str().
+	if (s.empty())
+		return mstl::string();
+	Tcl_DString ds;
+	Tcl_DStringInit(&ds);
+	Tcl_DStringAppend(&ds, s.c_str(), int(s.size()));
+	int n = Tcl_UtfToLower(Tcl_DStringValue(&ds));
+	mstl::string out(Tcl_DStringValue(&ds), unsigned(n));
+	Tcl_DStringFree(&ds);
+	return out;
 }
 
 

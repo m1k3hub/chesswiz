@@ -295,6 +295,17 @@ proc ::fix::tournamentEnter {text} {
   [expr {[llength [::scidb::ai::ecoLines {GRÜNFELD}]] == [llength $rows]}] [string match *Réti* [dict get [::scidb::ai::eco {Nf3}] name]]
 } -result {1 1 0 1 1}
 
+# R5F-01: an empty word (from [list ""] or a double space) must not crash the
+# case fold; it is ignored like any empty word.
+::tcltest::test R5F-01-eco-empty-words {ecoLines survives empty and repeated-space words} -body {
+ set all [llength [::scidb::ai::ecoLines {} 50000]]
+ set empty [llength [::scidb::ai::ecoLines [list ""] 50000]]
+ set najdorf [llength [::scidb::ai::ecoLines {Sicilian Najdorf}]]
+ set gap [llength [::scidb::ai::ecoLines {Sicilian {} Najdorf}]]
+ set spaced [llength [::scidb::ai::ecoLines [split "Sicilian  Najdorf" " "]]]
+ list [expr {$empty == $all}] [expr {$najdorf > 0}] [expr {$gap == $najdorf}] [expr {$spaced == $najdorf}]
+} -result {1 1 1 1}
+
 ::tcltest::test R4F-01-all-labels-resolve {every EcoIndex label resolves through ::td::openings::Named} -body {
  ::commandline::EnsureEco
  set failed {}; set accented 0; set total 0
