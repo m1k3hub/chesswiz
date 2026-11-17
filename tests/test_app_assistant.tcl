@@ -449,7 +449,16 @@ tcltest::test assistant-debug-inspection {in debug mode the model can read procs
 	set var [::application::assistant::runTool read_variable {name ::application::assistant::Priv pattern maxRounds}]
 	set procs [::application::assistant::runTool list_procs {pattern ::application::report::show*}]
 	set ::application::assistant::Priv(debug) 0
-	list [string match "proc ::application::openPane {uid {explicit true}} *" $src] $var [llength [split $procs \n]]
+	set spec {}
+	foreach arg [info args ::application::openPane] {
+		set default {}
+		if {[info default ::application::openPane $arg default]} {
+			lappend spec [list $arg $default]
+		} else {
+			lappend spec $arg
+		}
+	}
+	list [string match "proc ::application::openPane [list $spec] *" $src] $var [llength [split $procs \n]]
 } -result {1 {maxRounds = 8} 3}
 
 tcltest::test assistant-eval-needs-confirm {eval_tcl runs only the script the user allowed} -body {
