@@ -39,4 +39,9 @@ set ::commandline::Source fixtureSource
 ::tcltest::test command-options {optional range fields retain independent dictionary keys} -body {
  dict get [lindex [::commandline::Suggest {find games from 2015 to 2018 min elo 2600}] 0] args
 } -result {from 2015 to 2018 min_elo 2600}
+::tcltest::test command-scratch-untracked {generated test scratch files are never committed} -body {
+ set root [file normalize [file join [file dirname [info script]] ..]]
+ if {[catch {exec git -C $root ls-files tests/tmp-app/cmdline} tracked]} {set tracked ""}
+ llength [split [string trim $tracked] \n]
+} -result 0
 ::tcltest::cleanupTests
