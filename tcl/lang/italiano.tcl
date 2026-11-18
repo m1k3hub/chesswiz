@@ -1089,7 +1089,7 @@
 ::application::ask::mc::PrefsDoc		"Scegli gli strumenti vocali locali (whisper-cli, modello, registratore) e scopri cosa installare se l'input vocale non è disponibile."
 
 ### application::speech ################################################
-::application::speech::mc::Install		"L'input vocale richiede whisper-cli (whisper.cpp), un modello ggml e arecord o ffmpeg. Configurali in Preferenze > Assistente."
+::application::speech::mc::Install		"L'input vocale richiede whisper-cli (whisper.cpp), un modello ggml e arecord o ffmpeg. Configurali nella finestra Preferenze assistente\u2026."
 ::application::speech::mc::InstallMac	"macOS usa la dettatura di sistema: attivala in Impostazioni di Sistema > Tastiera > Dettatura, quindi premi il tasto di dettatura (o Fn Fn)."
 ::application::speech::mc::InstallWin	"Windows usa la dettatura di sistema: premi Win+H mentre il campo Chiedi ha il focus."
 ::application::speech::mc::Listening	"Registrazione in corso\u2026 clicca per fermare"

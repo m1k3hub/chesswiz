@@ -1018,7 +1018,7 @@
 ### application::speech ###############################################
 # Speech input (the Ask field's microphone). MissingCli/MissingModel/
 # MissingRecorder name the parts a missing speech path lacks.
-::application::speech::mc::Install		"Speech input needs whisper-cli (whisper.cpp), a ggml model and arecord or ffmpeg. Set them in Preferences > Assistant."
+::application::speech::mc::Install		"Speech input needs whisper-cli (whisper.cpp), a ggml model and arecord or ffmpeg. Set them in the Assistant Preferences\u2026 dialog."
 ::application::speech::mc::InstallMac		"macOS uses the system dictation: turn it on in System Settings > Keyboard > Dictation, then press the dictation key (or Fn Fn)."
 ::application::speech::mc::InstallWin		"Windows uses the system dictation: press Win+H while the Ask field has focus."
 ::application::speech::mc::Listening		"Recording\u2026 click to stop"

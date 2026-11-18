@@ -1090,7 +1090,7 @@
 # Die Spracheingabe (Mikrofon im Eingabefeld). MissingCli/MissingModel/
 # MissingRecorder benennen die Teile, die einem unvollständigen
 # Sprachpfad fehlen.
-::application::speech::mc::Install		"Die Spracheingabe erfordert whisper-cli (whisper.cpp), ein ggml-Modell und arecord oder ffmpeg. Richten Sie diese unter Einstellungen > Assistent ein."
+::application::speech::mc::Install		"Die Spracheingabe erfordert whisper-cli (whisper.cpp), ein ggml-Modell und arecord oder ffmpeg. Richten Sie diese im Dialog Assistenten-Einstellungen\u2026 ein."
 ::application::speech::mc::InstallMac	"macOS verwendet die Systemdiktatfunktion: Aktivieren Sie sie unter Systemeinstellungen > Tastatur > Diktat und drücken Sie dann die Diktattaste (oder Fn Fn)."
 ::application::speech::mc::InstallWin	"Windows verwendet die Systemdiktatfunktion: Drücken Sie Win+H, während das Eingabefeld den Fokus hat."
 ::application::speech::mc::Listening	"Aufnahme\u2026 Klicken zum Stoppen"

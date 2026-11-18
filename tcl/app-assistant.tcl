@@ -761,18 +761,18 @@ variable MaxReply 6000
 # Where a tool's feature lives in the menus: added to its reply as a
 # "menu:" line, which the model passes on (docs/ai/ASSISTANT_COVERAGE_MAP.md P2).
 variable ToolMenu {
-	open_play_engine "Main Menu > Training > Play Against Engine"
-	search_games	"Database tab > right-click the database > Maintenance > Advanced Search"
-	show_search		"Database tab > right-click the database > Maintenance > Advanced Search"
-	find_positions	"Database tab > right-click the database > Maintenance > Pattern Search (with the script above)"
-	find_similar	"Database tab > right-click the database > Maintenance > Pattern Search (with the script above)"
+	open_play_engine "Training > Play Against Engine\u2026"
+	search_games	"Database > Search > Advanced\u2026"
+	show_search		"Database > Search > Advanced\u2026"
+	find_positions	"Database > Search > Query Editor\u2026 (with the script above)"
+	find_similar	"Database > Search > Query Editor\u2026 (with the script above)"
 	open_game		"Database tab > double-click the game in the game list"
 	set_position	"Board tab > right-click the board > Set Start Board..."
 	opening_line	"Board tab > ECO pane"
-	engine_play		"Board tab > Analysis pane > right-click a line > Append move"
+	engine_play		"Board tab > Analysis pane > right-click a line > Add Move"
 	open_view		"Database tab > Players/Events tabs, right-click; or right-click the database > Maintenance"
 	player_stats	"Players tab > right-click the player > Show Player Card"
-	prepare_against	"Players tab > right-click the player > Show Prep Report"
+	prepare_against	"Players tab > right-click the player > Prep Report"
 	opening_score	"Board tab > Tree pane"
 	position_moves	"Board tab > Tree pane"
 }
@@ -4158,7 +4158,7 @@ proc ::application::assistant::DoAddToRepertoire {repertoire} {
 	set variant [::application::database::currentVariant]
 	set bases [::application::database::repertoireBases 0 $variant]
 	if {![llength $bases]} {
-		return "error: no writable repertoire database is open. Open one, or mark a database as one: Database tab > right-click it > Maintenance > Mark As > Openings"
+		return "error: no writable repertoire database is open. Open one, or mark a database as one: Database > Maintenance > Repertoire Type > Openings"
 	}
 	if {$repertoire ne ""} {
 		set bases [lmap b $bases { if {[string match -nocase "*$repertoire*" [::util::databaseName $b no]]} { set b } else continue }]

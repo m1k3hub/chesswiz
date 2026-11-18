@@ -691,7 +691,7 @@ namespace eval application {
 namespace eval speech {
 
 namespace eval mc {
-set Install		"Speech input needs sherpa-onnx-offline and a sherpa-onnx model folder (or whisper-cli with a ggml model), and arecord or ffmpeg. Set them in Preferences > Assistant."
+set Install		"Speech input needs sherpa-onnx-offline and a sherpa-onnx model folder (or whisper-cli with a ggml model), and arecord or ffmpeg. Set them in the Assistant Preferences\u2026 dialog."
 set InstallMac	"macOS uses the system dictation: turn it on in System Settings > Keyboard > Dictation, then press the dictation key (or Fn Fn)."
 set InstallWin	"Windows uses the system dictation: press Win+H while the Ask field has focus."
 set Listening	"Recording… click to cancel"

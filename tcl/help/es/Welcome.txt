@@ -69,9 +69,9 @@ tenga en cuenta al experimentar con Chesswiz:
 
 <ul style="padding: 5px;">
   <li style="margin-top: 0.5em; ">Un asistente con el que se habla en lenguaje normal: pregunte por qué se perdió una partida, qué suele jugar un jugador o cómo prepararse para un rival, y responde sobre el tablero (<b>Tools &gt; Asistente</b>). Las funciones de IA usan un modelo en la nube que se elige en <b>Tools &gt; Elegir modelo&hellip;</b>.</li>
-  <li style="margin-top: 0.5em; ">Análisis con motores potentes: Stockfish está incluido y listo para usar, y se pueden añadir más motores UCI y WinBoard (<b>Main Menu &gt; Configurar &gt; Motores</b>).</li>
+  <li style="margin-top: 0.5em; ">Análisis con motores potentes: Stockfish está incluido y listo para usar, y se pueden añadir más motores UCI y WinBoard (<b>Editar &gt; Preferencias &gt; Motores&hellip;</b>).</li>
   <li style="margin-top: 0.5em; ">Un tablero 3D junto al tablero 2D (pide <b>Open 3D Board</b> en el campo Ask).</li>
-  <li style="margin-top: 0.5em; ">Los atajos de teclado que quizás ya conozca: cambie al esquema estilo ChessBase en <b>Main Menu &gt; Configurar &gt; Keyboard Preferences</b>.</li>
+  <li style="margin-top: 0.5em; ">Los atajos de teclado que quizás ya conozca: cambie al esquema estilo ChessBase en <b>Editar &gt; Preferencias de teclado&hellip;</b>.</li>
   <li style="margin-top: 0.5em; ">Exportación a PGN, Scidb, Scid, PDF, HTML y LaTeX, y tablas de torneos a partir de la lista de partidas.</li>
   <li style="margin-top: 0.5em; ">El mismo programa en Windows, macOS y Linux.</li>
 </ul>
@@ -81,7 +81,7 @@ tenga en cuenta al experimentar con Chesswiz:
 <ul style="padding: 5px;">
   <li style="margin-top: 0.5em; ">Gestionar y recorrer bases de datos de Chesswiz (<abbr>.sci</abbr>) con un conmutador de bases de datos, listas de partidas ordenables, vistas de jugadores/torneos/lugares y flujos de trabajo de navegador y editor de partidas.</li>
   <li style="margin-top: 0.5em; ">Ejecutar flujos de trabajo centrados en la base de datos sobre bases de datos <abbr>.sci</abbr>, incluidas vistas filtradas, conjuntos de trabajo, mantenimiento de bases de datos, detección de duplicados y estadísticas de aperturas.</li>
-  <li style="margin-top: 0.5em; ">Búsquedas: <b>Main Menu &gt; Buscar</b> (o la lupa de la barra de herramientas de la base de datos) ofrece una búsqueda en lenguaje natural (por ejemplo, «derrotas de Carlsen con negras desde 2015»), búsqueda avanzada por cabecera y posición, búsquedas por material y por valoración, detección de duplicados y CQL 6.2 para consultas de patrones especializadas.</li>
+  <li style="margin-top: 0.5em; ">Búsquedas: <b>Base &gt; Buscar</b> (o la lupa de la barra de herramientas de la base de datos) ofrece una búsqueda en lenguaje natural (por ejemplo, «derrotas de Carlsen con negras desde 2015»), búsqueda avanzada por cabecera y posición, búsquedas por material y por valoración, detección de duplicados y CQL 6.2 para consultas de patrones especializadas.</li>
 </ul>
 
 <h2>Links</h2>

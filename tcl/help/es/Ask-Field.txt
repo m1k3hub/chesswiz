@@ -108,7 +108,7 @@ de red externos ni bibliotecas de audio vinculadas:
 <p>
 Si no se detecta ninguna herramienta o modelo de voz, el botón del micrófono se oculta automáticamente
 de la interfaz. Puede configurar las rutas locales de voz en
-<menuitem>Preferencias &gt; Asistente</menuitem> (o mediante la acción <nobr><tt>app.preferences.assistant</tt></nobr>),
+el diálogo <menuitem>Preferencias del asistente&hellip;</menuitem> (o mediante la acción <nobr><tt>app.preferences.assistant</tt></nobr>),
 que proporciona opciones para la ruta de <nobr><tt>whisper-cli</tt></nobr>, el archivo del modelo y la herramienta de grabación,
 junto con un botón <b>Detectar</b> para comprobar la configuración.
 </p>

@@ -340,7 +340,7 @@ proc ::application::setupscan::StepDatabases {} {
 	set files [lsort -integer -decreasing -index 0 [lsort -unique $files]]
 	set names [lmap f [lrange $files 0 4] { string map [list $home ~] [lindex $f 1] }]
 	set more [expr {[llength $files] > 5 ? " and [expr {[llength $files] - 5}] more" : ""}]
-	Say "Game files: found [llength $files] not opened yet, newest first: [join $names {, }]$more. Open one with File > Open."
+	Say "Game files: found [llength $files] not opened yet, newest first: [join $names {, }]$more. Open one with File > Open Database\u2026."
 }
 
 # vi:set ts=3 sw=3:

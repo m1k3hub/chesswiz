@@ -1104,7 +1104,7 @@
 ::application::ask::mc::PrefsDoc		"Válassza ki a helyi hangeszközöket (whisper-cli, modell, rögzítő), és nézze meg, mit kell telepíteni, ha a hangbevitel nem érhető el."
 
 ### application::speech ################################################
-::application::speech::mc::Install		"A hangbevitelhez whisper-cli (whisper.cpp), egy ggml modell és arecord vagy ffmpeg szükséges. Állítsa be őket a Beállítások > Asszisztens menüben."
+::application::speech::mc::Install		"A hangbevitelhez whisper-cli (whisper.cpp), egy ggml modell és arecord vagy ffmpeg szükséges. Állítsa be őket az Asszisztens beállításai\u2026 párbeszédablakban."
 ::application::speech::mc::InstallMac	"A macOS a rendszer diktálási funkcióját használja: kapcsolja be a Rendszerbeállítások > Billentyűzet > Diktálás menüben, majd nyomja meg a diktálás billentyűt (vagy Fn Fn)."
 ::application::speech::mc::InstallWin	"A Windows a rendszer diktálását használja: nyomja meg a Win+H billentyűkombinációt, miközben a Kérdezés mező fókuszban van."
 ::application::speech::mc::Listening	"Felvétel\u2026 kattintson a leállításhoz"

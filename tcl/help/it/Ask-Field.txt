@@ -107,8 +107,8 @@ né librerie audio collegate:
 
 <p>
 Se non viene rilevato alcuno strumento o modello vocale, il pulsante del microfono viene nascosto
-automaticamente dall'interfaccia. È possibile configurare i percorsi vocali locali in
-<menuitem>Preferenze &gt; Assistente</menuitem> (oppure con l'azione <nobr><tt>app.preferences.assistant</tt></nobr>),
+automaticamente dall'interfaccia. È possibile configurare i percorsi vocali locali nella finestra
+<menuitem>Preferenze assistente&hellip;</menuitem> (oppure con l'azione <nobr><tt>app.preferences.assistant</tt></nobr>),
 che include impostazioni per il percorso di <nobr><tt>whisper-cli</tt></nobr>, il file del modello e lo strumento di registrazione,
 unitamente a un pulsante <b>Rileva</b> per verificare la configurazione.
 </p>

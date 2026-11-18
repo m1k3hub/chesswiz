@@ -107,7 +107,7 @@ services or linked audio libraries:
 <p>
 If no speech tool or model is detected, the microphone button is automatically hidden
 from the interface. You can configure local speech paths in
-<menuitem>Preferences &gt; Assistant</menuitem> (or action <nobr><tt>app.preferences.assistant</tt></nobr>),
+the <menuitem>Assistant Preferences&hellip;</menuitem> dialog (or action <nobr><tt>app.preferences.assistant</tt></nobr>),
 which provides settings for the <nobr><tt>whisper-cli</tt></nobr> path, model file, and recording tool,
 along with a <b>Detect</b> button to verify the configuration.
 </p>

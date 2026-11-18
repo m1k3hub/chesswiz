@@ -1100,7 +1100,7 @@
 ::application::ask::mc::PrefsDoc		"Elegir las herramientas locales de voz (whisper-cli, modelo, grabador) y ver qué instalar si la entrada de voz no está disponible."
 
 ### application::speech ################################################
-::application::speech::mc::Install		"La entrada de voz necesita whisper-cli (whisper.cpp), un modelo ggml y arecord o ffmpeg. Configúrelos en Preferencias > Asistente."
+::application::speech::mc::Install		"La entrada de voz necesita whisper-cli (whisper.cpp), un modelo ggml y arecord o ffmpeg. Configúrelos en el diálogo Preferencias del asistente\u2026."
 ::application::speech::mc::InstallMac	"macOS utiliza el dictado del sistema: actívelo en Ajustes del Sistema > Teclado > Dictado y pulse la tecla de dictado (o Fn Fn)."
 ::application::speech::mc::InstallWin	"Windows utiliza el dictado del sistema: pulse Win+H mientras el campo Preguntar tenga el foco."
 ::application::speech::mc::Listening	"Grabando\u2026 clic para detener"

@@ -1,25 +1,575 @@
 # ======================================================================
-# Scidb App Test - no user string names the removed Extras menu
-# (GAP-003; VAL-BAR / VAL-KNOW menu redesign)
+# Scidb App Test - every user-facing menu path resolves at HEAD
+# (GAP-003; VAL-BAR-007)
 # ======================================================================
-# The Extras catch-all no longer exists: model configuration moved to
-# Tools > Choose Model…, the assistant to Tools > Assistant, rating updates
-# to Database > Player Data, and the 3D entries are registry actions.  No
-# user-visible Tcl string and no shipped help page may send anyone to the
-# removed menu, under any separator the pages use.
+# The old guard only looked for the word "Extras".  The menu reseal moved
+# many rows, so a help page or an assistant reply can name a path that no
+# longer exists without ever mentioning Extras.  This test extracts every
+# "A > B > C" chain from the help pages, the tips, the player card and the
+# user strings, then resolves it against the live drop-down, the live
+# context menus and the action registry in the same language.  Dynamic
+# cascades (a database's repertoire types, an engine's variations) are
+# data-driven: their cascade must exist, the values under it are runtime
+# data.
+#
+# It also keeps the Extras check: no user string or shipped help page may
+# send anyone to the removed catch-all.
 # ======================================================================
 
 package require Tcl 8.5
 package require tcltest 2.5
 
-namespace eval ::removedExtras {
+namespace eval ::mpaths {
 	variable Root [file normalize [file join [file dirname [info script]] ..]]
+	variable Langs {en de es hu it}
+	variable Catalog [dict create \
+		en english.tcl de deutsch.tcl es espanol.tcl hu magyar.tcl it italiano.tcl]
+	# These hold the English user strings the assistant, the player card
+	# and the setup scan show.  Language catalogs override them.
+	variable EnglishFiles {
+		app-assistant.tcl player-card.tcl app-ask.tcl
+		app-setup-scan.tcl ai-provider.tcl app-assistant-panel.tcl
+	}
+	# Surfaces that are not the menu bar.  Each maps to the live context
+	# menus it can open.  A pane name without a context menu is a terminal
+	# location, not a stale path.
+	variable SurfaceCids [dict create \
+		"Board tab" {C1} "Players tab" {C5} "Events tab" {C5} \
+		"Sites tab" {C5} "Annotators tab" {C5} "Positions tab" {C5} \
+		"Database tab" {C4} "Game list" {C3} \
+		"Analysis pane" {C6} "Notation pane" {C2} \
+		"ECO pane" {} "Tree pane" {} "Report pane" {} "Media pane" {} \
+		"Assistant pane" {} "Explorer pane" {}]
+	variable OsRoots {
+		"System Settings" "Systemeinstellungen" "Ajustes del Sistema"
+		"Impostazioni di Sistema" "Rendszerbeállítások"
+	}
+	variable SavedLang en
 }
 
-# Lines which may keep the word: the translation catalogue's label entry
-# (VAL-BAR-007 keeps every moved label translated) and identifiers which
-# merely contain the letters.  Nothing here is a menu path.
-proc ::removedExtras::Allowed {line} {
+proc ::mpaths::Ellipsis {} { return [format %c 0x2026] }
+proc ::mpaths::Mark {} { return [format %c 0x25b8] }
+proc ::mpaths::Sep {} { return [format %c 2] }
+
+# The dump and the help pages differ in punctuation, ampersands used for
+# keyboard mnemonics, "..." versus the ellipsis character, and trailing
+# accelerators.  Reduce both sides to the same label.
+proc ::mpaths::Norm {s} {
+	set s [string trim $s]
+	# Tcl sources spell the ellipsis as \u2026.
+	while {[regexp {\\u([0-9a-fA-F]{4})} $s -> hex]} {
+		scan $hex %x code
+		set s [string map [list "\\u$hex" [format %c $code]] $s]
+	}
+	set s [string map [list [Ellipsis] "..." [Mark] "" & {}] $s]
+	set s [string trim $s " \t\r\n\"'`\u00ab\u00bb\u201c\u201d"]
+	set s [regsub {\.\.\.+$} $s ""]
+	set s [regsub {[.,;:!?]+$} $s ""]
+	return [regsub -all {\s+} $s { }]
+}
+
+# A path component may carry a trailing parenthetical or prose after a
+# dash.  Strip those; the menu label is the part before them.
+proc ::mpaths::Comp {c} {
+	set c [string trim $c " \t\r\n\"'`\u00ab\u00bb\u201c\u201d.,;:!?[]{}"]
+	# A trailing parenthetical is prose unless it is a real menu label,
+	# such as "Motoren (Schachprogramme)": those are one word, title case.
+	while {[regexp {\s*\(([^()]*)\)\s*$} $c -> inner]
+	       && [expr {[llength [split [string trim $inner]]] > 1
+	                 || [string length $inner] > 20}]} {
+		regsub {\s*\([^()]*\)\s*$} $c {} c
+		set c [string trim $c " \t"]
+	}
+	set c [regsub {\s+-\s+.*$} $c ""]
+	return [string trim $c " \t\r\n"]
+}
+
+proc ::mpaths::ReadText {path} {
+	set ch [open $path rb]
+	set data [read $ch]
+	close $ch
+	set text [encoding convertfrom utf-8 $data]
+	# The German help pages and catalog are ISO-8859-1; the rest UTF-8.
+	if {[encoding convertto utf-8 $text] ne $data} {
+		set text [encoding convertfrom iso8859-1 $data]
+	}
+	return $text
+}
+
+proc ::mpaths::Unescape {s} {
+	set pairs {
+		&lt; < &gt; > &quot; \" &apos; ' &nbsp; { } &hellip; ... &mdash; -
+		&ndash; - &rarr; \u2192 &larr; \u2190 &laquo; \u00ab &raquo; \u00bb
+		&auml; \u00e4 &ouml; \u00f6 &uuml; \u00fc &szlig; \u00df
+		&Auml; \u00c4 &Ouml; \u00d6 &Uuml; \u00dc
+		&aacute; \u00e1 &eacute; \u00e9 &iacute; \u00ed &oacute; \u00f3
+		&uacute; \u00fa &ntilde; \u00f1 &Aacute; \u00c1 &Eacute; \u00c9
+		&Iacute; \u00cd &Oacute; \u00d3 &Uacute; \u00da &Ntilde; \u00d1
+		&agrave; \u00e0 &egrave; \u00e8 &igrave; \u00ec &ograve; \u00f2
+		&ugrave; \u00f9 &aring; \u00e5 &Aring; \u00c5 &aelig; \u00e6
+		&oslash; \u00f8 &Oslash; \u00d8 &rsquo; ' &lsquo; ' &ldquo; \"
+		&rdquo; \"
+	}
+	foreach {entity char} $pairs {
+		# The help pages use both "&hellip;" and a bare "&hellip".
+		set bare [string trimright $entity ";"]
+		regsub -all "${bare};?" $s $char s
+	}
+	regsub -all {&amp;?} $s & s
+	while {[regexp {&#(x?[0-9a-fA-F]+);} $s -> num]} {
+		if {[string index $num 0] eq "x"} {
+			set hex [string range $num 1 end]
+			scan $hex %x code
+		} else {
+			set code $num
+		}
+		set start [string first {&#} $s]
+		set stop [string first {;} $s $start]
+		set ent [string range $s $start $stop]
+		set s [string map [list $ent [format %c $code]] $s]
+	}
+	return $s
+}
+
+# Closing block tags end a sentence (and a path); opening tags and inline
+# tags do not add characters.  CQL help pages are full of "Condition 1 >"
+# arithmetic, which the component filters below drop.
+proc ::mpaths::Markup {text} {
+	regsub -all -nocase {</[^>]*>|<br[^>]*>} $text "\n" text
+	regsub -all {<[^>]*>} $text { } text
+	return $text
+}
+
+# Return {line {component ...}} for every maximal chain in a line.  A
+# maximal chain is a run of short " > "-separated parts: this keeps the
+# leftmost component as the root instead of inventing "Einstellungen >
+# Motoren" out of the tail of "Main Menu > Einstellungen > Motoren".
+proc ::mpaths::Chains {text isTcl} {
+	set sep [Sep]
+	set out {}
+	set lineNo 0
+	variable OsRoots
+	foreach line [split $text \n] {
+		incr lineNo
+		if {$isTcl && [string index [string trimleft $line] 0] eq "#"} continue
+		# A macOS Settings path is not an application menu; skip the whole
+		# line so its "Keyboard > Dictation" tail is not read as a menu.
+		set osLine 0
+		foreach root $OsRoots {
+			if {[string first $root $line] >= 0} { set osLine 1; break }
+		}
+		if {$osLine} continue
+		if {![regexp {\s>\s} $line]} continue
+		set parts [split [regsub -all {\s+>\s+} $line $sep] $sep]
+		set run {}
+		set runs {}
+		foreach part $parts {
+			set trimmed [string trim $part]
+			if {[string length $part] <= 90 && [llength [split $trimmed]] <= 10} {
+				lappend run $part
+			} else {
+				if {[llength $run] >= 2} { lappend runs $run }
+				set run {}
+			}
+		}
+		if {[llength $run] >= 2} { lappend runs $run }
+		foreach comps $runs {
+			set clean {}
+			foreach c $comps {
+				set c [Comp $c]
+				if {$c ne ""} { lappend clean $c }
+			}
+			if {[llength $clean] >= 2} { lappend out [list $lineNo $clean] }
+		}
+	}
+	return $out
+}
+
+proc ::mpaths::Key {path} { return [join $path [Sep]] }
+proc ::mpaths::CtxKey {cid path} { return [join [concat [list $cid] $path] [Sep]] }
+
+# ----------------------------------------------------------------------
+# Live drop-down tree
+# ----------------------------------------------------------------------
+proc ::mpaths::ParseDump {text} {
+	variable Top
+	variable Kids
+	variable Dyn
+	variable AllPaths
+
+	set Top {}
+	set Kids [dict create]
+	set Dyn [dict create]
+	set AllPaths {}
+	set levels [dict create]
+	set top ""
+	foreach line [split $text \n] {
+		if {[string match "MENU *" $line]} {
+			set top [Norm [string range $line 5 end]]
+			if {$top eq ""} continue
+			lappend Top $top
+			set path [list $top]
+			lappend AllPaths $path
+			dict set levels 0 $path
+			if {![dict exists $Kids [Key $path]]} { dict set Kids [Key $path] {} }
+			continue
+		}
+		if {![regexp {^(\s*)(ENTRY|SUBMENU) (.*)$} $line -> indent kind rest]} continue
+		set depth [expr {[string length $indent] / 2}]
+		set parentDepth [expr {$depth - 1}]
+		if {![dict exists $levels $parentDepth]} continue
+		set parent [dict get $levels $parentDepth]
+		if {$kind eq "SUBMENU"} {
+			# Marker for the cascade whose ENTRY is the parent path; the
+			# children that follow are at the next depth.  It makes the
+			# cascade static.
+			dict set levels $depth $parent
+			dict unset Dyn [Key $parent]
+			if {![dict exists $Kids [Key $parent]]} { dict set Kids [Key $parent] {} }
+			continue
+		}
+		set label $rest
+		# [Mark] inside braces is a glob character class, not a command:
+		# compare the real cascade marker instead.
+		set mk [Mark]
+		set moff [expr {[string length $mk] - 1}]
+		set cascade [expr {[string range $label end-$moff end] eq $mk}]
+		if {$cascade} { set label [string trimright $label " \t$mk"] }
+		if {[regexp {^(.*?)\s+(Ctrl|Cmd|Alt|Shift|F[0-9])} $label -> base]} { set label $base }
+		set label [Norm $label]
+		if {$label eq ""} continue
+		set path [concat $parent [list $label]]
+		lappend AllPaths $path
+		dict lappend Kids [Key $parent] $label
+		if {![dict exists $Kids [Key $path]]} { dict set Kids [Key $path] {} }
+		dict set levels $depth $path
+		if {$cascade} { dict set Dyn [Key $path] 1 }
+	}
+}
+
+# ----------------------------------------------------------------------
+# Live context menus (C1 board, C2 notation, C3 game list, C4 database,
+# C5 player, C6 analysis line)
+# ----------------------------------------------------------------------
+proc ::mpaths::AddRows {cid prefix rows} {
+	variable CtxKids
+	variable CtxDyn
+
+	set k [CtxKey $cid $prefix]
+	if {![dict exists $CtxKids $k]} { dict set CtxKids $k {} }
+	foreach row $rows {
+		if {$row eq "-"} continue
+		set head [lindex $row 0]
+		if {$head in {ask header}} continue
+		if {$head eq "cascade"} {
+			set id [lindex $row 1]
+			set kids [lindex $row 2]
+			set label [Norm [::context::L $id]]
+			if {$label eq ""} continue
+			dict lappend CtxKids $k $label
+			set path [concat $prefix [list $label]]
+			set pk [CtxKey $cid $path]
+			if {![dict exists $CtxKids $pk]} { dict set CtxKids $pk {} }
+			if {[llength $kids]} {
+				AddRows $cid $path $kids
+			} else {
+				dict set CtxDyn $pk 1
+			}
+			continue
+		}
+		set label [Norm [::context::L $row]]
+		if {$label eq ""} continue
+		dict lappend CtxKids $k $label
+		set pk [CtxKey $cid [concat $prefix [list $label]]]
+		if {![dict exists $CtxKids $pk]} { dict set CtxKids $pk {} }
+	}
+}
+
+proc ::mpaths::BuildContexts {} {
+	variable CtxKids
+	variable CtxDyn
+
+	set CtxKids [dict create]
+	set CtxDyn [dict create]
+	foreach {cid object} {
+		C1 {}
+		C2 {}
+		C3 {}
+		C4 {base /tmp/mpaths-probe.si4}
+		C5 {name Probe}
+		C6 {}
+	} {
+		if {[catch {
+			set rows [::context::Rows $cid [dict create {*}$object]]
+			AddRows $cid {} $rows
+		} err]} {
+			# A context that cannot be built would make every path under
+			# it look stale; say so rather than pass silently.
+			error "context $cid: $err"
+		}
+	}
+}
+
+proc ::mpaths::BuildLabels {} {
+	variable AllLabels
+	variable Kids
+	variable CtxKids
+	variable Top
+
+	set AllLabels [dict create]
+	foreach label $Top { dict set AllLabels $label 1 }
+	foreach {k list} $Kids {
+		foreach label $list { dict set AllLabels $label 1 }
+	}
+	foreach {k list} $CtxKids {
+		foreach label $list { dict set AllLabels $label 1 }
+	}
+}
+
+proc ::mpaths::BuildLang {lang} {
+	variable SavedLang
+	variable Dropdown
+
+	if {![info exists SavedLang]} { set SavedLang en }
+	catch { set SavedLang $::mc::langID }
+	# SwitchLanguage is the runtime language path: it reloads the catalog,
+	# refreshes the registry labels and rebuilds the live menu.  Calling
+	# only ::mc::setLang leaves the registry labels in the previous
+	# language, which would compare English rows against German help.
+	::menu::SwitchLanguage $lang
+	if {![winfo exists .mpathsMenu]} { menu .mpathsMenu -tearoff 0 }
+	catch { destroy .mpathsMenu }
+	menu .mpathsMenu -tearoff 0
+	set Dropdown [::menu::Dump .mpathsMenu]
+	ParseDump $Dropdown
+	BuildContexts
+	BuildLabels
+	return
+}
+
+proc ::mpaths::RestoreLang {} {
+	variable SavedLang
+	catch { destroy .mpathsMenu }
+	if {[info exists SavedLang] && $SavedLang ne ""} {
+		catch { ::menu::SwitchLanguage $SavedLang }
+	}
+	return
+}
+
+# ----------------------------------------------------------------------
+# Resolution
+# ----------------------------------------------------------------------
+proc ::mpaths::IsProse {c} {
+	if {$c eq ""} { return 1 }
+	set first [string index $c 0]
+	if {[string is alpha $first] && [string is lower $first]} { return 1 }
+	if {[regexp {[,;]} $c]} { return 1 }
+	if {[regexp -nocase {right-click|double-click|\bclick\b} $c]} { return 1 }
+	if {[llength [split $c]] > 4} { return 1 }
+	return 0
+}
+
+proc ::mpaths::Walk {start rest} {
+	variable Kids
+	variable Dyn
+
+	set cur $start
+	foreach c $rest {
+		set k [Key $cur]
+		if {[dict exists $Dyn $k]} { return 1 }
+		set kids {}
+		if {[dict exists $Kids $k]} { set kids [dict get $Kids $k] }
+		if {[lsearch -exact $kids $c] >= 0} {
+			lappend cur $c
+			continue
+		}
+		if {[IsProse $c]} { continue }
+		return 0
+	}
+	return 1
+}
+
+proc ::mpaths::WalkCid {cid cur rest} {
+	variable CtxKids
+	variable CtxDyn
+	variable SurfaceCids
+
+	set i 0
+	while {$i < [llength $rest]} {
+		set c [lindex $rest $i]
+		set k [CtxKey $cid $cur]
+		if {[dict exists $CtxDyn $k]} { return 1 }
+		set kids {}
+		if {[dict exists $CtxKids $k]} { set kids [dict get $CtxKids $k] }
+		if {[lsearch -exact $kids $c] >= 0} {
+			lappend cur $c
+			incr i
+			continue
+		}
+		if {[dict exists $SurfaceCids $c]} {
+			return [WalkSurface $c [lrange $rest [expr {$i + 1}] end]]
+		}
+		if {[IsProse $c]} { incr i; continue }
+		return 0
+	}
+	return 1
+}
+
+proc ::mpaths::WalkSurface {surface rest} {
+	variable SurfaceCids
+
+	set cids [dict get $SurfaceCids $surface]
+	foreach cid $cids {
+		if {[WalkCid $cid {} $rest]} { return 1 }
+	}
+	# A pane with no context menu is a terminal location.
+	return [expr {[llength $rest] == 0 ? 1 : 0}]
+}
+
+# 1 = resolves, 0 = a known menu row with a stale tail, -1 = the first
+# component is not a menu label anywhere at HEAD.
+proc ::mpaths::Resolve {comps} {
+	variable Top
+	variable AllPaths
+	variable SurfaceCids
+
+	set c0 [lindex $comps 0]
+	set rest [lrange $comps 1 end]
+	if {$c0 eq "Main Menu"} {
+		if {![llength $rest]} { return 1 }
+		set t [lindex $rest 0]
+		if {[lsearch -exact $Top $t] < 0} { return 0 }
+		return [Walk [list $t] [lrange $rest 1 end]]
+	}
+	if {[lsearch -exact $Top $c0] >= 0} { return [Walk [list $c0] $rest] }
+	if {[dict exists $SurfaceCids $c0]} { return [WalkSurface $c0 $rest] }
+	set found 0
+	foreach path $AllPaths {
+		if {[llength $path] && [lindex $path end] eq $c0} {
+			incr found
+			if {[Walk $path $rest]} { return 1 }
+		}
+	}
+	if {$found} { return 0 }
+	return -1
+}
+
+# A leading prose phrase ("Searching: Main Menu", "search_games \"Database
+# tab") hides the real root.  Use the longest known suffix.
+proc ::mpaths::TrimRoot {comps} {
+	variable Top
+	variable AllLabels
+	variable SurfaceCids
+
+	set c0 [string map [list "\u0022" "" "'" ""] [lindex $comps 0]]
+	set words [split $c0]
+	for {set i 0} {$i < [llength $words]} {incr i} {
+		set cand [join [lrange $words $i end]]
+		if {$cand eq "Main Menu" || [lsearch -exact $Top $cand] >= 0
+		 || [dict exists $SurfaceCids $cand] || [dict exists $AllLabels $cand]} {
+			return [concat [list $cand] [lrange $comps 1 end]]
+		}
+	}
+	return $comps
+}
+
+proc ::mpaths::Titleish {c} {
+	set c [regsub {(\.\.\.)+$} $c ""]
+	if {$c eq "" || [llength [split $c]] > 4} { return 0 }
+	if {[regexp {[0-9]} $c]} { return 0 }
+	set first [string index $c 0]
+	return [expr {[string is alpha $first] && [string toupper $first] eq $first}]
+}
+
+proc ::mpaths::AllTitleish {comps} {
+	foreach c $comps {
+		if {![Titleish $c]} { return 0 }
+	}
+	return 1
+}
+
+proc ::mpaths::IsOsRoot {c} {
+	variable OsRoots
+	foreach root $OsRoots {
+		if {[string match "$root*" $c]} { return 1 }
+	}
+	return 0
+}
+
+# ----------------------------------------------------------------------
+# Sources
+# ----------------------------------------------------------------------
+proc ::mpaths::FilesFor {lang} {
+	variable Root
+	variable Catalog
+	variable EnglishFiles
+
+	set dir [file join $Root tcl help $lang]
+	set files [lsort [concat \
+		[glob -nocomplain -directory $dir *.txt] \
+		[glob -nocomplain -directory $dir *.html]]]
+	lappend files [file join $Root tcl lang [dict get $Catalog $lang]]
+	if {$lang eq "en"} {
+		foreach name $EnglishFiles {
+			lappend files [file join $Root tcl $name]
+		}
+	}
+	return $files
+}
+
+proc ::mpaths::Analyze {lang} {
+	set bad {}
+	foreach file [FilesFor $lang] {
+		set markup [expr {[file extension $file] in {.txt .html}}]
+		set text [ReadText $file]
+		if {$markup} { set text [Markup $text] }
+		set text [Unescape $text]
+		foreach item [Chains $text [expr {!$markup}]] {
+			lassign $item line comps
+			set norm {}
+			foreach c $comps { lappend norm [Norm $c] }
+			set comps [TrimRoot $norm]
+			if {[llength $comps] < 2} continue
+			if {[IsOsRoot [lindex $comps 0]]} continue
+			set r [Resolve $comps]
+			set where "[file tail $file]:$line"
+			if {$r == 1} continue
+			if {$r == 0} {
+				lappend bad "$where: [join $comps { > }]"
+			} elseif {[AllTitleish $comps]} {
+				lappend bad "$where: unknown menu root: [join $comps { > }]"
+			}
+		}
+	}
+	return $bad
+}
+
+proc ::mpaths::Check {lang} {
+	set rc [catch {
+		BuildLang $lang
+		Analyze $lang
+	} result]
+	RestoreLang
+	if {$rc} { return -code error $result }
+	return $result
+}
+
+proc ::mpaths::Resolves {lang chain} {
+	set comps {}
+	foreach c [split $chain >] { lappend comps [Norm [string trim $c]] }
+	set rc [catch {
+		BuildLang $lang
+		set r [Resolve $comps]
+	} result]
+	RestoreLang
+	if {$rc} { return -code error $result }
+	return [expr {$r == 1}]
+}
+
+# ----------------------------------------------------------------------
+# The removed Extras catch-all
+# ----------------------------------------------------------------------
+proc ::mpaths::ExtrasAllowed {line} {
 	if {[string match {set Extras*} [string trimleft $line]]} { return 1 }
 	if {[string match {::menu::mc::Extras*} [string trimleft $line]]} { return 1 }
 	if {[string match {*RegisterExtras*} $line]} { return 1 }
@@ -27,96 +577,156 @@ proc ::removedExtras::Allowed {line} {
 	return 0
 }
 
-proc ::removedExtras::Scan {file commentAware} {
-	set ch [open $file rb]
-	set data [read $ch]
-	close $ch
-	set bad {}
-	set lineNo 0
-	foreach line [split $data \n] {
-		incr lineNo
-		if {$commentAware && [string index [string trimleft $line] 0] eq "#"} { continue }
-		if {[::removedExtras::Allowed $line]} { continue }
-		# The old menu is gone, so any mention of it in a user string or a
-		# help page is a stale path, whatever separator follows it.
-		if {[string first {Extras} $line] >= 0} { lappend bad [list $file $lineNo Extras] }
-	}
-	return $bad
-}
-
-proc ::removedExtras::Files {} {
+proc ::mpaths::ExtrasFiles {} {
 	variable Root
-	return [lsort [::removedExtras::ProductFiles [file join $Root tcl]]]
+	return [lsort [::mpaths::ProductFiles [file join $Root tcl]]]
 }
 
-# Every Tcl source and shipped help page below tcl/ can hold a user string,
-# including the language catalogs and widgets. The generated tcl/chesswiz
-# bundle is not a source file and is skipped by extension.
-proc ::removedExtras::ProductFiles {dir} {
+proc ::mpaths::ProductFiles {dir} {
 	set files {}
 	foreach path [glob -nocomplain -directory $dir -types f *] {
 		if {[file extension $path] in {.tcl .txt .html}} { lappend files $path }
 	}
 	foreach path [glob -nocomplain -directory $dir -types d *] {
-		lappend files {*}[::removedExtras::ProductFiles $path]
+		lappend files {*}[::mpaths::ProductFiles $path]
 	}
 	return $files
 }
 
-tcltest::test menu-no-removed-extras-string {no product string or help page names the removed Extras menu} -body {
+proc ::mpaths::ExtrasBad {} {
 	set bad {}
-	foreach file [::removedExtras::Files] {
+	foreach file [ExtrasFiles] {
 		set commentAware [expr {[file extension $file] eq ".tcl"}]
-		lappend bad {*}[::removedExtras::Scan $file $commentAware]
+		set text [ReadText $file]
+		set lineNo 0
+		foreach line [split $text \n] {
+			incr lineNo
+			if {$commentAware && [string index [string trimleft $line] 0] eq "#"} continue
+			if {[ExtrasAllowed $line]} continue
+			if {[string first {Extras} $line] >= 0} {
+				lappend bad "[file tail $file]:$lineNo"
+			}
+		}
 	}
-	set bad
+	return $bad
+}
+
+# ----------------------------------------------------------------------
+# Tests
+# ----------------------------------------------------------------------
+tcltest::test menu-paths-en {every menu path in the English help and user strings resolves} -body {
+	::mpaths::Check en
 } -result {}
 
-tcltest::test menu-removed-extras-none-in-help {every shipped help page is free of Extras} -body {
+tcltest::test menu-paths-de {every menu path in the German help and catalog resolves} -body {
+	::mpaths::Check de
+} -result {}
+
+tcltest::test menu-paths-es {every menu path in the Spanish help and catalog resolves} -body {
+	::mpaths::Check es
+} -result {}
+
+tcltest::test menu-paths-hu {every menu path in the Hungarian help and catalog resolves} -body {
+	::mpaths::Check hu
+} -result {}
+
+tcltest::test menu-paths-it {every menu path in the Italian help and catalog resolves} -body {
+	::mpaths::Check it
+} -result {}
+
+tcltest::test menu-paths-stale {the paths the reseal removed no longer resolve} -body {
 	set bad {}
-	foreach file [::removedExtras::Files] {
-		if {[file extension $file] in {.txt .html}} {
-			lappend bad {*}[::removedExtras::Scan $file 0]
-		}
+	foreach {lang chain} {
+		en {Main Menu > Setup > Engines}
+		en {Main Menu > Setup > Keyboard Preferences}
+		en {Main Menu > Search}
+		en {Preferences > Assistant}
+		en {Maintenance > Advanced Search}
+		en {Maintenance > Pattern Search}
+		en {Maintenance > Mark As > Openings}
+		en {File > Open > HTML documents}
+		de {Main Menu > Einstellungen > Motoren (Schachprogramme)}
+		de {Einstellungen > Assistent}
+		es {Main Menu > Configurar > Motores}
+		es {Preferencias > Asistente}
+		hu {Main Menu > Beállítások > Elemző modulok}
+		it {Main Menu > Imposta > Motori}
+		it {Preferenze > Assistente}
+	} {
+		if {![::mpaths::Resolves $lang $chain]} continue
+		lappend bad "$lang: $chain"
 	}
 	set bad
 } -result {}
 
-tcltest::test menu-tools-choose-model-path {the replacement path is present in every listed module and English help} -body {
-	set targets [list \
-		[file join $::removedExtras::Root tcl app-setup-scan.tcl] \
-		[file join $::removedExtras::Root tcl app-ai.tcl] \
-		[file join $::removedExtras::Root tcl ai-provider.tcl] \
-		[file join $::removedExtras::Root tcl player-data.tcl] \
-		[file join $::removedExtras::Root tcl help en Welcome.txt]]
-	set missing {}
-	foreach file $targets {
-		set ch [open $file rb]
-		set data [read $ch]
-		close $ch
-		if {[string first {Tools > Choose Model} $data] < 0
-			&& [string first {Tools &gt; Choose Model} $data] < 0} {
-			lappend missing [file tail $file]
-		}
+tcltest::test menu-paths-current {the replacement paths resolve in every language} -body {
+	set bad {}
+	foreach {lang chain} {
+		en {Edit > Preferences > Engines}
+		en {Edit > Keyboard Preferences}
+		en {Database > Search > Advanced}
+		en {Database > Search > Query Editor}
+		en {Database > Maintenance > Repertoire Type > Openings}
+		en {Tools > Choose Model}
+		en {Tools > Assistant}
+		en {Training > Play Against Engine}
+		en {Database > Player Data > Update Rating Data}
+		en {File > Open Database}
+		de {Bearbeiten > Einstellungen > Motoren (Schachprogramme)}
+		de {Bearbeiten > Tastaturbelegung}
+		de {Datenbank > Suchen}
+		es {Editar > Preferencias > Motores}
+		es {Editar > Preferencias de teclado}
+		es {Base > Buscar}
+		hu {Szerkeszt > Beállítások > Elemző modulok}
+		hu {Szerkeszt > Billentyűzet-beállítások}
+		hu {Adatbázis > Keresés}
+		it {Modifica > Preferenze > Motori}
+		it {Modifica > Preferenze tastiera}
+		it {Banca dati > Cerca}
+	} {
+		if {[::mpaths::Resolves $lang $chain]} continue
+		lappend bad "$lang: $chain"
 	}
-	set missing
+	set bad
+} -result {}
+
+tcltest::test menu-paths-context {context-menu paths resolve, and the removed rows do not} -body {
+	set bad {}
+	foreach chain {
+		{Board tab > right-click the board > Set Start Board}
+		{Database tab > right-click the database > Maintenance > Compact database}
+		{Players tab > right-click the player > Show Player Card}
+		{Analysis pane > right-click a line > Add Move}
+	} {
+		if {![::mpaths::Resolves en $chain]} { lappend bad "missing: $chain" }
+	}
+	foreach chain {
+		{Database tab > right-click the database > Maintenance > Advanced Search}
+		{Database tab > right-click it > Maintenance > Mark As > Openings}
+		{Board tab > right-click the board > Append move}
+	} {
+		if {[::mpaths::Resolves en $chain]} { lappend bad "still resolves: $chain" }
+	}
+	set bad
+} -result {}
+
+tcltest::test menu-no-removed-extras-string {no product string or help page names the removed Extras menu} -body {
+	::mpaths::ExtrasBad
 } -result {}
 
 tcltest::test menu-replacement-paths {rating updates and the 3D board name their real current route} -body {
-	set card [file join $::removedExtras::Root tcl player-card.tcl]
-	set ch [open $card rb]
-	set cardText [read $ch]
-	close $ch
 	set bad {}
+	set card [file join $::mpaths::Root tcl player-card.tcl]
+	set ch [open $card rb]; set cardText [read $ch]; close $ch
 	if {[string first {Database > Player Data > Update Rating Data} $cardText] < 0} {
 		lappend bad player-rating
 	}
 	foreach lang {en de es hu it} {
 		foreach ext {txt html} {
-			set file [file join $::removedExtras::Root tcl help $lang Welcome.$ext]
-			set ch [open $file rb]
-			set text [read $ch]
-			close $ch
+			set file [file join $::mpaths::Root tcl help $lang Welcome.$ext]
+			set text [::mpaths::ReadText $file]
+			set text [::mpaths::Unescape [::mpaths::Markup $text]]
 			if {[string first {Open 3D Board} $text] < 0} { lappend bad 3d-$lang-$ext }
 		}
 	}
