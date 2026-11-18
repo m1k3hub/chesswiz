@@ -65,6 +65,19 @@ proc drainDeferred {{limit 20}} {
         foreach callback $scheduled { uplevel #0 [lindex $callback end] }
     }
 }
+# The background dictionary load is complete when the coroutine has removed
+# itself and DataLoaded is on; the deferred cache write is complete when the
+# cache-write call has been recorded. Run the scheduled callbacks the event
+# loop would run until the named signal holds, instead of guessing a number of
+# turns. This is a completion signal, not a longer sleep.
+proc drainUntil {condition {limit 500}} {
+    for {set guard 0} {$guard < $limit} {incr guard} {
+        if {[uplevel 1 [list expr $condition]]} { return 1 }
+        if {![llength $::cacheTestAfter]} { break }
+        drainDeferred 1
+    }
+    return [uplevel 1 [list expr $condition]]
+}
 proc cacheWritten? {} {
     expr {[lsearch -index 0 -exact $::cacheTestCalls cache-write] >= 0}
 }
@@ -101,7 +114,9 @@ tcltest::test cache-load-write-after-window {the write waits for the mapped main
         drainDeferred
         set early [expr {[cacheWritten?] ? "wrote-too-early" : "waited"}]
         set ::cacheTestMapped 1
-        drainDeferred
+        if {![drainUntil {[cacheWritten?]}]} {
+            error "deferred cache write did not complete"
+        }
         list $early [expr {[cacheWritten?] ? "written" : "missing"}]
     } finally {
         rename winfo {}
@@ -167,14 +182,20 @@ foreach mode {background consumer} {
         runCacheLoad {} 0
         ::load::ensureEco
         ::load::startBackgroundData
+        # The deferral means no dictionary chunk has run yet: startBackgroundData
+        # only handed the first turn to the event loop.
         set partial [list $::load::DataLoaded [lmap c $::cacheTestCalls {lindex $c 0}]]
         if {$mode eq "consumer"} {
             set complete [::scidb::engine::info]
         } else {
-            drainDeferred
+            if {![drainUntil {[llength [info commands ::load::DataLoader]] == 0 && $::load::DataLoaded}]} {
+                error "background dictionary load did not complete"
+            }
             set complete $::load::DataLoaded
         }
-        drainDeferred
+        if {![drainUntil {[cacheWritten?]}]} {
+            error "deferred cache write did not complete"
+        }
         list $partial $complete [llength [info commands ::load::DataLoader]] \
             [lmap c $::cacheTestCalls {lindex $c 0}] \
             [trace info execution ::scidb::engine::info]
@@ -182,7 +203,7 @@ foreach mode {background consumer} {
         rename winfo {}
         rename ::scidb::engine::info {}
         releaseAfter
-} -result {{0 {eco cache-read ssp}} 1 0 {eco cache-read ssp ssp ssp ssp ssp comp fide ips dwz ecf iccf wiki wiki cgdc site done cache-write} {}}
+} -result {{0 eco} 1 0 {eco cache-read ssp ssp ssp ssp ssp comp fide ips dwz ecf iccf wiki wiki cgdc site done cache-write} {}}
 
 # Installs made before the shards existed only ship the monolithic file.
 tcltest::test cache-load-legacy-dictionary {monolithic installs still load} -body {
