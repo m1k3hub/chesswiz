@@ -70,7 +70,7 @@ tenga en cuenta al experimentar con Chesswiz:
 <ul style="padding: 5px;">
   <li style="margin-top: 0.5em; ">Un asistente con el que se habla en lenguaje normal: pregunte por qué se perdió una partida, qué suele jugar un jugador o cómo prepararse para un rival, y responde sobre el tablero (<b>Tools &gt; Asistente</b>). Las funciones de IA usan un modelo en la nube que se elige en <b>Tools &gt; Elegir modelo&hellip;</b>.</li>
   <li style="margin-top: 0.5em; ">Análisis con motores potentes: Stockfish está incluido y listo para usar, y se pueden añadir más motores UCI y WinBoard (<b>Main Menu &gt; Configurar &gt; Motores</b>).</li>
-  <li style="margin-top: 0.5em; ">Un tablero 3D junto al tablero 2D (<b>Main Menu &gt; Extras &gt; Open 3D Board</b>).</li>
+  <li style="margin-top: 0.5em; ">Un tablero 3D junto al tablero 2D (pide <b>Open 3D Board</b> en el campo Ask).</li>
   <li style="margin-top: 0.5em; ">Los atajos de teclado que quizás ya conozca: cambie al esquema estilo ChessBase en <b>Main Menu &gt; Configurar &gt; Keyboard Preferences</b>.</li>
   <li style="margin-top: 0.5em; ">Exportación a PGN, Scidb, Scid, PDF, HTML y LaTeX, y tablas de torneos a partir de la lista de partidas.</li>
   <li style="margin-top: 0.5em; ">El mismo programa en Windows, macOS y Linux.</li>

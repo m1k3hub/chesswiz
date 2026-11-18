@@ -61,7 +61,7 @@ set PrivateCard				"Private card"
 set PrivateCardNote			"Entered by you; kept on this computer, never written into a database."
 set NameMissing				"A private card needs the player's name, as written in the games."
 set FromRatingList			"From rating list"
-set NotInRatingList			"No player '%s' is in the rating lists. Update them under Extras, or check the spelling or the FIDE ID."
+set NotInRatingList			"No player '%s' is in the rating lists. Update them under Database > Player Data > Update Rating Data…, or check the spelling or the FIDE ID."
 
 }
 

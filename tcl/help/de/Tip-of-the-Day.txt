@@ -171,15 +171,11 @@ ein kontextsensitives Menü.
 #<TIP number="010" level="1">
 #
 #<p>
-#Es empfiehlt sich die Spielerphotodateien herunterzuladen. Dies wird im
-#Hauptmenü unter
-#<menuitem>%::menu::mc::Extras%</menuitem>&#x27a2;<menuitem>%::util::photos::mc::InstallPlayerPhotos%</menuitem>
-#angeboten.
-#</p>
-#
-#<p>
-#Sobald eine Aktualisierung der Photodateien auf dem Server erfolgte, weist
-#ein spezielles Menü neben dem Hauptmenü darauf hin:
+#Es empfiehlt sich die Spielerphotodateien herunterzuladen. Sobald eine
+#Aktualisierung der Photodateien auf dem Server erfolgt, bietet ein spezielles
+#Menü neben dem Hauptmenü
+#<menuitem>%::util::photos::mc::InstallPlayerPhotos%</menuitem>
+#an:
 #</p>
 #
 #<div width="100%" style="text-align: center"><img src="images/download-hint.png" /></div>

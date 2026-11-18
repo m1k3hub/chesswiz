@@ -14,7 +14,7 @@ xvfb-run -a /usr/local/bin/tkchesswiz tests/test_tactics_trainer.tcl
 Set `TACTICS_TEST_TMP` to an authorized scratch directory to enable the disk
 persistence roundtrip. Progress is data, never sourced as Tcl.
 
-Extras > Tactics Trainer opens FEN-based PGNs. The AI training-set button builds
+Training > Tactics Trainer opens FEN-based PGNs. The AI training-set button builds
 these from database games; open its exported PGN in the trainer. Both ordinary
 SAN mainlines and the training export's UCI `engine line` comments are supported.
 Variations, comments, NAGs, and non-FEN games are excluded. Invalid solution

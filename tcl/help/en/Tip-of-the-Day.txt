@@ -162,14 +162,10 @@ drop of the toolbar, and additionally a context-sensitive menu.
 #<TIP number="010" level="1">
 #
 #<p>
-#It is reommended to download the player photo files. This is available in
-#main menu with entry
-#<menuitem>%::menu::mc::Extras%</menuitem>&#x27a2;<menuitem>%::util::photos::mc::InstallPlayerPhotos%</menuitem>.
-#</p>
-#
-#<p>
-#As soon as an update of the player photo files is available on the server
-#a sepcial menu beside the main menu will indicate this:
+#It is recommended to download the player photo files. As soon as an update
+#of the player photo files is available on the server, a special menu beside
+#the main menu offers
+#<menuitem>%::util::photos::mc::InstallPlayerPhotos%</menuitem>:
 #</p>
 #
 #<dir><img src="images/download-hint.png" /></dir>
