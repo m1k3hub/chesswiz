@@ -51,7 +51,10 @@ proc open {} {
 	switch [tk windowingsystem] {
 		x11	{ ::scidb::tk::wm splash .splash }
 		win32	{ wm overrideredirect .splash on }
-		aqua	{ ::tk::unsupported::MacWindowStyle style .splash plain {} }
+		# The splash is decoration, never an input window: without
+		# noActivates Aqua makes the new topmost window key, taking the
+		# keyboard away from the main window while it is loading.
+		aqua	{ ::tk::unsupported::MacWindowStyle style .splash plain {noActivates} }
 	}
 
 	::util::place .splash -position center

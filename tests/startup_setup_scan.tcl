@@ -35,8 +35,16 @@ proc scanCheck {{event sample}} {
     set grab [grab current]
     puts [list OBSERVE $event ms $elapsed focus $target grab $grab]
     if {$grab ne {}} {lappend ::scanViolations [list grab $elapsed $grab]}
-    if {$target ne {} && [winfo toplevel $target] ne {.application}} {
-        lappend ::scanViolations [list focus $elapsed $target]
+    if {$target ne {}} {
+        set top [winfo toplevel $target]
+        # The startup splash and Tk's hidden root window belong to this
+        # application.  The splash exists only while the main window loads
+        # and accepts no input (noActivates on Aqua), so the keyboard
+        # returning to it is not another window stealing the user's focus.
+        set ownSplash [expr {$top eq {.splash} && [winfo exists .splash]}]
+        if {$top ne {.application} && $top ne {.} && !$ownSplash} {
+            lappend ::scanViolations [list focus $elapsed $target]
+        }
     }
     if {[winfo exists .application.wait]} {lappend ::scanViolations [list wait $elapsed]}
 }
@@ -114,7 +122,7 @@ trace add execution ::application::setupscan::EngineCandidates leave scanCandida
 # Optional diagnostic timing, without replacing any startup operation.
 if {[info exists env(STARTUP_SCAN_TRACE)]} {
     proc scanTrace {args} {puts [list TIMING [clock milliseconds] {*}$args]}
-    foreach cmd {::application::sample::maybeOpen ::application::database::openBase ::scidb::db::load ::application::setupscan::EngineCandidates ::application::setupscan::Glob ::application::setupscan::StepSpeech ::application::setupscan::StepDatabases ::application::setupscan::StepFonts} {
+    foreach cmd {::application::sample::maybeOpen ::application::database::openBase ::scidb::db::load ::application::setupscan::EngineCandidates ::application::setupscan::Glob ::application::setupscan::StepSpeech ::application::setupscan::StepDatabases ::application::setupscan::StepFonts ::application::Startup2 ::load::startBackgroundData ::load::resumeBackgroundData ::load::backgroundData ::load::ensureEco ::load::LoadData ::load::load ::knowledge::Ensure ::scanSample} {
         trace add execution $cmd {enter leave} scanTrace
     }
 }

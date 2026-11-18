@@ -284,6 +284,16 @@ proc ::load::dataWhenUp {} {
 # No nested update loop: startup returns to Tk between independent files.
 proc ::load::startBackgroundData {} {
 	if {$::load::DataLoaded || [llength [info commands ::load::DataLoader]]} { return }
+	# The first chunk parses a whole rating shard in native code. Run it from
+	# a timer, never from the caller's turn: Startup2 is a timer which fires
+	# while the first window is still settling, and parsing there keeps the
+	# window from repainting (or answering the startup responsiveness probe)
+	# for the length of the shard. The coroutine yields after every file.
+	after 10 ::load::runBackgroundData
+}
+
+proc ::load::runBackgroundData {} {
+	if {$::load::DataLoaded || [llength [info commands ::load::DataLoader]]} { return }
 	coroutine ::load::DataLoader ::load::backgroundData
 	after 1 ::load::resumeBackgroundData
 }
