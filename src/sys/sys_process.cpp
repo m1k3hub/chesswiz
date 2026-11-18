@@ -31,6 +31,7 @@
 #include <tcl.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 //#define DEBUG
 
@@ -56,20 +57,67 @@ static ProcessMap m_processMap;
 # include <sys/wait.h>
 # include <unistd.h>
 # include <errno.h>
+# include <fcntl.h>
 
 static bool m_childHandlerHooked = false;
+static int m_childPipe[2] = { -1, -1 };
+static Tcl_Channel m_childChannel = 0;
+static volatile sig_atomic_t m_childPending = 0;
 
 
 static void handleChildStatus(Process* process, pid_t pid, int status);
+static void drainChildEvents();
+
+
+// A SIGCHLD can arrive in the middle of anything, on the main thread or on a
+// worker thread. Neither Tcl nor the process map is reentrant: calling
+// Tcl_DoWhenIdle() here used to splice an idle handler into a list the main
+// thread was modifying, and walking the map raced with an insertion or an
+// erase. Both corrupt the idle list, and TclServiceIdle() then called a
+// garbage (often null) handler: an intermittent SIGSEGV, or an endless loop
+// over a list that points back at itself.
+//
+// Only async-signal-safe work is allowed here: remember that something
+// happened and wake the interpreter through a pipe. drainChildEvents() does
+// the waiting and the Tcl calls, on the main thread.
+static void
+trapChildEvent(int signum)
+{
+	int savedErrno = errno;
+
+	m_childPending = 1;
+
+	if (m_childPipe[1] >= 0)
+	{
+		char byte = 0;
+		ssize_t written = ::write(m_childPipe[1], &byte, 1);
+		(void) written; // a full pipe already has a wakeup queued
+	}
+
+	errno = savedErrno;
+}
 
 
 // Only our own processes are waited for, by pid: waitpid(-1) also took the
 // exit status of children that Tcl's exec waits for, which then failed with
 // ECHILD and could not tell success from failure.
+//
+// This runs on the main thread, either from the wakeup channel handler or from
+// a reader that is about to look at a process. A status can only be observed
+// after the child changed state, so a reader that drains first sees a dead
+// process before it sees the end of its output pipe.
 static void
-trapChildEvent(int signum)
+drainChildEvents()
 {
-	int savedErrno = errno;
+	m_childPending = 0;
+
+	if (m_childPipe[0] >= 0)
+	{
+		char buffer[64];
+
+		while (::read(m_childPipe[0], buffer, sizeof(buffer)) > 0)
+			; // a wakeup says nothing: the statuses are in the kernel
+	}
 
 	for (ProcessMap::const_iterator i = m_processMap.begin(); i != m_processMap.end(); ++i)
 	{
@@ -78,8 +126,62 @@ trapChildEvent(int signum)
 		if (i->second && waitpid(i->first, &status, WNOHANG | WUNTRACED | WCONTINUED) > 0)
 			handleChildStatus(i->second, i->first, status);
 	}
+}
 
-	errno = savedErrno;
+
+static void
+childEventReady(ClientData, int)
+{
+	drainChildEvents();
+}
+
+
+static void
+installChildHandler()
+{
+	if (m_childHandlerHooked)
+		return;
+
+	if (::pipe(m_childPipe) == 0)
+	{
+		for (unsigned i = 0; i < 2; ++i)
+		{
+			int flags = ::fcntl(m_childPipe[i], F_GETFL);
+
+			if (flags != -1)
+				::fcntl(m_childPipe[i], F_SETFL, flags | O_NONBLOCK);
+
+			flags = ::fcntl(m_childPipe[i], F_GETFD);
+
+			if (flags != -1)
+				::fcntl(m_childPipe[i], F_SETFD, flags | FD_CLOEXEC);
+		}
+
+		m_childChannel = Tcl_MakeFileChannel(
+			reinterpret_cast<ClientData>(intptr_t(m_childPipe[0])), TCL_READABLE);
+	}
+
+	if (m_childChannel)
+	{
+		Tcl_RegisterChannel(::sys::tcl::interp(), m_childChannel);
+		Tcl_CreateChannelHandler(m_childChannel, TCL_READABLE, ::childEventReady, 0);
+		Tcl_SetChannelOption(0, m_childChannel, "-blocking", "no");
+		Tcl_SetChannelOption(0, m_childChannel, "-encoding", "binary");
+		Tcl_SetChannelOption(0, m_childChannel, "-translation", "binary binary");
+	}
+	else
+	{
+		m_childPipe[1] = -1; // no wakeup; readers drain instead
+	}
+
+	struct sigaction action;
+	::memset(&action, 0, sizeof(action));
+	sigemptyset(&action.sa_mask);
+	action.sa_handler = ::trapChildEvent;
+	action.sa_flags = SA_RESTART;
+	::sigaction(SIGCHLD, &action, 0);
+
+	m_childHandlerHooked = true;
 }
 
 
@@ -228,6 +330,14 @@ readHandler(ClientData clientData, int)
 {
 	try
 	{
+		// Wakeups are normally drained by the event loop before it services a
+		// channel, but a status can also be pending from a signal that arrived
+		// after the loop woke up. Apply it first: an exited process must look
+		// dead here, so a reader sees the end of its output as a close, not as
+		// a read that returned nothing.
+		if (m_childPending)
+			::drainChildEvents();
+
 		Process* process = reinterpret_cast<Process*>(clientData);
 
 		if (process->isRunning())
@@ -259,11 +369,7 @@ Process::Process(Command const& command, mstl::string const& directory)
 
 #ifndef __WIN32__
 	// trap child events, e.g. crashes
-	if (!::m_childHandlerHooked)
-	{
-		signal(SIGCHLD, ::trapChildEvent);
-		m_childHandlerHooked = true;
-	}
+	::installChildHandler();
 #endif
 
 	Tcl_DStringInit(m_buffer);
