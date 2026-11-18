@@ -145,6 +145,42 @@ def knight():
 
 PIECES = dict(k=king, q=queen, r=rook, b=bishop, n=knight, p=pawn)
 
+# The shapes are drawn on a 45x45 grid; SCALE enlarges them about the centre so
+# they fill the square like other Staunton sets.  The app redraws the vectors at
+# every square size, so this sets the share of the square, not a pixel size.
+SCALE = 1.12
+import re
+
+def _scale_path(d):
+    out, cmd, i = [], None, 0
+    toks = re.findall(r"[A-Za-z]|-?[0-9]*\.?[0-9]+", d)
+    while i < len(toks):
+        t = toks[i]
+        if t.isalpha():
+            cmd = t; out.append(t); i += 1; continue
+        if cmd == "A":  # rx ry rot large sweep x y
+            rx, ry, rot, la, sw, x, y = toks[i:i+7]
+            out.append(f"{f(float(rx)*SCALE)},{f(float(ry)*SCALE)} {rot} {la} {sw} "
+                       f"{f(CX+(float(x)-CX)*SCALE)},{f(CX+(float(y)-CX)*SCALE)}")
+            i += 7
+        else:
+            x, y = toks[i:i+2]
+            out.append(f"{f(CX+(float(x)-CX)*SCALE)},{f(CX+(float(y)-CX)*SCALE)}")
+            i += 2
+    return " ".join(out)
+
+def _scaled(fn):
+    def g():
+        spec = fn()
+        for k in ("fills", "details", "solid"):
+            if k in spec: spec[k] = [_scale_path(d) for d in spec[k]]
+        b = [float(v) for v in spec["bbox"].split(",")]
+        spec["bbox"] = ",".join(f(CX+(v-CX)*SCALE) for v in b)
+        return spec
+    return g
+
+PIECES = {k: _scaled(v) for k, v in PIECES.items()}
+
 STYLE_FILL = "fill:{fill};fill-opacity:1;fill-rule:nonzero;stroke:black;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;stroke-opacity:1"
 STYLE_LINE = "fill:none;stroke:{stroke};stroke-width:1.2;stroke-linecap:round;stroke-linejoin:round;stroke-opacity:1"
 STYLE_DOT = "fill:{fill};stroke:{fill};stroke-width:0.6;stroke-opacity:1"
