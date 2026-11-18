@@ -3,6 +3,12 @@ namespace eval ::scidb::test::actions {
     variable Dir [file join [file dirname [file normalize [info script]]] tmp-app actions_[pid]]
     # The engine writes only capturable en-passant squares; after 1.e4 it is "-".
     variable Fen {rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1}
+    # The user's engine list at process start. A probe installs its own
+    # fixture engine and deletes the program with its scratch directory;
+    # release puts the real list (and its options file) back after every
+    # file, so no later dialog or menu sees a broken or empty list.
+    variable StartupEngines {}
+    catch { set StartupEngines $::engine::Engines }
 
     proc engineProgram {} {
         if {[info exists ::env(SCIDB_TEST_ENGINE)]} {return $::env(SCIDB_TEST_ENGINE)}
@@ -158,6 +164,60 @@ namespace eval ::scidb::test::actions {
     # files run in one process, so a file that leaves either behind changes
     # the fixture every later file sees.
     proc release {} {
+        # A handler whose id is a child of a context cascade posts a real
+        # choices menu and keeps a server-wide grab until someone dismisses
+        # it. Nothing can click it in a headless run, so it would outlive the
+        # file and block every later file and every child process that shares
+        # this display. Destroy the menus a probe posted.
+        catch {
+            foreach menu [winfo children .] {
+                if {![string match .contextChoices_* $menu]} { continue }
+                catch { grab release $menu }
+                catch { ::tk::MenuUnpost $menu }
+                catch { destroy $menu }
+            }
+            set held [grab current]
+            if {$held ne {} && [string match .contextChoices_* $held]} { grab release $held }
+        }
+        # The app floats Chesswiz Online, a stream window, the tournament
+        # director and every undocked pane outside the main window. A file
+        # which opened one leaves it mapped, and the next file's "a fresh
+        # start shows only the main window" check then sees it, along with the
+        # stale tabs and streams it was showing. Withdraw them here; the
+        # module that owns one deiconifies its own window when it opens it
+        # again.
+        catch {
+            foreach top [::application::FloatingWindows] {
+                catch { wm withdraw $top }
+            }
+        }
+        # An action which fails on purpose (a refused export, a bad file) logs
+        # its reason and the log is a real toplevel: left mapped it covers the
+        # next file's board and makes its clicks land on the log instead.
+        catch { wm withdraw .application.log }
+        # A playing dialog left open is a mapped window over the next file's
+        # board, and once registered beside it, an input to the dialog
+        # planner and to the inset's protected-board check: the next file
+        # then plans against a dialog the product would not have. Destroy
+        # them; the module which owns one reopens it on demand, exactly as
+        # after a fresh start.
+        catch {
+            foreach dlg $::util::place::BesideDialogs {
+                if {[winfo exists $dlg]} { catch { destroy $dlg } }
+            }
+        }
+        # The discovery dialog is a real child of the main window, not a
+        # floating top-level, so a file which opens it and only cleans up
+        # top-levels leaves it mapped over the board and every later dialog.
+        catch {
+            if {[winfo exists .application.__discover__]} {
+                if {[llength [info commands ::application::database::discover::Close]]} {
+                    ::application::database::discover::Close
+                } else {
+                    destroy .application.__discover__
+                }
+            }
+        }
         # A probe may leave a real engine piping into a pane it closes. Power
         # those down first; otherwise closing the database waits on a reply
         # that will never come.
@@ -172,6 +232,25 @@ namespace eval ::scidb::test::actions {
         # raises a precondition error inside the native activate command and
         # leaves a stale after# timer id as that command's result.
         catch { update }
+        # Trial mode is per game. A probe which entered it and then opened a
+        # new game leaves the original game in trial mode while the current
+        # one is not; the game in trial mode then cannot be released and the
+        # slot leaks into every later file. End it on the slot which owns it.
+        foreach position {0 1 2 3 4 5 6 7 8 9} {
+            catch {
+                if {[::scidb::game::query $position open?]
+                 && [::scidb::game::query $position trial]} {
+                    set current [::scidb::game::current]
+                    ::scidb::game::switch $position
+                    if {[::scidb::game::current] == $position} {
+                        ::game::flipTrialMode
+                    }
+                    if {$current != $position && [::scidb::game::query $current open?]} {
+                        ::scidb::game::switch $current
+                    }
+                }
+            }
+        }
         if {[info exists ::application::database::Vars(switcher)]} {
             set bases [$::application::database::Vars(switcher) bases]
         } else {
@@ -242,6 +321,65 @@ namespace eval ::scidb::test::actions {
         foreach child [winfo children .application] {
             if {[string match .application.__card__* $child]} {catch {destroy $child}}
         }
+        # The embedded 3D widget is cached for a fast re-toggle. Its frame is
+        # parented in the layout which created it, so a later file which needs
+        # a pristine 2D board must not inherit the cached frame.
+        catch {
+            set w $::application::board::Vars(3dwin)
+            if {$w ne "" && [winfo exists $w]} {
+                ::application::board::show3D 0
+                destroy $w
+                set ::application::board::Vars(3dwin) {}
+                set ::board3d::Priv(embed,frame) {}
+                set ::board3d::Priv(embed,togl) {}
+            }
+        }
+        # Releasing the games leaves the board on the last position. The next
+        # file expects the app to be at the standard start position unless it
+        # opens a game of its own, so put the empty scratch game back there.
+        if {[info exists ::application::pgn::Vars(gamebar)]
+         && [::gamebar::empty? $::application::pgn::Vars(gamebar)]} {
+            catch {
+                set current [::scidb::game::current]
+                if {$current != 9 && [::scidb::game::query 9 open?]} {
+                    ::scidb::game::switch 9
+                }
+                ::scidb::game::clear [set ::game::StartPositionFen]
+            }
+        }
+        # A probe may have replaced the engine list with its own fixture and
+        # deleted that program with its scratch directory. Restore the list
+        # the process started with (memory and the options file): an empty or
+        # broken list shrinks the engine dialogs and breaks the engine menus.
+        catch {
+            if {$::engine::Engines ne $::scidb::test::actions::StartupEngines} {
+                set ::engine::Engines $::scidb::test::actions::StartupEngines
+                ::engine::SaveEngineList
+            }
+        }
+        # A file which starts the assistant's position search and leaves it
+        # running leaves Tree(token) busy: the next file's position_moves
+        # refuses with "a position search is already running", and the stale
+        # 60 s timer fires inside an unrelated test. Cancel and clear it.
+        catch {
+            if {[info exists ::application::assistant::Tree(token)]
+             && [string length $::application::assistant::Tree(token)]} {
+                if {[info exists ::application::assistant::Tree(timer)]} {
+                    catch { after cancel $::application::assistant::Tree(timer) }
+                }
+                catch {
+                    trace remove execution ::application::tree::ConfigSearchButton \
+                        enter ::application::assistant::TreeButton
+                }
+                set ::application::assistant::Tree(token) {}
+                set ::application::assistant::Tree(timer) {}
+            }
+        }
+        # Keyboard focus is process state. A probe which leaves it on a board
+        # pane gives the next file's menu labels their board meaning (Edit >
+        # Copy becomes the annotation command) and sends its keystrokes to the
+        # board. The fresh-start focus is the main window.
+        catch { focus .application }
         # Closing a base adds it to Open Recent. A later menu walk in the same
         # process must not see fixtures opened by an earlier file.
         catch {::application::database::ClearHistory}
@@ -343,6 +481,112 @@ namespace eval ::scidb::test::actions {
             }
         }
         return 0
+    }
+
+    # The main window's fresh-start state. A file that maximises the window
+    # to exercise full-screen placement leaves the next file measuring that
+    # surface instead of the one a fresh start gives.
+    proc rememberStartupWindow {} {
+        set ::scidb::test::actions::StartupWindow \
+            [list [wm state .application] [wm geometry .application]]
+        return $::scidb::test::actions::StartupWindow
+    }
+
+    proc restoreStartupWindow {} {
+        if {![info exists ::scidb::test::actions::StartupWindow]} { return 0 }
+        lassign $::scidb::test::actions::StartupWindow state geometry
+        set changed 0
+        if {[wm state .application] ne $state} {
+            catch { wm state .application $state }
+            set changed 1
+        }
+        if {[wm geometry .application] ne $geometry} {
+            catch { wm geometry .application $geometry }
+            set changed 1
+        }
+        if {$changed} {
+            update idletasks
+            update
+        }
+        return $changed
+    }
+
+    # The arrangement a fresh start leaves: the shipped board layout with the
+    # panes it declares, no saved layout and no explicit reopen overrides.
+    # Files share one process, so a file which opens panes, maximises a pane
+    # or forces panes back open must not decide the arrangement, the window
+    # minimum or the board size the files after it start from.
+    proc startupArrangement {} {
+        set twm [::application::twm board]
+        set id $::application::Vars($twm:id)
+        return [dict create \
+            manager $twm id $id \
+            leaves {board editor games dbgames tree analysis:1} \
+            layout [::application::reflow::substTpl $::application::BoardLayout] \
+            override {} name ""]
+    }
+
+    # True when the pane set, the reopen overrides and the pane widgets are
+    # still the ones a fresh start has. The layout structure is compared as
+    # well when the leaves match, ignoring sash coordinates: a file which
+    # reordered panes must not hand its arrangement to the next file either.
+    proc arrangementIsStartup {} {
+        set state [startupArrangement]
+        set twm [dict get $state manager]
+        if {[catch {$twm leaves} leaves]} { return 0 }
+        if {$leaves ne [dict get $state leaves]} { return 0 }
+        if {[llength $::application::reflow::S(override)]} { return 0 }
+        # A pane can outlive its widget (a frame closed while the module kept
+        # the path). Reopening rebuilds it, so treat that as a changed
+        # arrangement instead of handing a dead table to the next file.
+        if {[info exists ::application::tree::Vars(table)]
+         && ![winfo exists $::application::tree::Vars(table)]} { return 0 }
+        if {[catch {set actual [::application::twm::inspectLayout $twm]}]} {
+            return 0
+        }
+        return [expr {
+            [layoutPaneOrder $actual] eq [layoutPaneOrder [dict get $state layout]]
+        }]
+    }
+
+    # The pane sequence of a layout, ignoring panes' options and sash
+    # coordinates: the twm's own inspect output spells options differently
+    # from the layout template, so the structure is what can be compared.
+    # Every node is the triple {type id-or-options body}.
+    proc layoutPaneOrder {layout} {
+        set order {}
+        foreach {type first body} $layout {
+            if {$type in {pane frame}} {
+                lappend order $first
+            } else {
+                lappend order {*}[layoutPaneOrder $body]
+            }
+        }
+        return $order
+    }
+
+    # Put the startup arrangement back after a file that changed it. Closing
+    # and reopening the panes a file left behind also refreshes the module
+    # state (a tree table rebuilt in a new frame) that the file's own cleanup
+    # may have left pointing at a destroyed widget.
+    proc restoreStartupArrangement {} {
+        if {[catch {arrangementIsStartup} same]} { return 0 }
+        if {$same} { return 0 }
+        set state [startupArrangement]
+        set twm [dict get $state manager]
+        if {[catch {$twm leaves}]} { return 0 }
+        # The tree keeps its table widget when the pane is only collapsed, but
+        # loses it when the pane was closed. Reopen it first so restoreBoard
+        # below rebuilds the module instead of loading a layout with a dead
+        # widget inside.
+        if {[info exists ::application::tree::Vars(table)]
+         && ![winfo exists $::application::tree::Vars(table)]
+         && [lsearch -exact [$twm leaves] tree] >= 0} {
+            catch {::application::twm::ChangeState $twm tree}
+            update
+        }
+        catch {restoreBoard $state}
+        return 1
     }
 
     # Only metadata: no process is started by the handler reachability tests.

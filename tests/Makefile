@@ -3,7 +3,24 @@
 
 SHELL := /bin/bash
 TCLSH := tclsh
-XVFB_RUN := xvfb-run -a </dev/null
+# The suite's geometry surface is 1920x1080: that is the size its dialog,
+# inset and menu scenarios are written for, the size the mission's own app
+# test command uses, and the size every file of the VAL-CROSS-003 baseline
+# and final evidence runs used (with openbox). Xvfb's default (1280x1024) is
+# a different surface -- dialog strips, the scroll rung and the below-floor
+# video fixture are sized from it -- so a run there exercises scenarios the
+# suite does not describe rather than the surface it does.
+XVFB_RUN := xvfb-run -a -s '-screen 0 1920x1080x24' </dev/null
+# Some app tests exercise real window-manager behavior (menu fullscreen,
+# focus, frame extents). The suite's isolation harness has always started
+# openbox on the Xvfb display; do the same here so `make app-tcl` tests the
+# surface the tests describe instead of a bare X server without a WM.
+APP_WM := $(shell command -v openbox 2>/dev/null)
+ifeq ($(APP_WM),)
+APP_TCL_RUN = $(SRC_DIR)/tkchesswiz $(TEST_DIR)run_app_tests.tcl -verbose
+else
+APP_TCL_RUN = bash -c '$(APP_WM) >/dev/null 2>&1 & sleep 1; exec $(SRC_DIR)/tkchesswiz $(TEST_DIR)run_app_tests.tcl -verbose'
+endif
 # The classifier-mechanics tests use a stand-in classifier with no
 # calibration; the calibration gate itself is tested with this unset
 # (systemone-qualified in tests/test_app_systemone.tcl).
@@ -95,8 +112,10 @@ app-tcl: $(TEST_DIR)run_app_tests.tcl $(TEST_DIR)run_app_driver.tcl
 	@# A fresh home each run: the suite must not depend on the developer's
 	@# saved layout and settings (~/.chesswiz), as on a CI machine.
 	@rm -rf $(TEST_DIR)tmp-app/app-home && mkdir -p $(TEST_DIR)tmp-app/app-home
-	@HOME=$(abspath $(TEST_DIR)tmp-app/app-home) $(XVFB_RUN) $(SRC_DIR)/tkchesswiz $(TEST_DIR)run_app_tests.tcl -verbose 2>&1 || true
-	@grep -q "STATUS: PASSED" $(TEST_DIR)app_test_report.txt
+	@HOME=$(abspath $(TEST_DIR)tmp-app/app-home) $(XVFB_RUN) $(APP_TCL_RUN) > $(TEST_DIR)app_test.log 2>&1; \
+		rc=$$?; cat $(TEST_DIR)app_test.log; \
+		if [ $$rc -ne 0 ]; then echo "APP-TCL: runner failed with exit code $$rc"; exit $$rc; fi; \
+		grep -q "STATUS: PASSED" $(TEST_DIR)app_test_report.txt || { echo "APP-TCL: run did not report STATUS: PASSED"; exit 1; }
 
 # ==============================================================================
 # C++ Tests

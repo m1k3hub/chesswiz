@@ -8,6 +8,11 @@ package require Tcl 8.5
 package require tcltest 2.5
 
 namespace eval ::scidb::test::actions_gates {}
+# Every case installs its own gate. Leaving the last one (typically {})
+# behind disables confirmations for every later file in the shared process.
+set ::scidb::test::actions_gates::savedHooks \
+	[list $::action::ConfirmHook $::action::BulkHook]
+
 
 if {[llength [info commands ::action::register]] == 0} {
 	source [file join [file dirname [file normalize [info script]]] .. tcl actions.tcl]
@@ -191,6 +196,9 @@ tcltest::test gate-bulk-and-confirm-bulk-takes-precedence {bulk hook is called f
 	rename ::scidb::test::actions_gates::trackHook {}
 	rename ::scidb::test::actions_gates::dummyHandler7 {}
 } -result {{test both}}
+
+lassign $::scidb::test::actions_gates::savedHooks \
+	::action::ConfirmHook ::action::BulkHook
 
 ::tcltest::cleanupTests
 return

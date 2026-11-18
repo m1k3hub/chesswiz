@@ -1510,6 +1510,10 @@ proc application::media::ShowImage {path} {
 		return
 	}
 
+	# Reuse the viewer's image names: the pane shows one picture at a time,
+	# and a stale image of the same name would make the next create fail and
+	# leave the canvas blank.
+	catch { image delete Priv(img) }
 	if {[catch { image create photo Priv(img) -file $path }]} {
 		set Priv(statusbar) "Cannot load image: $path"
 		return
@@ -1522,23 +1526,29 @@ proc application::media::ShowImage {path} {
 	set canH [winfo height $canvas]
 	if {$canW < 10} { set canW 300 }
 	if {$canH < 10} { set canH 200 }
+	if {$imgW < 1 || $imgH < 1} {
+		set Priv(statusbar) "Cannot load image: $path"
+		return
+	}
 
 	# Scale to fit
 	set scale [expr {min(1.0, min(double($canW)/$imgW, double($canH)/$imgH))}]
-	set dstW [expr {int($imgW * $scale)}]
-	set dstH [expr {int($imgH * $scale)}]
 
 	# Create a resized image
+	set shown Priv(img)
 	if {$scale < 1.0} {
 		catch { image delete Priv(imgscaled) }
 		image create photo Priv(imgscaled)
 		# Tk doesn't have a native resize; use the subsample approach
 		set sx [expr {int(ceil(1.0/$scale))}]
 		catch { Priv(imgscaled) copy Priv(img) -subsample $sx $sx }
-		$canvas create image [expr {$canW/2}] [expr {$canH/2}] -image Priv(imgscaled) -anchor center
-	} else {
-		$canvas create image [expr {$canW/2}] [expr {$canH/2}] -image Priv(img) -anchor center
+		# An empty (0x0) photo in a canvas aborts the client: X BadValue on
+		# X_CreatePixmap. Only show the copy when it really has pixels.
+		if {[image width Priv(imgscaled)] > 0 && [image height Priv(imgscaled)] > 0} {
+			set shown Priv(imgscaled)
+		}
 	}
+	$canvas create image [expr {$canW/2}] [expr {$canH/2}] -image $shown -anchor center
 
 	set Priv(statusbar) "$path (${imgW}x${imgH})"
 }

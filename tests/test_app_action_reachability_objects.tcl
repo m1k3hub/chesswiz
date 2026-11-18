@@ -73,7 +73,17 @@ namespace eval ::scidb::test::objects {
     proc nop {args} { return 0 }
     proc confirm {what} { return 1 }
     proc tool {id {argv {}}} {
-        set reply [::action::run $id $argv]
+        # Up to three cases share this X display. A neighbour can be holding
+        # the server grab while its menu or dialog is open, and this action's
+        # own grab then fails before it changes anything. Wait for the
+        # neighbour to finish and run the same case again; the action still
+        # has to succeed, so nothing is skipped or weakened.
+        for {set attempt 0} {$attempt < 40} {incr attempt} {
+            set reply [::action::run $id $argv]
+            if {![string match -nocase {error:*grab failed*} $reply]} { break }
+            after 250
+            update
+        }
         if {[string match -nocase error:* $reply]} { error "$id: $reply" }
         return $reply
     }

@@ -68,6 +68,10 @@ proc ::c9probe::value {id obj} {
 set pane [expr {[info exists ::env(RESEAL_PANE)] ? $::env(RESEAL_PANE) : "board"}]
 set initialLeaves [::scidb::test::askscope::InitialLeaves]
 set initialBoard [::scidb::test::actions::captureBoard]
+# c9.tablebase opens the options dialog, which leaves the lookups switched
+# off.  That is a process-wide option: restore it so a following file can
+# still show a tablebase line under the board.
+set initialTablebase [array get ::tablebase::Options]
 
 tcltest::test c9-every-listed-effect {every listed pane row opens choices/dialog or changes its native state} -body {
  ::scidb::test::askscope::FocusPane $pane
@@ -133,6 +137,8 @@ tcltest::test c9-every-listed-effect {every listed pane row opens choices/dialog
  ::scidb::test::askscope::RestoreLayout $initialLeaves
  ::scidb::test::actions::restoreBoard $initialBoard
  ::scidb::test::askscope::Reset
+ catch { array set ::tablebase::Options $initialTablebase }
+ catch { ::tablebase::positionChanged $::application::board::Vars(widget:frame) }
  catch { ::application::pgn::release $gameSlot }
  catch { ::game::release $gameSlot }
 } -result {}

@@ -773,8 +773,7 @@ proc rotated? {} {
 proc bind {key cmd} {
 	variable Vars
 
-	foreach w $Vars(need-binding) {
-		if {![winfo exists $w]} { continue }
+	foreach w [bindingWidgets] {
 		::bind $w $key [namespace code [list FilterKey %K %s $cmd]]
 		::bind $w $key {+ break }
 		if {[regexp {^<Key-[^>]+>$} $key]} {
@@ -799,8 +798,25 @@ proc unbindGameControls {position base variant} {
 
 proc needBinding {w} {
 	variable Vars
-	lappend Vars(need-binding) $w
+	if {![info exists Vars(need-binding)]} { set Vars(need-binding) {} }
+	if {$w ni $Vars(need-binding)} { lappend Vars(need-binding) $w }
 	::application::AddShortcutTag $w
+}
+
+
+# The live widgets in need-binding. A rebuilt pane leaves the widgets of
+# the pane it replaced behind; they are gone, so drop them here. Rebinding
+# and unbinding must never touch a dead window.
+proc bindingWidgets {} {
+	variable Vars
+
+	if {![info exists Vars(need-binding)]} { return {} }
+	set live {}
+	foreach w $Vars(need-binding) {
+		if {[winfo exists $w] && $w ni $live} { lappend live $w }
+	}
+	set Vars(need-binding) $live
+	return $live
 }
 
 

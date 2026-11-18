@@ -494,4 +494,17 @@ tcltest::test board3d-app-webgl {WebGL server starts, serves and syncs the board
 ::board3d::WebGLStopServer
 unset -nocomplain ::env(SCIDB_WEB3D_NO_BROWSER)
 
+# The embedded 3D widget is kept for a fast re-toggle while the app runs.
+# These tests are done with the main board, and the next files in this shared
+# process expect a pristine 2D board with no 3D frame created; destroy the
+# widget instead of leaving a hidden frame parented in the old layout.
+if {[info exists ::application::board::Vars(3dwin)]} {
+	set b3dEmbedded $::application::board::Vars(3dwin)
+	catch { ::application::board::show3D 0 }
+	catch { destroy $b3dEmbedded }
+	set ::application::board::Vars(3dwin) {}
+}
+catch { set ::board3d::Priv(embed,frame) {} }
+catch { set ::board3d::Priv(embed,togl) {} }
+
 tcltest::cleanupTests

@@ -572,10 +572,8 @@ proc ::application::keyEditor::BindAction {action} {
 				# tag in the Chesswiz scheme, where it then carries just the
 				# user's overrides. The action's ChessBase-scheme default is
 				# swallowed, so exactly one key runs it.
-				if {[info exists ::application::board::Vars(need-binding)]} {
-					foreach w $::application::board::Vars(need-binding) {
-						::application::AddShortcutTag $w
-					}
+				foreach w [::application::board::bindingWidgets] {
+					::application::AddShortcutTag $w
 				}
 				foreach s [BindSpecs $spec] {
 					bind ChessBaseBoard <$s> [list ::application::ShortcutBoardCommand %W %K %s $cmd]
@@ -604,11 +602,10 @@ proc ::application::keyEditor::UnbindAction {action} {
 			}
 			board {
 				# board::bind only adds bindings; removing one takes the
-				# widgets themselves
-				if {[info exists ::application::board::Vars(need-binding)]} {
-					foreach w $::application::board::Vars(need-binding) {
-						foreach s [BindSpecs $spec] { bind $w <$s> {} }
-					}
+				# widgets themselves. A rebuilt pane can leave dead entries
+				# in need-binding, so only live widgets are unbound.
+				foreach w [::application::board::bindingWidgets] {
+					foreach s [BindSpecs $spec] { bind $w <$s> {} }
 				}
 			}
 			chessbase {

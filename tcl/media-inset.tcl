@@ -608,6 +608,16 @@ proc ::mediainset::Layout {} {
 				set mb [expr {$Squeeze ne {} && !$Audio && [string is integer -strict $maxBoard] ? $maxBoard : 0}]
 				if {[::application::board::setReserve $side $pixels $kind $mb]} {
 					lassign [::application::board::reserveRect] x y rw rh
+					# The 2D canvas is hidden in 3D and its reserve arithmetic can
+					# lag the visible 3D slot (a restore leaves the old height for a
+					# pass). The visible frame is the truth: center in its extent,
+					# or the inset sits (3D toolbar height)/2 off.
+					if {$::application::board::Vars(3d)} {
+						switch -- $side {
+							right - left { set rh [winfo height $view] }
+							bottom { set rw [winfo width $view] }
+						}
+					}
 					set x [expr {$x + [winfo x $view] + ($rw - $iw)/2}]
 					set y [expr {$y + [winfo y $view] + ($rh - $ih)/2}]
 					PlaceInset $w $pane $x $y $iw $ih
@@ -735,8 +745,7 @@ proc ::mediainset::Fold {w pane} {
 	::application::board::setReserve {} 0
 	FrameView 0
 	RestoreBoard $pane
-	set mw [MinimumStrip]
-	set mh [expr {int(round(($mw-8)/$::mediainset::Aspect))+[winfo reqheight $w.controls]+8}]
+	lassign [MinimumSize $w] mw mh
 	place $w -x -10000 -y -10000 -width $mw -height $mh -relx 0 -rely 0 -anchor nw -relwidth {} -relheight {}
 	PlaceHandle $pane
 }
@@ -752,7 +761,13 @@ proc ::mediainset::ProtectPlayingBoard {} {
 	variable Collapsed
 	variable HeldPlace
 	variable Audio
+	variable Swapped
 	if {$Audio} { return }
+	# Expanded video fills the pane on purpose (VAL-BRD-006); the dialog
+	# planner places open dialogs outside that pane. Re-packing the expanded
+	# video as a minimum strip here would defeat Expand as soon as any
+	# playing dialog is registered, mapped or merely withdrawn.
+	if {$Swapped} { return }
 	if {!$Shown || ![llength $::util::place::BesideDialogs]} { return }
 	set pane [Pane]
 	if {$pane eq ""} { return }
@@ -760,9 +775,21 @@ proc ::mediainset::ProtectPlayingBoard {} {
 	set board [BoardRect]
 	if {![winfo exists $w] || $board eq {}} { return }
 	set current [rect]
-	if {!$Collapsed && ![Area $current $board]} { return }
-	set mw [MinimumStrip]
-	set mh [expr {int(round(($mw-8)/$::mediainset::Aspect))+[winfo reqheight $w.controls]+8}]
+	# Covering a dialog is as wrong as covering the board: a playing dialog's
+	# frame must stay clear of the inset (VAL-DLG-015b), and Layout centres the
+	# inset in its own strip after a dialog pack that did not include it (the
+	# compact/scroll rung packs dialogs alone). Re-pack or fold here, after the
+	# strip layout has run, so a later Layout cannot put the inset under one.
+	set covered 0
+	foreach dlg $::util::place::BesideDialogs {
+		if {[winfo exists $dlg] && [winfo ismapped $dlg]
+			&& [Area $current [::util::place::besideOuterRect $dlg]] > 0} {
+			set covered 1
+			break
+		}
+	}
+	if {!$Collapsed && !$covered && ![Area $current $board]} { return }
+	lassign [MinimumSize $w] mw mh
 	set sizes [list [list $mw $mh]]
 	set obstacles {}
 	foreach dlg $::util::place::BesideDialogs {
@@ -841,6 +868,39 @@ proc ::mediainset::reserveForLayout {width height} {
 proc ::mediainset::MinimumStrip {} {
 	variable Options
 	return [expr {$Options(minWidth) + 8}]
+}
+
+# Size for the minimum video surface used when the inset folds or has to be
+# packed clear of a dialog. The configured minimum can be larger than the pane
+# (a caller asking for "no free margin" does exactly that); asking Tk for such
+# a window makes it allocate a double-buffer pixmap beyond the X server's
+# limit and the process dies. Clamp to the pane and display while keeping the
+# video's aspect ratio, so the surface stays real and can still bind a backend.
+proc ::mediainset::MinimumSize {w} {
+	variable Options
+	variable Aspect
+	set pane [Pane]
+	set maxW [winfo screenwidth $w]
+	set maxH [winfo screenheight $w]
+	if {$pane ne ""} {
+		if {[winfo width $pane] > 1} {
+			set maxW [expr {min($maxW, [winfo width $pane] - 12)}]
+		}
+		if {[winfo height $pane] > 1} {
+			set maxH [expr {min($maxH, [winfo height $pane] - 12)}]
+		}
+	}
+	set controls [winfo reqheight $w.controls]
+	set maxW [expr {max(168, $maxW)}]
+	set maxH [expr {max($controls + 8, $maxH)}]
+	set mw [expr {min($Options(minWidth) + 8, $maxW)}]
+	set mh [expr {int(round(($mw - 8)/$Aspect)) + $controls + 8}]
+	if {$mh > $maxH} {
+		set mh $maxH
+		set mw [expr {min($maxW,
+			max(168, int(round(($mh - $controls - 8)*$Aspect)) + 8))}]
+	}
+	return [list $mw $mh]
 }
 
 # Fit each candidate down to the documented minimum VIDEO width (frame
@@ -1067,6 +1127,12 @@ proc ::mediainset::release {} {
 proc ::mediainset::PlaceInset {w pane x y width height} {
 	variable Held
 	variable HeldPlace
+	# Geometry supplied by a dialog can exceed the display; never ask Tk for
+	# a window (or its double buffer) larger than the screen.
+	if {![string is integer -strict $width] || $width < 1} { set width 1 }
+	if {![string is integer -strict $height] || $height < 1} { set height 1 }
+	set width [expr {min($width, [winfo screenwidth $w])}]
+	set height [expr {min($height, [winfo screenheight $w])}]
 	if {$Held > 0 && [winfo ismapped $w]} {
 		set HeldPlace [list $x $y $width $height]
 		return

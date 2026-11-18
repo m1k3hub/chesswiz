@@ -75,8 +75,13 @@ tcltest::test p6-text-report-stale {an old opening report cannot analyze a move 
 tcltest::test p6-live-loop {analysis starts, resumes, plays a PV and pins a complete candidate without changing the board game} -constraints p6Engine -setup {
     ::scidb::test::p6::waitUntil {$::application::Vars(ready)}
     catch {destroy .tipoftheday}
-    set trialStarted [expr {![::game::trialMode?]}]
-    if {$trialStarted} {::game::flipTrialMode}
+    # Trial mode belongs to the game it was started on. The body opens a new
+    # scratch game for the PV, so restoring by flipping the current game in
+    # the cleanup would put the new game into trial mode and leave the one
+    # which started it there. Remember both the slot and its state.
+    set trialPosition [::scidb::game::current]
+    set initialTrial [::game::trialMode?]
+    if {!$initialTrial} {::game::flipTrialMode}
     set oldEngines $::engine::Engines
     set oldFile $::scidb::file::engines
     set oldConfirm $::application::assistant::Priv(confirm)
@@ -140,7 +145,20 @@ tcltest::test p6-live-loop {analysis starts, resumes, plays a PV and pins a comp
     set ::scidb::file::engines $oldFile
     set ::application::assistant::Priv(confirm) $oldConfirm
     ::options::hookWriter ::engine::WriteEngineOptions engines
-    if {$trialStarted} {::game::flipTrialMode}
+    # End the trial on the slot which started it, wherever the body left the
+    # current game, so a later file does not inherit trial mode or a game
+    # which cannot be released.
+    if {[::scidb::game::query $trialPosition open?]} {
+        set current [::scidb::game::current]
+        catch {::scidb::game::switch $trialPosition}
+        if {$trialPosition == [::scidb::game::current]
+         && [::scidb::game::query $trialPosition trial] != $initialTrial} {
+            ::game::flipTrialMode
+        }
+        if {$current != $trialPosition && [::scidb::game::query $current open?]} {
+            catch {::scidb::game::switch $current}
+        }
+    }
 } -result {{0 0 0} 1 1 1 1 1}
 
 tcltest::cleanupTests

@@ -198,9 +198,12 @@ if {[tk windowingsystem] ne "aqua"} {
 proc init {} {
 	variable G
 
-	if {!$G(init)} { return }
-
 	set b $G(toplevel)
+	# The application, or a dialog teardown, may have destroyed every
+	# root child.  Rebuild the (withdrawn) popup instead of leaving every
+	# later tooltip pointing at a dead window.
+	if {[winfo exists $b]} { return }
+
 	tk::toplevel $b -class TooltipPopup
 
 	if {[tk windowingsystem] eq "aqua"} {
@@ -777,6 +780,10 @@ proc Show {w var msg {i {}} {font {}}} {
 	after cancel $G(fadeId)
 	after cancel $G(exposureId)
 	set b $G(toplevel)
+	if {![winfo exists $b]} {
+		init
+		if {![winfo exists $b]} { return }
+	}
 
 	set tipbg [background]
 	set tipfg [foreground]

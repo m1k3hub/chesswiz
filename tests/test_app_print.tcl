@@ -28,6 +28,16 @@ proc setup {} {
 	file mkdir $tmpDir
 }
 
+# Keep the session's scratch game (9) and the UI slots out of this file's
+# way: load the print game into a position nobody else uses.  Releasing the
+# current scratch game would destroy the board subscription every later file
+# in the same process expects.
+proc freePosition {} {
+	set pos 20
+	while {[::scidb::game::query $pos open?]} { incr pos }
+	return $pos
+}
+
 proc tempPath {stem ext} {
 	variable tmpDir
 	return [file normalize [file join $tmpDir "${stem}_[pid]_[clock microseconds].${ext}"]]
@@ -150,7 +160,7 @@ tcltest::test print-procs-exist {::print::game and ::print::preview exist} -body
 tcltest::test print-preview-database-game {::print::preview generates PDF with players' names and invokes xdg-open} -setup {
 	set pgn [makePgn "Capablanca, Jose Raul" "Tartakower, Saviely"]
 	::scidb::db::open $pgn ::scidb::test::appprint::log log ::scidb::test::appprint::progress progress
-	set pos [::scidb::game::current]
+	set pos [freePosition]
 	::scidb::game::load $pos $pgn Normal 0
 	installStubs "/usr/bin/lp"
 } -body {
@@ -177,14 +187,13 @@ tcltest::test print-preview-database-game {::print::preview generates PDF with p
 } -cleanup {
 	restoreStubs
 	catch { ::scidb::game::release $pos }
-	catch { ::scidb::game::new $pos }
 	catch { ::scidb::db::close $pgn }
 } -result [expr {[tk windowingsystem] eq "aqua" ? {1 1 1 1 1 1 open 1} : {1 1 1 1 1 1 xdg-open 1}}]
 
 tcltest::test print-game-linux-lp {::print::game invokes lp on Linux when lp is available and PDF has players' names} -setup {
 	set pgn [makePgn "Morphy, Paul" "Anderssen, Adolf"]
 	::scidb::db::open $pgn ::scidb::test::appprint::log log ::scidb::test::appprint::progress progress
-	set pos [::scidb::game::current]
+	set pos [freePosition]
 	::scidb::game::load $pos $pgn Normal 0
 	installStubs "/usr/bin/lp"
 } -body {
@@ -209,14 +218,13 @@ tcltest::test print-game-linux-lp {::print::game invokes lp on Linux when lp is 
 } -cleanup {
 	restoreStubs
 	catch { ::scidb::game::release $pos }
-	catch { ::scidb::game::new $pos }
 	catch { ::scidb::db::close $pgn }
 } -result [expr {[tk windowingsystem] eq "aqua" ? {1 1 1 1 1 open 1} : {1 1 1 1 1 lp 1}}]
 
 tcltest::test print-game-linux-fallback-viewer {::print::game falls back to xdg-open when lp/lpr are unavailable} -setup {
 	set pgn [makePgn "Kasparov, Garry" "Karpov, Anatoly"]
 	::scidb::db::open $pgn ::scidb::test::appprint::log log ::scidb::test::appprint::progress progress
-	set pos [::scidb::game::current]
+	set pos [freePosition]
 	::scidb::game::load $pos $pgn Normal 0
 	installStubs ""
 } -body {
@@ -235,7 +243,6 @@ tcltest::test print-game-linux-fallback-viewer {::print::game falls back to xdg-
 } -cleanup {
 	restoreStubs
 	catch { ::scidb::game::release $pos }
-	catch { ::scidb::game::new $pos }
 	catch { ::scidb::db::close $pgn }
 } -result [expr {[tk windowingsystem] eq "aqua" ? {1 1 1 open 1} : {1 1 1 xdg-open 1}}]
 
@@ -244,7 +251,7 @@ tcltest::test print-game-linux-fallback-viewer {::print::game falls back to xdg-
 tcltest::test print-game-linux-lp-refused {::print::game falls back to xdg-open when lp refuses the job} -constraints {notAqua} -setup {
 	set pgn [makePgn "Tal, Mikhail" "Botvinnik, Mikhail"]
 	::scidb::db::open $pgn ::scidb::test::appprint::log log ::scidb::test::appprint::progress progress
-	set pos [::scidb::game::current]
+	set pos [freePosition]
 	::scidb::game::load $pos $pgn Normal 0
 	installStubs "/usr/bin/lp"
 	proc ::print::RunCommand {cmdList {async 1}} {
@@ -264,12 +271,11 @@ tcltest::test print-game-linux-lp-refused {::print::game falls back to xdg-open 
 } -cleanup {
 	restoreStubs
 	catch { ::scidb::game::release $pos }
-	catch { ::scidb::game::new $pos }
 	catch { ::scidb::db::close $pgn }
 } -result {1 {lp xdg-open} 1}
 
 tcltest::test print-modified-scratch-game {::print::game exports unsaved/modified game tags and players to PDF} -setup {
-	set pos [::scidb::game::current]
+	set pos [freePosition]
 	if {![::scidb::game::query $pos open?]} {
 		::scidb::game::new $pos
 	}
@@ -287,7 +293,6 @@ tcltest::test print-modified-scratch-game {::print::game exports unsaved/modifie
 } -cleanup {
 	restoreStubs
 	catch { ::scidb::game::release $pos }
-	catch { ::scidb::game::new $pos }
 } -result {1 1 1}
 
 tcltest::test print-macos-branch {::print::game and ::print::preview use open on macOS} -setup {
@@ -297,7 +302,7 @@ tcltest::test print-macos-branch {::print::game and ::print::preview use open on
 	set ::tcl_platform(platform) "unix"
 	set pgn [makePgn "Alekhine, Alexander" "Euwe, Max"]
 	::scidb::db::open $pgn ::scidb::test::appprint::log log ::scidb::test::appprint::progress progress
-	set pos [::scidb::game::current]
+	set pos [freePosition]
 	::scidb::game::load $pos $pgn Normal 0
 	installStubs ""
 } -body {
@@ -317,7 +322,6 @@ tcltest::test print-macos-branch {::print::game and ::print::preview use open on
 	set ::tcl_platform(platform) $savedPlatform
 	restoreStubs
 	catch { ::scidb::game::release $pos }
-	catch { ::scidb::game::new $pos }
 	catch { ::scidb::db::close $pgn }
 } -result {1 1 open 1 open 1}
 
@@ -331,7 +335,7 @@ tcltest::test print-windows-branch {::print::game uses wscript ShellExecute prin
 	set ::tcl_platform(platform) "windows"
 	set pgn [makePgn "Lasker, Emanuel" "Steinitz, Wilhelm"]
 	::scidb::db::open $pgn ::scidb::test::appprint::log log ::scidb::test::appprint::progress progress
-	set pos [::scidb::game::current]
+	set pos [freePosition]
 	::scidb::game::load $pos $pgn Normal 0
 	installStubs ""
 } -body {
@@ -366,7 +370,6 @@ tcltest::test print-windows-branch {::print::game uses wscript ShellExecute prin
 	set ::tcl_platform(platform) $savedPlatform
 	restoreStubs
 	catch { ::scidb::game::release $pos }
-	catch { ::scidb::game::new $pos }
 	catch { ::scidb::db::close $pgn }
 } -result {1 1 wscript 1 1}
 

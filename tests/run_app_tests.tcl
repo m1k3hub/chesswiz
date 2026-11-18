@@ -6,7 +6,13 @@ package require tcltest 2.5
 namespace eval ::scidb::test::app {
     variable testDir [file dirname [file normalize [info script]]]
     variable rootDir [file dirname $testDir]
-    variable reportFile [file join $testDir app_test_report.txt]
+    # A second runner (a single-file repro beside a full run) must not
+    # overwrite the report the first one is still writing.
+    variable reportFile [expr {
+        [info exists ::env(SCIDB_APP_TEST_REPORT)]
+            ? $::env(SCIDB_APP_TEST_REPORT)
+            : [file join $testDir app_test_report.txt]
+    }]
     variable totalPass 0
     variable totalFail 0
     variable totalSkip 0
@@ -40,13 +46,32 @@ proc ::scidb::test::app::emit {line} {
 # that follow can then fail though they pass alone.  This is a report, not a
 # reset -- the leaks are fixed where they are made.
 # Files share one process and nine game slots.  Once the action-probe support
-# module is loaded, use its process-wide reset (bases, slots, cards, engines)
-# after every file; before that, at least power down engines and drain the idle
-# callbacks they leave behind.  A stopped engine's deferred callback firing
-# inside the next file's native engine start aborts the whole suite.
+# module is loaded, use its process-wide reset (bases, slots, cards, engines,
+# pane arrangement) after every file; before that, at least power down engines
+# and drain the idle callbacks they leave behind.  A stopped engine's deferred
+# callback firing inside the next file's native engine start aborts the whole
+# suite, and panes a file left open decide the window minimum the next file
+# measures.
 proc ::scidb::test::app::settle {} {
+    # A file may put the dialogs in non-interactive mode for a headless batch.
+    # That mode answers every question with its safe reply, so leaving it on
+    # refuses the next file's confirmation (resign, close, overwrite) without
+    # showing anything.
+    if {[info exists ::scidb::test::app::nonInteractiveDefault]
+     && [llength [info commands ::dialog::nonInteractive]]
+     && [::dialog::nonInteractive] ne $::scidb::test::app::nonInteractiveDefault} {
+        catch { ::dialog::nonInteractive $::scidb::test::app::nonInteractiveDefault }
+    }
     if {[llength [info commands ::scidb::test::actions::release]]} {
         catch { ::scidb::test::actions::release }
+        # Panes, reopen overrides and maximised layouts also outlive a file:
+        # the window minimum and board size they leave decide what the next
+        # file can measure. Put the fresh-start arrangement back.
+        # A file which maximised the window for a full-screen scenario must
+        # not hand that surface (or a zoomed state) to the next file, which
+        # measures the fresh-start one.
+        catch { ::scidb::test::actions::restoreStartupWindow }
+        catch { ::scidb::test::actions::restoreStartupArrangement }
         return
     }
     catch {
@@ -55,6 +80,25 @@ proc ::scidb::test::app::settle {} {
         }
         update
     }
+}
+
+# The action registry is process-wide, and several files register sample
+# actions from their ``-setup`` blocks (test.bar.game, test.args.req, ...).
+# Those are fixtures for the file that makes them: leaving them registered
+# hands later files a registry the product never has, which changes the
+# derived knowledge pack (its registry hash and record count) and every
+# surface that enumerates actions. Drop what a file added; never touch a
+# record the file merely edited in place.
+proc ::scidb::test::app::settleRegistry {baseline} {
+    if {![llength [info commands ::action::list]]} { return {} }
+    set removed {}
+    foreach id [::action::list] {
+        if {$id ni $baseline} {
+            catch { ::action::Unregister $id }
+            lappend removed $id
+        }
+    }
+    return $removed
 }
 
 proc ::scidb::test::app::checkCleanup {file} {
@@ -100,6 +144,12 @@ set ::env(SCIDB_AI_CLASSIFIER) off
 if {![info exists ::env(SCIDB_AI_UNCALIBRATED)]} { set ::env(SCIDB_AI_UNCALIBRATED) 1 }
 source [file join $::scidb::test::app::testDir no_open_stub.tcl]
 source -encoding utf-8 [file join $::scidb::test::app::testDir .. tcl chesswiz]
+# The action-probe files load this themselves for their own cleanup. Source it
+# once here as well: settle below then resets the process the same way whether
+# or not one of those files has already run, instead of leaving the first
+# files in a run to leak games, trial mode and a moved board into later ones.
+source [file join $::scidb::test::app::testDir app_actions_support.tcl]
+
 # A fresh user directory (CI) is a first run, whose language chooser waits for
 # a click; the tests are not one. Startup2 has not run yet: it is a timer.
 set ::scidb::dir::setup 0
@@ -157,6 +207,21 @@ proc tcltest::cleanupTests {args} {
 
 set startTime [clock seconds]
 
+# The window a fresh start opens, before any file resizes it; settle puts it
+# back after every file. Wait only for the window itself: the startup
+# callbacks are still ahead, and a file which tests them must still see them.
+set mapDeadline [expr {[clock milliseconds] + 10000}]
+while {[winfo width .application] <= 1 && [clock milliseconds] < $mapDeadline} {
+    after 10
+    update
+}
+catch { ::scidb::test::actions::rememberStartupWindow }
+# The dialog mode a first run has; settle restores it after every file.
+set ::scidb::test::app::nonInteractiveDefault [::dialog::nonInteractive]
+# The registry the product starts with; settleRegistry restores it per file.
+::scidb::test::app::settle
+set ::scidb::test::app::registryBaseline [::action::list]
+
 foreach testFile $testFiles {
     ::scidb::test::app::emit "\n=== Running [file tail $testFile] ==="
 
@@ -173,12 +238,44 @@ foreach testFile $testFiles {
         tcltest::configure -verbose {error}
     }
 
+    # A file that reads the language files it is about to commit points
+    # ::scidb::dir::share at the worktree's tcl/. That redirect holds the
+    # language catalogs only, not the installed layout every other file
+    # expects (sample/, scripts/, themes/, images/). Put the installed share
+    # back after each file, even one which fails half-way through.
+    set shareBefore $::scidb::dir::share
+    # A file's top-level foreach/lassign writes globals.  Namespace scripts
+    # evaluated at the global level resolve an unqualified name to an existing
+    # global first, so an earlier file's leftover ``kind`` (or ``id``, ``name``)
+    # silently redirects a later file's namespace loop variable to ``::`` and
+    # its own namespace reads then fail.  A file may create globals; it may not
+    # hand them to the next file.  Keep the ones that were already here.
+    set globalsBefore [concat [info vars] {globalsBefore leaked}]
     set rc [catch {source -encoding utf-8 $testFile} err opts]
+    if {[info exists ::scidb::dir::share] && $::scidb::dir::share ne $shareBefore} {
+        set ::scidb::dir::share $shareBefore
+    }
     if {$rc} {
         ::scidb::test::app::emit "ERROR in [file tail $testFile]: $err"
         incr ::scidb::test::app::totalFail 1
     }
     ::scidb::test::app::settle
+    # A test body runs in the global frame, so a ``namespace upvar`` there
+    # creates a *link* in ``::`` to a live application variable.  Unsetting a
+    # link unsets the variable it points at, not the link: dropping the
+    # suite's ``Vars``/``engine`` links would wipe the analysis pane and the
+    # engine arrays mid-run.  The leaks this removes are the scalars a
+    # top-level foreach/lassign leaves behind, so only scalars are dropped.
+    foreach leaked [info vars] {
+        if {$leaked ni $globalsBefore && ![array exists ::$leaked]} {
+            catch { unset ::$leaked }
+        }
+    }
+    set fixtureActions [::scidb::test::app::settleRegistry $::scidb::test::app::registryBaseline]
+    if {[llength $fixtureActions]} {
+        ::scidb::test::app::emit [format "  unregistered %d fixture action(s): %s" \
+            [llength $fixtureActions] [join $fixtureActions {, }]]
+    }
     catch { ::scidb::test::app::checkCleanup $testFile }
 }
 

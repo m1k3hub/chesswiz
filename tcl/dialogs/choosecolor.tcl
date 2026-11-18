@@ -169,11 +169,20 @@ proc geometry {{whichPart size}} {
 proc getActualColor {color} {
 	variable Priv
 
-	if {![info exists Priv(label)]} {
+	# The helper label is created once and then only used to resolve a name
+	# to RGB. A caller which destroys top-level children (the test suite's
+	# toplevel cleanup, a dialog that destroys its own windows) can take it
+	# with them; the cached name must not turn every later colour into "".
+	if {![info exists Priv(label)] || ![winfo exists $Priv(label)]} {
 		set Priv(label) [tk::label ._choosecolor__should_be_unique_pathname_[clock seconds]]
 	}
-	if {[catch {$Priv(label) configure -background $color}]} { return "" }
-	lassign [winfo rgb $Priv(label) [$Priv(label) cget -background]] r g b
+	if {[catch {$Priv(label) configure -background $color}]} {
+		# Fall back to the root window: colour names still resolve there.
+		if {[catch {winfo rgb . $color} rgb]} { return "" }
+		lassign $rgb r g b
+	} else {
+		lassign [winfo rgb $Priv(label) [$Priv(label) cget -background]] r g b
+	}
 	return [format "#%02x%02x%02x" [expr {$r/257}] [expr {$g/257}] [expr {$b/257}]]
 }
 

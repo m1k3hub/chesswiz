@@ -3001,6 +3001,7 @@ proc onConfigure {W w h} {
 }
 proc onDebounced {w h} {
  variable S; set S(afterId) {}
+ set S(lastSize) [list $w $h]
  if {[set t [boardTwm]] ne {}} {::application::focuszoom::windowResized $t}
  set mode $S(mode)
  evaluate $w $h
@@ -3019,6 +3020,29 @@ proc onDebounced {w h} {
 proc cancelPending {} {
  variable S
  if {$S(afterId) ne {}} {after cancel $S(afterId); set S(afterId) {}}
+}
+# Settle the wide/tall presentation before another consumer measures the
+# board. The Configure debounce is longer than the dialog-placement settle,
+# so without this the first plan is made against the squeezed intermediate
+# rectangle and the reflowed board then forces a second placement of every
+# open dialog (VAL-DLG-010: one re-place per resize).
+proc settle {} {
+ variable S
+ if {$S(busy)} {return 0}
+ set w [winfo width .application]
+ set h [winfo height .application]
+ set size [list $w $h]
+ set pending [expr {$S(afterId) ne {}}]
+ cancelPending
+ if {$pending || ![info exists S(lastSize)] || $S(lastSize) ne $size} {
+  set loads $S(loadCount)
+  onDebounced $w $h
+  # 2: a wide/tall load rebuilt the docking tree. Its board is not the final
+  # drawing until the rebuild completes; consumers that measure the board
+  # must wait for it (see besideBoardRebuilt).
+  if {$S(loadCount) ne $loads} {return 2}
+ }
+ return 1
 }
 proc shouldCollapse {uid} {
  if {[string match analysis:* $uid]} {

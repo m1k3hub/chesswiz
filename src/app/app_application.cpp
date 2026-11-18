@@ -1574,6 +1574,12 @@ Application::newGame(unsigned position, variant::Type variant)
 
 	if (m_fallbackPosition == InvalidPosition)
 		m_fallbackPosition = position;
+
+	// A caller which recreates the game it just released (the print tests do)
+	// must get a current game back; without one the next board or print
+	// command has no game to work on.
+	if (m_currentPosition == InvalidPosition)
+		m_currentPosition = position;
 }
 
 
@@ -1601,7 +1607,52 @@ Application::releaseGame(unsigned position)
 		cancelAllThreads(cursor);
 
 		if (m_fallbackPosition != InvalidPosition)
-			switchGame(m_fallbackPosition, UpdateReferenceGames);
+		{
+			unsigned fallback = m_fallbackPosition;
+			switchGame(fallback, UpdateReferenceGames);
+
+			// A recreated game may not have its board subscriber yet; keep the
+			// current position valid even then.
+			if (m_currentPosition == position)
+				m_currentPosition = fallback;
+		}
+		else
+		{
+			// The fallback may already be gone (it was released earlier), but
+			// another game, usually the scratch game, can still be shown. Never
+			// leave the current position pointing at the game just erased: the
+			// board would ask the native layer for a game that is not there and
+			// abort the callback which redraws it.
+			unsigned next = InvalidPosition;
+
+			for (GameMap::const_iterator i = m_gameMap.begin(); i != m_gameMap.end(); ++i)
+			{
+				if (isScratchGame(i->first))
+				{
+					next = i->first;
+					m_fallbackPosition = i->first;
+					break;
+				}
+
+				if (next == InvalidPosition)
+					next = i->first;
+			}
+
+			if (next != InvalidPosition)
+			{
+				switchGame(next, UpdateReferenceGames);
+
+				// switchGame() waits for a subscriber before it switches; a
+				// fresh scratch game may not have one yet, but the current
+				// position must not keep pointing at the erased game.
+				if (m_currentPosition == position)
+					m_currentPosition = next;
+			}
+			else
+			{
+				m_currentPosition = InvalidPosition;
+			}
+		}
 	}
 
 	if (m_subscriber)

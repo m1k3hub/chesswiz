@@ -10,6 +10,10 @@ package require Tcl 8.5
 package require tcltest 2.5
 
 namespace eval ::scidb::test::draft {}
+# The tests below write the real editor's language slots and widget map.
+# Snapshot them so a later test file does not inherit a comment in progress.
+set ::scidb::test::draft::savedVars [array get ::comment::Vars]
+
 
 proc ::scidb::test::draft::editor {} {
 	set f .drafteditor[pid]
@@ -83,6 +87,9 @@ tcltest::test comment-translate-ignores-failure {OnTranslated does nothing when 
 	destroy $target
 	set text
 } -result {}
+
+array unset ::comment::Vars
+array set ::comment::Vars $::scidb::test::draft::savedVars
 
 ::tcltest::cleanupTests
 return

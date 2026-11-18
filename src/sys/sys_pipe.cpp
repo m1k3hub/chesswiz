@@ -19,6 +19,9 @@
 
 #include "sys_pipe.h"
 
+#include "../tcl/tcl_exception.h" // lives in src/tcl (Makefile adds -I../tcl)
+#include "../tcl/tcl_base.h"     // lives in src/tcl (Makefile adds -I../tcl)
+
 #include "m_assert.h"
 
 #include <tcl.h>
@@ -34,7 +37,28 @@ action(ClientData data, int mask)
 	char c;
 
 	if (Tcl_Read(reinterpret_cast<Pipe*>(data)->channel(), &c, 1) != -1)
-		reinterpret_cast<Pipe*>(data)->available(c);
+	{
+		// This is a Tcl channel handler: a script callback that raises an
+		// error (a destroyed progress dialog, a stopped engine) throws a
+		// C++ exception here. Letting it unwind through Tcl's C event loop
+		// reaches std::terminate and aborts the whole process, so report it
+		// as a background error like any other failing script callback.
+		try
+		{
+			reinterpret_cast<Pipe*>(data)->available(c);
+		}
+		catch (mstl::exception const& exc)
+		{
+			Tcl_Interp* ti = ::tcl::interp();
+			if (*Tcl_GetStringResult(ti) == '\0')
+				Tcl_SetObjResult(ti, Tcl_NewStringObj(exc.what(), -1));
+			Tcl_BackgroundError(ti);
+		}
+		catch (...)
+		{
+			Tcl_BackgroundError(::tcl::interp());
+		}
+	}
 }
 
 

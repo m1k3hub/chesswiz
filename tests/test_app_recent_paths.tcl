@@ -159,10 +159,18 @@ namespace eval ::scidb::test::recentpaths {
 		return $switcher.__menu__
 	}
 
+	# Dismiss the popup the way a user does.  A bare widget ``unpost``
+	# unmaps the menu but leaves Tk's saved popup state (and the focus it
+	# captured) behind: the next tk_popup in the process then restores that
+	# stale focus instead of the widget that posts it, so a later file's
+	# Escape does not return focus to its table.  tk::MenuUnpost clears the
+	# saved grab/focus state as well as unposting.
 	proc unpopup {} {
 		set switcher [switcher]
-		catch { $switcher.__menu__ unpost }
-		catch { destroy $switcher.__menu__ }
+		set menu $switcher.__menu__
+		catch { ::tk::MenuUnpost $menu }
+		catch { $menu unpost }
+		catch { destroy $menu }
 		set ::application::database::Vars(ignore-next) 0
 	}
 

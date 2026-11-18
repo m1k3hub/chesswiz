@@ -2,6 +2,11 @@
 # (tests/tmp-app/explore-fixes/REPORT.md).
 package require Tcl 8.5
 package require tcltest 2.5
+# These regressions run headless: no modal may wait for a click. The mode is
+# process-wide, so hand the real dialogs back at the end; a file which leaves
+# it on silently answers every later file's question with "no" (the lichess
+# resign confirmation then never reaches the server).
+set ::scidb::test::xfix_savedNonInteractive [::dialog::nonInteractive]
 ::dialog::nonInteractive 1
 
 namespace eval ::scidb::test::xfix {
@@ -170,4 +175,5 @@ tcltest::test xfix-view-print-usage {view::print usage has no doubled space} -bo
 	list [string match "*<flags> <options>*" $msg] [string first "  " $msg]
 } -result {1 -1}
 
+::dialog::nonInteractive $::scidb::test::xfix_savedNonInteractive
 tcltest::cleanupTests

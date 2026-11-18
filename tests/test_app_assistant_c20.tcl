@@ -78,6 +78,7 @@ tcltest::test c20-dialog-intent {missing facts never reach view handlers; explic
  proc ::c20::entered {args} {lappend ::c20::calls [lindex [lindex $args 0] 0]}
  foreach proc {DoOpenView DoDiscover} {trace add execution ::application::assistant::$proc enter ::c20::entered}
  set windows [winfo children .]
+ set appWindows [winfo children .application]
 } -body {
  array set ::application::assistant::Priv {busy 1 lastRequest {What is Carlsen's current rating?} turnTools 0}
  set ::c20::intent fact
@@ -98,6 +99,9 @@ tcltest::test c20-dialog-intent {missing facts never reach view handlers; explic
 } -cleanup {
  foreach proc {DoOpenView DoDiscover} {trace remove execution ::application::assistant::$proc enter ::c20::entered}
  foreach w [winfo children .] {if {$w ni $windows} {catch {destroy $w}}}
+ # The discovery dialog is a child of the main window, not a top-level:
+ # destroy it here or it covers the next file's board and dialogs.
+ foreach w [winfo children .application] {if {$w ni $appWindows} {catch {destroy $w}}}
  rename ::ai::systemone::chooseManySync {}
  rename ::c20::choose ::ai::systemone::chooseManySync
  array unset ::application::assistant::Priv

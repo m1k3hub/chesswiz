@@ -788,13 +788,28 @@ proc refreshBase {base} {
 proc switchToBase {filename} {
 	variable Vars
 
-	if {[catch { $Vars(switcher) current $filename }]} {
-		# may happen if open failed
-		return
+	if {[catch { $Vars(switcher) current $filename } message]} {
+		# The switcher's own update can fail while the base it is leaving is
+		# being torn down (an update callback still names it). Returning here
+		# left the app on the old base while the switcher showed the new one,
+		# and the games table then asked a closed database for its games. A
+		# base whose open failed never reached the switcher, and has nothing
+		# to switch to.
+		if {![$Vars(switcher) contains? $filename]} { return }
+		catch { ::log::info "database switcher update failed for $filename: $message" }
 	}
-	[namespace parent]::twm::switchLayout $Vars(variant) db
-	::scidb::db::switch $filename $Vars(variant)
-	UpdateAfterSwitch $filename $Vars(variant)
+	# The switcher normally moves to a variant the new base has. Do it here
+	# too, so a base whose switcher update was interrupted still opens in a
+	# variant it supports rather than the previous base's.
+	set variant $Vars(variant)
+	if {![catch { ::scidb::db::get variants $filename } variants]
+	 && [llength $variants] && $variant ni $variants} {
+		set variant [lindex $variants 0]
+	}
+	set Vars(variant) $variant
+	[namespace parent]::twm::switchLayout $variant db
+	::scidb::db::switch $filename $variant
+	UpdateAfterSwitch $filename $variant
 }
 
 

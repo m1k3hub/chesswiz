@@ -57,6 +57,23 @@ proc ::scidb::test::rep::buildGame {} {
 }
 
 
+# Pick the current game in the trainer's source list. The dialog prefers an
+# open repertoire database when one is current, which is right for a user and
+# wrong for these tests: both drill tests assert on cards built from the game
+# they just set up. Choose the row whose base is "" (the current game) and
+# take that row's side, exactly as the source chooser does.
+proc ::scidb::test::rep::chooseCurrentGame {} {
+	set sources $::reptrainer::Vars(sources)
+	set i [lsearch -exact -index 1 $sources ""]
+	if {$i < 0} { error "the trainer does not offer the current game" }
+	lassign [lindex $sources $i] label _ _ side
+	set ::reptrainer::Vars(sourceIndex) $i
+	set ::reptrainer::Vars(sourceLabel) $label
+	set ::reptrainer::Vars(sideChoice) $side
+	return $side
+}
+
+
 # The position keys of the trained side in the built game, taken from the
 # game itself (the key is the FEN without the clocks).
 proc ::scidb::test::rep::gameKeys {} {
@@ -207,6 +224,7 @@ tcltest::test reptrainer-drill {answering right and wrong updates the card} -set
 		::reptrainer::open .application
 		update
 		set dlg .application.__reptrainer__
+		::scidb::test::rep::chooseCurrentGame
 		[::util::place::playingBody $dlg].setup.start invoke
 		update
 
@@ -473,6 +491,7 @@ tcltest::test reptrainer-jev-note {reptrainer_note rules, classifier roles, spoi
 			::reptrainer::open .application
 			update
 			set dlg .application.__reptrainer__
+			::scidb::test::rep::chooseCurrentGame
 			[::util::place::playingBody $dlg].setup.start invoke
 			update
 			# Wait for the async note decision to fire

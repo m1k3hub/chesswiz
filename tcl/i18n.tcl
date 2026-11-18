@@ -507,7 +507,10 @@ proc selectLang {{lang {}}} {
 	}
 
 	array unset EcoTrans
-	array unset EcoMatch
+	# EcoMatch is a plain list, not an array: ``array unset`` would silently
+	# leave the previous language's patterns active, so switching back to
+	# English kept translating ECO names (e.g. "Defensa Sicilian").
+	set EcoMatch {}
 
 	set file [file join $::scidb::dir::share lang eco $mc::input($Language)]
 	if {![file readable $file]} {

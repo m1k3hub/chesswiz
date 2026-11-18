@@ -44,6 +44,12 @@ set after [llength $::application::database::RecentFiles]
 puts [list CLEAR_EFFECT before $before after $after result $result command $clearCmd]
 $recentMenu unpost
 catch {grab release $recentMenu}
+# The dropdown and its posted cascade are a probe, not application state.
+# Leaving the root menu posted holds the pointer and hands every later
+# tooltip or hover test a window it did not create.
+catch {.realDropdown unpost}
+catch {grab release .realDropdown}
+catch {destroy .realDropdown}
 tcltest::test recent-fixed-clear-is-registry {fixed Clear History is not a data-row exemption} -body {
  list [expr {$before>0 && $after==0}] [string match {::action::run *} $clearCmd]
 } -result {1 1}

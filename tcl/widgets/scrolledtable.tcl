@@ -384,7 +384,10 @@ proc see {path position} {
 		if {$(size) == 0} { return }
 		set position [expr {$(size) - 1}]
 	}
-	if {![expr {$(start) <= $position && $position <= $(start) + $(height)}]} {
+	# The viewport holds rows start .. start+height-1: the row one past its
+	# end is not visible. Treating it as visible skipped the scroll, and the
+	# caller then selected an item the table has not created.
+	if {![expr {$(start) <= $position && $position < $(start) + $(height)}]} {
 		set start [expr {min($(size) - $(height), $position)}]
 		if {$start != $(start)} {
 			::table::select $table none
@@ -1167,6 +1170,12 @@ proc PopupMenu {table x y} {
 		::table::keepFocus $table true
 		::bind $menu <<MenuUnpost>> [namespace code [list Popdown $table]]
 		tk_popup $menu {*}[winfo pointerxy $table]
+	} else {
+		# No row means no menu: leave nothing behind. An unposted widget
+		# would otherwise sit on the table as a stale game-row menu, so a
+		# later click anywhere on the table would find one that this click
+		# built.
+		destroy $menu
 	}
 }
 

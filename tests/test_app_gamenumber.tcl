@@ -112,7 +112,37 @@ proc useBase {stem {count 40}} {
     ::application::database::switchToBase $file
     update idletasks
     update
-    return [gamesTable]
+    set table [gamesTable]
+    # The table follows the base through an idle update, and that update only
+    # fills it once the view of the new base is ready. Measure only when the
+    # table really shows this base with its games: a selection on the previous
+    # base's empty table names an item which does not exist, and a row lookup
+    # can then reach a database which is already closed. Both read as "the
+    # arrow did nothing" instead of the state the test is about.
+    # ::table::numRows is the number of rows the widget has realised (the
+    # visible window), not the number of games in the base, so the model size
+    # is asked for the way the games pane asks for it.
+    set deadline [expr {[clock milliseconds] + 15000}]
+    while 1 {
+        set ready 1
+        if {[catch { ::scrolledtable::base $table } base] || $base ne $file} {
+            set ready 0
+        } elseif {[catch { ::scrolledtable::variant $table } variant]
+                || ![::scidb::db::get open? $file $variant]} {
+            set ready 0
+        } elseif {[catch {
+            ::scidb::view::count games $file $variant [::scidb::tree::view]
+        } rows] || $rows < $count} {
+            set ready 0
+        }
+        if {$ready} { break }
+        if {[clock milliseconds] > $deadline} {
+            error "games table not ready for '$file': base='$base' variant='[expr {[info exists variant] ? $variant : {}}]' games='[expr {[info exists rows] ? $rows : {}}]' expected $count"
+        }
+        after 25
+        update
+    }
+    return $table
 }
 
 # Drive the box as a user does: show its toolbar, focus the entry (clears the

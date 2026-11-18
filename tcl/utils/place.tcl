@@ -67,6 +67,19 @@ variable BesideTimer		{}
 variable BesideMaxWait		80
 variable BesideFirst		{}
 variable BesideUnmappedRetries	0
+# Bounded retry while a wide/tall reflow load is in progress.
+variable BesideReflowRetries	0
+# A wide/tall load rebuilt the board; wait for its completed drawing.
+variable BesideAwaitRebuild	0
+variable BesideAwaitRebuildWaits	0
+# A resize, maximize or fullscreen transition rebuilds the board several
+# times. Planning against one of the intermediate rectangles moved the
+# dialog again when the next one landed (VAL-DLG-010). Plan only after the
+# drawing has been unchanged this long.
+variable BesideBoardQuiet	120
+variable BesideBoardProbe	{}
+variable BesideBoardProbeAt	0
+variable BesideBoardProbeWaits	0
 variable BesideDialogs		{}
 variable BesideState
 variable BesideReplacements	0
@@ -3012,6 +3025,10 @@ proc besideBoardRebuilt {} {
 	variable BesideDialogs
 	variable BesideState
 	variable BesideMeasureDepth
+	variable BesideAwaitRebuild
+	variable BesideAwaitRebuildWaits
+	set BesideAwaitRebuild 0
+	set BesideAwaitRebuildWaits 0
 	if {$BesideMeasureDepth > 0 || [besideVideoRect] eq {}} {
 		besideSchedule
 		return
@@ -3052,6 +3069,13 @@ proc BesideSettle {} {
 	if {$BesideTimer ne {}} { after cancel $BesideTimer }
 	set BesideTimer {}
 	variable BesideUnmappedRetries
+	variable BesideReflowRetries
+	variable BesideAwaitRebuild
+	variable BesideAwaitRebuildWaits
+	variable BesideBoardQuiet
+	variable BesideBoardProbe
+	variable BesideBoardProbeAt
+	variable BesideBoardProbeWaits
 	# The border can be briefly unmapped between a canvas rebuild and the
 	# WM's MapNotify. Do not consume the only resize notification there.
 	# Bound the retry when the board was deliberately hidden; Map handles
@@ -3067,17 +3091,45 @@ proc BesideSettle {} {
 		besideSchedule 80
 		return
 	}
-	# Finish the pending main-window reflow before measuring the board.
-	# Waiting for another trailing debounce lets Configure bursts postpone
-	# placement beyond 500 ms. Both consumers now use the current dimensions
-	# in this event-loop turn; cancel the old callback so it cannot reflow
-	# the board again after the dialog has settled.
-	if {[info exists ::application::reflow::S(afterId)]
-		&& $::application::reflow::S(afterId) ne {}} {
-		::application::reflow::cancelPending
-		::application::reflow::onDebounced [winfo width .application] [winfo height .application]
+	# Finish the main-window reflow before measuring the board. Its load can
+	# be in progress and it debounces the same Configure for longer than this
+	# settle waits: without running it here the plan is made against the
+	# squeezed intermediate rectangle and the reflowed board then moves every
+	# open dialog a second time (VAL-DLG-010). Waiting for another trailing
+	# debounce instead would push placement past a maximize's 500 ms
+	# (VAL-DLG-018A).
+	if {$BesideAwaitRebuild} {
+		if {[incr BesideAwaitRebuildWaits] <= 20} { besideSchedule 25; return }
+		set BesideAwaitRebuild 0
 	}
-	if {[besideBoardRect] eq {}} { besideSchedule 30; return }
+	set BesideAwaitRebuildWaits 0
+	# A failing settle (a window torn down while a dialog was still waiting)
+	# retries like a busy one; only its explicit 1 means the layout is ready.
+	if {[catch {::application::reflow::settle} settled] || $settled ne 1} {
+		if {[incr BesideReflowRetries] <= 10} { besideSchedule 30; return }
+	} elseif {$settled == 2} {
+		# A wide/tall load rebuilt the docking tree. Until its own rebuild
+		# completes the board reports the squeezed intermediate rectangle;
+		# besideBoardRebuilt clears the wait and re-schedules this settle.
+		set BesideAwaitRebuild 1
+		besideSchedule 25
+		return
+	}
+	set BesideReflowRetries 0
+	set drawing [besideBoardRect]
+	if {$drawing eq {}} { besideSchedule 30; return }
+	# A resize, maximize or fullscreen transition rebuilds the board more
+	# than once; the intermediate rectangle is not a placement input. Wait
+	# until the drawing has stopped changing (bounded, so a dialog whose own
+	# reserve keeps moving the board cannot stall the settle).
+	if {$drawing ne $BesideBoardProbe} {
+		set BesideBoardProbe $drawing
+		set BesideBoardProbeAt [clock milliseconds]
+		if {[incr BesideBoardProbeWaits] <= 10} { besideSchedule 30; return }
+	} elseif {[clock milliseconds] - $BesideBoardProbeAt < $BesideBoardQuiet} {
+		if {[incr BesideBoardProbeWaits] <= 20} { besideSchedule 30; return }
+	}
+	set BesideBoardProbeWaits 0
 	# Plan against the coalesced drawing, not the old canvas while its
 	# resize is still queued. Otherwise a squeeze forces an intermediate
 	# repaint and defeats the board's Configure coalescing.
@@ -3701,9 +3753,14 @@ proc BesideBoardPlan {dlg parent {retry 0}} {
 		&& $rw <= $ww-$fw && $rh <= $wh-$fh} {
 		set reserved [besideRequestedReserve $dlg $peers $rw $rh $workarea $extents 12]
 		if {[dict exists $reserved replan]} {
-			return [BesideBoardPlan $dlg $parent [expr {$retry+1}]]
-		}
-		if {[llength $reserved]} {
+			# Releasing a stale group reserve is a one-shot correction. If the
+			# live drawing still cannot hold a strip, the ordinary no-room
+			# fallback below must stand: retrying without a bound re-entered this
+			# plan (a full reserve search each time) until Tcl's recursion limit.
+			if {$retry < 2} {
+				return [BesideBoardPlan $dlg $parent [expr {$retry+1}]]
+			}
+		} elseif {[llength $reserved]} {
 			set plan $reserved
 			lassign [dict get $plan geometry] _ _ pw ph
 		}

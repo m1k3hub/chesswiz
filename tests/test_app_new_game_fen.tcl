@@ -85,7 +85,8 @@ proc ::scidb::test::newgame::makeRoom {} {
 			return
 		}
 	}
-	error "no game slot could be freed"
+	# Every slot may already be a released placeholder: the list keeps nine
+	# entries after a release, and ::game::new reuses those empty entries.
 }
 
 # New Game through the menu entry; returns the game slot it landed in.

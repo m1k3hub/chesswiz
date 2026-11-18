@@ -108,6 +108,15 @@ proc ::scidb::test::choices::commentChecks {} {
     destroy $::comment::Vars(dialog)
 }
 ::scidb::game::update addcomment [::scidb::game::position key] after {Generated annotation}
-after 700 ::scidb::test::choices::commentChecks
+# The comment dialog is modal (open waits on its window); the editor is
+# ready after 700 ms, at which point commentChecks runs in that event loop,
+# destroys the dialog and lets open return. Keep that one bounded timer, and
+# cancel it if open ever returns without it firing so no callback can land
+# in the next file in a shared run.
+set ::scidb::test::choices::commentTimer \
+    [after 700 ::scidb::test::choices::commentChecks]
 ::comment::open .application after en
+if {[info exists ::scidb::test::choices::commentTimer]} {
+    after cancel $::scidb::test::choices::commentTimer
+}
 ::tcltest::cleanupTests

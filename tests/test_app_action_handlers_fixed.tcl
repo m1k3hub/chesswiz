@@ -69,6 +69,7 @@ namespace eval ::scidb::test::knowfix {
         variable testDir
         variable base
         set pos 0
+        dismissChoices
         catch {
             foreach entry [::game::gameList] {
                 if {[lindex $entry 0] ne {}} {
@@ -80,6 +81,24 @@ namespace eval ::scidb::test::knowfix {
         }
         catch { ::application::database::closeBase .application $base }
         catch { file delete -force $testDir }
+    }
+
+    # A handler whose id is a child of a context cascade posts the real
+    # choices menu and returns "opened choices". In an interactive session
+    # the user dismisses it; here nothing can, and the posted menu keeps a
+    # server-wide grab that blocks every later file and every child process
+    # sharing this display. Close it wherever it is opened.
+    proc dismissChoices {} {
+        foreach menu [winfo children .] {
+            if {![string match .contextChoices_* $menu]} { continue }
+            catch { grab release $menu }
+            catch { ::tk::MenuUnpost $menu }
+            catch { destroy $menu }
+        }
+        catch {
+            set held [grab current]
+            if {$held ne {} && [string match .contextChoices_* $held]} { grab release $held }
+        }
     }
 }
 
@@ -209,6 +228,7 @@ test knowfix-6-c3-sort-desc {c3.sort_desc sorts descending} -body {
     set obj [dict create path $table column white sortable 1]
     # Should execute without error
     ::action::run c3.sort_desc [list object $obj]
+    ::scidb::test::knowfix::dismissChoices
     expr {1}
 } -result {1}
 

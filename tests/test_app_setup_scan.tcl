@@ -2,6 +2,11 @@ package require tcltest 2.5
 source [file join [file dirname [info script]] app_actions_support.tcl]
 ::scidb::test::actions::ready
 
+# These cases save and restore product option arrays. Keep the snapshot in
+# this file's namespace: a global array named "saved" would collide with the
+# scalar many later files use for the same purpose (same process, one ::).
+namespace eval ::scidb::test::setupscan {}
+
 tcltest::test setup-scan-engine-subfolder {an engine unpacked in a folder named after it is found} -setup {
 	set dir [file join [file normalize ~] engines igel-3.5 bin]
 	file mkdir $dir
@@ -9,7 +14,7 @@ tcltest::test setup-scan-engine-subfolder {an engine unpacked in a folder named 
 	set exe [file join $dir igel-3.5$::ext]
 	set f [open $exe w]; puts $f "#!/bin/sh"; close $f
 	if {$::ext eq ""} { file attributes $exe -permissions 0755 }
-	array set saved [array get ::application::setupscan::Options]
+	array set ::scidb::test::setupscan::saved [array get ::application::setupscan::Options]
 	set ::application::setupscan::Options(rejected) {}
 	set savedEngines $::engine::Engines
 	set ::engine::Engines {}
@@ -17,7 +22,7 @@ tcltest::test setup-scan-engine-subfolder {an engine unpacked in a folder named 
 	dict get [::application::setupscan::EngineCandidates] igel
 } -cleanup {
 	set ::engine::Engines $savedEngines
-	array set ::application::setupscan::Options [array get saved]
+	array set ::application::setupscan::Options [array get ::scidb::test::setupscan::saved]
 	file delete -force [file join [file normalize ~] engines igel-3.5]
 	unset ::ext
 } -result [file join [file normalize ~] engines igel-3.5 bin igel-3.5[expr {$::tcl_platform(platform) eq "windows" ? ".exe" : ""}]]

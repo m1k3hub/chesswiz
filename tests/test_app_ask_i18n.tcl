@@ -359,4 +359,10 @@ tcltest::test ask-i18n-translated-languages {for es/it/hu/sv the Ask placeholder
 ::scidb::test::askI18n::Empty
 ::scidb::test::askI18n::restore
 
+# The worktree's tcl/ holds the language files but not the installed layout
+# (sample/, scripts/, themes/). Leave the installed share behind for the files
+# that follow: without it the sample database, the player card scripts and the
+# ttk theme files cannot be found.
+set ::scidb::dir::share $::scidb::test::askI18n::savedShare
+
 tcltest::cleanupTests

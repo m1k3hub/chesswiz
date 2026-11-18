@@ -668,6 +668,9 @@ proc startAnalysis {number} {
 	set Vars(current:message) {}
 	$Vars(widget:mesg) configure -text ""
 	::engine::kill $number
+	# A fresh start owns the pane: rows cached from the previous engine must
+	# not be shown, or counted, before the new engine has produced its own.
+	Display(clear) $tree
 	after cancel $Vars(after:id)
 	after cancel $Vars(after:stop)
 	set Vars(after:stop) {}
@@ -707,6 +710,10 @@ proc lines {number} {
 	variable NumberToTree
 
 	if {![exists? $number]} { return {} }
+	# Killing an engine leaves no lines.  A stopped engine is still alive and
+	# keeps the lines its Stop froze (G19), but a powered-down pane is empty
+	# no matter which path (close, a hung engine, the test-suite reset) did it.
+	if {![::engine::active? $number]} { return {} }
 	variable $NumberToTree($number)::Vars
 	variable ${number}::Options
 
@@ -894,6 +901,9 @@ proc CloseEngine {tree} {
 	set Vars(engine:stopped) 0
 
 	::engine::kill $Vars(number)
+	# Powering down empties the pane: cached lines and PVs belong to the
+	# engine which is gone.
+	Display(clear) $tree
 	::toolbar::childconfigure $Vars(widget:button:close) -state disabled
 	::toolbar::childconfigure $Vars(widget:button:stop) -state disabled
 	UpdatePinState $tree
@@ -1405,6 +1415,10 @@ proc Display(state) {tree state} {
 proc Display(clear) {tree} {
 	variable ${tree}::Vars
 
+	# The rows and the cached engine results are one state: clear both.
+	array unset Vars lines:*
+	array unset Vars pv:*
+	array unset Vars suspended,*
 	set Vars(current:message) {}
 	$Vars(widget:mesg) configure -text ""
 	$Vars(widget:mw) raise $Vars(widget:main)
@@ -1633,6 +1647,13 @@ proc IsReady {tree id} {
 proc Signal {tree id code} {
 	if {![winfo exists $tree]} { return }
 	variable ${tree}::Vars
+
+	# A signal belongs to one engine. A late signal from an engine the pane
+	# has replaced (a stopped engine's deferred callback, a killed engine's
+	# exit) must not cancel the current search, show its dialog, or power
+	# down the engine the pane runs now.
+	if {![info exists Vars(number)] || [catch {::engine::id $Vars(number)} current]} { return }
+	if {$current != $id} { return }
 
 	after cancel $Vars(after:id)
 	after cancel $Vars(after:stop)

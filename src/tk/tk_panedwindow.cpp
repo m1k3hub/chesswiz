@@ -1541,6 +1541,16 @@ DisplayPanedWindow(
 	ArrangePanes(clientData);
     }
 
+    /*
+     * A panedwindow can be mapped and still have no size: a pane below its
+     * minimum, a sash drag in progress, or the video inset reserving the
+     * whole pane. There are no pixels to double-buffer, and XCreatePixmap
+     * aborts the process on a zero width or height.
+     */
+    if (Tk_Width(tkwin) < 1 || Tk_Height(tkwin) < 1) {
+	return;
+    }
+
 #ifndef TK_NO_DOUBLE_BUFFERING
     /*
      * Create a pixmap for double-buffering, if necessary.
@@ -2873,6 +2883,11 @@ DisplayProxyWindow(
     Tk_Window tkwin = pwPtr->proxywin;
     pwPtr->flags &= ~PROXY_REDRAW_PENDING;
     if ((tkwin == NULL) || !Tk_IsMapped(tkwin)) {
+	return;
+    }
+
+    /* The proxy window follows a sash which can shrink it to nothing. */
+    if (Tk_Width(tkwin) < 1 || Tk_Height(tkwin) < 1) {
 	return;
     }
 

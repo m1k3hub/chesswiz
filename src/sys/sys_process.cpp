@@ -366,6 +366,11 @@ Process::Process(Command const& command, mstl::string const& directory)
 
 Process::~Process()
 {
+	// A stop/resume signal schedules a deferred callback. The engine can be
+	// powered down before that callback runs, and it would then use this
+	// object after it is gone; cancel it while the token is still valid.
+	Tcl_CancelIdleCall(callStopped, this);
+	Tcl_CancelIdleCall(callResumed, this);
 	Tcl_DStringFree(m_buffer);
 	delete m_buffer;
 	m_processMap.erase(m_pid);
@@ -645,14 +650,34 @@ Process::signalResumed()
 void
 Process::callStopped(void* clientData)
 {
-	static_cast<Process*>(clientData)->stopped();
+	// This runs from Tcl's event loop, not from a Tcl command. An exception
+	// escaping it would unwind through Tcl and terminate the process, so
+	// report a failed engine callback the way Tcl reports any other
+	// background failure.
+	try
+	{
+		static_cast<Process*>(clientData)->stopped();
+	}
+	catch (mstl::exception const& exc)
+	{
+		Tcl_SetObjResult(::tcl::interp(), Tcl_NewStringObj(exc.what(), -1));
+		Tcl_BackgroundError(::tcl::interp());
+	}
 }
 
 
 void
 Process::callResumed(void* clientData)
 {
-	static_cast<Process*>(clientData)->resumed();
+	try
+	{
+		static_cast<Process*>(clientData)->resumed();
+	}
+	catch (mstl::exception const& exc)
+	{
+		Tcl_SetObjResult(::tcl::interp(), Tcl_NewStringObj(exc.what(), -1));
+		Tcl_BackgroundError(::tcl::interp());
+	}
 }
 
 // vi:set ts=3 sw=3:

@@ -107,45 +107,92 @@ tcltest::test wood3d-webserver-serves-pbr {WebGL server serves PBR wood textures
 	::board3d::webserver::stop
 } -result {1 1 1 1 1 1}
 
-tcltest::test wood3d-headless-webgl-viewer {WebGL viewer loads photorealistic PBR wood material without console errors} -setup {
-	set port [::board3d::webserver::start [file join $::board3d::LibRoot web3d]]
-} -body {
-	set browser ""
+namespace eval ::wood3dTest {
+	variable Done 0
+	variable Out ""
+	variable Child {}
+	variable Profile {}
+}
+
+# A browser boot is not the measurement: the page's own virtual-time budget
+# decides how many frames it renders. Give the process a generous wall-clock
+# cap and a private profile so a busy machine or a locked default profile
+# cannot turn the measurement into a timeout.
+proc ::wood3dTest::browser {port attempt} {
 	foreach cand {google-chrome chromium} {
 		if {[auto_execok $cand] ne ""} {
 			set browser [auto_execok $cand]
-			break
+			set profile [file join [file dirname [info script]] tmp-app \
+				"wood3d-profile-[pid]-$attempt"]
+			file mkdir $profile
+			set ::wood3dTest::Profile $profile
+			set url "http://127.0.0.1:${port}/index.html?material=pbr-wood&selftest=1"
+			return [list $browser \
+				--headless --disable-gpu --enable-webgl \
+				--ignore-gpu-blocklist --use-gl=angle --use-angle=swiftshader \
+				--enable-unsafe-swiftshader --no-sandbox \
+				--user-data-dir=$profile --no-first-run --no-default-browser-check \
+				--disable-dev-shm-usage --disable-extensions \
+				--disable-background-networking --disable-component-update \
+				--disable-default-apps --disable-sync --metrics-recording-only \
+				--mute-audio \
+				--virtual-time-budget=4000 --enable-logging=stderr --v=0 \
+				--dump-dom $url]
 		}
 	}
-	if {$browser eq ""} {
+	return {}
+}
+
+proc ::wood3dTest::readPipe {pipe} {
+	append ::wood3dTest::Out [read $pipe]
+	if {[eof $pipe]} {
+		catch { close $pipe }
+		set ::wood3dTest::Child {}
+		set ::wood3dTest::Done 1
+	}
+}
+
+proc ::wood3dTest::run {cmd} {
+	set ::wood3dTest::Done 0
+	set ::wood3dTest::Out ""
+	set t0 [clock milliseconds]
+	set pipe [open "|$cmd 2>@1" r]
+	set ::wood3dTest::Child $pipe
+	fconfigure $pipe -blocking 0
+	fileevent $pipe readable [list ::wood3dTest::readPipe $pipe]
+	set timer [after 60000 {set ::wood3dTest::Done timeout}]
+	vwait ::wood3dTest::Done
+	after cancel $timer
+	if {$::wood3dTest::Done eq "timeout"} {
+		catch { set child [pid $pipe] }
+		catch { exec kill -TERM $child }
+		after 1000
+		catch { exec kill -KILL $child }
+		catch { close $pipe }
+		set ::wood3dTest::Child {}
+	}
+	return [list $::wood3dTest::Done $::wood3dTest::Out \
+		[expr {max(1, [clock milliseconds] - $t0)}]]
+}
+
+tcltest::test wood3d-headless-webgl-viewer {WebGL viewer loads photorealistic PBR wood material without console errors} -setup {
+	set port [::board3d::webserver::start [file join $::board3d::LibRoot web3d]]
+} -body {
+	set cmd [::wood3dTest::browser $port 1]
+	if {$cmd eq ""} {
 		# Fallback if no headless browser binary is installed on the runner
 		set index [::wood3dTest::request $port /index.html]
 		expr {[string match {*pbr-wood*} $index] ? "PASS_OK" : "FAIL"}
 	} else {
-		set url "http://127.0.0.1:${port}/index.html?material=pbr-wood&selftest=1"
-		set cmd [list $browser --headless --disable-gpu --enable-webgl \
-			--ignore-gpu-blocklist --use-gl=angle --use-angle=swiftshader \
-			--enable-unsafe-swiftshader --no-sandbox \
-			--virtual-time-budget=4000 --enable-logging=stderr --v=0 \
-			--dump-dom $url]
-		set Done 0
-		set Out ""
-		set t0 [clock milliseconds]
-		set pipe [open "|$cmd 2>@1" r]
-		fconfigure $pipe -blocking 0
-		fileevent $pipe readable [list apply {{p} {
-			append ::Out [read $p]
-			if {[eof $p]} {
-				catch { close $p }
-				set ::Done 1
-			}
-		}} $pipe]
-		set timer [after 15000 { set ::Done timeout }]
-		vwait ::Done
-		after cancel $timer
-		set wallMs [expr {max(1, [clock milliseconds] - $t0)}]
+		lassign [::wood3dTest::run $cmd] Done Out wallMs
 		if {$Done eq "timeout"} {
-			catch { close $pipe }
+			# Chrome's first profile initialisation can be slower than the
+			# page: one fresh attempt, still with the same page assertion.
+			catch { file delete -force $::wood3dTest::Profile }
+			lassign [::wood3dTest::run [::wood3dTest::browser $port 2]] \
+				Done Out wallMs
+		}
+		if {$Done eq "timeout"} {
 			error "Headless browser timed out"
 		}
 		set hasMarker [regexp {WOOD3D_SELFTEST:PASS mat=pbr-wood tex=4 clearcoat=1 errors=0 fps=([0-9.]+)} $Out -> fps]
@@ -156,6 +203,7 @@ tcltest::test wood3d-headless-webgl-viewer {WebGL viewer loads photorealistic PB
 	}
 } -cleanup {
 	::board3d::webserver::stop
+	catch { file delete -force $::wood3dTest::Profile }
 } -result PASS_OK
 
 tcltest::cleanupTests

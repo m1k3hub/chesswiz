@@ -28,6 +28,19 @@ namespace eval ::scidb::test::run12 {
 		::scidb::db::switch $pgn Normal
 	}
 
+	# The Advanced Search dialog this file opens stays mapped above the main
+	# window, holding the keyboard focus and covering the board. The next
+	# file's synthetic board click is hit-tested with winfo containing, so
+	# it lands on this dialog instead of the board and the move is lost.
+	# Dismiss the dialog the file opened; the base stays open for the next
+	# test in this file and settle releases it afterwards.
+	proc teardown {} {
+		variable pgn
+		set ns ::application::database
+		catch { destroy [${ns}::AdvancedDialogName $pgn Normal] }
+		catch { destroy [${ns}::MaterialDialogName $pgn Normal] }
+	}
+
 	proc advanced {player} {
 		variable pgn
 		set ns ::application::database
@@ -48,6 +61,8 @@ tcltest::test run12-player-surname {plain surname finds "Surname, X" but not lon
 	lmap p {Carlsen carlsen Carlsen* {Carlsen, M} Carlsenx Carls {Carlsen M}} {
 		::scidb::test::run12::advanced $p
 	}
+} -cleanup {
+	::scidb::test::run12::teardown
 } -result {3 3 4 1 1 0 0}
 
 tcltest::test run12-material-on-screen {Search by Material opens fully on screen} -body {
@@ -70,11 +85,15 @@ tcltest::test run12-material-on-screen {Search by Material opens fully on screen
 	destroy $dlg
 	wm geometry .application $g
 	list [expr {$x >= $wx}] [expr {$r <= $wx+$ww}] [string match *+-* $geo] $btn
+} -cleanup {
+	::scidb::test::run12::teardown
 } -result {1 1 0 1}
 
 tcltest::test run12-duplicates {Find Duplicates reports 1 group for two identical games} -body {
 	set groups [::scidb::db::findDuplicates $::scidb::test::run12::pgn Normal]
 	list [llength $groups] [llength [lindex $groups 0]]
+} -cleanup {
+	::scidb::test::run12::teardown
 } -result {1 2}
 
 tcltest::cleanupTests

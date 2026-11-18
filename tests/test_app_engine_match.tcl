@@ -22,7 +22,12 @@ namespace eval ::scidb::test::em {}
 proc ::scidb::test::em::stub {names repliesW repliesB} {
 	variable engines
 
+	# Keep the product seam, not just delete it: the match tests run in the
+	# same process as later files that start a real engine match.
 	catch { rename ::scidb::test::em::realRequest {} }
+	if {[llength [info commands ::enginematch::RequestMove]]} {
+		rename ::enginematch::RequestMove ::scidb::test::em::realRequest
+	}
 	set engines $::engine::Engines
 	set fresh {}
 	foreach name $names {
@@ -55,7 +60,9 @@ proc ::scidb::test::em::unstub {} {
 	set pos $::enginematch::Priv(pos)
 	catch { ::enginematch::Finish }
 	catch { rename ::enginematch::RequestMove {} }
-	catch { rename ::scidb::test::em::realRequest ::enginematch::RequestMove }
+	if {[llength [info commands ::scidb::test::em::realRequest]]} {
+		catch { rename ::scidb::test::em::realRequest ::enginematch::RequestMove }
+	}
 	if {[info exists engines]} { set ::engine::Engines $engines }
 	if {$pos >= 0} {
 		catch { ::application::pgn::release $pos }

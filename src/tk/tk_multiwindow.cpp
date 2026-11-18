@@ -793,6 +793,14 @@ DisplayMultiWindow(ClientData clientData)	// Information about window
 	if (mw->flags & REQUESTED_RELAYOUT)
 		ArrangePane(clientData);
 
+	// A pane can be mapped at zero size while a neighbouring pane, a sash
+	// or the video inset takes its space. The double buffer then has no
+	// pixels, and XCreatePixmap rejects a zero width or height by ending
+	// the process.
+	if (Tk_Width(tkwin) < 1 || Tk_Height(tkwin) < 1) {
+		return;
+	}
+
 #ifndef TK_NO_DOUBLE_BUFFERING
 	// Create a pixmap for double-buffering, if necessary.
 	pixmap = Tk_GetPixmap(	Tk_Display(tkwin),

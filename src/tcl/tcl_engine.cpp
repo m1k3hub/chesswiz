@@ -91,6 +91,7 @@ public:
 
 	EngineLog(FILE* fp, Tcl_Obj* cmd, Tcl_Obj* arg)
 		:m_stream(fp)
+		,m_flushTimer(0)
 		,m_cmd(cmd)
 		,m_arg(arg)
 		,m_debugCmd(0)
@@ -110,10 +111,16 @@ public:
 
 	~EngineLog()
 	{
+		if (m_flushTimer)
+		{
+			Tcl_DeleteTimerHandler(m_flushTimer);
+			m_flushTimer = 0;
+		}
 #ifdef _WIN32
 		// Deliver pending output while the Tcl command objects are still alive.
 		m_stream.close();
 #endif
+		try { flush(); } catch (...) {}
 		if (m_cmd) Tcl_DecrRefCount(m_cmd);
 		if (m_arg) Tcl_DecrRefCount(m_arg);
 		if (m_debugCmd) Tcl_DecrRefCount(m_debugCmd);
@@ -125,6 +132,7 @@ public:
 
 	void setConsole(Tcl_Obj* cmd, Tcl_Obj* arg)
 	{
+		flush();	// deliver the pending output to the reader which is leaving
 		if (cmd) Tcl_IncrRefCount(cmd);
 		if (arg) Tcl_IncrRefCount(arg);
 		if (m_cmd) Tcl_DecrRefCount(m_cmd);
@@ -135,6 +143,7 @@ public:
 
 	void setDebug(Tcl_Obj* cmd, Tcl_Obj* arg)
 	{
+		flush();
 		Tcl_IncrRefCount(cmd);
 		Tcl_IncrRefCount(arg);
 		if (m_debugCmd) Tcl_DecrRefCount(m_debugCmd);
@@ -145,7 +154,33 @@ public:
 
 	void write(char const* s, size_t len)
 	{
-		Tcl_Obj* str = Tcl_NewStringObj(s, len);
+		// A verbose engine (an "info" flood) can emit a line per microsecond,
+		// and every line used to cost one Tcl callback on the UI thread: the
+		// console could not keep up and the event loop stalled for a minute.
+		// Coalesce the info lines into short batches; everything else (the
+		// engine's answers, our commands, errors) is delivered at once, in
+		// order. A timer bounds the delay so ordinary analysis still reaches
+		// the pane while the engine searches, instead of waiting for bestmove.
+		m_pending.append(s, len);
+
+		if (!isInfo(s, len) || m_pending.size() >= BatchBytes)
+			flush();
+		else if (!m_flushTimer)
+			m_flushTimer = Tcl_CreateTimerHandler(FlushDelay, &EngineLog::onFlushTimer, this);
+	}
+
+	void flush()
+	{
+		if (m_flushTimer)
+		{
+			Tcl_DeleteTimerHandler(m_flushTimer);
+			m_flushTimer = 0;
+		}
+		if (m_pending.empty())
+			return;
+
+		Tcl_Obj* str = Tcl_NewStringObj(m_pending.data(), int(m_pending.size()));
+		m_pending.clear();
 
 		Tcl_IncrRefCount(str);
 		if (m_debugCmd)
@@ -162,7 +197,25 @@ public:
 
 private:
 
+	// "< info ..." is the traffic stockfish, and every other UCI engine, can
+	// generate without bound; the rest is low volume and stays immediate.
+	static bool isInfo(char const* s, size_t len)
+	{
+		return len >= 7 && ::strncmp(s, "< info ", 7) == 0;
+	}
+
+	static void onFlushTimer(void* clientData)
+	{
+		EngineLog* log = static_cast<EngineLog*>(clientData);
+		log->m_flushTimer = 0;
+		try { log->flush(); } catch (...) {}
+	}
+
+	enum { BatchBytes = 32768, FlushDelay = 50 };
+
 	mstl::ofstream	m_stream;
+	mstl::string	m_pending;
+	Tcl_TimerToken	m_flushTimer;
 	Tcl_Obj*			m_cmd;
 	Tcl_Obj*			m_arg;
 	Tcl_Obj*			m_debugCmd;
@@ -271,7 +324,14 @@ public:
 	void sendInfo(Tcl_Obj* cmd, Tcl_Obj* args)
 	{
 		Tcl_IncrRefCount(args);
-		tcl::invoke(__func__, m_updateInfoCmd, m_clientData, m_id, cmd, args, nullptr);
+		try
+		{
+			tcl::invoke(__func__, m_updateInfoCmd, m_clientData, m_id, cmd, args, nullptr);
+		}
+		catch (mstl::exception const&)
+		{
+			reportBackgroundError();
+		}
 		Tcl_DecrRefCount(args);
 	}
 
@@ -438,7 +498,14 @@ public:
 
 	void engineIsReady() override
 	{
-		tcl::invoke(__func__, m_isReadyCmd, m_clientData, m_id, nullptr);
+		try
+		{
+			tcl::invoke(__func__, m_isReadyCmd, m_clientData, m_id, nullptr);
+		}
+		catch (mstl::exception const&)
+		{
+			reportBackgroundError();
+		}
 	}
 
 	void engineSignal(Signal signal) override
@@ -460,7 +527,18 @@ public:
 				break;
 		}
 
-		tcl::invoke(__func__, m_signalCmd, m_clientData, m_id, Tcl_NewStringObj(msg, -1), nullptr);
+		// These callbacks run from the engine's channel handler, not from a
+		// Tcl command. A stale pane (or any other error in the callback) must
+		// not unwind through Tcl and terminate the application: report it as
+		// a background error, the same way Tcl reports any other callback.
+		try
+		{
+			tcl::invoke(__func__, m_signalCmd, m_clientData, m_id, Tcl_NewStringObj(msg, -1), nullptr);
+		}
+		catch (mstl::exception const&)
+		{
+			reportBackgroundError();
+		}
 	}
 
 	void setId(unsigned id)
@@ -469,6 +547,14 @@ public:
 	}
 
 private:
+
+	static void reportBackgroundError()
+	{
+		Tcl_Interp* ti = ::tcl::interp();
+		if (*Tcl_GetStringResult(ti) == '\0')
+			Tcl_SetObjResult(ti, Tcl_NewStringObj("engine callback failed", -1));
+		Tcl_BackgroundError(ti);
+	}
 
 	Tcl_Obj* m_isReadyCmd;
 	Tcl_Obj* m_signalCmd;

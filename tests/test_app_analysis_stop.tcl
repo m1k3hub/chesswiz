@@ -123,9 +123,17 @@ proc ::scidb::test::pane::waitUntil {cond {ms 30000}} {
 	return [uplevel 1 [list expr $cond]]
 }
 
+# The protocol log is captured for assertions about commands and answers. An
+# engine which floods its output (analysis-output-flood) emits hundreds of
+# thousands of "info" lines; appending every one of them keeps the suite
+# copying a growing string for a minute and looks like a hang. Keep a bounded
+# capture: everything up to the cap, and past it only the lines an assertion
+# can look for (the "> command" and "< answer" traffic, not the info flood).
 proc ::scidb::test::pane::logLine {arg line} {
 	variable Log
-	append Log $line "\n"
+	if {[string length $Log] < 4194304 || ![string match {< info *} $line]} {
+		append Log $line "\n"
+	}
 }
 
 # true when the engine protocol log contains <text>

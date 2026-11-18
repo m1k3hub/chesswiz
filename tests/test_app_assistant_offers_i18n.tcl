@@ -201,4 +201,9 @@ tcltest::test offers-i18n-coverage {every offer string has a German text of its 
 
 ::scidb::test::offersI18n::restore
 
+# The worktree's tcl/ holds the language files but not the installed layout
+# (scripts/plain.eXt and the like). Leave the installed share behind for the
+# files that follow: a player card opened then rendered empty without it.
+set ::scidb::dir::share $::scidb::test::offersI18n::savedShare
+
 tcltest::cleanupTests

@@ -607,6 +607,10 @@ tcltest::test assistant-position-moves {position_moves reports the tree of the b
 	# This test also runs alone with -match; do not depend on the pane test.
 	::application::assistant::show
 	# the Clipbase stands in for a Scidb base; the tree needs a saved one
+	# Clipbase is the process-wide scratch base and earlier files may have
+	# left their own games in it: the copy would add ours to theirs, and the
+	# tree counts the games in the base. Own it for the duration of the test.
+	catch { ::scidb::db::clear Clipbase }
 	::scidb::db::copy $::scidb::test::assistant::Fixture Clipbase {} \
 		::scidb::test::assistant::nop {} ::scidb::test::assistant::nop {}
 	::scidb::db::save Clipbase ::scidb::test::assistant::nop {}

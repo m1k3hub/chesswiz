@@ -1135,6 +1135,14 @@ DisplayTabs(ClientData clientData)	// Information about window
 	width = Tk_Width(tkwin) - nb->padding.left - nb->padding.right - 2*nb->borderWidth;
 	height = nb->tabHeight;
 
+	// A notebook squeezed to nothing (a sash or a pane swap in progress)
+	// has no tab strip to draw, and XCreatePixmap rejects a zero width or
+	// height with BadValue, which ends the process. Nothing is visible in
+	// a zero-sized strip, so there is nothing to draw either.
+	if (width < 1 || height < 1) {
+		return;
+	}
+
 #ifdef TK_NO_DOUBLE_BUFFERING
 
 	Tk_Fill3DRectangle(tkwin, Tk_WindowId(tkwin), nb->background, x, y, width, height, 0, TK_RELIEF_FLAT);
@@ -1220,6 +1228,14 @@ DisplayNotebook(ClientData clientData)	// Information about window
 	y = Tk_Height(tkwin) - nb->tabHeight - nb->padding.bottom - nb->borderWidth;
 	width = Tk_Width(tkwin) - nb->padding.left - nb->padding.right - 2*nb->borderWidth;
 	height = nb->tabHeight;
+
+	// A mapped window can still be laid out at zero size while a sash,
+	// pane or inset reserves its space. The double buffer has no pixels to
+	// hold then, and Tk_GetPixmap's XCreatePixmap call is fatal for a zero
+	// width or height.
+	if (Tk_Width(tkwin) < 1 || Tk_Height(tkwin) < 1) {
+		return;
+	}
 
 #ifndef TK_NO_DOUBLE_BUFFERING
 	// Create a pixmap for double-buffering, if necessary.

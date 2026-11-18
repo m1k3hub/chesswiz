@@ -2158,6 +2158,30 @@ proc ::context::ObjectRule {id object {visibilityOnly 0}} {
 	if {$id eq "c5.player_url" && [dict exists $object webUrl]} {
 		return [list 1 [WebChoiceAvailable $object]]
 	}
+	# Copy Text is enabled by the comment text itself, not by the language
+	# list: an empty editor has nothing to copy into another language slot.
+	# Only a live editor can say it is empty; an object naming a widget which
+	# no longer exists (a stale menu object, a synthetic walk object) is not
+	# evidence of an empty comment and keeps the ordinary cascade rules.
+	if {$id eq "c11.copy_text" && [dict exists $object widget]} {
+		set w [dict get $object widget]
+		if {[winfo exists $w]} {
+			set available 0
+			catch {set available [expr {![::widget::textIsEmpty? $w]}]}
+			if {!$available} { return {1 0} }
+		}
+	}
+	# The native language menu disables a language the comment already has.
+	# A posted row carries that one call, so judge the call, not the cascade:
+	# another language's runnable row must not admit "NewLanguage fi" when fi
+	# is already in the comment.
+	if {$id eq "c11.add_language" && [dict exists $object call]} {
+		set call [dict get $object call]
+		set available [expr {[llength $call] == 2 && [lindex $call 0] eq "NewLanguage"
+			&& [info exists ::comment::Vars(langSet)]
+			&& [lindex $call 1] ni $::comment::Vars(langSet)}]
+		return [list 1 $available]
+	}
 	if {$id eq "c11.switch_language" && [dict exists $object call]} {
 		set call [dict get $object call]
 		set available [expr {[llength $call] == 2 && [lindex $call 0] eq "SwitchLanguage"

@@ -331,7 +331,8 @@ proc FetchResult {table {force false}} {
 	if {[llength $Options(sort:column)]} {
 		lappend options -sort [columnIndex $Options(sort:column)]
 	}
-	set state [::scidb::vars::finish $Options(rating:type) $Options(search:mode) {*}$options]
+	set state [::scidb::vars::finish $Options(rating:type) \
+		[::application::tree::SearchMethod $Options(search:mode)] {*}$options]
 
 	if {$force || $state ne "unchanged"} {
 		set Vars(data) [::scidb::vars::fetch]

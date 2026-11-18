@@ -2138,7 +2138,12 @@ proc ::application::assistant::RunTool {name cargs {approval {}}} {
 	if {[TurnRefused]} {
 		return [list declined 0 [BoundsDecline $Priv(lastRequest)]]
 	}
-	if {$name eq "download_games" && [info exists Priv(lastRequest)]
+	# A public script call supplies its own arguments; only a model turn is
+	# rewritten from the user's wording. Otherwise an explicit, malformed
+	# download_games call would silently become the Download Games dialog.
+	if {$name eq "download_games"
+	 && !([info exists Priv(scriptPosition)] && $Priv(scriptPosition))
+	 && [info exists Priv(lastRequest)]
 	 && [string length [string trim $Priv(lastRequest)]]
 	 && ![regexp -nocase {\m(?:twic|week\s+in\s+chess|lichess|chess\.com|https?://|\.pgn|\.zip)\M} $Priv(lastRequest)]
 	 && (![dict exists $cargs player] || [dict get $cargs player] eq "")
@@ -3292,7 +3297,8 @@ proc ::application::assistant::DoPositionMoves {limit} {
 proc ::application::assistant::TreeOptions {} {
 	if {[info exists ::application::tree::Options(rating:type)]} {
 		return [list $::application::tree::Options(rating:type) \
-			$::application::tree::Options(search:mode) $::application::tree::Options(search:variations)]
+			[::application::tree::SearchMethod $::application::tree::Options(search:mode)] \
+			$::application::tree::Options(search:variations)]
 	}
 	return {Elo exact 0}
 }

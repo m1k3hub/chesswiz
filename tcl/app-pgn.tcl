@@ -819,11 +819,14 @@ proc ensureScratchGame {} {
 
 	::scidb::game::switch 9
 	::scidb::game::new 0
-	::scidb::game::switch 0
-	::scidb::pos::setup [::scidb::pos::fen]
 	set tags [::scidb::game::tags 0]
 	::game::setFirst $scratchbaseName Normal $tags utf-8
 	add 0 $scratchbaseName Normal $tags
+	# A game created here has no subscriber until this pane attaches to it,
+	# and switchGame refuses to switch to a game which is not ready yet. add
+	# attaches the pane (and switches), so the position can then be set on
+	# game 0 rather than on the scratch game which was current before.
+	::scidb::pos::setup [::scidb::pos::fen]
 	select 0
 
 	return 1

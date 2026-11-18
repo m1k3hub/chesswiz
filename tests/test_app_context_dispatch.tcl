@@ -167,7 +167,13 @@ tcltest::test dispatch-player-preparation {native player preparation report open
  update
  list $reply [winfo exists $dlg]
 } -cleanup {
- if {[info exists dlg] && [winfo exists $dlg]} {::application::database::player::ClosePrepReport $dlg}
+ if {[info exists dlg] && [winfo exists $dlg]} {
+  ::application::database::player::ClosePrepReport $dlg
+  # ClosePrepReport releases the report view but leaves the dialog for its
+  # own close binding to destroy. Nothing clicks it here, and a 1302x770
+  # dialog left mapped covers the board the next file measures and clicks.
+  catch {destroy $dlg}
+ }
  ::application::database::closeBase .application $base
  file delete -force $::scidb::test::actions::Dir
 } -result {{opened player preparation report} 1}

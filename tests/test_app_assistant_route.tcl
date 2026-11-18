@@ -798,12 +798,29 @@ tcltest::test route-font-size-deterministic {a whole-window font-size command ro
   set ::application::assistant::RouteMode active
   set ::scidb::test::route::RouteReply [::scidb::test::route::reply existing_assistant 0.99 0.99]
   set ::scidb::test::route::ChatCalls 0
+  # The whole-window command rewrites every Tk font, and its first call also
+  # turns Tk's point sizes into the pixel sizes this font system stores.
+  # Decrementing once is therefore not the inverse of the increment: it left
+  # every later file's dialogs one font step short (the real minimum plans of
+  # dlg-032/dlg-039 changed with it). Snapshot the realised configuration and
+  # put exactly that back, so the file cannot resize the rest of the run.
+  set savedFonts {}
+  foreach f [font names] { lappend savedFonts $f [font configure $f] }
+  set savedSizes [array get ::font::Options *:size]
   set before [expr {abs([font configure TkDefaultFont -size])}]
-  ::scidb::test::route::ask "biger font"
-  update
-  set after [expr {abs([font configure TkDefaultFont -size])}]
-  if {$after > $before} { ::font::changeFontSize -1 }
-  list [expr {$after > $before}] $::scidb::test::route::ChatCalls
+  set code [catch {
+   ::scidb::test::route::ask "biger font"
+   update
+   set after [expr {abs([font configure TkDefaultFont -size])}]
+   list [expr {$after > $before}] $::scidb::test::route::ChatCalls
+  } outcome]
+  foreach {f config} $savedFonts { catch { font configure $f {*}$config } }
+  if {[info exists ::font::Options]} {
+   array unset ::font::Options *:size
+   array set ::font::Options $savedSizes
+  }
+  if {$code} { return -code error $outcome }
+  set outcome
  }
 } -result {1 0}
 

@@ -747,7 +747,7 @@ if {[::scidb::game::query mainvariant?] eq "Normal"} {
 	if {![[namespace parent]::exists? tree]} { return }
 	if {[::scidb::tree::isUpToDate?]} { return }
 
-	if {[string length $base]} {
+	if {[string length $base] && [llength [::scidb::tree::get]]} {
 		if {$base ne $Vars(current:base) || $variant ne $Vars(current:variant)} {
 			SetSwitcher $base $variant
 		}
@@ -774,6 +774,15 @@ set Vars(force) 1
 }
 
 
+# The native tree methods are exact, fast and quick. "slow" is the menu's
+# historical name for the thorough (tortoise) search, which is the exact
+# method: a pane may still carry it in Options(search:mode), and passing it
+# to the native commands would make every later tree update fail.
+proc SearchMethod {mode} {
+	return [expr {$mode eq "slow" ? "exact" : $mode}]
+}
+
+
 proc DoSearch {table} {
 	variable Vars
 	variable Options
@@ -783,7 +792,7 @@ proc DoSearch {table} {
 if {[::scidb::game::query mainvariant?] ne "Normal"} { return }
 #################################################
 
-	if {[::scidb::tree::update $Options(rating:type) $Options(search:mode) $Options(search:variations)]} {
+	if {[::scidb::tree::update $Options(rating:type) [SearchMethod $Options(search:mode)] $Options(search:variations)]} {
 		if {$Vars(searching)} {
 			$Vars(progress) configure -background [::colors::lookup $Colors(progress:finished)]
 			place $Vars(progress) -x 1 -y 1 -width 127
@@ -1100,6 +1109,20 @@ proc FetchResult {table {force false}} {
 	# neccessary because of "after" effect
 	set table $Vars(table)
 
+	# A search result may arrive after its reference base was closed or
+	# replaced.  Counting rows in the vanished base used to trip a native
+	# assertion, so drop the stale result instead.
+	set base [::scidb::tree::get]
+	if {[llength $base] == 0
+			|| ![::scidb::db::get open? $base [::scidb::tree::variant]]} {
+		set Vars(data) {}
+		if {[winfo exists $table]} {
+			catch { ::table::clear $table }
+			ShowMessage NoGamesAvailable
+		}
+		return
+	}
+
 ### VARIANTS ####################################
 if {[::scidb::game::query mainvariant?] ne "Normal"} { return }
 if {$Vars(force)} { set force true }
@@ -1113,7 +1136,7 @@ if {$Vars(force)} { set force true }
 	}
 	set state [::scidb::tree::finish \
 		$Options(rating:type) \
-		$Options(search:mode) \
+		[SearchMethod $Options(search:mode)] \
 		$Options(search:variations) \
 		{*}$options \
 	]
