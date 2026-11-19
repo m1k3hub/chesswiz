@@ -660,7 +660,7 @@ namespace eval ::scidb::test::actions {
     # These are assertions about real product replies, not skipped handlers.
     variable RealGates {
         repertoire_check {error: no repertoire is open: open a database of type Openings, Openings White or Openings Black}
-        add_to_repertoire {error: no writable repertoire database is open. Open one, or mark a database as one: Database tab > right-click it > Maintenance > Mark As > Openings}
+        add_to_repertoire {error: no writable repertoire database is open. Open one, or mark a database as one: Database > Maintenance > Repertoire Type > Openings}
         find_positions {error: call cql_help first and write the script from its reference and examples; then call find_positions again}
         save_pattern {error: there is no position search to save; call find_positions first}
         save_working_set {error: the game list shows no games}

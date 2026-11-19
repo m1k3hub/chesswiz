@@ -771,7 +771,7 @@ tcltest::test assistant-menu-line {a tool with a menu equivalent says where it l
 	set ok [::application::assistant::runTool search_games {player {carlsen, m} result win}]
 	set bad [::application::assistant::runTool search_games {}]
 	set ::application::assistant::ToolMenu {}
-	list [string match "*\nmenu: Database tab > right-click the database > Maintenance > Advanced Search" $ok] \
+	list [string match "*\nmenu: Database > Search > Advanced\u2026" $ok] \
 		[string match "*menu:*" $bad]
 } -result {1 0}
 
