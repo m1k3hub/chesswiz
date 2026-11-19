@@ -2795,6 +2795,50 @@ proc ::scidb::test::dlgplace::nativeMinimum {dlg} {
     puts "W9H native=$frame overlap=$measured minimum=$minimum candidates=$areas"
     require [expr {$measured == $minimum}] "native overlap $measured != minimum $minimum"
 }
+# A trigger's Configure, reflow debounce and board rebuild are asynchronous.
+# A fixed sleep is a bet on that schedule (VAL-TST-001): under load the WM can
+# deliver the trigger's second Configure after the sleep and the planner then
+# moves the dialog again. Wait for the production settle that recorded this
+# trigger and for the WM to finish applying it instead: no placement, reflow
+# or board work pending, and the main, board and dialog rectangles unchanged
+# across polls. Bounded; raises on timeout. The trigger's own 500 ms response
+# is asserted separately and is not extended by this wait.
+proc ::scidb::test::dlgplace::pendingAfter {name} {
+    if {![info exists $name]} {return 0}
+    set id [set $name]
+    return [expr {$id ne {} && ![catch {after info $id}]}]
+}
+proc ::scidb::test::dlgplace::triggerSettled {dlg seq trigger {timeout 6000}} {
+    set deadline [expr {[clock milliseconds] + $timeout}]
+    set previous {}
+    set changedAt [clock milliseconds]
+    while {[clock milliseconds] < $deadline} {
+        waitFor 20
+        set now [clock milliseconds]
+        set recorded 0
+        foreach r [::util::place::besidePlacementLog $seq] {
+            if {[dict get $r dialog] eq $dlg && [dict get $r trigger] eq $trigger} {
+                set recorded 1
+                break
+            }
+        }
+        set state [list [wmFrame .application] [boardRect] [wmFrame $dlg]]
+        # pendingTrigger is a one-shot hint for the next plan, not proof that
+        # work is outstanding: a settle that finds no changed input leaves it
+        # set. Requiring it to clear would wait forever.
+        set pending [expr {!$recorded
+            || $::util::place::BesideTimer ne {}
+            || $::application::Vars(loading)
+            || [pendingAfter ::application::board::Vars(after)]
+            || [pendingAfter ::application::reflow::S(afterId)]}]
+        if {$pending || $state ne $previous} {
+            set previous $state
+            set changedAt $now
+        }
+        if {!$pending && $now - $changedAt >= 300} {return}
+    }
+    error "placement for $trigger did not settle within $timeout ms (recorded $recorded timer [set ::util::place::BesideTimer] loading $::application::Vars(loading) board [pendingAfter ::application::board::Vars(after)] reflow [pendingAfter ::application::reflow::S(afterId)] state $state previous $previous frame [wmFrame $dlg])"
+}
 proc ::scidb::test::dlgplace::pairReady {dialogs} {
     set deadline [expr {[clock milliseconds]+5000}]
     set previous {}
@@ -2838,7 +2882,7 @@ tcltest::test dlg-w9h-native-deadline {Engine Match native minimum and single se
         set seq $::util::place::BesideRecordSeq
         set start [clock milliseconds]
         eval $script
-        ::scidb::test::dlgplace::waitFor 500
+        ::scidb::test::dlgplace::triggerSettled $dlg $seq $trigger
         set stable [::scidb::test::dlgplace::wmFrame $dlg]
         ::scidb::test::dlgplace::require [expr {
             $decoration eq $::util::place::BesideState($dlg,extents)}] "lost native decoration cache"
@@ -2931,7 +2975,7 @@ tcltest::test dlg-w9i-pair-deadline {both playing dialogs record and settle befo
         set seq $::util::place::BesideRecordSeq
         set start [clock milliseconds]
         eval $script
-        ::scidb::test::dlgplace::waitFor 500
+        foreach d $ds {::scidb::test::dlgplace::triggerSettled $d $seq $trigger}
         puts "W9I records $trigger [::util::place::besidePlacementLog $seq]"
         set stable {}
         foreach d $ds {

@@ -19,6 +19,7 @@ namespace eval ::lichess::api {
 	variable ReconnectDelays {1000 3000 9000}
 	variable RecoveryTimeout 30000
 	variable Deliveries {}
+	variable WatchdogSerial 0
 	namespace eval mc {
 		set Network "Could not complete the Lichess request."
 		set Unauthorized "Lichess rejected the credential. Sign in again."
@@ -416,7 +417,32 @@ proc ::lichess::api::ArmWatchdog {id {activity 0}} {
 		RecoveryNotice $id {}
 	}
 	after cancel [dict get $Requests $id watchdog]
-	dict set Requests $id watchdog [after $StallTimeout [list ::lichess::api::Reconnect $id]]
+	variable WatchdogSerial
+	incr WatchdogSerial
+	dict set Requests $id watchdogToken $WatchdogSerial
+	dict set Requests $id watchdog [after $StallTimeout \
+		[list ::lichess::api::WatchdogExpired $id $WatchdogSerial]]
+}
+
+# A due watchdog proves the timer expired, not that the peer is silent: a
+# blocked event loop leaves readable bytes unread, and the timer then runs
+# before the file event that would have re-armed it. Defer the decision to
+# idle, which Tcl runs only after every ready file event, and ignore a check
+# whose attempt has since been re-armed, dropped or given up.
+proc ::lichess::api::WatchdogExpired {id token} {
+	variable Requests
+	if {![dict exists $Requests $id]} { return }
+	if {[dict get $Requests $id watchdogToken] != $token} { return }
+	dict set Requests $id watchdog {}
+	after idle [list ::lichess::api::WatchdogCheck $id $token]
+}
+proc ::lichess::api::WatchdogCheck {id token} {
+	variable Requests
+	if {![dict exists $Requests $id]} { return }
+	set r [dict get $Requests $id]
+	if {[dict get $r watchdogToken] != $token || [dict get $r lost]
+		|| [dict get $r http] eq {}} { return }
+	Reconnect $id
 }
 proc ::lichess::api::ForgetDelivery {id} {
 	variable Deliveries

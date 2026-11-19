@@ -82,6 +82,17 @@ proc ::scidb::test::eof::Cleanup {} {
  catch {::online::window::closeTab lichess-tv}
 }
 proc ::scidb::test::eof::Check {actual expected} {if {$actual ne $expected} {error "expected <$expected>, got <$actual>"}}
+# The retry/recovery has really completed when its new HTTP attempt has
+# received the feed body again: the request is connected, its attempts were
+# reset by that activity, and OnTvEvent repopulated the game id. The id is
+# cleared before the hold switch so the original body cannot satisfy this.
+proc ::scidb::test::eof::StreamLive {h} {
+    expr {[dict exists $::lichess::api::Requests $h]
+        && ![dict get $::lichess::api::Requests $h lost]
+        && [dict get $::lichess::api::Requests $h attempts] == 0
+        && [dict get $::lichess::api::Requests $h http] ne {}
+        && $::lichess::tv::Priv(gameId) eq "eof-tv"}
+}
 proc ::scidb::test::eof::Journal {name} {
  variable Out; variable Hits; variable Events
  set f [open [file join $Out $name.txt] w]
@@ -249,14 +260,23 @@ namespace eval ::scidb::test::eof {
    set error [.online.status cget -text]
    ::scidb::test::eof::Check [expr {[string match *Lichess* $error]}] 1
    if {$::scidb::test::eof::recovery eq "newer"} {::online::window::status "A newer status"}
+   # The recovery was triggered by the shortened probe interval above. The
+   # recovered stream then runs at the product's real interval: this server
+   # shares the event loop, so a loaded loop cannot send its 60 ms heartbeat
+   # and would falsely stall a live stream. The status assertion is still
+   # made after the real body arrives, not after an elapsed timer.
+   set ::lichess::api::StallTimeout [lindex $::scidb::test::eof::Saved 1]
    set ::scidb::test::eof::Mode hold
+   set ::lichess::tv::Priv(gameId) {}
    if {$::scidb::test::eof::recovery in {manual newer}} {.online.$h.retry invoke}
-   ::scidb::test::eof::Wait {$::lichess::tv::Priv(gameId) eq "eof-tv" && ![winfo exists .online.$h]}
-   ::scidb::test::eof::Pause 500
+   ::scidb::test::eof::Wait {[::scidb::test::eof::StreamLive $h] && ![winfo exists .online.$h]}
+   # Sample the status before Journal/Shot: the screenshot is evidence, while
+   # execing it blocks the event loop and must not decide the assertion.
+   set actual [.online.status cget -text]
    ::scidb::test::eof::Journal status-$::scidb::test::eof::recovery
    ::scidb::test::eof::Shot status-$::scidb::test::eof::recovery
    set expected [expr {$::scidb::test::eof::recovery eq "newer" ? "A newer status" : ""}]
-   list [expr {[.online.status cget -text] eq $expected}] [dict get $::lichess::api::Requests $h lost] [expr {$::lichess::tv::Priv(streamHandle) eq $h}]
+   list [expr {$actual eq $expected}] [dict get $::lichess::api::Requests $h lost] [expr {$::lichess::tv::Priv(streamHandle) eq $h}]
   } -cleanup {::scidb::test::eof::Cleanup} -result {1 0 1}
  }
 }
