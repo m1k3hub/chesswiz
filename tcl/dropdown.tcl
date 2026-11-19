@@ -10,7 +10,6 @@
 
 namespace eval menu {
 	variable DropdownTree {}
-	variable DropdownFilled [dict create]
 	variable DropdownOrder 0
 	variable DropdownCounter 0
 	variable DropdownWidget ""
@@ -887,11 +886,16 @@ proc ::menu::RegisterTree {} {
 	dict set ::action::Registry menu.help.support enabled {expr {$::menu::SupportURL ne ""}}
 	dict set ::action::Registry menu.help.support doc "Open the Chesswiz support page to donate or support development."
 
-	# The New Game variants are dispatched by ::menu::Invoke but have no
-	# drop-down row, so they are registered here for ::action::run.
-	foreach id {game.new.normal game.new.three game.new.crazy game.new.variants} {
-		Register $id [MC NewGame] "" "" "" ""
+	# The New Game variants are dispatched by ::menu::Invoke and are also
+	# the rows of Game > New Game, so they are registered here for
+	# ::action::run (and for the assistant).
+	foreach {id label} [NewGameRows] {
+		Register $id $label "" "" "" ""
+		# A posted row is user reachable even though it has no fixed
+		# drop-down ordinal, so the assistant may run it too (VAL-AI-009).
+		dict set ::action::Registry $id operator 1
 	}
+	Register game.new.variants [MC NewGame] "" "" "" ""
 }
 
 proc ::menu::RegisterNodes {node order top} {
@@ -1173,9 +1177,188 @@ proc ::menu::AmpText {text} {
 	return [list " $plain" [expr {$ul < 0 ? -1 : $ul + 1}]]
 }
 
+# The registry must also be constructible before (or without) the language
+# pack, so a missing localization falls back to the shipped English name.
+proc ::menu::VariantLabel {name fallback} {
+	if {[info exists ::mc::VariantName($name)]} {
+		return $::mc::VariantName($name)
+	}
+	return $fallback
+}
+
+# One list of {id label} pairs feeds both the registry (RegisterTree) and
+# the posted Game > New Game cascade, so a variant can never be offered
+# without its action (or the reverse).
+proc ::menu::NewGameRows {} {
+	set antichess [VariantLabel Antichess Antichess]
+	return [list \
+		game.new.normal		[VariantLabel Normal {Normal Chess}] \
+		game.new.three		[VariantLabel ThreeCheck {Three-check Chess}] \
+		game.new.crazy		[VariantLabel Crazyhouse Crazyhouse] \
+		game.new.losers		"$antichess - [VariantLabel Losers Losers]" \
+		game.new.suicide	"$antichess - [VariantLabel Suicide Suicide]" \
+		game.new.giveaway	"$antichess - [VariantLabel Giveaway Giveaway]" \
+	]
+}
+
+# The top-level Board and Database cascades are the only ones whose
+# -state depends on the tab/layout rather than on their own rows.
+proc ::menu::TopEntryState {labelName} {
+	if {$labelName eq "Board" && [OnDatabaseTab]} { return disabled }
+	if {$labelName eq "Database" && [BoardOnlyLayout]} { return disabled }
+	return normal
+}
+
+# Refresh every top-level cascade state before the drop-down posts. Tk
+# will not post a disabled cascade, so a stale disabled Board/Database
+# entry could never recover through its own -postcommand.
+proc ::menu::RefreshTopStates {menu} {
+	variable DropdownTree
+	if {![winfo exists $menu]} { return }
+	set last ""
+	catch { set last [$menu index end] }
+	if {$last eq "" || $last eq "none"} { return }
+	set i -1
+	foreach top $DropdownTree {
+		if {[lindex $top 0] ne "cascade"} { continue }
+		incr i
+		if {$i > $last} { break }
+		catch { $menu entryconfigure $i -state [TopEntryState [lindex $top 1]] }
+	}
+}
+
+# Keep the entry that owns the posting cascade in step with the state it
+# shows. FillTop is also called directly by tests and dumps, without the
+# parent being posted first.
+proc ::menu::SyncTopState {labelName menu} {
+	set parent [winfo parent $menu]
+	if {$parent eq "" || ![winfo exists $parent]} { return }
+	set last ""
+	catch { set last [$parent index end] }
+	if {$last eq "" || $last eq "none"} { return }
+	for {set i 0} {$i <= $last} {incr i} {
+		if {[$parent type $i] ne "cascade"} { continue }
+		set sub ""
+		catch { set sub [$parent entrycget $i -menu] }
+		if {$sub eq $menu} {
+			catch { $parent entryconfigure $i -state [TopEntryState $labelName] }
+			return
+		}
+	}
+}
+
+# View > Toolbars is a real per-toolbar checkbutton list. The tree keeps
+# the B0 structural marker (the frozen dump fixture names it), but the
+# posted menu renders the toolbar filler, exactly like the other dynamic
+# leaves whose dump row is only a marker.
+proc ::menu::ToolbarsAvailable {} {
+	if {[llength [info commands ::toolbar::activeParents]] == 0} { return 0 }
+	return [expr {[llength [::toolbar::activeParents]] > 0}]
+}
+
+proc ::menu::FillToolbars {menu} {
+	if {[llength [info commands ::toolbar::activeParents]] == 0} { return }
+	foreach parent [::toolbar::activeParents] {
+		if {![info exists ::toolbar::Specs(toolbars:$parent)]} { continue }
+		set last ""
+		catch { set last [$menu index end] }
+		set first [expr {$last eq "" || $last eq "none" ? 0 : $last + 1}]
+		if {[catch { ::toolbar::addToolbarMenu $menu $parent -1 }]} { continue }
+		# addToolbarMenu inserts the native checkbuttons that toggle the
+		# toolbar's own hidden flag. Re-point their command at the registry
+		# so every posted row dispatches through ::action::run, exactly
+		# like the other dynamic rows (VAL-REG-002).
+		set i $first
+		foreach toolbar $::toolbar::Specs(toolbars:$parent) {
+			if {$i > [$menu index end]} { break }
+			catch {
+				$menu entryconfigure $i \
+					-command [list ::action::run toolbar.toggle [dict create toolbar $toolbar]]
+			}
+			incr i
+		}
+	}
+}
+
+# Would a dynamic cascade post at least one row? This is the visibility
+# half of FillDynamic; it never builds a widget, so the parent can decide
+# whether to show the cascade without filling it early.
+proc ::menu::DynamicNotEmpty {labelName} {
+	switch -- $labelName {
+		OpenRecent {
+			# recentFiles drops the bases already in the switcher, so an
+			# open database can still leave nothing to list. That menu
+			# used to post a lone "(Empty)" cascade; it is not meaningful
+			# content, so the parent cascade is dropped instead.
+			if {[llength [info commands ::application::database::recentFiles]] == 0} { return 0 }
+			return [expr {[llength [::application::database::recentFiles]] > 0}]
+		}
+		NewGame { return 1 }
+		AddToRepertoire - AddLineToRepertoire {
+			return [expr {[GameLoaded] && ![TrialMode]}]
+		}
+		MaintRepertoireType {
+			if {![DbOpen] || ![DbWritable]} { return 0 }
+			set base ""
+			catch { set base [::scidb::db::get name] }
+			return [expr {[string tolower [file extension $base]] in {.sci .si3 .si4}}]
+		}
+		AppAnnotationTimeout - AppSlidingVariation { return 1 }
+		AppPromotedMark {
+			if {[catch { set variant [::scidb::game::query variant?] }]} { return 0 }
+			return [expr {$variant eq "Crazyhouse"}]
+		}
+		Panes {
+			set twm [PaneTWM]
+			return [expr {$twm ne "" && [llength [$twm leaves]] > 0}]
+		}
+	}
+	return 1
+}
+
+# Whether a static node list will post any row. FillNodes drops hidden
+# commands and empty cascades, so a parent cascade must use the same rules
+# before deciding that one of its children is content (Game > Save Game
+# when no game is loaded is the case this protects).
+proc ::menu::NodesHaveRows {nodes} {
+	foreach node $nodes {
+		switch -- [lindex $node 0] {
+			sep { continue }
+			cmd {
+				if {[dict get [state [lindex $node 1]] visible]} { return 1 }
+			}
+			toggle { return 1 }
+			cascade {
+				set labelName [lindex $node 1]
+				set children [lindex $node 3]
+				if {$children eq "dynamic"} {
+					if {[DynamicNotEmpty $labelName]} { return 1 }
+				} elseif {[NodesHaveRows $children]} {
+					return 1
+				}
+			}
+			dyn {
+				set labelName [lindex $node 1]
+				if {$labelName eq "PerToolbarCheckbuttons"} {
+					if {[ToolbarsAvailable]} { return 1 }
+					continue
+				}
+				set id [DynId $labelName]
+				if {$id eq ""} { return 1 }
+				if {![dict get [state $id] visible]} { continue }
+				if {[string match {menu.view.panes.*} $id]} {
+					set suffix [string range $id 16 end]
+					if {[PaneReason $suffix] ne ""} { continue }
+				}
+				return 1
+			}
+		}
+	}
+	return 0
+}
+
 proc ::menu::BuildDropdown {menu} {
 	variable DropdownTree
-	variable DropdownFilled
 	variable DropdownWidget
 
 	if {[llength $DropdownTree] == 0} {
@@ -1186,24 +1369,25 @@ proc ::menu::BuildDropdown {menu} {
 	# so a stale label would otherwise survive until the app is restarted.
 	RegisterTree
 	RegisterExtras
-	catch { $menu delete 0 end }
+	ClearMenu $menu
 	foreach top $DropdownTree {
 		if {[lindex $top 0] ne "cascade"} { continue }
 		set labelName [lindex $top 1]
 		set accel [::menu::CascadeAccel $labelName [lindex $top 2]]
 		set sub $menu.[WidgetName [MC $labelName]]
-		# Rebuilding this instance invalidates only its own lazy-fill entry.
-		dict unset DropdownFilled [list $sub $labelName]
 		catch { destroy $sub }
 		menu $sub -tearoff 0
 		$sub configure -postcommand [list ::menu::FillTop $labelName $sub]
 		lassign [AmpText [MC $labelName]] text ul
-		set state normal
-		if {($labelName eq "Board" && [OnDatabaseTab]) || ($labelName eq "Database" && [BoardOnlyLayout])} {set state disabled}
-		$menu add cascade -label $text -underline $ul -menu $sub -accelerator $accel -state $state
+		$menu add cascade -label $text -underline $ul -menu $sub -accelerator $accel \
+			-state [TopEntryState $labelName]
 	}
+	# The Board/Database top-level state follows the live tab/layout. It
+	# has to be refreshed whenever the button posts, before Tk decides
+	# whether a disabled cascade may open (see ::menu::RefreshTopStates).
+	$menu configure -postcommand [list ::menu::RefreshTopStates $menu]
 	# First-run selection and other callers use mc::setLang directly.
-	# Keep cached menus in sync through the common notification, too.
+	# Keep labels in sync through the common notification, too.
 	bind $menu <<LanguageChanged>> [list ::menu::BuildDropdown $menu]
 	set DropdownWidget $menu
 	return $menu
@@ -1211,18 +1395,32 @@ proc ::menu::BuildDropdown {menu} {
 
 proc ::menu::ClearMenu {menu} {
 	if {![winfo exists $menu]} { return }
+	# A cascade owns a separate menu widget; deleting the entry does not
+	# destroy it. Rebuilding a cascade must drop the old children or every
+	# post would leave another tree of dead menus behind.
+	set last ""
+	catch { set last [$menu index end] }
+	if {$last ne "" && $last ne "none"} {
+		for {set i 0} {$i <= $last} {incr i} {
+			if {[$menu type $i] ne "cascade"} { continue }
+			set sub ""
+			catch { set sub [$menu entrycget $i -menu] }
+			if {$sub eq "" || ![winfo exists $sub]} { continue }
+			ClearMenu $sub
+			catch { destroy $sub }
+		}
+	}
 	catch { $menu delete 0 end }
 }
 
 proc ::menu::FillTop {labelName menu} {
 	variable DropdownTree
-	variable DropdownFilled
-	variable DropdownForceAll
 
-	if {![info exists DropdownForceAll]} { set DropdownForceAll 0 }
-	set cacheKey [list $menu $labelName]
-	if {!$DropdownForceAll && [dict exists $DropdownFilled $cacheKey]} { return }
-	dict set DropdownFilled $cacheKey 1
+	# Every post rebuilds the cascade: visibility, enablement and labels
+	# are live state, not a one-time snapshot (a DB can open, a game can
+	# be loaded, the engine can start, the focus can move). The tree is
+	# small; the timing test keeps this below the posting budget.
+	SyncTopState $labelName $menu
 
 	set children {}
 	foreach top $DropdownTree {
@@ -1280,20 +1478,16 @@ proc ::menu::FillNodes {nodes menu level} {
 				set children [lindex $node 3]
 				if {!$DropdownForceAll && $labelName in {PasteGame MergeGame GameHistory}
 				 && ![GameLoaded]} { continue }
-				# A static cascade whose rows are all hidden (module absent,
-				# no database, ...) would be a dead entry: drop it.
-				if {!$DropdownForceAll && $children ne "dynamic"} {
-					set any 0
-					foreach child $children {
-						set ck [lindex $child 0]
-						if {$ck eq "sep"} { continue }
-						if {$ck eq "cmd"} {
-							if {[dict get [state [lindex $child 1]] visible]} { set any 1; break }
-						} else {
-							set any 1; break
-						}
+				# A cascade whose rows are all hidden (module absent, no
+				# database, no game, ...) would be a dead entry: drop it.
+				# Dynamic children count only when their filler would
+				# actually post something.
+				if {!$DropdownForceAll} {
+					if {$children eq "dynamic"} {
+						if {![DynamicNotEmpty $labelName]} { continue }
+					} elseif {![NodesHaveRows $children]} {
+						continue
 					}
-					if {!$any} { continue }
 				}
 				set sub $menu.__dd[incr DropdownCounter]
 				catch { destroy $sub }
@@ -1311,6 +1505,13 @@ proc ::menu::FillNodes {nodes menu level} {
 			}
 			dyn {
 				set labelName [lindex $node 1]
+				if {$labelName eq "PerToolbarCheckbuttons" && !$DropdownForceAll} {
+					# Live View > Toolbars: the real per-toolbar checkbuttons,
+					# not the structural marker the dump fixture names.
+					FillToolbars $menu
+					if {[$menu index end] ne "none"} { set lastSep 0 }
+					continue
+				}
 				set id [::menu::DynId $labelName]
 				lassign [AmpText [MC $labelName]] text ul
 				set opts [list -label $text -underline $ul]
@@ -1386,6 +1587,105 @@ proc ::menu::DynId {labelName} {
 	return ""
 }
 
+# Dynamic leaves that only set a board option. The native rows keep their
+# -variable so the current value is checked, but their action is the shared
+# board.display operation rather than a bare callback.
+proc ::menu::FillAnnotationTimeout {menu} {
+	foreach ms {1500 2000 2500 3000 3500 4000 4500 5000 0} {
+		set label $ms
+		if {$ms == 0} {
+			set label [expr {[info exists ::application::board::mc::None]
+				? $::application::board::mc::None : "None"}]
+		}
+		$menu add radiobutton -label $label \
+			-variable ::application::board::Options(annotation:timeout) \
+			-value $ms \
+			-command [list ::action::run board.display [dict create annotation_ms $ms]]
+		::theme::configureRadioEntry $menu
+	}
+}
+
+proc ::menu::FillSlidingVariation {menu} {
+	foreach pos {hidden bottom top right left} {
+		$menu add radiobutton \
+			-compound left \
+			-label [set ::mc::[string toupper $pos 0 0]] \
+			-variable ::variation::Options(slide:position) \
+			-value $pos \
+			-command [list ::action::run board.display [dict create sliding $pos]]
+		::theme::configureRadioEntry $menu
+	}
+}
+
+proc ::menu::FillPromotedMark {menu} {
+	if {[catch { set variant [::scidb::game::query variant?] }]
+	 || $variant ne "Crazyhouse"} { return }
+	foreach mark {none bullet star disk} {
+		set label ""
+		catch { set label [set ::application::board::mc::PromoSign($mark)] }
+		if {$label eq ""} { set label $mark }
+		$menu add radiobutton -label $label \
+			-variable ::application::board::Options(promoted:mark) \
+			-value $mark \
+			-command [list ::action::run board.display [dict create promoted $mark]]
+		::theme::configureRadioEntry $menu
+	}
+}
+
+# The game bar's Save submenu built these from the live repertoire bases.
+# Rebuild the same rows here, but dispatch each destination through the
+# registry instead of a captured native callback.
+proc ::menu::FillRepertoire {menu line} {
+	if {[llength [info commands ::application::database::repertoireBases]] == 0} { return }
+	set variant ""
+	catch { set variant [::scidb::game::query variant?] }
+	set bases [::application::database::repertoireBases 0 $variant]
+	set mc ::application::database::mc
+	if {![llength $bases]} {
+		$menu add command -label " [set ${mc}::NoRepertoireBases]" \
+			-command [list ::action::run game.repertoire.none]
+		return
+	}
+	if {[llength $bases] == 1} {
+		set base [lindex $bases 0]
+		set format [expr {$line ? [set ${mc}::AddLineToRepertoireBase] : [set ${mc}::AddToRepertoireBase]}]
+		$menu add command \
+			-label " [format $format [::util::databaseName $base]]" \
+			-image $::icon::16x16::saveAs -compound left \
+			-command [list ::action::run game.repertoire.save [dict create base $base line $line]]
+		return
+	}
+	set sub $menu.repertoire
+	catch { destroy $sub }
+	menu $sub -tearoff 0
+	foreach base $bases {
+		$sub add command -label [::util::databaseName $base] \
+			-command [list ::action::run game.repertoire.save [dict create base $base line $line]]
+	}
+	set label [expr {$line ? [set ${mc}::AddLineToRepertoire] : [set ${mc}::AddToRepertoire]}]
+	$menu add cascade -menu $sub -label " $label" \
+		-image $::icon::16x16::saveAs -compound left -state normal
+}
+
+proc ::menu::ToggleToolbar {arguments} {
+	set toolbar [dict get $arguments toolbar]
+	if {[llength [info commands ::toolbar::ShowToolbar]] == 0} { return "" }
+	return [::toolbar::ShowToolbar $toolbar]
+}
+
+proc ::menu::SaveToRepertoire {arguments} {
+	set base [dict get $arguments base]
+	if {[dict get $arguments line]} {
+		return [::widget::busyOperation \
+			[list ::application::database::saveCurrentLineToRepertoire .application $base]]
+	}
+	return [::application::pgn::saveGame add $base]
+}
+
+proc ::menu::NoRepertoireBase {arguments} {
+	return [::application::database::showNoRepertoireBases .application]
+}
+
 proc ::menu::FillDynamic {labelName menu} {
 	ClearMenu $menu
 	switch -- $labelName {
@@ -1394,22 +1694,56 @@ proc ::menu::FillDynamic {labelName menu} {
 				::application::database::addRecentlyUsedToMenu .application $menu
 			}
 		}
-		NewGame - AddToRepertoire - AddLineToRepertoire {
-			# variant / repertoire destinations are generated from data
+		NewGame {
+			# The same variant list the game bar's New Game submenu used,
+			# now dispatched by the registered game.new.* actions.
+			foreach {id label} [NewGameRows] {
+				lassign [AmpText $label] text ul
+				$menu add command -label $text -underline $ul \
+					-command [list ::action::run $id]
+			}
+		}
+		AddToRepertoire {
+			if {[GameLoaded] && ![TrialMode]} { FillRepertoire $menu 0 }
+		}
+		AddLineToRepertoire {
+			if {[GameLoaded] && ![TrialMode]} { FillRepertoire $menu 1 }
 		}
 		MaintRepertoireType {
-			# generated from the open database's repertoire types
+			# The current database's repertoire flavour, as the database
+			# switcher's Maintenance menu offered it.
+			if {[DbOpen] && [DbWritable]} {
+				set base ""
+				catch { set base [::scidb::db::get name] }
+				foreach {type label} {
+					Openings		RepertoireBoth
+					OpeningsWhite	RepertoireWhite
+					OpeningsBlack	RepertoireBlack
+				} {
+					set text ""
+					catch { set text [set ::application::database::mc::$label] }
+					if {$text eq ""} { continue }
+					lassign [AmpText $text] plain ul
+					$menu add command -label $plain -underline $ul \
+						-command [list ::action::run database.repertoire_type \
+							[dict create base $base type $type]]
+				}
+			}
 		}
-		AppAnnotationTimeout - AppSlidingVariation - AppPromotedMark {
-			# board appearance submenus are generated from board options
+		AppAnnotationTimeout {
+			FillAnnotationTimeout $menu
+		}
+		AppSlidingVariation {
+			FillSlidingVariation $menu
+		}
+		AppPromotedMark {
+			FillPromotedMark $menu
 		}
 		Panes {
 			FillPanes $menu
 		}
 		Toolbars {
-			foreach parent [::toolbar::activeParents] {
-				catch { ::toolbar::addToolbarMenu $menu $parent none }
-			}
+			FillToolbars $menu
 		}
 		Theme {
 			FillTheme $menu
@@ -1834,7 +2168,7 @@ proc ::menu::Dump {menu} {
 	set old $DropdownForceAll
 	set DropdownForceAll 1
 	if {[llength $DropdownTree] == 0} { DefineTree; RegisterTree; RegisterExtras }
-	catch { $menu delete 0 end }
+	ClearMenu $menu
 	foreach top $DropdownTree {
 		set labelName [lindex $top 1]
 		set sub $menu.[WidgetName [MC $labelName]]
@@ -1953,6 +2287,31 @@ proc ::menu::RegisterExtras {} {
 			doc "Close a named information or preferences dialog. Unsaved form fields are discarded." \
 			args {{dialog {type enum required 1 enum {about correspondence crosstable engine_dictionary iccf keyboard pgn player_dictionary review_engine}}}} \
 			handler ::menu::CloseNamedDialog]
+	}
+	# Dynamic rows that have no drop-down tree placement of their own. They
+	# are posted by the fillers above, so they are registered here rather
+	# than through Register (which would add them to the static tree).
+	if {![dict exists $::action::Registry toolbar.toggle]} {
+		::action::register toolbar.toggle [dict create label "Show or hide toolbar" \
+			what "Show or hide toolbar" object {} ai 0 \
+			doc "Show or hide one of the layout's toolbars without leaving the menu." \
+			args {{toolbar {type string required 1}}} \
+			handler ::menu::ToggleToolbar]
+	}
+	if {![dict exists $::action::Registry game.repertoire.save]} {
+		::action::register game.repertoire.save [dict create label "Add to Repertoire" \
+			what "Add the current game or line to an opening database" object {} ai 0 \
+			doc "Save the game on the board, or the current line, into a writable opening database." \
+			args {{base {type string required 1}} {line {type boolean default 0}}} \
+			handler ::menu::SaveToRepertoire]
+	}
+	if {![dict exists $::action::Registry game.repertoire.none]} {
+		set noBases "No writable opening databases are open."
+		catch { set noBases $::application::database::mc::NoRepertoireBases }
+		::action::register game.repertoire.none [dict create label $noBases \
+			what "Explain why no opening database can take the game" object {} ai 0 \
+			doc "Explain that no writable opening database is open." \
+			args {} handler ::menu::NoRepertoireBase]
 	}
 	RegisterDynamicActions
 	# Layout rows also appear in the native pane layout popup. Keep its mc
@@ -2660,6 +3019,9 @@ proc ::menu::Do {id} {
 		game.new.three { return [::menu::gameNew .application ThreeCheck] }
 		game.new.crazy { return [::menu::gameNew .application Crazyhouse] }
 		game.new.variants { return [::menu::gameNew .application Normal] }
+		game.new.losers { return [::menu::gameNew .application Losers] }
+		game.new.suicide { return [::menu::gameNew .application Suicide] }
+		game.new.giveaway { return [::menu::gameNew .application Giveaway] }
 		menu.game.load_number { return [::gamebar::LoadGameNumber .application] }
 		game-next { return [::application::board::LoadGame(any) .application next] }
 		game-prev { return [::application::board::LoadGame(any) .application prev] }

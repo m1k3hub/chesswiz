@@ -2090,13 +2090,16 @@ proc LeaveSettings {w} {
 proc BuildSettingsMenu {m} {
 	variable Vars
 
-	# The drop-down is built once; each cascade fills lazily on post
-	# (VAL-BAR-005). Re-posting only re-points the menubutton.
+	# The drop-down widget is built once; each cascade rebuilds its live
+	# rows on post (VAL-BAR-005). Re-posting re-points the menubutton and
+	# refreshes the Board/Database tab state before Tk posts the menu.
 	if {![info exists Vars(menu:entries)] || ![winfo exists $Vars(menu:entries)]} {
 		catch { destroy $m.entries }
 		::menu $m.entries
 		::menu::build $m.entries
 		set Vars(menu:entries) $m.entries
+	} elseif {[llength [info commands ::menu::RefreshTopStates]]} {
+		catch { ::menu::RefreshTopStates $Vars(menu:entries) }
 	}
 
 	$m configure \

@@ -1959,6 +1959,15 @@ dict set ::knowledge::Explicit c3.flag.16 [dict create purpose {Toggle the selec
 dict set ::knowledge::Explicit c3.flag.17 [dict create purpose {Toggle the selected game's attack classification flag.} when {Use this to collect examples of offensive play.} examples {{Mark this game as an attacking example} {Remove this game's attack flag}}]
 dict set ::knowledge::Explicit c3.flag.18 [dict create purpose {Toggle the selected game's sacrifice classification flag.} when {Use this to collect examples of giving up material for compensation.} examples {{Flag this game as a sacrifice example} {Remove this game's sacrifice flag}}]
 dict set ::knowledge::Explicit c3.flag.19 [dict create purpose {Toggle the selected game's defense classification flag.} when {Use this to collect examples of resisting an opponent's threats.} examples {{Mark this game as a defensive example} {Remove this game's defense flag}}]
+# Starting a board game in a variant is distinct from creating a database
+# for it, so these rows describe the board-side beginning rather than the
+# collection-side file.
+dict set ::knowledge::Explicit game.new.normal [dict create purpose {Start playing an ordinary game of chess on the board.} when {Use this when you want a fresh standard game to play through.} examples {{Begin a standard chess game on the board} {Play an ordinary game from the usual start}}]
+dict set ::knowledge::Explicit game.new.three [dict create purpose {Start a game in which giving check three times wins.} when {Use this when you want to play the three-check chess variant.} examples {{Begin a three-check game on the board} {Play a game won by three checks}}]
+dict set ::knowledge::Explicit game.new.crazy [dict create purpose {Start a game where captured pieces come back into play.} when {Use this when you want to play the Crazyhouse variant.} examples {{Begin a Crazyhouse game on the board} {Play a game with pieces returning from captures}}]
+dict set ::knowledge::Explicit game.new.losers [dict create purpose {Start an Antichess game where being mated or stalemated can win.} when {Use this when you want the Losers rules for an antichess game.} examples {{Begin an Antichess game with Losers rules} {Play the Losers version of antichess}}]
+dict set ::knowledge::Explicit game.new.suicide [dict create purpose {Start an Antichess game where a stalemated side with fewer pieces wins.} when {Use this when you want the Suicide rules for an antichess game.} examples {{Begin an Antichess game with Suicide rules} {Play the Suicide version of antichess}}]
+dict set ::knowledge::Explicit game.new.giveaway [dict create purpose {Start an Antichess game where the stalemated side wins.} when {Use this when you want the Giveaway rules for an antichess game.} examples {{Begin an Antichess game with Giveaway rules} {Play the Giveaway version of antichess}}]
 # End reviewed native knowledge: games
 
 # Reviewed native knowledge: database
@@ -2200,6 +2209,7 @@ dict set ::knowledge::Explicit view.focus_pin [dict create purpose {Toggle wheth
 dict set ::knowledge::Explicit view.focus_ratio [dict create purpose {Cycle the size ratio used when focus enlarges a pane.} when {Use this to adjust how much extra space the active pane receives.} examples {{Change the automatic pane-zoom ratio} {Adjust how much the focused pane grows}}]
 dict set ::knowledge::Explicit view.focus_zoom [dict create purpose {Toggle automatic pane enlargement as focus moves.} when {Use this when the view you are working in should gain space.} examples {{Make pane size follow focus} {Turn off automatic focus-based pane enlargement}}]
 dict set ::knowledge::Explicit view.pane_zoom [dict create purpose {Maximise the active pane or restore the workspace arrangement.} when {Use this to concentrate temporarily on a single view.} examples {{Maximise the active workspace pane} {Restore the workspace after pane zoom}}]
+dict set ::knowledge::Explicit toolbar.toggle [dict create purpose {Show or hide one of the workspace's toolbars.} when {Use this when a toolbar takes up space you need for the board.} examples {{Hide a toolbar from the main menu} {Bring back a hidden toolbar}}]
 # End reviewed native knowledge: interface
 
 # Resolved missing context leaves
