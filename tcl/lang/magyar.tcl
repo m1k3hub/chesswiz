@@ -324,7 +324,7 @@
 
 # Contact
 ::menu::mc::ContactBugReport		"&Hiba jelentés"
-::menu::mc::ContactFeatureRequest	"&Feature Request" ;# NEW
+::menu::mc::ContactFeatureRequest	"Funkci\xf3k\xe9r\xe9s"
 ::menu::mc::SupportChesswiz		"A Chesswiz &támogatása…"
 
 # Extras
@@ -446,6 +446,7 @@
 ::menu::mc::SaveLayoutAs	"Elrendezés mentése másként…"
 ::menu::mc::ManageLayouts	"Elrendezések kezelése…"
 ::menu::mc::Crazyhouse	"Crazyhouse"
+{::menu::mc::variant list}	"V\u00e1ltozatlista"
 ::menu::mc::DiscoverDatabases	"Adatbázisok felkutatása…"
 ::menu::mc::Open3DBoard	"3D tábla megnyitása"
 ::menu::mc::OpenWebGL3DBoard	"WebGL 3D tábla megnyitása"
@@ -3756,3 +3757,5 @@
 ::menu::mc::FocusFollowsSize "\xc1tm\xe9retez\xe9skor a f\xf3kusz k\xf6veti a m\xe9retet"
 ::menu::mc::OpeningLine "Megnyit\xe1si v\xe1ltozat keres\xe9se"
 ::menu::mc::EnginePlay "A motor j\xe1tsszon"
+::menu::mc::ExportLichess "Lichess-tanulm\xe1ny\u2026"
+::menu::mc::UploadStudy "Felt\xf6lt\xe9s Lichess-tanulm\xe1nyba\u2026"

@@ -901,13 +901,42 @@ proc ::action::fuzzyScoreLower {q t} {
 	return [expr {500 - $gaps - ($last - $first + 1) - [string length $t]}]
 }
 
-# The registry stores human labels for menu actions but bare tool ids
-# (open_game) for assistant tools. Show the latter as words.
-proc ::action::displayLabel {label} {
+# The registry stores menu labels with Tk's "&" mnemonic markup and bare
+# tool ids (open_game) for assistant tools. A surface that prints a label
+# as text (Ask, knowledge, assistant, key editor, tooltips) must drop the
+# mnemonic markers; "&&" is one literal ampersand.
+proc ::action::plainText {text} {
+	if {[llength [info commands ::tk::UnderlineAmpersand]]} {
+		return [lindex [::tk::UnderlineAmpersand $text] 0]
+	}
+	# Tk-less test interpreters: one "&" marks the next character, "&&" is
+	# a literal ampersand.
+	set out ""
+	set n [string length $text]
+	for {set i 0} {$i < $n} {incr i} {
+		if {[string index $text $i] ne "&"} {
+			append out [string index $text $i]
+			continue
+		}
+		if {$i + 1 < $n && [string index $text [expr {$i + 1}]] eq "&"} {
+			append out "&"
+			incr i
+		}
+	}
+	return $out
+}
+
+# The label as a menu/Ask row stores it: bare tool ids become words, and
+# any "&" mnemonic markup is kept for the consumer that owns the surface.
+proc ::action::markupLabel {label} {
 	if {[regexp {^[a-z0-9_]+$} $label] && [string match "*_*" $label]} {
 		return [join [split $label _] " "]
 	}
 	return $label
+}
+
+proc ::action::displayLabel {label} {
+	return [::action::plainText [::action::markupLabel $label]]
 }
 
 # The text a query is matched against: label, doc and accelerator.
@@ -1208,7 +1237,7 @@ proc ::action::labels {surface args} {
 			set vis [dict get $state visible]
 		}
 
-		set label [displayLabel [dict get $record label]]
+		set label [markupLabel [dict get $record label]]
 		set ac [labelAccel $id]
 
 		set row [::list $id $label $ac $en $vis]
@@ -1382,7 +1411,7 @@ proc ::action::_BuildAskRows {ctxObjects ctxMenus ctxIds} {
 
 		if {![_bareRunnable $id]} { continue }
 
-		set label [displayLabel [dict get $record label]]
+		set label [markupLabel [dict get $record label]]
 		set ac [labelAccelRecord $id $record]
 		lappend rows [::list $id $label $ac [string tolower [searchTextRecord $record]]]
 	}

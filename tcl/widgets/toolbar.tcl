@@ -1011,7 +1011,7 @@ proc ::toolbar::RefreshRegistryLabels {} {
 			}
 			if {$label eq ""} { catch {set label [$w cget -text]} }
 			if {$label ne "" && [dict exists $::action::Registry $Specs($key)]} {
-				dict set ::action::Registry $Specs($key) label [string trim [string map {& {}} $label]]
+				dict set ::action::Registry $Specs($key) label [::action::plainText [string trim $label]]
 			}
 		}
 	}
@@ -1108,7 +1108,7 @@ proc Add {toolbar widgetCommand args} {
 		set labelvar $Specs(tooltipvar:$w:$toolbar)
 		if {$labelvar ne "" && [info exists $labelvar]} { set label [set $labelvar] }
 		if {$label eq "" && [info exists options(-text)]} { set label $options(-text) }
-		set label [string trim [string map {& {}} $label]]
+		set label [::action::plainText [string trim $label]]
 		set options(-command) \
 			[::toolbar::RegistryCommand $toolbar $w $options(-command) $label]
 	}

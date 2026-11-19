@@ -431,6 +431,7 @@
 ::menu::mc::SaveLayoutAs	"Salva layout come…"
 ::menu::mc::ManageLayouts	"Gestisci layout…"
 ::menu::mc::Crazyhouse	"Crazyhouse"
+{::menu::mc::variant list}	"Elenco delle varianti"
 ::menu::mc::DiscoverDatabases	"Scopri banche dati…"
 ::menu::mc::Open3DBoard	"Apri scacchiera 3D"
 ::menu::mc::OpenWebGL3DBoard	"Apri scacchiera 3D WebGL"
@@ -3775,3 +3776,5 @@
 ::menu::mc::FocusFollowsSize "Il fuoco segue le dimensioni durante il ridimensionamento"
 ::menu::mc::OpeningLine "Consulta una variante di apertura"
 ::menu::mc::EnginePlay "Lascia giocare il motore"
+::menu::mc::ExportLichess "Studio di Lichess\u2026"
+::menu::mc::UploadStudy "Carica in uno studio di Lichess\u2026"

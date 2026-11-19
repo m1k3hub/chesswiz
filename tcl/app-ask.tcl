@@ -158,7 +158,7 @@ proc ::application::ask::Build {notebook} {
 	pack $entry -side left -fill x -expand yes -padx {2 2} -pady 1
 
 	set placeholder [ttk::label $frame.placeholder \
-		-text $::application::ask::mc::Placeholder \
+		-text [PlaceholderText] \
 		-foreground [expr {[::theme::isDark] ? "#8b949e" : "grey"}] \
 		-background [expr {[::theme::isDark] ? [::ttk::style lookup TEntry -fieldbackground] : ""}]]
 	place $placeholder -in $entry -relx 0 -x 4 -rely 0.5 -anchor w
@@ -192,6 +192,17 @@ proc ::application::ask::Build {notebook} {
 	RegisterAction
 	catch { InstallShortcutTags $notebook }
 	return $frame
+}
+
+# The localized field hint names the shortcut of this platform. The
+# language files spell the Control key (Ctrl+K, German Strg+K); on aqua
+# the same key is Command, exactly as ::menu::FormatAccel displays it.
+proc ::application::ask::PlaceholderText {} {
+	set text $::application::ask::mc::Placeholder
+	if {[llength [info commands ::menu::Aqua?]] && [::menu::Aqua?]} {
+		set text [string map {Ctrl+ Cmd+ Strg+ Cmd+} $text]
+	}
+	return $text
 }
 
 # Keep the placeholder visible exactly while the field is empty.
@@ -248,7 +259,7 @@ proc ::application::ask::Relabel {} {
 	variable mc
 
 	if {[info exists Priv(placeholder)] && [winfo exists $Priv(placeholder)]} {
-		$Priv(placeholder) configure -text $mc::Placeholder
+		$Priv(placeholder) configure -text [PlaceholderText]
 	}
 	PlaceholderState
 	if {[info exists Priv(mic)] && [winfo exists $Priv(mic)]} {
@@ -495,7 +506,11 @@ proc ::application::ask::ShowList {} {
 	set i 0
 	foreach row $rows {
 		lassign $row id label accel enabled visible
-		set text [format " %-48s %s" $label $accel]
+		# The registry label is Tk menu markup ("&Quit", "&&" for a literal
+		# "&"). The list is text, so strip the mnemonic exactly as the menus
+		# do; AmpText's one leading space replaces the format's own.
+		set plain [lindex [::menu::AmpText $label] 0]
+		set text [format " %-48s %s" [string trimleft $plain] $accel]
 		lappend items [list $text $id]
 		incr i
 	}

@@ -749,7 +749,10 @@ proc ::menu::MirrorCommandBindings {} {
 	variable Mirrored
 
 	if {![::menu::Aqua?]} { return }
-	set tags {.application ChessBaseBoard}
+	# AskShortcut is a bindtag, not a widget: the Ask field installs it in
+	# front of the class tag so Cmd+Shift+K takes precedence over Text/Script
+	# bindings on macOS just as Ctrl+Shift+K does elsewhere.
+	set tags {.application ChessBaseBoard AskShortcut}
 	catch { lappend tags {*}$::application::board::Vars(need-binding) }
 	foreach tag [lsort -unique $tags] {
 		if {[string match .* $tag] && ![winfo exists $tag]} { continue }
@@ -2335,10 +2338,10 @@ proc ::menu::RegisterExtras {} {
 			doc "[string totitle $operation] a saved layout by name without opening the layout manager." \
 			handler [list ::menu::RunNamedLayoutMutation $operation]]
 	}
-	Register view.pane_zoom "Maximise / Restore Pane" "Control-Shift-Z" "" "" "00.001"
-	Register view.focus_zoom "Focus follows size" "" "" "" "00.002"
-	Register view.focus_ratio "Zoom ratio" "" "" "" "00.003"
-	Register view.focus_pin "Pin board size" "" "" "" "00.004"
+	Register view.pane_zoom [MC MaximisePane] "Control-Shift-Z" "" "" "00.001"
+	Register view.focus_zoom [MC FocusZoom] "" "" "" "00.002"
+	Register view.focus_ratio [MC FocusZoomRatio] "" "" "" "00.003"
+	Register view.focus_pin [MC FocusZoomPinBoard] "" "" "" "00.004"
 	Register view.focus_follows_size "Focus follows size on resize" "" "" "" "00.005"
 	dict set ::action::Registry view.focus_follows_size label [MC FocusFollowsSize]
 	dict set ::action::Registry view.focus_follows_size enabled {expr {[::menu::PaneTWM] ne ""}}

@@ -448,6 +448,7 @@
 ::menu::mc::ManageLayouts	"Gestionar diseños…"
 ::menu::mc::Normal	"Estándar"
 ::menu::mc::Crazyhouse	"Crazyhouse"
+{::menu::mc::variant list}	"Lista de variantes"
 ::menu::mc::DiscoverDatabases	"Descubrir bases de datos…"
 ::menu::mc::Open3DBoard	"Abrir tablero 3D"
 ::menu::mc::OpenWebGL3DBoard	"Abrir tablero 3D WebGL"
@@ -3756,3 +3757,5 @@
 ::menu::mc::FocusFollowsSize "El foco sigue al tama\xf1o al redimensionar"
 ::menu::mc::OpeningLine "Consultar una variante de apertura"
 ::menu::mc::EnginePlay "Dejar jugar al motor"
+::menu::mc::ExportLichess "Estudio de Lichess\u2026"
+::menu::mc::UploadStudy "Subir a un estudio de Lichess\u2026"

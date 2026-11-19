@@ -3816,3 +3816,5 @@
 ::menu::mc::FocusFollowsSize "Fokus folgt der Gr\xf6\xdfe beim \xc4ndern der Fenstergr\xf6\xdfe"
 ::menu::mc::OpeningLine "Eine Er\xf6ffnungsvariante nachschlagen"
 ::menu::mc::EnginePlay "Die Engine spielen lassen"
+::menu::mc::ExportLichess "Lichess-Studie\u2026"
+::menu::mc::UploadStudy "In Lichess-Studie hochladen\u2026"

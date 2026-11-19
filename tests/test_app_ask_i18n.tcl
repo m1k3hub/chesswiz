@@ -44,6 +44,15 @@ proc ::scidb::test::askI18n::Placeholder {} {
 	return $::scidb::test::askI18n::placeholder
 }
 
+# The placeholder names this platform's shortcut: Control elsewhere, the
+# Command key on aqua (tcl/app-ask.tcl PlaceholderText).
+proc ::scidb::test::askI18n::PlatformHint {text} {
+	if {[llength [info commands ::menu::Aqua?]] && [::menu::Aqua?]} {
+		return [string map {Ctrl+ Cmd+ Strg+ Cmd+} $text]
+	}
+	return $text
+}
+
 # The placeholder's text and whether it is on screen (place) or not.
 proc ::scidb::test::askI18n::shown {} {
 	set w [::scidb::test::askI18n::Placeholder]
@@ -147,7 +156,10 @@ tcltest::test ask-i18n-placeholder {the placeholder follows a live language swit
 	list $english $german [expr {$again eq $english}]
 } -cleanup {
 	::scidb::test::askI18n::Clean
-} -result {{{Ask or tell Chesswiz what to do (Ctrl+K)} place} {{Chesswiz fragen oder sagen, was zu tun ist (Strg+K)} place} 1}
+} -result [list \
+	[list [::scidb::test::askI18n::PlatformHint {Ask or tell Chesswiz what to do (Ctrl+K)}] place] \
+	[list [::scidb::test::askI18n::PlatformHint {Chesswiz fragen oder sagen, was zu tun ist (Strg+K)}] place] \
+	1]
 
 tcltest::test ask-i18n-typed-text-survives {a language switch never overwrites what was typed} -body {
 	::menu::SwitchLanguage English
@@ -169,7 +181,11 @@ tcltest::test ask-i18n-typed-text-survives {a language switch never overwrites w
 	list $typed $german $again
 } -cleanup {
 	::scidb::test::askI18n::Clean
-} -result {{{new game} {new game} {}} {{new game} {new game} {} {Chesswiz fragen oder sagen, was zu tun ist (Strg+K)}} {{new game} {new game} {}}}
+} -result [list \
+	{{new game} {new game} {}} \
+	[list {new game} {new game} {} \
+		[::scidb::test::askI18n::PlatformHint {Chesswiz fragen oder sagen, was zu tun ist (Strg+K)}]] \
+	{{new game} {new game} {}}]
 
 # ----------------------------------------------------------------------
 # The result list; its last row is the assistant row (also the row a

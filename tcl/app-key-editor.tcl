@@ -306,7 +306,7 @@ proc ::application::keyEditor::SameKey {a b} {
 proc ::application::keyEditor::ActionLabel {action labelVar} {
 	if {![info exists ${labelVar}]} { return $action }
 	set value [set ${labelVar}]
-	set value [string map {& ""} $value]
+	set value [::action::plainText $value]
 	set value [string trimright $value .]
 	if {$value eq ""} { return $action }
 	return $value

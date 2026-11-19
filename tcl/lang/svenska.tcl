@@ -438,6 +438,7 @@
 ::menu::mc::SaveLayoutAs	"Spara layout som…"
 ::menu::mc::ManageLayouts	"Hantera layouter…"
 ::menu::mc::Crazyhouse	"Crazyhouse"
+{::menu::mc::variant list}	"Variantlista"
 ::menu::mc::DiscoverDatabases	"Upptäck databaser…"
 ::menu::mc::Open3DBoard	"Öppna 3D-bräde"
 ::menu::mc::OpenWebGL3DBoard	"Öppna WebGL 3D-bräde"
@@ -3764,3 +3765,5 @@
 ::menu::mc::FocusFollowsSize "Fokus f\xf6ljer storleken vid storleks\xe4ndring"
 ::menu::mc::OpeningLine "Sl\xe5 upp en \xf6ppningsvariant"
 ::menu::mc::EnginePlay "L\xe5t motorn spela"
+::menu::mc::ExportLichess "Lichess-studie\u2026"
+::menu::mc::UploadStudy "Ladda upp till Lichess-studie\u2026"
