@@ -22,7 +22,9 @@ cp "$root"/engines/stockfish/src/nn-*.nnue "$tree/engines/stockfish/src/"
 rsync -a --exclude target --exclude reckless-scidb --exclude reckless-chesswiz "$root/engines/reckless/" "$tree/engines/reckless/"
 (cd "$tree/engines/reckless" && cargo vendor --quiet vendor > /dev/null &&
 	# dpkg-source leaves out files such as .gitignore; cargo must not miss them
-	for c in vendor/*/.cargo-checksum.json; do sed -i 's/"files":{[^}]*}/"files":{}/' "$c"; done &&
+	for c in vendor/*/.cargo-checksum.json; do
+		sed 's/"files":{[^}]*}/"files":{}/' "$c" > "$c.new" && mv -f "$c.new" "$c"
+	done &&
 	printf '\n[source.crates-io]\nreplace-with = "vendored-sources"\n\n[source.vendored-sources]\ndirectory = "vendor"\n' >> .cargo/config.toml)
 
 echo "$sha" > "$tree/debian/git-sha"

@@ -76,6 +76,8 @@ set DescriptionHasChanged	"Description has changed"
 namespace import ::tcl::mathfunc::abs
 namespace import ::tcl::mathfunc::max
 
+# The input row (entry plus Send/Clear/Hide) needs the pane's natural
+# width. At 250 px the entry collapsed to a single pixel.
 array set PaneOptions {
 	board		{ -width 500 -height 540 -minwidth 300 -minheight 300 -expand both -shrink x -grow x }
 	tree		{ -width 500 -height 120 -minwidth 250 -minheight 100 -expand y }
@@ -86,8 +88,6 @@ array set PaneOptions {
 	eco		{ -width 500 -height 520 -minwidth 150 -minheight 100 -expand both }
 	media		{ -width 400 -height 300 -minwidth 250 -minheight 200 -expand y }
 	report	{ -width 500 -height 400 -minwidth 250 -minheight 150 -expand both }
-	# The input row (entry plus Send/Clear/Hide) needs the pane's natural
-	# width. At 250 px the entry collapsed to a single pixel.
 	assistant	{ -width 400 -height 400 -minwidth 400 -minheight 150 -expand both }
 	explorer	{ -width 360 -height 420 -minwidth 220 -minheight 200 -expand y }
 }

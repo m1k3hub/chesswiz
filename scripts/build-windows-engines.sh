@@ -30,11 +30,12 @@ mkdir -p "$WORK"
 cp -R "$ROOT/engines/stockfish/src" "$ROOT/engines/stockfish/scripts" "$WORK/"
 cp "$ROOT"/engines/stockfish/src/*.nnue "$WORK/src/" 2>/dev/null || true
 
-sed -i \
+sed \
 	-e 's/CXXFLAGS += -flto=full/CXXFLAGS +=/' \
 	-e 's/CXXFLAGS += -flto -flto-partition=one/CXXFLAGS +=/' \
 	-e 's/LDFLAGS += \$(CXXFLAGS) -flto=jobserver/LDFLAGS += $(CXXFLAGS)/' \
-	"$WORK/src/Makefile"
+	"$WORK/src/Makefile" > "$WORK/src/Makefile.new" \
+	&& mv -f "$WORK/src/Makefile.new" "$WORK/src/Makefile"
 
 make -s -C "$WORK/src" clean >/dev/null 2>&1 || true
 make -C "$WORK/src" -j"$(nproc)" build ARCH="$ARCH" COMP=clang \

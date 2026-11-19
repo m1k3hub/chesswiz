@@ -804,6 +804,25 @@ uninstall: uninstall-scripts uninstall-sample uninstall-pieces uninstall-cursors
 		fi;                                                                                   \
 	fi
 
+# Comment lines are deleted from the merged script. POSIX BRE only: BSD
+# sed reads "\+" as a literal plus, and "[ \t]" as the set of space,
+# backslash and "t" (not a tab), which silently kept the comments that
+# were hiding an invalid braced list. `make bundle COMMENT_STRIP=0`
+# keeps every comment, so a test can source the result and prove that no
+# comment is load-bearing.
+COMMENT_STRIP ?= 1
+ifeq ($(COMMENT_STRIP),0)
+COMMENT_STRIP_FILTER =
+else
+COMMENT_STRIP_FILTER = \
+		-e '/^\#\#/d'                                       \
+		-e '/^\#$$/d'                                       \
+		-e '/^[[:blank:]]*\#[[:blank:]][[:blank:]]*/d'
+endif
+
+.PHONY: bundle
+bundle: $(SCRIPT)
+
 $(SCRIPT): $(SOURCES) Makefile ../Makefile.in
 	@echo "Checking trailing newlines in sources"
 	@err=; for f in $(SOURCES); do \
@@ -820,9 +839,7 @@ $(SCRIPT): $(SOURCES) Makefile ../Makefile.in
 		-e 's#%ENGINESDIR%#$(call sedrepl,$(ENGINESDIR))#g' \
 		-e 's#%USERDIRNAME%#$(call sedrepl,$(USERDIRNAME))#g' \
 		-e 's#%TKPROGRAM%#$(call sedrepl,$(TKPROGRAM))#g'   \
-		-e '/^##/d'                                         \
-		-e '/^#$$/d'                                        \
-		-e '/^[ 	]*#[ 	]\+/d'                               \
+		$(COMMENT_STRIP_FILTER)                             \
 		"$$tmp.in" > "$$tmp" \
 		|| { echo "ERROR: cannot write $(SCRIPT)"; exit 1; }; \
 	if [ -x /usr/bin/tclsh ]; then TCLSH=/usr/bin/tclsh; else TCLSH=tclsh; fi; \

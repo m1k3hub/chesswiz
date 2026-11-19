@@ -42,7 +42,11 @@ file mkdir $::SMOKE(home)
 set env(HOME) $::SMOKE(home)
 
 set scriptDir [file dirname [file normalize [info script]]]
-set merged	[file join [file dirname $scriptDir] tcl chesswiz]
+if {[llength $argv]} {
+	set merged [file normalize [lindex $argv 0]]
+} else {
+	set merged	[file join [file dirname $scriptDir] tcl chesswiz]
+}
 
 if {![file exists $merged]} {
 	puts stderr "STARTUP-SMOKE: merged script not found: $merged"
