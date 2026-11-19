@@ -7,10 +7,12 @@
 # longer exists without ever mentioning Extras.  This test extracts every
 # "A > B > C" chain from the help pages, the tips, the player card and the
 # user strings, then resolves it against the live drop-down, the live
-# context menus and the action registry in the same language.  Dynamic
-# cascades (a database's repertoire types, an engine's variations) are
-# data-driven: their cascade must exist, the values under it are runtime
-# data.
+# context menus and the action registry in the same language.  Every
+# registered language is checked: the list comes from the product's own
+# tcl/lang/localization.tcl, so a new language cannot be skipped.  Dynamic
+# cascades (icon sizes, themes, a database's repertoire types) are opened
+# through their own postcommand: a path must reach a child the product
+# actually posts, and an empty cascade has no children to name.
 #
 # It also keeps the Extras check: no user string or shipped help page may
 # send anyone to the removed catch-all.
@@ -21,9 +23,6 @@ package require tcltest 2.5
 
 namespace eval ::mpaths {
 	variable Root [file normalize [file join [file dirname [info script]] ..]]
-	variable Langs {en de es hu it}
-	variable Catalog [dict create \
-		en english.tcl de deutsch.tcl es espanol.tcl hu magyar.tcl it italiano.tcl]
 	# These hold the English user strings the assistant, the player card
 	# and the setup scan show.  Language catalogs override them.
 	variable EnglishFiles {
@@ -42,9 +41,27 @@ namespace eval ::mpaths {
 		"Assistant pane" {} "Explorer pane" {}]
 	variable OsRoots {
 		"System Settings" "Systemeinstellungen" "Ajustes del Sistema"
-		"Impostazioni di Sistema" "Rendszerbeállítások"
+		"Impostazioni di Sistema" "Rendszerbeállítások" "Systeminställningar"
 	}
 	variable SavedLang en
+}
+
+# The registered languages and their catalogs come from the product's own
+# table, so a newly added language cannot be skipped by this guard.
+proc ::mpaths::Languages {} {
+	variable Root
+	set text [ReadText [file join $Root tcl lang localization.tcl]]
+	set result [dict create]
+	foreach line [split $text \n] {
+		if {![regexp {^[ \t]*\x7b[ \t]*([^\x7d]*?)[ \t]*\x7d[ \t]*$} $line -> fields]} continue
+		set fields [regexp -all -inline {\S+} $fields]
+		if {[llength $fields] < 4} continue
+		dict set result [lindex $fields 1] [lindex $fields 3]
+	}
+	if {![dict size $result]} {
+		error "no language rows in tcl/lang/localization.tcl"
+	}
+	return $result
 }
 
 proc ::mpaths::Ellipsis {} { return [format %c 0x2026] }
@@ -144,6 +161,33 @@ proc ::mpaths::Markup {text} {
 # maximal chain is a run of short " > "-separated parts: this keeps the
 # leftmost component as the root instead of inventing "Einstellungen >
 # Motoren" out of the tail of "Main Menu > Einstellungen > Motoren".
+proc ::mpaths::KnownRoot {word} {
+	variable Top
+	variable AllLabels
+	variable SurfaceCids
+
+	return [expr {$word eq "Main Menu"
+		|| [lsearch -exact $Top $word] >= 0
+		|| [dict exists $AllLabels $word]
+		|| [dict exists $SurfaceCids $word]}]
+}
+
+# A path can follow a long sentence with no punctuation: the Swedish
+# speech hint ends "... Ställ in dem i Inställningar > Assistent".  When a
+# part is too long to be a menu label, keep its trailing words up to the
+# last known menu label, so the path after the prose is still checked.  An
+# unknown tail is left alone: prose is not a menu path.
+proc ::mpaths::TailStart {s} {
+	set words [split [string trim $s]]
+	set last [llength $words]
+	for {set i [expr {max(0, $last - 10)}]} {$i < $last} {incr i} {
+		set cand [join [lrange $words $i end]]
+		if {[string length $cand] > 90} continue
+		if {[KnownRoot [lindex $words $i]]} { return $cand }
+	}
+	return ""
+}
+
 proc ::mpaths::Chains {text isTcl} {
 	set sep [Sep]
 	set out {}
@@ -169,7 +213,8 @@ proc ::mpaths::Chains {text isTcl} {
 				lappend run $part
 			} else {
 				if {[llength $run] >= 2} { lappend runs $run }
-				set run {}
+				set tail [TailStart $part]
+				set run [expr {$tail eq "" ? {} : [list $tail]}]
 			}
 		}
 		if {[llength $run] >= 2} { lappend runs $run }
@@ -253,7 +298,6 @@ proc ::mpaths::ParseDump {text} {
 # ----------------------------------------------------------------------
 proc ::mpaths::AddRows {cid prefix rows} {
 	variable CtxKids
-	variable CtxDyn
 
 	set k [CtxKey $cid $prefix]
 	if {![dict exists $CtxKids $k]} { dict set CtxKids $k {} }
@@ -270,11 +314,9 @@ proc ::mpaths::AddRows {cid prefix rows} {
 			set path [concat $prefix [list $label]]
 			set pk [CtxKey $cid $path]
 			if {![dict exists $CtxKids $pk]} { dict set CtxKids $pk {} }
-			if {[llength $kids]} {
-				AddRows $cid $path $kids
-			} else {
-				dict set CtxDyn $pk 1
-			}
+			# A cascade with no declared children has none to resolve: a
+			# path must stop at the cascade itself.
+			if {[llength $kids]} { AddRows $cid $path $kids }
 			continue
 		}
 		set label [Norm [::context::L $row]]
@@ -287,10 +329,8 @@ proc ::mpaths::AddRows {cid prefix rows} {
 
 proc ::mpaths::BuildContexts {} {
 	variable CtxKids
-	variable CtxDyn
 
 	set CtxKids [dict create]
-	set CtxDyn [dict create]
 	foreach {cid object} {
 		C1 {}
 		C2 {}
@@ -342,9 +382,75 @@ proc ::mpaths::BuildLang {lang} {
 	menu .mpathsMenu -tearoff 0
 	set Dropdown [::menu::Dump .mpathsMenu]
 	ParseDump $Dropdown
+	FillDynamicCascades .mpathsMenu
 	BuildContexts
 	BuildLabels
 	return
+}
+
+proc ::mpaths::FindEntry {menu label} {
+	if {[catch {$menu index end} last]} { return -1 }
+	if {$last eq "" || $last eq "none"} { return -1 }
+	for {set i 0} {$i <= $last} {incr i} {
+		if {[$menu type $i] eq "separator"} continue
+		set text ""
+		catch { set text [$menu entrycget $i -label] }
+		if {[Norm $text] eq $label} { return $i }
+	}
+	return -1
+}
+
+# Dump prints a dynamic cascade as a leaf marker: its rows exist only after
+# the product's postcommand runs. Open each one here and record the real
+# children, so a path through an empty cascade cannot match its tail by
+# accident. Runtime values remain children: the cascade itself and every
+# label the product posts are checked.
+proc ::mpaths::FillDynamicCascades {root} {
+	variable Dyn
+	variable Kids
+
+	set queue [dict keys $Dyn]
+	set seen [dict create]
+	while {[llength $queue]} {
+		set key [lindex $queue 0]
+		set queue [lrange $queue 1 end]
+		if {[dict exists $seen $key]} continue
+		dict set seen $key 1
+		set path [split $key [Sep]]
+		set cur $root
+		set found 1
+		foreach label $path {
+			set i [FindEntry $cur $label]
+			if {$i < 0 || [$cur type $i] ne "cascade"} { set found 0; break }
+			set sub ""
+			catch { set sub [$cur entrycget $i -menu] }
+			if {$sub eq "" || ![winfo exists $sub]} { set found 0; break }
+			set cur $sub
+		}
+		if {!$found} continue
+		set command ""
+		catch { set command [$cur cget -postcommand] }
+		if {$command ne ""} { catch { uplevel #0 $command } }
+		set kids {}
+		if {[catch {$cur index end} last] == 0 && $last ne "" && $last ne "none"} {
+			for {set i 0} {$i <= $last} {incr i} {
+				if {[$cur type $i] eq "separator"} continue
+				set text ""
+				catch { set text [$cur entrycget $i -label] }
+				set text [Norm $text]
+				if {$text eq ""} continue
+				lappend kids $text
+				set child [concat $path [list $text]]
+				set childKey [Key $child]
+				if {![dict exists $Kids $childKey]} { dict set Kids $childKey {} }
+				if {[$cur type $i] eq "cascade"} {
+					dict set Dyn $childKey 1
+					lappend queue $childKey
+				}
+			}
+		}
+		dict set Kids $key $kids
+	}
 }
 
 proc ::mpaths::RestoreLang {} {
@@ -371,12 +477,10 @@ proc ::mpaths::IsProse {c} {
 
 proc ::mpaths::Walk {start rest} {
 	variable Kids
-	variable Dyn
 
 	set cur $start
 	foreach c $rest {
 		set k [Key $cur]
-		if {[dict exists $Dyn $k]} { return 1 }
 		set kids {}
 		if {[dict exists $Kids $k]} { set kids [dict get $Kids $k] }
 		if {[lsearch -exact $kids $c] >= 0} {
@@ -391,14 +495,12 @@ proc ::mpaths::Walk {start rest} {
 
 proc ::mpaths::WalkCid {cid cur rest} {
 	variable CtxKids
-	variable CtxDyn
 	variable SurfaceCids
 
 	set i 0
 	while {$i < [llength $rest]} {
 		set c [lindex $rest $i]
 		set k [CtxKey $cid $cur]
-		if {[dict exists $CtxDyn $k]} { return 1 }
 		set kids {}
 		if {[dict exists $CtxKids $k]} { set kids [dict get $CtxKids $k] }
 		if {[lsearch -exact $kids $c] >= 0} {
@@ -501,14 +603,13 @@ proc ::mpaths::IsOsRoot {c} {
 # ----------------------------------------------------------------------
 proc ::mpaths::FilesFor {lang} {
 	variable Root
-	variable Catalog
 	variable EnglishFiles
 
 	set dir [file join $Root tcl help $lang]
 	set files [lsort [concat \
 		[glob -nocomplain -directory $dir *.txt] \
 		[glob -nocomplain -directory $dir *.html]]]
-	lappend files [file join $Root tcl lang [dict get $Catalog $lang]]
+	lappend files [file join $Root tcl lang [dict get [Languages] $lang]]
 	if {$lang eq "en"} {
 		foreach name $EnglishFiles {
 			lappend files [file join $Root tcl $name]
@@ -614,25 +715,9 @@ proc ::mpaths::ExtrasBad {} {
 # ----------------------------------------------------------------------
 # Tests
 # ----------------------------------------------------------------------
-tcltest::test menu-paths-en {every menu path in the English help and user strings resolves} -body {
-	::mpaths::Check en
-} -result {}
-
-tcltest::test menu-paths-de {every menu path in the German help and catalog resolves} -body {
-	::mpaths::Check de
-} -result {}
-
-tcltest::test menu-paths-es {every menu path in the Spanish help and catalog resolves} -body {
-	::mpaths::Check es
-} -result {}
-
-tcltest::test menu-paths-hu {every menu path in the Hungarian help and catalog resolves} -body {
-	::mpaths::Check hu
-} -result {}
-
-tcltest::test menu-paths-it {every menu path in the Italian help and catalog resolves} -body {
-	::mpaths::Check it
-} -result {}
+foreach lang [lsort [dict keys [::mpaths::Languages]]] {
+	tcltest::test menu-paths-$lang [format {every menu path in the %s help and catalog resolves} $lang] -body [list ::mpaths::Check $lang] -result {}
+}
 
 tcltest::test menu-paths-stale {the paths the reseal removed no longer resolve} -body {
 	set bad {}
@@ -644,6 +729,7 @@ tcltest::test menu-paths-stale {the paths the reseal removed no longer resolve} 
 		en {Maintenance > Advanced Search}
 		en {Maintenance > Pattern Search}
 		en {Maintenance > Mark As > Openings}
+		en {Database > Maintenance > Repertoire Type > Openings}
 		en {File > Open > HTML documents}
 		de {Main Menu > Einstellungen > Motoren (Schachprogramme)}
 		de {Einstellungen > Assistent}
@@ -652,6 +738,7 @@ tcltest::test menu-paths-stale {the paths the reseal removed no longer resolve} 
 		hu {Main Menu > Beállítások > Elemző modulok}
 		it {Main Menu > Imposta > Motori}
 		it {Preferenze > Assistente}
+		sv {Inställningar > Assistent}
 	} {
 		if {![::mpaths::Resolves $lang $chain]} continue
 		lappend bad "$lang: $chain"
@@ -666,7 +753,7 @@ tcltest::test menu-paths-current {the replacement paths resolve in every languag
 		en {Edit > Keyboard Preferences}
 		en {Database > Search > Advanced}
 		en {Database > Search > Query Editor}
-		en {Database > Maintenance > Repertoire Type > Openings}
+		en {Database > Maintenance > Change Icon}
 		en {Tools > Choose Model}
 		en {Tools > Assistant}
 		en {Training > Play Against Engine}
@@ -684,9 +771,35 @@ tcltest::test menu-paths-current {the replacement paths resolve in every languag
 		it {Modifica > Preferenze > Motori}
 		it {Modifica > Preferenze tastiera}
 		it {Banca dati > Cerca}
+		sv {Verktyg > Assistent}
 	} {
 		if {[::mpaths::Resolves $lang $chain]} continue
 		lappend bad "$lang: $chain"
+	}
+	set bad
+} -result {}
+
+tcltest::test menu-paths-dynamic {dynamic cascades are checked down to the children the product posts} -body {
+	set bad {}
+	# Rows the product generates at runtime: the cascade exists and its real
+	# children resolve.
+	foreach {lang chain} {
+		en {View > Icon Size}
+		en {View > Icon Size > Small}
+		en {Database > Maintenance > Repertoire Type}
+		sv {Visa > Ikonstorlek > Liten}
+	} {
+		if {[::mpaths::Resolves $lang $chain]} continue
+		lappend bad "missing: $lang: $chain"
+	}
+	# A value the product does not post under that cascade is not a menu path,
+	# and an empty cascade has no children to name.
+	foreach {lang chain} {
+		en {View > Icon Size > Huge}
+		en {Database > Maintenance > Repertoire Type > Openings}
+	} {
+		if {![::mpaths::Resolves $lang $chain]} continue
+		lappend bad "still resolves: $lang: $chain"
 	}
 	set bad
 } -result {}

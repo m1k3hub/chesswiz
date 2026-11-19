@@ -1094,7 +1094,7 @@
 ::application::ask::mc::PrefsDoc		"Välj de lokala röstverktygen (whisper-cli, modell, inspelare) och se vad som behöver installeras när röstinmatning inte är tillgänglig."
 
 ### application::speech ################################################
-::application::speech::mc::Install		"Röstinmatning kräver whisper-cli (whisper.cpp), en ggml-modell och arecord eller ffmpeg. Ställ in dem i Inställningar > Assistent."
+::application::speech::mc::Install		"Röstinmatning kräver whisper-cli (whisper.cpp), en ggml-modell och arecord eller ffmpeg. Ställ in dem i dialogrutan Assistentinställningar\u2026."
 ::application::speech::mc::InstallMac	"macOS använder systemets diktering: aktivera den i Systeminställningar > Tangentbord > Diktering och tryck sedan på dikteringstangenten (eller Fn Fn)."
 ::application::speech::mc::InstallWin	"Windows använder systemets diktering: tryck på Win+H medan Fråga-fältet har fokus."
 ::application::speech::mc::Listening	"Inspelning\u2026 klicka för att stoppa"

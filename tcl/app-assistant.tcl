@@ -4158,7 +4158,7 @@ proc ::application::assistant::DoAddToRepertoire {repertoire} {
 	set variant [::application::database::currentVariant]
 	set bases [::application::database::repertoireBases 0 $variant]
 	if {![llength $bases]} {
-		return "error: no writable repertoire database is open. Open one, or mark a database as one: Database > Maintenance > Repertoire Type > Openings"
+		return "error: no writable repertoire database is open. Open one, or set a database's type with Database > Maintenance > Change Icon (choose an Openings type)."
 	}
 	if {$repertoire ne ""} {
 		set bases [lmap b $bases { if {[string match -nocase "*$repertoire*" [::util::databaseName $b no]]} { set b } else continue }]
