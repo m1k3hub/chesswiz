@@ -330,6 +330,7 @@ readHandler(ClientData clientData, int)
 {
 	try
 	{
+#ifndef __WIN32__
 		// Wakeups are normally drained by the event loop before it services a
 		// channel, but a status can also be pending from a signal that arrived
 		// after the loop woke up. Apply it first: an exited process must look
@@ -337,6 +338,7 @@ readHandler(ClientData clientData, int)
 		// a read that returned nothing.
 		if (m_childPending)
 			::drainChildEvents();
+#endif
 
 		Process* process = reinterpret_cast<Process*>(clientData);
 
