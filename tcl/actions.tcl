@@ -943,7 +943,9 @@ proc ::action::displayLabel {label} {
 proc ::action::searchText {id} {
 	variable Registry
 	set record [get $id]
-	set text "[displayLabel [dict get $record label]] [dict get $record doc]"
+	# Search keeps the registry label as stored: it contains the visible
+	# text, and typing either the visible label or the menu markup matches.
+	set text "[markupLabel [dict get $record label]] [dict get $record doc]"
 	set ks [dict get $record keys]
 	if {[llength $ks] >= 2 && [lindex $ks 1] ne ""} { append text " " [lindex $ks 1] }
 	return $text
@@ -963,7 +965,7 @@ proc ::action::labelAccel {id} {
 # field reads every registry row per keystroke, so it must not call get (and
 # a label-command) again for the text and the accelerator.
 proc ::action::searchTextRecord {record} {
-	set text "[displayLabel [dict get $record label]] [dict get $record doc]"
+	set text "[markupLabel [dict get $record label]] [dict get $record doc]"
 	set ks [dict get $record keys]
 	if {[llength $ks] >= 2 && [lindex $ks 1] ne ""} { append text " " [lindex $ks 1] }
 	return $text
