@@ -939,16 +939,14 @@ proc ::action::displayLabel {label} {
 	return [::action::plainText [::action::markupLabel $label]]
 }
 
-# The text a query is matched against: label, doc and accelerator.
+# The text a query is matched against: visible label, stored markup label,
+# doc and accelerator. The visible label comes first so typing exactly what
+# a menu/Ask row shows wins the prefix bonus; the stored label follows only
+# when it differs, so typing the raw "&" markup still matches too.
 proc ::action::searchText {id} {
 	variable Registry
 	set record [get $id]
-	# Search keeps the registry label as stored: it contains the visible
-	# text, and typing either the visible label or the menu markup matches.
-	set text "[markupLabel [dict get $record label]] [dict get $record doc]"
-	set ks [dict get $record keys]
-	if {[llength $ks] >= 2 && [lindex $ks 1] ne ""} { append text " " [lindex $ks 1] }
-	return $text
+	return [searchTextRecord $record]
 }
 
 # The display accelerator of an action, honouring a key-editor override.
@@ -965,7 +963,10 @@ proc ::action::labelAccel {id} {
 # field reads every registry row per keystroke, so it must not call get (and
 # a label-command) again for the text and the accelerator.
 proc ::action::searchTextRecord {record} {
-	set text "[markupLabel [dict get $record label]] [dict get $record doc]"
+	set markup [markupLabel [dict get $record label]]
+	set text [plainText $markup]
+	if {$markup ne $text} { append text " $markup" }
+	append text " " [dict get $record doc]
 	set ks [dict get $record keys]
 	if {[llength $ks] >= 2 && [lindex $ks 1] ne ""} { append text " " [lindex $ks 1] }
 	return $text
@@ -1333,9 +1334,13 @@ proc ::action::AskRows {query} {
 	set q [string tolower $query]
 	set output {}
 	foreach row $rows {
-		lassign $row id label ac text
+		lassign $row id label ac text visible
 		set score [fuzzyScoreLower $q $text]
 		if {$score < 0} { continue }
+		# The indexed text also carries the stored "&" markup and the docs,
+		# so a longer label that merely starts with the query could beat an
+		# exact visible label ("Help…" vs "Help"). Prefer the exact label.
+		if {$visible ne "" && $q eq $visible} { incr score 500 }
 		lappend output [::list $score $label [::list $id $label $ac 1 1]]
 	}
 	set sorted [lsort -integer -decreasing -index 0 $output]
@@ -1414,8 +1419,9 @@ proc ::action::_BuildAskRows {ctxObjects ctxMenus ctxIds} {
 		if {![_bareRunnable $id]} { continue }
 
 		set label [markupLabel [dict get $record label]]
+		set visible [string tolower [plainText $label]]
 		set ac [labelAccelRecord $id $record]
-		lappend rows [::list $id $label $ac [string tolower [searchTextRecord $record]]]
+		lappend rows [::list $id $label $ac [string tolower [searchTextRecord $record]] $visible]
 	}
 	set AskStateMap $stateMap
 	return $rows

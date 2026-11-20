@@ -869,6 +869,25 @@ proc ::menu::RegisterTree {} {
 	# This dynamic recent-files leaf has no fixed dropdown ordinal. Keep it
 	# in the generic assistant operator and knowledge surfaces nonetheless.
 	dict set ::action::Registry menu.file.recent.clear operator 1
+	# Posted recent-file rows are registry actions too. The file, encoding
+	# and read-only flag are validated arguments, not a script stored in the
+	# menu row. Like Clear History and the New Game variants, a posted row
+	# is user reachable even without a fixed drop-down ordinal, so the
+	# assistant may run it too (VAL-AI-009).
+	if {![dict exists $::action::Registry menu.file.recent.open]} {
+		::action::register menu.file.recent.open [dict create \
+			label "Open Recent Database" object {} \
+			args {
+				{file {type string required 1 description {Database file to open}}}
+				{encoding {type string default {}}}
+				{readonly {type boolean default 0}}
+				{parent {type string default .application}}
+			} \
+			handler ::application::database::OpenRecentBase \
+			operator 1 \
+			what "Open Recent Database" \
+			doc "Open a database from the recent-files list."]
+	}
 	set n 0
 	foreach top $DropdownTree {
 		incr n
@@ -2147,8 +2166,15 @@ proc ::menu::FillRecentGames {menu} {
 		if {$label eq ""} { set label "game [incr ::menu::DropdownCounter]" }
 		lassign [AmpText $label] text ul
 		$menu add command -label $text -underline $ul \
-			-command [list ::scidb::game::switch $position]
+			-command [list ::action::run menu.game.history.recent.open \
+				[dict create position $position]]
 	}
+}
+
+# The posted recent-game row names one history entry; dispatch it through
+# the registry exactly like the fixed menu rows.
+proc ::menu::OpenRecentGame {arguments} {
+	return [::scidb::game::switch [dict get $arguments position]]
 }
 
 # ----------------------------------------------------------------------
@@ -2379,6 +2405,18 @@ proc ::menu::RegisterExtras {} {
 	} {
 		incr i
 		Register $id [MC $labelName] "" "" "" [format "03.%03d" [expr {850 + $i}]]
+	}
+	# Each posted recent-game row dispatches one history position through
+	# the registry; the position is an argument, not a script in the row.
+	# It is a user-reachable posted row, so the assistant may run it too.
+	if {![dict exists $::action::Registry menu.game.history.recent.open]} {
+		::action::register menu.game.history.recent.open [dict create \
+			label "Open Recent Game" object {} \
+			args {{position {type string required 1 description {Recent game entry to switch to}}}} \
+			handler ::menu::OpenRecentGame \
+			operator 1 \
+			what "Open Recent Game" \
+			doc "Switch to a game from the recent-games list."]
 	}
 	# "Clipbase" is the game clipboard: reuse game.paste's handler so the
 	# posted row and the assistant paste the same remembered games.

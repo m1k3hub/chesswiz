@@ -209,6 +209,51 @@ tcltest::test ask-typing-filters {typing narrows the registry to matching action
 	}
 } -result {1 1 1 1}
 
+# GAP-003 (terminal review 7): the search text starts with the visible
+# label, so typing exactly what the row shows ranks that row first even
+# though the stored label also carries "&" mnemonic markup.
+tcltest::test ask-exact-visible-label-ranks-first {the exact visible label ranks first in every catalog} -body {
+	set saved $::mc::langID
+	set bad {}
+	foreach {lang query} {
+		en Help
+		en {Focus follows size}
+		es Motores
+		de Anmerkungen
+		hu Értékelés
+	} {
+		::menu::SwitchLanguage $lang
+		update
+		set rows [::action::labels asklist $query]
+		if {![llength $rows]} { lappend bad [list $lang $query no-rows]; continue }
+		set top [lindex $rows 0]
+		set visible [::action::displayLabel [lindex $top 1]]
+		if {$visible ne $query} {
+			lappend bad [list $lang $query [lindex $top 0] $visible]
+		}
+	}
+	::menu::SwitchLanguage $saved
+	update
+	set bad
+} -result {}
+
+tcltest::test ask-stored-markup-label-still-matches {typing a stored "&" label still finds the row} -body {
+	set saved $::mc::langID
+	::menu::SwitchLanguage en
+	set englishHelp [lmap row [::action::labels asklist "&Help"] {lindex $row 0}]
+	set englishSupport [lmap row [::action::labels asklist "&Support"] {lindex $row 0}]
+	::menu::SwitchLanguage es
+	set spanishEngines [lmap row [::action::labels asklist "Motor&es"] {lindex $row 0}]
+	::menu::SwitchLanguage de
+	set german [lmap row [::action::labels asklist "&Anmerkungen"] {lindex $row 0}]
+	::menu::SwitchLanguage $saved
+	update
+	list [expr {"app-help" in $englishHelp}] \
+		[expr {"menu.help.support" in $englishSupport}] \
+		[expr {"menu.edit.preferences.engines" in $spanishEngines || "menu.analysis.engines" in $spanishEngines}] \
+		[expr {"menu.board.appearance.annotation" in $german}]
+} -result {1 1 1 1}
+
 tcltest::test ask-asklist-only-runnable {hidden and disabled actions never reach the list} -body {
 	::scidb::test::ask::isolated {
 		set ::scidb::test::ask::Ran {}
@@ -382,6 +427,116 @@ tcltest::test ask-ctrl-k-keeps-kill-line {Ctrl+K inside a Text editor does not s
 		set result
 	}
 } -result {1 1}
+
+# GAP-001 (terminal review 7): the private AskShortcut tag runs before the
+# widget class, so Ctrl+K must stop the binding chain when it handles the
+# key. Otherwise the class Control-k binding (TEntry/Entry: delete from the
+# cursor to end) wipes the Ask field or truncates another single-line entry.
+tcltest::test ask-ctrl-k-keeps-field-text {Ctrl+K in the Ask field keeps and selects its text} -body {
+	set entry [::application::ask::Entry]
+	set savedQuery $::application::ask::Query
+	$entry delete 0 end
+	$entry insert 0 "flip board"
+	$entry icursor 0
+	focus -force $entry
+	update
+	event generate $entry <Control-Key-k>
+	update
+	set result [list [$entry get] [$entry selection present] [focus]]
+	$entry delete 0 end
+	::application::ask::Typed ""
+	set ::application::ask::Query $savedQuery
+	set result
+} -result {{flip board} 1 .application.nb.ask.entry}
+
+tcltest::test ask-ctrl-k-keeps-other-entry-text {Ctrl+K in another single-line entry keeps its text} -body {
+	catch { destroy .application.__askgap }
+	frame .application.__askgap
+	place .application.__askgap -x 2 -y 2 -width 160 -height 60
+	ttk::entry .application.__askgap.te
+	entry .application.__askgap.e
+	pack .application.__askgap.te .application.__askgap.e -fill x
+	update
+	set out {}
+	foreach entry {.application.__askgap.te .application.__askgap.e} {
+		$entry delete 0 end
+		$entry insert 0 "hello world"
+		$entry icursor 2
+		focus -force $entry
+		update
+		set tagged [expr {"AskShortcut" in [bindtags $entry]}]
+		event generate $entry <Control-Key-k>
+		update
+		lappend out [list $tagged [$entry get] [focus]]
+	}
+	destroy .application.__askgap
+	set out
+} -result {{1 {hello world} .application.nb.ask.entry} {1 {hello world} .application.nb.ask.entry}}
+
+tcltest::test ask-ctrl-k-multiline-still-kills-line {Ctrl+K in a mapped Text editor keeps kill-line and Ctrl+Shift+K focuses Ask} -body {
+	catch { destroy .application.__askgap }
+	frame .application.__askgap
+	place .application.__askgap -x 2 -y 2 -width 160 -height 80
+	text .application.__askgap.t -width 20 -height 3
+	pack .application.__askgap.t -fill both -expand yes
+	update
+	set editor .application.__askgap.t
+	$editor insert 1.0 "one\ntwo"
+	$editor mark set insert 1.1
+	focus -force $editor
+	update
+	set tagged [expr {"AskShortcut" in [bindtags $editor]}]
+	event generate $editor <Control-Key-k>
+	update
+	set afterK [list [$editor get 1.0 1.end] [focus]]
+	event generate $editor <Control-Key-K>
+	update
+	set afterShiftK [list [$editor get 1.0 1.end] [focus]]
+	destroy .application.__askgap
+	list $tagged $afterK $afterShiftK
+} -result {1 {o .application.__askgap.t} {o .application.nb.ask.entry}}
+
+tcltest::test ask-command-k-aqua-breaks-on-entry {mirrored aqua Command-k breaks outside multiline editors} -setup {
+	set savedMirrored [array names ::menu::Mirrored]
+	set hadCmdK [bind AskShortcut <Command-Key-k>]
+	rename ::tk ::scidb::test::ask::RealTk
+	proc ::tk {args} {
+		if {$args eq "windowingsystem"} { return aqua }
+		return [uplevel 1 [list ::scidb::test::ask::RealTk {*}$args]]
+	}
+} -body {
+	::menu::MirrorCommandBindings
+	set cmdK [bind AskShortcut <Command-Key-k>]
+	catch { destroy .application.__askgap }
+	frame .application.__askgap
+	place .application.__askgap -x 2 -y 2 -width 160 -height 28
+	ttk::entry .application.__askgap.e
+	pack .application.__askgap.e -fill both -expand yes
+	update
+	.application.__askgap.e insert 0 "hello world"
+	.application.__askgap.e icursor 2
+	focus -force .application.__askgap.e
+	update
+	set rc [catch { uplevel #0 $cmdK }]
+	set result [list [expr {$cmdK eq [bind AskShortcut <Control-Key-k>]}] \
+		$rc [.application.__askgap.e get] [focus]]
+	destroy .application.__askgap
+	set result
+} -cleanup {
+	if {[llength [info commands ::scidb::test::ask::RealTk]]} {
+		rename ::tk {}
+		rename ::scidb::test::ask::RealTk ::tk
+	}
+	catch { destroy .application.__askgap }
+	foreach key [array names ::menu::Mirrored] {
+		if {$key in $savedMirrored} continue
+		set comma [string first , $key]
+		if {$comma < 0} continue
+		catch { bind [string range $key 0 [expr {$comma - 1}]] [string range $key [expr {$comma + 1}] end] {} }
+		catch { unset ::menu::Mirrored($key) }
+	}
+	catch { bind AskShortcut <Command-Key-k> $hadCmdK }
+} -result {1 3 {hello world} .application.nb.ask.entry}
 
 tcltest::test ask-key-editor-reports-precedence {the key editor explains the Ctrl+K precedence} -body {
 	set text [::application::keyEditor::Conflict some.action Control-k]

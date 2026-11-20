@@ -82,8 +82,8 @@ tcltest::test knowledge-plain-words-guard {all purposes and use cases avoid impl
  }
  puts "KNOWLEDGE_PLAIN_FIELDS $checked"
  list $checked $bad
-# 800 exposed actions (including the two board Media actions), three fields each.
-} -result {2400 {}}
+# 802 exposed actions (including the two board Media actions and recent-item opens), three fields each.
+} -result {2406 {}}
 tcltest::test knowledge-plain-words-canary {implementation terms in future descriptions fail the guard} -body {
  ::toolbarKnowledge::implementationTerms {Configure a native widget by path and callback in the Tcl registry handler.}
 } -result {native widget path callback tcl registry handler}

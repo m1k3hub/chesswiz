@@ -47,5 +47,30 @@ tcltest::test database-history-clear-native {database Clear History preserves ga
  ::action::run menu.file.recent.clear
  list [llength $::application::database::RecentFiles] [expr {$::game::History eq $gameBefore}]
 } -result {0 1}
+
+# GAP-002 (terminal review 7): the dynamic recent-games rows used to bind
+# ::scidb::game::switch directly. Each posted row is a registry action now.
+tcltest::test recent-game-rows-are-registry-actions {posted recent-game rows dispatch through ::action::run} -body {
+	catch { destroy .recentGameProbe }
+	menu .recentGameProbe -tearoff 0
+	::menu::FillRecentGames .recentGameProbe
+	set rows {}
+	set last [.recentGameProbe index end]
+	if {$last ne "" && $last ne "none"} {
+		for {set i 0} {$i <= $last} {incr i} {
+			lappend rows [list [.recentGameProbe entrycget $i -label] \
+				[.recentGameProbe entrycget $i -command]]
+		}
+	}
+	destroy .recentGameProbe
+	set bad {}
+	foreach row $rows {
+		if {![string match {::action::run menu.game.history.recent.open *} [lindex $row 1]]} {
+			lappend bad $row
+		}
+	}
+	list [expr {[llength $rows] > 0}] \
+		[expr {[dict exists $::action::Registry menu.game.history.recent.open]}] $bad
+} -result {1 1 {}}
 ::scidb::test::actions::release
 ::tcltest::cleanupTests

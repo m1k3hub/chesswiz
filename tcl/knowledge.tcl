@@ -677,6 +677,14 @@ dict set ::knowledge::Explicit menu.file.recent.clear [dict create \
 	purpose {Clear the list of recently opened databases without deleting any files.} \
 	when {Use this to remove old database shortcuts from the recent list.} \
 	examples {{Empty the recent database list} {Forget which databases I opened recently}}]
+dict set ::knowledge::Explicit menu.file.recent.open [dict create \
+	purpose {Open a database from the recently opened files list.} \
+	when {Use this to reopen a database from the recent files history.} \
+	examples {{Reopen a recent database} {Open a database from the recent files list}}]
+dict set ::knowledge::Explicit menu.game.history.recent.open [dict create \
+	purpose {Switch to a game from the recent games history list.} \
+	when {Use this to return to a game you recently opened.} \
+	examples {{Switch to a recent game} {Reopen a game from the recent games list}}]
 
 set ::knowledge::Topics [list \
 	[dict create \

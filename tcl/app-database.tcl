@@ -911,6 +911,16 @@ proc setFocus {} {
 }
 
 
+# A recent-files row is a registry action: the file, its encoding and the
+# read-only flag travel as validated arguments, exactly as the row passed
+# them to openBase before.
+proc OpenRecentBase {arguments} {
+	return [openBase [dict get $arguments parent] [dict get $arguments file] yes \
+		-encoding [dict get $arguments encoding] \
+		-readonly [dict get $arguments readonly]]
+}
+
+
 proc addRecentlyUsedToMenu {parent m} {
 	variable Vars
 
@@ -925,8 +935,9 @@ proc addRecentlyUsedToMenu {parent m} {
 				-label " $name  \u25b8  $dir" \
 				-image [set [namespace current]::icons::${type}(16x16)] \
 				-compound left \
-				-command [namespace code \
-					[list openBase $parent $file yes -encoding $encoding -readonly $readonly]] \
+				-command [list ::action::run menu.file.recent.open \
+					[dict create parent $parent file $file \
+						encoding $encoding readonly $readonly]] \
 				;
 		}
 		$m add separator

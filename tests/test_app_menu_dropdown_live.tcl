@@ -422,6 +422,48 @@ tcltest::test md-live-every-cascade {with a database and a game loaded every pos
     if {[info exists base]} {::mdl::CloseDatabase $base}
 }
 
+# GAP-002 (terminal review 7): the empty recent list hid the direct
+# openBase binding. With a real recent entry, every posted row (Open
+# Recent included) must still dispatch through ::action::run.
+tcltest::test md-live-populated-recent-rows {a populated recent-files list posts only registry actions and reopens via ::action::run} -setup {
+    set base [::mdl::OpenNative]
+    if {![::menu::GameLoaded]} {
+        ::action::run open_game {number 1}
+        ::scidb::test::actions::waitUntil {[::menu::GameLoaded]} 10000
+    }
+    set recent [::scidb::test::actions::fixture]
+    ::action::run open_database [dict create path $recent]
+    update
+    catch { ::application::database::closeBase .application $recent }
+    update
+} -body {
+    set recentCount [llength $::application::database::RecentFiles]
+    set problems {}
+    ::mdl::WalkAll [::mdl::menu] root problems
+    set nonAction {}
+    foreach problem $problems {
+        if {[lindex $problem 0] eq "not-registry"} { lappend nonAction $problem }
+    }
+    # Also verify the toolbar -menucmd path and invoke a posted recent row.
+    catch { destroy .mdlToolbarRecent }
+    menu .mdlToolbarRecent -tearoff 0
+    ::application::database::addRecentlyUsedToMenu .application .mdlToolbarRecent
+    set rowCmd [.mdlToolbarRecent entrycget 0 -command]
+    set isRecentAction [string match {::action::run menu.file.recent.open *} $rowCmd]
+    set switcher [::application::database::switcherWidget]
+    set wasOpen [$switcher contains? $recent]
+    .mdlToolbarRecent invoke 0
+    update
+    set isOpen [$switcher contains? $recent]
+    destroy .mdlToolbarRecent
+    catch { ::application::database::closeBase .application $recent }
+    update
+    list [expr {$recentCount > 0}] $nonAction $isRecentAction $wasOpen $isOpen
+} -result {1 {} 1 0 1} -cleanup {
+    catch { destroy .mdlToolbarRecent }
+    if {[info exists base]} {::mdl::CloseDatabase $base}
+}
+
 tcltest::test md-live-newgame {Game > New Game posts the registered variant rows} -setup {
     set base [::mdl::OpenNative]
     set game [::mdl::TopMenu Game]

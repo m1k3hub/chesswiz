@@ -423,6 +423,10 @@ proc ::application::ask::Help {} {
 proc ::application::ask::CtrlK {} {
 	if {[InMultilineEditor]} { return }
 	Focus
+	# This private tag runs before the widget class. Stop the chain or the
+	# class Control-k binding (TEntry/Entry delete from the cursor to end)
+	# also runs: it wiped the Ask field and truncated any other entry.
+	return -code break
 }
 
 proc ::application::ask::CtrlShiftK {} {
