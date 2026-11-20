@@ -98,6 +98,11 @@ unset _name
 }
 
 variable Query ""
+variable FmtCache [dict create]
+variable ListTexts {}
+variable ListGeom ""
+variable ListIndex -1
+variable RowHeight ""
 variable Priv
 array set Priv {
 	index		0
@@ -191,6 +196,19 @@ proc ::application::ask::Build {notebook} {
 	PlaceholderState
 	RegisterAction
 	catch { InstallShortcutTags $notebook }
+	# Run filtering synchronously right after TEntry inserts a character on
+	# KeyPress, instead of waiting for KeyRelease (which adds hold latency
+	# and a second native display pass on Aqua). KeyRelease remains as a
+	# fallback for IME/paste paths; Typed short-circuits when unchanged.
+	set tags [bindtags $entry]
+	if {"AskEntry" ni $tags} {
+		set pos [lsearch -exact $tags TEntry]
+		if {$pos >= 0} {
+			bindtags $entry [linsert $tags [expr {$pos + 1}] AskEntry]
+		} else {
+			bindtags $entry [linsert $tags 1 AskEntry]
+		}
+	}
 	return $frame
 }
 
@@ -212,14 +230,18 @@ proc ::application::ask::PlaceholderState {} {
 
 	if {![info exists Priv(placeholder)] || ![winfo exists $Priv(placeholder)]} { return }
 	if {[string length $Query]} {
-		place forget $Priv(placeholder)
-	} else {
+		if {[winfo manager $Priv(placeholder)] ne ""} {
+			place forget $Priv(placeholder)
+		}
+	} elseif {[winfo manager $Priv(placeholder)] ne "place"} {
 		place $Priv(placeholder) -in $Priv(entry) -relx 0 -x 4 -rely 0.5 -anchor w
 	}
 }
 
 proc ::application::ask::ThemeChanged {} {
 	variable Priv
+	variable RowHeight
+	set RowHeight ""
 	if {[info exists Priv(placeholder)] && [winfo exists $Priv(placeholder)]} {
 		$Priv(placeholder) configure \
 			-foreground [expr {[::theme::isDark] ? "#8b949e" : "grey"}] \
@@ -257,7 +279,9 @@ proc ::application::ask::MicText {} {
 proc ::application::ask::Relabel {} {
 	variable Priv
 	variable mc
+	variable FmtCache
 
+	set FmtCache [dict create]
 	if {[info exists Priv(placeholder)] && [winfo exists $Priv(placeholder)]} {
 		$Priv(placeholder) configure -text [PlaceholderText]
 	}
@@ -459,6 +483,7 @@ proc ::application::ask::InstallShortcutTags {{w .application}} {
 
 bind AskShortcut <Control-Key-k> {::application::ask::CtrlK}
 bind AskShortcut <Control-Key-K> {::application::ask::CtrlShiftK; break}
+bind AskEntry <KeyPress> {::application::ask::Typed %K}
 
 proc ::application::ask::InMultilineEditor {} {
 	set w [focus]
@@ -490,8 +515,10 @@ proc ::application::ask::Typed {{key ""}} {
 	set Priv(filtered) $text
 
 	if {$text eq ""} {
-		set Priv(rows) {}
-		HideList
+		if {$Priv(rows) ne {} || [ListVisible]} {
+			set Priv(rows) {}
+			HideList
+		}
 		return
 	}
 	set Priv(rows) [::action::labels asklist $text]
@@ -503,22 +530,32 @@ proc ::application::ask::ShowList {} {
 	variable Priv
 	variable Query
 	variable mc
+	variable FmtCache
+	variable ListTexts
+	variable ListGeom
+	variable ListIndex
+	variable RowHeight
 
 	set rows $Priv(rows)
-	set assistantIndex [llength $rows]
-	set items {}
-	set i 0
+	if {[dict size $FmtCache] > 4096} { set FmtCache [dict create] }
+	set texts {}
 	foreach row $rows {
-		lassign $row id label accel enabled visible
+		lassign $row id label accel
 		# The registry label is Tk menu markup ("&Quit", "&&" for a literal
-		# "&"). The list is text, so strip the mnemonic exactly as the menus
-		# do; AmpText's one leading space replaces the format's own.
-		set plain [lindex [::menu::AmpText $label] 0]
-		set text [format " %-48s %s" [string trimleft $plain] $accel]
-		lappend items [list $text $id]
-		incr i
+		# "&"). Cache formatted row strings so typing never re-strips and
+		# re-formats hundreds of rows on every keystroke.
+		set key [list $label $accel]
+		if {[dict exists $FmtCache $key]} {
+			lappend texts [dict get $FmtCache $key]
+		} else {
+			set plain [lindex [::menu::AmpText $label] 0]
+			set text [format " %-48s %s" [string trimleft $plain] $accel]
+			dict set FmtCache $key $text
+			lappend texts $text
+		}
 	}
-	lappend items [list " $mc::AskAssistant" ""]
+	lappend texts " $mc::AskAssistant"
+	set count [llength $texts]
 
 	set w $Priv(list)
 	set opening 0
@@ -535,26 +572,93 @@ proc ::application::ask::ShowList {} {
 		bind $w.list <ButtonRelease-1> { break }
 		bind $w.list <Double-Button-1> { break }
 		set Priv(list) $w
+		set ListTexts {}
+		set ListGeom ""
+		set ListIndex -1
+		set RowHeight ""
 		set opening 1
 	}
 	set list $w.list
-	# Consecutive prefixes often produce the same rows. Keep those rows
-	# (and their native selection) rather than repainting the entire list.
-	set texts {}
-	foreach item $items { lappend texts [lindex $item 0] }
-	if {[$list get 0 end] ne $texts} {
-		$list delete 0 end
-		$list insert end {*}$texts
+	# Consecutive prefixes often keep almost all rows in the same order.
+	# Avoid copying the widget contents out on every key, and strip any
+	# identical leading/trailing slices so unchanged rows are not re-measured
+	# by Tk/CoreText on every keystroke.
+	set listChanged 0
+	if {$opening || $ListTexts ne $texts} {
+		set listChanged 1
+		set oldLen [llength $ListTexts]
+		if {!$opening && $oldLen > 0 && $count > 0 && [$list size] == $oldLen} {
+			set p 0
+			set minLen [expr {$oldLen < $count ? $oldLen : $count}]
+			while {$p < $minLen && [lindex $ListTexts $p] eq [lindex $texts $p]} {
+				incr p
+			}
+			set oldEnd [expr {$oldLen - 1}]
+			set newEnd [expr {$count - 1}]
+			while {$oldEnd >= $p && $newEnd >= $p \
+			 && [lindex $ListTexts $oldEnd] eq [lindex $texts $newEnd]} {
+				incr oldEnd -1
+				incr newEnd -1
+			}
+			if {$oldEnd >= $p || $newEnd >= $p} {
+				set didMiddle 0
+				if {($oldEnd - $p) >= 40 && ($newEnd - $p) >= 40} {
+					# Even when rows above and below a large block change (e.g.
+					# high- and low-scoring rows around 400 synthetic rows),
+					# anchor on the midpoint so the unchanged block is kept in place.
+					set mid [expr {($p + $newEnd) / 2}]
+					set oldMid [lsearch -exact -start $p $ListTexts [lindex $texts $mid]]
+					if {$oldMid >= $p && $oldMid <= $oldEnd} {
+						set oLo $oldMid
+						set nLo $mid
+						while {$oLo > $p && $nLo > $p \
+						 && [lindex $ListTexts [expr {$oLo - 1}]] eq [lindex $texts [expr {$nLo - 1}]]} {
+							incr oLo -1
+							incr nLo -1
+						}
+						set oHi $oldMid
+						set nHi $mid
+						while {$oHi < $oldEnd && $nHi < $newEnd \
+						 && [lindex $ListTexts [expr {$oHi + 1}]] eq [lindex $texts [expr {$nHi + 1}]]} {
+							incr oHi
+							incr nHi
+						}
+						if {($oHi - $oLo + 1) >= 32} {
+							if {$oldEnd > $oHi} { $list delete [expr {$oHi + 1}] $oldEnd }
+							if {$newEnd > $nHi} { $list insert [expr {$oHi + 1}] {*}[lrange $texts [expr {$nHi + 1}] $newEnd] }
+							if {$oLo > $p} { $list delete $p [expr {$oLo - 1}] }
+							if {$nLo > $p} { $list insert $p {*}[lrange $texts $p [expr {$nLo - 1}]] }
+							set didMiddle 1
+						}
+					}
+				}
+				if {!$didMiddle} {
+					if {$oldEnd >= $p} {
+						$list delete $p $oldEnd
+					}
+					if {$newEnd >= $p} {
+						$list insert $p {*}[lrange $texts $p $newEnd]
+					}
+				}
+			}
+		} else {
+			$list delete 0 end
+			$list insert end {*}$texts
+		}
+		set ListTexts $texts
 	}
-	if {[llength $items]} {
+	if {$count} {
 		if {$Priv(index) < 0} { set Priv(index) 0 }
-		if {$Priv(index) >= [llength $items]} { set Priv(index) [expr {[llength $items] - 1}] }
+		if {$Priv(index) >= $count} { set Priv(index) [expr {$count - 1}] }
 		if {[$list curselection] ne $Priv(index)} {
 			$list selection clear 0 end
 			$list selection set $Priv(index)
 		}
 		if {[$list index active] != $Priv(index)} { $list activate $Priv(index) }
-		$list see $Priv(index)
+		if {$opening || $listChanged || $ListIndex != $Priv(index)} {
+			$list see $Priv(index)
+			set ListIndex $Priv(index)
+		}
 	}
 
 	set entry [Entry]
@@ -562,9 +666,17 @@ proc ::application::ask::ShowList {} {
 		set x [winfo rootx $entry]
 		set y [expr {[winfo rooty $entry] + [winfo height $entry] + 2}]
 		set width [expr {[winfo width $entry] + [winfo width [Mic]] + 8}]
-		set rowHeight [expr {[font metrics [$list cget -font] -linespace] + 4}]
-		set height [expr {min(320, max($rowHeight, [llength $items] * $rowHeight + 4))}]
-		wm geometry $w "${width}x${height}+${x}+${y}"
+		if {$RowHeight eq ""} {
+			set RowHeight [expr {[font metrics [$list cget -font] -linespace] + 4}]
+		}
+		set height [expr {min(320, max($RowHeight, $count * $RowHeight + 4))}]
+		set geom "${width}x${height}+${x}+${y}"
+		# Avoid redundant wm geometry calls on Aqua: even an unchanged
+		# geometry triggers a native Cocoa window frame/display cycle.
+		if {$opening || $ListGeom ne $geom} {
+			wm geometry $w $geom
+			set ListGeom $geom
+		}
 	}
 	# Reordering an already visible Aqua window forces another native
 	# display pass on every key. Only map and raise when opening the list.

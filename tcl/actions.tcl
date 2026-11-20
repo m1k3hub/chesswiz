@@ -38,6 +38,9 @@ namespace eval ::action {
 	# have to invalidate the cache.
 	variable AskCachedStamp ""
 	variable AskCachedRows {}
+	variable AskLiveScriptsKey ""
+	variable AskLiveScripts {}
+	variable AskMetaCache [dict create]
 	# Availability each cached row had when it was captured, so a menu read
 	# that observes a different availability can invalidate the snapshot.
 	variable AskStateMap [dict create]
@@ -881,7 +884,7 @@ proc ::action::fuzzyScoreLower {q t} {
 		set score [expr {1000 - [string length $t] - $pos}]
 		if {$pos == 0} {
 			incr score 400
-		} elseif {[regexp {(^|[ _./-])} [string index $t [expr {$pos - 1}]]]} {
+		} elseif {[string first [string index $t [expr {$pos - 1}]] " _./-"] >= 0} {
 			incr score 200
 		}
 		return $score
@@ -986,7 +989,9 @@ proc ::action::labelAccelRecord {id record} {
 # any menu-state read outside an Ask rebuild.
 proc ::action::InvalidateAskRows {} {
 	variable AskCachedStamp
+	variable AskLiveScriptsKey
 	set AskCachedStamp ""
+	set AskLiveScriptsKey ""
 }
 
 # A menu build (or any state read outside an Ask rebuild) sees live
@@ -1019,50 +1024,80 @@ proc ::action::_stampOf {cmd} {
 # cache invalidation hook. Deduplicate shared predicates across aliases.
 proc ::action::AskLiveInputs {ctxObjects ctxMenus} {
 	variable Registry
-	set scripts [dict create]
-	dict for {id rec} $Registry {
-		if {[dict get $rec ai] eq "debug" || $id eq "context.ask"} { continue }
-		set object {}
-		set contexts [dict get $rec context]
-		if {[llength $contexts] && [dict get $rec dropdown] eq ""} {
-			set included 0
-			foreach cid $contexts {
-				if {[dict exists $ctxMenus $cid] && $id in [dict get $ctxMenus $cid]} {
-					set included 1
+	variable RegistryVersion
+	variable AskLiveScriptsKey
+	variable AskLiveScripts
+
+	if {![info exists RegistryVersion]} { set RegistryVersion 0 }
+	if {![info exists AskLiveScriptsKey]} { set AskLiveScriptsKey "" }
+	if {![info exists AskLiveScripts]} { set AskLiveScripts {} }
+	set predVer [expr {[info exists ::context::PredicateVersion] ? $::context::PredicateVersion : 0}]
+	set predSize [expr {[info exists ::context::Predicates] ? [dict size $::context::Predicates] : 0}]
+	set hasObjRule [llength [info commands ::context::ObjectRule]]
+	set scriptsKey [::list $RegistryVersion [dict size $Registry] $ctxObjects $ctxMenus $predVer $predSize $hasObjRule]
+	if {$scriptsKey ne $AskLiveScriptsKey} {
+		set scripts [dict create]
+		dict for {id rec} $Registry {
+			if {[dict get $rec ai] eq "debug" || $id eq "context.ask"} { continue }
+			set object {}
+			set contexts [dict get $rec context]
+			if {[llength $contexts] && [dict get $rec dropdown] eq ""} {
+				set included 0
+				foreach cid $contexts {
+					if {[dict exists $ctxMenus $cid] && $id in [dict get $ctxMenus $cid]} {
+						set included 1
+					}
+				}
+				if {!$included} { continue }
+				foreach cid $contexts {
+					if {[dict exists $ctxObjects $cid]} {
+						if {$cid eq "C5" && $id ni [dict get $ctxMenus $cid]} { continue }
+						set object [dict get $ctxObjects $cid]
+						break
+					}
 				}
 			}
-			if {!$included} { continue }
-			foreach cid $contexts {
-				if {[dict exists $ctxObjects $cid]} {
-					if {$cid eq "C5" && $id ni [dict get $ctxMenus $cid]} { continue }
-					set object [dict get $ctxObjects $cid]
-					break
+			foreach field {visible enabled} {
+				set script [dict get $rec $field]
+				if {$script eq ""} { continue }
+				if {[dict get $rec $field-args] && $object ne {}} {
+					lappend script [dict create object $object]
+				}
+				dict set scripts $script 1
+			}
+			if {[string match {c[0-9]*} $id] && $hasObjRule \
+			 && (![llength [info commands ::context::HasObjectRule]] || [::context::HasObjectRule $id])} {
+				dict set scripts [::list ::context::ObjectRule $id $object] 1
+			}
+		}
+		if {[info exists ::context::Predicates]} {
+			dict for {id predicates} $::context::Predicates {
+				if {[dict exists $Registry $id]} {
+					set rec [dict get $Registry $id]
+					set contexts [dict get $rec context]
+					if {[llength $contexts] && [dict get $rec dropdown] eq ""} {
+						set included 0
+						foreach cid $contexts {
+							if {[dict exists $ctxMenus $cid] && $id in [dict get $ctxMenus $cid]} {
+								set included 1
+								break
+							}
+						}
+						if {!$included} { continue }
+					}
+				}
+				dict for {field predicate} $predicates {
+					if {$field in {visible enabled}} {
+						dict set scripts [::list namespace eval ::context [::list expr $predicate]] 1
+					}
 				}
 			}
 		}
-		foreach field {visible enabled} {
-			set script [dict get $rec $field]
-			if {$script eq ""} { continue }
-			if {[dict get $rec $field-args] && $object ne {}} {
-				lappend script [dict create object $object]
-			}
-			dict set scripts $script 1
-		}
-		if {[string match {c[0-9]*} $id] && [llength [info commands ::context::ObjectRule]]} {
-			dict set scripts [::list ::context::ObjectRule $id $object] 1
-		}
-	}
-	if {[info exists ::context::Predicates]} {
-		dict for {id predicates} $::context::Predicates {
-			dict for {field predicate} $predicates {
-				if {$field in {visible enabled}} {
-					dict set scripts [::list namespace eval ::context [::list expr $predicate]] 1
-				}
-			}
-		}
+		set AskLiveScripts [dict keys $scripts]
+		set AskLiveScriptsKey $scriptsKey
 	}
 	set values {}
-	foreach script [dict keys $scripts] {
+	foreach script $AskLiveScripts {
 		set code [catch {uplevel #0 $script} value]
 		lappend values $script $code $value
 	}
@@ -1327,25 +1362,25 @@ proc ::action::AskRows {query} {
 	if {$query eq ""} {
 		set output {}
 		foreach row $rows {
-			lappend output [::list [lindex $row 0] [lindex $row 1] [lindex $row 2] 1 1]
+			lappend output [lindex $row 0]
 		}
 		return $output
 	}
 	set q [string tolower $query]
 	set output {}
 	foreach row $rows {
-		lassign $row id label ac text visible
+		lassign $row outRow text visible
 		set score [fuzzyScoreLower $q $text]
 		if {$score < 0} { continue }
 		# The indexed text also carries the stored "&" markup and the docs,
 		# so a longer label that merely starts with the query could beat an
 		# exact visible label ("Help…" vs "Help"). Prefer the exact label.
 		if {$visible ne "" && $q eq $visible} { incr score 500 }
-		lappend output [::list $score $label [::list $id $label $ac 1 1]]
+		lappend output [::list $score $outRow]
 	}
 	set sorted [lsort -integer -decreasing -index 0 $output]
 	set result {}
-	foreach entry $sorted { lappend result [lindex $entry 2] }
+	foreach entry $sorted { lappend result [lindex $entry 1] }
 	return $result
 }
 
@@ -1355,6 +1390,8 @@ proc ::action::AskRows {query} {
 proc ::action::_BuildAskRows {ctxObjects ctxMenus ctxIds} {
 	variable Registry
 	variable AskStateMap
+	variable AskMetaCache
+	if {![info exists AskMetaCache]} { set AskMetaCache [dict create] }
 
 	set ctxSet [dict create]
 	foreach id $ctxIds { dict set ctxSet $id 1 }
@@ -1418,10 +1455,28 @@ proc ::action::_BuildAskRows {ctxObjects ctxMenus ctxIds} {
 
 		if {![_bareRunnable $id]} { continue }
 
-		set label [markupLabel [dict get $record label]]
-		set visible [string tolower [plainText $label]]
+		set rawLabel [dict get $record label]
+		set doc [dict get $record doc]
+		set ks [dict get $record keys]
+		if {[dict exists $AskMetaCache $id]} {
+			lassign [dict get $AskMetaCache $id] cRaw cDoc cKs label visible searchLower
+			set hit [expr {$cRaw eq $rawLabel && $cDoc eq $doc && $cKs eq $ks}]
+		} else {
+			set hit 0
+		}
+		if {!$hit} {
+			set label [markupLabel $rawLabel]
+			set plain [plainText $label]
+			set visible [string tolower $plain]
+			set search $plain
+			if {$label ne $plain} { append search " $label" }
+			append search " " $doc
+			if {[llength $ks] >= 2 && [lindex $ks 1] ne ""} { append search " " [lindex $ks 1] }
+			set searchLower [string tolower $search]
+			dict set AskMetaCache $id [::list $rawLabel $doc $ks $label $visible $searchLower]
+		}
 		set ac [labelAccelRecord $id $record]
-		lappend rows [::list $id $label $ac [string tolower [searchTextRecord $record]] $visible]
+		lappend rows [::list [::list $id $label $ac 1 1] $searchLower $visible]
 	}
 	set AskStateMap $stateMap
 	return $rows

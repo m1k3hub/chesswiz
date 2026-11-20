@@ -1298,9 +1298,57 @@ proc ::context::FindCascade {rows id} {
 	return {}
 }
 
+proc ::context::CollectCascadeIds {rows setVar} {
+	upvar 1 $setVar idSet
+	foreach row $rows {
+		if {[lindex $row 0] ne "cascade"} { continue }
+		dict set idSet [lindex $row 1] 1
+		CollectCascadeIds [lindex $row 2] idSet
+	}
+}
+
+proc ::context::EnsureCascadeIdSet {} {
+	variable Menus
+	variable CascadeIdSet
+	if {![info exists Menus]} { return {} }
+	if {![info exists CascadeIdSet] || ![dict size $CascadeIdSet]} {
+		set CascadeIdSet [dict create]
+		dict for {cid entry} $Menus {
+			switch -- [lindex $entry 0] {
+				list { CollectCascadeIds [lindex $entry 1] CascadeIdSet }
+				map {
+					dict for {_ rows} [lindex $entry 1] {
+						CollectCascadeIds $rows CascadeIdSet
+					}
+				}
+			}
+		}
+	}
+	return $CascadeIdSet
+}
+
+proc ::context::HasObjectRule {id} {
+	if {![string match {c[0-9]*} $id]} { return 0 }
+	if {[dict exists [EnsureCascadeIdSet] $id]} { return 1 }
+	if {$id in {c2.add_variation c2.replace_move c2.strip c2.comment_before c2.comment_after \
+		c3.paste_games c3.sort_column c3.sort_asc c3.sort_desc c3.sort.column c3.sort.asc c3.sort.desc \
+		c3.delete c3.flags c3.open_url c4.save_changes c4.import.pgn c5.player_url \
+		c9.layout c9.float c9.maximise c9.stay_on_top c9.hide_leaving c9.analysis.best c9.analysis.opponents \
+		c11.copy_text c11.add_language c11.switch_language c12.remove_history}} { return 1 }
+	if {[string match c2.strip.* $id] || [string match c3.flag.* $id] \
+	 || [string match c5.sort.* $id] || ([string match c6.* $id] && $id ni {c6.copy_fen c6.copy_line c6.setup_engine c6.setup_eval_edges})} {
+		return 1
+	}
+	return 0
+}
+
 proc ::context::ActionCascade {id object} {
+	variable Menus
 	if {[dict exists $object call] || [dict exists $object webUrl] || [dict exists $object notationOption]} { return {} }
-	if {[catch {set record [::action::get $id]}]} { return {} }
+	if {![info exists Menus]} { return {} }
+	if {[llength [info commands EnsureCascadeIdSet]] && ![dict exists [EnsureCascadeIdSet] $id]} { return {} }
+	if {![info exists ::action::Registry] || ![dict exists $::action::Registry $id]} { return {} }
+	set record [dict get $::action::Registry $id]
 	foreach cid [dict get $record context] {
 		set found [FindCascade [Rows $cid $object] $id]
 		if {[llength $found]} { return [list $cid [lindex $found 0]] }
@@ -1352,8 +1400,8 @@ proc ::context::ClipboardCanPaste {} {
 	return [expr {[::game::clipboard::reason $base $variant] eq ""}]
 }
 
-proc ::context::Visible {id object} {
-	set st [::menu::state $id $object {} 1]
+proc ::context::Visible {id object {pre {}}} {
+	set st [::menu::state $id $object {} 1 $pre]
 	set visible [dict get $st visible]
 	# R6/R7: the engine group belongs to a running line engine.
 	if {$id in {c6.pause_resume c6.close_engine c6.lock_engine c6.opponents_view
@@ -1440,27 +1488,31 @@ proc ::context::WhyDisabled {id object} {
 # the assistant row are not.
 # ----------------------------------------------------------------------
 proc ::context::MenuIds {cid object} {
+	set pre [dict create objectResolved 1 \
+		gameLoaded [expr {[llength [info commands ::menu::GameLoaded]] ? [::menu::GameLoaded] : 1}] \
+		onDb [expr {[llength [info commands ::menu::OnDatabaseTab]] ? [::menu::OnDatabaseTab] : 0}] \
+		boardOnly [expr {[llength [info commands ::menu::BoardOnlyLayout]] ? [::menu::BoardOnlyLayout] : 0}]]
 	set ids {}
 	foreach row [Rows $cid $object] {
-		lappend ids {*}[MenuRowIds $cid $row $object]
+		lappend ids {*}[MenuRowIds $cid $row $object $pre]
 	}
 	return $ids
 }
 
-proc ::context::MenuRowIds {cid row object} {
+proc ::context::MenuRowIds {cid row object {pre {}}} {
 	if {![llength $row] || $row eq "-"} { return {} }
 	set kind [lindex $row 0]
 	if {$kind eq "ask" || $kind eq "header"} { return {} }
 	if {$kind eq "cascade"} {
 		set id [lindex $row 1]
-		if {![Visible $id $object]} { return {} }
+		if {![Visible $id $object $pre]} { return {} }
 		set ids [list $id]
 		foreach sub [lindex $row 2] {
-			lappend ids {*}[MenuRowIds $cid $sub $object]
+			lappend ids {*}[MenuRowIds $cid $sub $object $pre]
 		}
 		return $ids
 	}
-	if {![Visible $row $object]} { return {} }
+	if {![Visible $row $object $pre]} { return {} }
 	return [list $row]
 }
 
@@ -2227,12 +2279,25 @@ proc ::context::ObjectRule {id object {visibilityOnly 0}} {
 		# this visibility query; do not build a second throwaway submenu.
 		if {$visibilityOnly} {return {1 1}}
 		set available [RunnableChildren [lindex $cascade 1] $object]
-		if {!$available && $id in {c9.layout c9.not.move_notation c9.not.move_info c9.not.language c5.player_url c11.format c11.copy_text c11.translate_comment c10.show_column c11.insert_symbol c11.insert_emoticon c11.add_language c11.switch_language c4.maintenance}} {
-			variable Counter
-			set m .contextAvailability[incr Counter]
-			menu $m -tearoff 0
-			catch {CascadePrefix $id $m $object; set available [HasRunnableRow $m]}
-			destroy $m
+		if {!$available} {
+			# Check prefix-only cascades directly without creating/destroying
+			# temporary native Tk menu widgets on every Ask keystroke.
+			switch -- $id {
+				c4.maintenance { set available 0 }
+				c9.layout {
+					set gb $::application::pgn::Vars(gamebar)
+					set available [expr {[winfo exists $gb] && [::gamebar::size $gb] > 0 ? 1 : 0}]
+				}
+				c9.not.move_notation { set available [expr {[llength $::notation::moveStyles] > 0 ? 1 : 0}] }
+				c9.not.move_info - c9.not.language - c11.format - c11.translate_comment { set available 1 }
+				c5.player_url - c11.copy_text - c10.show_column - c11.insert_symbol - c11.insert_emoticon - c11.add_language - c11.switch_language {
+					variable Counter
+					set m .contextAvailability[incr Counter]
+					menu $m -tearoff 0
+					catch {CascadePrefix $id $m $object; set available [HasRunnableRow $m]}
+					destroy $m
+				}
+			}
 		}
 		return [list 1 $available]
 	}

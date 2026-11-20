@@ -526,7 +526,7 @@ proc ::application::keyEditor::RemoveSchemeKey {where action spec} {
 	if {[OwnedByOverride? $spec $action]} { return }
 	switch -- $where {
 		app { foreach spec [BindSpecs $spec] { bind .application <$spec> {} } }
-		board { foreach spec [BindSpecs $spec] { ::application::board::bind <$spec> {} } }
+		board { foreach spec [BindSpecs $spec] { ::application::board::unbind <$spec> } }
 		cb { foreach spec [BindSpecs $spec] { bind ChessBaseBoard <$spec> {} } }
 	}
 }

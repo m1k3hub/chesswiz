@@ -681,4 +681,179 @@ tcltest::test ask-keystroke-budget {p95 of one keystroke is under 100 ms on a 40
 	}
 } -match glob -result {1 1}
 
+tcltest::test ask-pgn-editor-ctrl-k-precedence {real PGN text editor keeps Ctrl+K kill-line and Ctrl+Shift+K focus across language switches} -setup {
+	set savedLang $::mc::langID
+	set savedTab [::application::activeTab]
+	set addedGame ""
+	::application::switchTab board
+	update
+	if {[::application::pgn::empty?]} {
+		::menu::gameNew .application
+		update
+		set addedGame [::gamebar::selected $::application::pgn::Vars(gamebar)]
+	}
+	set slot [::scidb::game::current]
+	if {$slot < 0 || $slot > 8} { set slot 0 }
+	::application::pgn::select $slot
+	# Raise the PGN editor pane if the startup assistant panel is stacked on top.
+	set editorFrame [winfo parent [winfo parent $::application::pgn::Vars(main)]]
+	foreach mw [winfo children .application.nb.board] {
+		if {[string match *__multiwindow__* $mw]} {
+			catch { $mw raise $editorFrame }
+		}
+	}
+	update
+	set pgn $::application::pgn::Vars(pgn:$slot)
+	set savedState [$pgn cget -state]
+	set savedText [$pgn get 1.0 end-1c]
+	set savedFocus [focus]
+	set savedMirrored [array names ::menu::Mirrored]
+} -body {
+	# Switching en -> de -> en used to leave zombie FilterKey/break bindings
+	# for Control-k/Control-K on PGN because German binds edit-comment to K.
+	::menu::SwitchLanguage de
+	update
+	::menu::SwitchLanguage en
+	update
+	set enCtrlK [bind $pgn <Control-Key-k>]
+	set enCtrlShiftK [bind $pgn <Control-Key-K>]
+
+	# In English (after visiting German): editable PGN must kill-line on Ctrl+K
+	# and focus Ask on Ctrl+Shift+K, just like the Comment editor.
+	$pgn configure -state normal
+	$pgn delete 1.0 end
+	$pgn insert 1.0 "pgn text line"
+	$pgn mark set insert 1.3
+	focus -force $pgn
+	update
+	event generate $pgn <Control-Key-k>
+	update
+	set enAfterK [list [$pgn get 1.0 end-1c] [expr {[focus] eq $pgn}]]
+	event generate $pgn <Control-Key-K>
+	update
+	set enAfterShiftK [list [$pgn get 1.0 end-1c] [expr {[focus] eq [::application::ask::Entry]}]]
+
+	# While in German (where board Accel(edit-comment) is K): editable PGN
+	# must still kill-line on Ctrl+K and focus Ask on Ctrl+Shift+K.
+	::menu::SwitchLanguage de
+	update
+	$pgn configure -state normal
+	$pgn delete 1.0 end
+	$pgn insert 1.0 "pgn text line"
+	$pgn mark set insert 1.3
+	focus -force $pgn
+	update
+	event generate $pgn <Control-Key-k>
+	update
+	set deAfterK [list [$pgn get 1.0 end-1c] [expr {[focus] eq $pgn}]]
+	event generate $pgn <Control-Key-K>
+	update
+	set deAfterShiftK [list [$pgn get 1.0 end-1c] [expr {[focus] eq [::application::ask::Entry]}]]
+
+	# Simulated Aqua Command mirror: de -> en must clear mirrored Command-k on PGN.
+	rename ::tk ::scidb::test::ask::RealTkPgn
+	proc ::tk {args} {
+		if {$args eq "windowingsystem"} { return aqua }
+		return [uplevel 1 [list ::scidb::test::ask::RealTkPgn {*}$args]]
+	}
+	::menu::MirrorCommandBindings
+	::menu::SwitchLanguage en
+	update
+	set aquaCmdK [bind $pgn <Command-Key-k>]
+	set aquaCmdShiftK [bind $pgn <Command-Key-K>]
+	rename ::tk {}
+	rename ::scidb::test::ask::RealTkPgn ::tk
+
+	list [expr {$enCtrlK eq ""}] [expr {$enCtrlShiftK eq ""}] \
+		$enAfterK $enAfterShiftK $deAfterK $deAfterShiftK \
+		[expr {$aquaCmdK eq ""}] [expr {$aquaCmdShiftK eq ""}]
+} -cleanup {
+	if {[llength [info commands ::scidb::test::ask::RealTkPgn]]} {
+		rename ::tk {}
+		rename ::scidb::test::ask::RealTkPgn ::tk
+	}
+	foreach key [array names ::menu::Mirrored] {
+		if {$key in $savedMirrored} continue
+		set comma [string first , $key]
+		if {$comma < 0} continue
+		catch { bind [string range $key 0 [expr {$comma - 1}]] [string range $key [expr {$comma + 1}] end] {} }
+		catch { unset ::menu::Mirrored($key) }
+	}
+	catch { ::menu::SwitchLanguage $savedLang }
+	catch {
+		$pgn configure -state normal
+		$pgn delete 1.0 end
+		$pgn insert 1.0 $savedText
+		$pgn configure -state $savedState
+	}
+	if {$addedGame ne ""} {
+		catch { ::gamebar::remove $::application::pgn::Vars(gamebar) $addedGame }
+	}
+	if {$savedTab ne ""} { catch { ::application::switchTab $savedTab } }
+	if {$savedFocus ne "" && [winfo exists $savedFocus]} { catch { focus $savedFocus } }
+	update
+} -result {1 1 {pgn 1} {pgn 1} {pgn 1} {pgn 1} 1 1}
+
+tcltest::test ask-keystroke-no-label-recompute {synthetic-400 keystrokes do not recompute labels per keystroke and stay fast} -body {
+	::scidb::test::ask::isolated {
+		variable Synthetics
+		set Synthetics {}
+		for {set i 0} {$i < 400} {incr i} {
+			set id [format "test.ask.nocmp%03d" $i]
+			::action::register $id [dict create \
+				label [format "Synthetic &Zebra Action %03d" $i] \
+				object {} handler ::scidb::test::ask::ran what "" doc "synthetic entry"]
+			lappend Synthetics $id
+		}
+		set entry [::application::ask::Entry]
+		# Warm up cache + list once
+		$entry delete 0 end
+		$entry insert 0 "z"
+		unset -nocomplain ::application::ask::Priv(filtered)
+		::application::ask::Typed ""
+		update idletasks
+
+		set ::scidb::test::ask::ampCalls 0
+		set ::scidb::test::ask::plainCalls 0
+		set ::scidb::test::ask::markupCalls 0
+		proc ::scidb::test::ask::_countAmp {args} { incr ::scidb::test::ask::ampCalls }
+		proc ::scidb::test::ask::_countPlain {args} { incr ::scidb::test::ask::plainCalls }
+		proc ::scidb::test::ask::_countMarkup {args} { incr ::scidb::test::ask::markupCalls }
+		trace add execution ::menu::AmpText enter ::scidb::test::ask::_countAmp
+		trace add execution ::action::plainText enter ::scidb::test::ask::_countPlain
+		trace add execution ::action::markupLabel enter ::scidb::test::ask::_countMarkup
+
+		set times {}
+		set text "z"
+		foreach ch [split "ebra action" ""] {
+			append text $ch
+			set t0 [clock microseconds]
+			$entry delete 0 end
+			$entry insert 0 $text
+			::application::ask::Typed ""
+			update idletasks
+			lappend times [expr {([clock microseconds] - $t0) / 1000.0}]
+		}
+		trace remove execution ::menu::AmpText enter ::scidb::test::ask::_countAmp
+		trace remove execution ::action::plainText enter ::scidb::test::ask::_countPlain
+		trace remove execution ::action::markupLabel enter ::scidb::test::ask::_countMarkup
+
+		set p95 [::scidb::test::ask::Percentile $times 0.95]
+		set list .application.askList.list
+		set expectedRows [::action::labels asklist $text]
+		set listCount [$list size]
+		set exactCount [expr {$listCount == [llength $expectedRows] + 1}]
+		set noAmp [expr {[string first "&" [join [$list get 0 end] \n]] < 0}]
+		puts "EVIDENCE ask-no-recompute p95Ms=$p95 amp=$::scidb::test::ask::ampCalls plain=$::scidb::test::ask::plainCalls markup=$::scidb::test::ask::markupCalls rows=$listCount"
+		::scidb::test::ask::forget {*}$Synthetics
+		::action::NoteRegistryChange
+		set Synthetics {}
+		list [expr {$p95 < 100}] \
+			$::scidb::test::ask::ampCalls \
+			$::scidb::test::ask::plainCalls \
+			$::scidb::test::ask::markupCalls \
+			$exactCount $noAmp
+	}
+} -result {1 0 0 0 1 1}
+
 tcltest::cleanupTests

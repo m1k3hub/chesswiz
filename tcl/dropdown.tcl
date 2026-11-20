@@ -968,7 +968,9 @@ proc ::menu::state {id {object {}} {arguments {}} {visibilityOnly 0} {pre {}}} {
 	# repeating the same lookups hundreds of times per keystroke.
 	if {[dict exists $pre record]} {
 		set rec [dict get $pre record]
-	} elseif {[catch { set rec [::action::get $id] }]} {
+	} elseif {[info exists ::action::Registry] && [dict exists $::action::Registry $id]} {
+		set rec [dict get $::action::Registry $id]
+	} else {
 		set rec ""
 	}
 	if {$rec ne ""} {

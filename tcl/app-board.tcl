@@ -774,15 +774,27 @@ proc bind {key cmd} {
 	variable Vars
 
 	foreach w [bindingWidgets] {
-		::bind $w $key [namespace code [list FilterKey %K %s $cmd]]
-		::bind $w $key {+ break }
+		set body "[namespace code [list FilterKey %K %s $cmd]]\nbreak"
 		if {[regexp {^<Key-[^>]+>$} $key]} {
 			# A plain key binding also matches the key with Control; let Ctrl+Q
 			# and the other application shortcuts through to .application.
 			# On macOS the Command key (Mod1) is let through the same way.
 			set mask [expr {[tk windowingsystem] eq "aqua" ? 12 : 4}]
-			::bind $w $key "if {%s & $mask} continue\n[::bind $w $key]"
+			set body "if {%s & $mask} continue\n$body"
 		}
+		if {[winfo class $w] in {Text Comment Script Entry TEntry}} {
+			# Editable PGN text keeps standard Text and AskShortcut bindings,
+			# just as ShortcutBoardCommand does for ChessBaseBoard.
+			set body "if {\[::application::ShortcutEditable %W\]} continue\n$body"
+		}
+		::bind $w $key $body
+	}
+}
+
+
+proc unbind {key} {
+	foreach w [bindingWidgets] {
+		::bind $w $key {}
 	}
 }
 
@@ -841,14 +853,14 @@ proc bindKeys {} {
 	}
 
 	foreach key [array names Accel] {
-		bind <Control-[string tolower $Vars(key:$key)]> {}
-		bind <Control-[string toupper $Vars(key:$key)]> {}
+		unbind <Control-[string tolower $Vars(key:$key)]>
+		unbind <Control-[string toupper $Vars(key:$key)]>
 	}
 
-	bind <Control-Shift-[string tolower $Vars(key:edit-comment)]> {}
-	bind <Control-Shift-[string toupper $Vars(key:edit-comment)]> {}
-	bind <Control-Shift-[string tolower $Vars(key:import-game)]> {}
-	bind <Control-Shift-[string toupper $Vars(key:import-game)]> {}
+	unbind <Control-Shift-[string tolower $Vars(key:edit-comment)]>
+	unbind <Control-Shift-[string toupper $Vars(key:edit-comment)]>
+	unbind <Control-Shift-[string tolower $Vars(key:import-game)]>
+	unbind <Control-Shift-[string toupper $Vars(key:import-game)]>
 
 	foreach key [array names Accel] {
 		bind <Control-[string tolower $Accel($key)]> $Vars(cmd:$key)
@@ -2654,6 +2666,9 @@ proc LanguageChanged {} {
 	bindKeys
 	# bindKeys re-bound the scheme keys over the user overrides' places
 	::application::keyEditor::ApplyOverrides
+	# Keep macOS Command mirrors and drop-down accelerators in sync after
+	# language-specific board keys (e.g. German Ctrl+K -> English Ctrl+C) change.
+	catch { ::menu::RefreshAccelerators }
 	SetupToolbar
 	UpdateSaveButton
 }
