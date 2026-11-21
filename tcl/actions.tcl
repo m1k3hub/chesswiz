@@ -1064,7 +1064,8 @@ proc ::action::AskLiveInputs {ctxObjects ctxMenus} {
 	set predSize [expr {[info exists ::context::Predicates] ? [dict size $::context::Predicates] : 0}]
 	set menusVer [expr {[info exists ::context::MenusVersion] ? $::context::MenusVersion : 0}]
 	set hasObjRule [llength [info commands ::context::ObjectRule]]
-	set scriptsKey [::list $RegistryVersion [dict size $Registry] $ctxObjects $ctxMenus $predVer $predSize $menusVer $hasObjRule]
+	set hasDirectObjRule [llength [info commands ::context::HasDirectObjectRule]]
+	set scriptsKey [::list $RegistryVersion [dict size $Registry] $ctxObjects $ctxMenus $predVer $predSize $menusVer $hasObjRule $hasDirectObjRule]
 	if {$scriptsKey ne $AskLiveScriptsKey} {
 		set scripts [dict create]
 		dict for {id rec} $Registry {
@@ -1096,7 +1097,8 @@ proc ::action::AskLiveInputs {ctxObjects ctxMenus} {
 				dict set scripts $script 1
 			}
 			if {[string match {c[0-9]*} $id] && $hasObjRule \
-			 && (![llength [info commands ::context::HasObjectRule]] || [::context::HasObjectRule $id])} {
+			 && (($hasDirectObjRule && [::context::HasDirectObjectRule $id]) \
+			  || (!$hasDirectObjRule && (![llength [info commands ::context::HasObjectRule]] || [::context::HasObjectRule $id])))} {
 				dict set scripts [::list ::context::ObjectRule $id $object] 1
 			}
 		}
@@ -1193,6 +1195,15 @@ proc ::action::AskStamp {ctxObjects ctxMenus} {
 	}
 	if {[info exists ::context::MenusVersion]} {
 		lappend parts menusver $::context::MenusVersion
+	}
+	if {[dict exists $ctxObjects C9] && [llength [info commands ::menu::PaneFloating]]} {
+		set c9obj [dict get $ctxObjects C9]
+		set c9uid [expr {[dict exists $c9obj paneUid] ? [dict get $c9obj paneUid] : ""}]
+		set c9twm [expr {[dict exists $c9obj twm] ? [dict get $c9obj twm] : ""}]
+		lappend parts c9float [::menu::PaneFloating $c9uid $c9twm]
+	}
+	if {[llength [info commands ::menu::NoHtmlReport]]} {
+		lappend parts nohtml [::menu::NoHtmlReport]
 	}
 	# Each online control row follows ::online::view::Available, i.e. the
 	# presence and state of its widget, which no variable below covers.
@@ -1345,32 +1356,46 @@ proc ::action::AskRows {query} {
 	# external change and must not invalidate the snapshot we are building.
 	set AskBuilding 1
 	set rc [catch {
-		# Context rows belong to their current object. Resolve each
-		# context's object and posted ids once, exactly as CurrentObjectFor
-		# would per row.
-		set ctxIds {}
+		# Context rows belong to their current object. Resolve each context's
+		# object and declared row ids cheaply first; only call ::context::MenuIds
+		# (which evaluates per-row visibility via ::menu::state) on a cache miss.
 		set ctxObjects [dict create]
-		set ctxMenus [dict create]
-		if {[llength [info commands ::context::MenuIds]] \
-		 && [llength [info commands ::context::CurrentObject]]} {
+		set ctxDeclared [dict create]
+		set hasDeclared [llength [info commands ::context::DeclaredIds]]
+		set hasMenuIds [llength [info commands ::context::MenuIds]]
+		if {$hasMenuIds && [llength [info commands ::context::CurrentObject]]} {
 			foreach cid {C1 C2 C3 C4 C5 C6 C7 C8 C9 C10 C11 C12} {
 				if {![catch {set object [::context::CurrentObject $cid]}] \
 				 && [dict size $object] && [::context::HasObject $cid $object]} {
-					set ids [::context::MenuIds $cid $object]
-					lappend ctxIds {*}$ids
 					dict set ctxObjects $cid $object
-					dict set ctxMenus $cid $ids
+					if {$hasDeclared} {
+						dict set ctxDeclared $cid [::context::DeclaredIds $cid $object]
+					} else {
+						dict set ctxDeclared $cid [::context::MenuIds $cid $object]
+					}
 				}
 			}
 		}
 
-		set stamp [AskStamp $ctxObjects $ctxMenus]
+		set stamp [AskStamp $ctxObjects $ctxDeclared]
 		if {$stamp ne $AskCachedStamp} {
+			set ctxIds {}
+			set ctxMenus [dict create]
+			if {$hasDeclared} {
+				dict for {cid object} $ctxObjects {
+					set ids [::context::MenuIds $cid $object]
+					lappend ctxIds {*}$ids
+					dict set ctxMenus $cid $ids
+				}
+			} else {
+				set ctxMenus $ctxDeclared
+				dict for {cid ids} $ctxDeclared { lappend ctxIds {*}$ids }
+			}
 			set rows [_BuildAskRows $ctxObjects $ctxMenus $ctxIds]
 			set AskCachedRows $rows
 			# A lazy registration during the build would make this
 			# snapshot mixed; leave the cache cold in that case.
-			if {[AskStamp $ctxObjects $ctxMenus] eq $stamp} {
+			if {[AskStamp $ctxObjects $ctxDeclared] eq $stamp} {
 				set AskCachedStamp $stamp
 			} else {
 				set AskCachedStamp ""
@@ -1378,10 +1403,18 @@ proc ::action::AskRows {query} {
 		} else {
 			set rows $AskCachedRows
 			# Opt-in diagnostic for future changes to menu::state itself.
-			if {[info exists ::action::AskCacheCheck] && $::action::AskCacheCheck
-			 && [_BuildAskRows $ctxObjects $ctxMenus $ctxIds] ne $rows} {
-				set AskCachedStamp ""
-				error "Ask cache disagrees with live menu state"
+			if {[info exists ::action::AskCacheCheck] && $::action::AskCacheCheck} {
+				set ctxIds {}
+				set ctxMenus [dict create]
+				dict for {cid object} $ctxObjects {
+					set ids [::context::MenuIds $cid $object]
+					lappend ctxIds {*}$ids
+					dict set ctxMenus $cid $ids
+				}
+				if {[_BuildAskRows $ctxObjects $ctxMenus $ctxIds] ne $rows} {
+					set AskCachedStamp ""
+					error "Ask cache disagrees with live menu state"
+				}
 			}
 		}
 		set rows

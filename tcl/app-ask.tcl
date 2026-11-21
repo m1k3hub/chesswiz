@@ -113,6 +113,8 @@ array set Priv {
 	listVisible	0
 	prewarmAfter	{}
 	refreshAfter	{}
+	blinkAfter	{}
+	blinkPaused	0
 	window		{}
 	prefs		{}
 	prefsStartup	{}
@@ -155,8 +157,23 @@ proc ::application::ask::Build {notebook} {
 	if {[winfo exists $notebook.ask]} { return $notebook.ask }
 
 	set frame [ttk::frame $notebook.ask]
-	set entry [ttk::entry $frame.entry -takefocus 1 \
-		-textvariable ::application::ask::Query]
+	if {[tk windowingsystem] eq "aqua"} {
+		# Tk 8.6's ttk::entry uses a hardcoded 600/300 ms cursor blink timer
+		# that is not reset while typing and cannot be configured via
+		# -insertofftime; on Aqua each blink invalidates the entire .application
+		# NSView (~35-65 ms), colliding with keystroke 2 (~600 ms after focus).
+		# Use tk::entry on Aqua so PauseBlink can hold the caret steady while
+		# typing and resume blinking after idle.
+		set entry [tk::entry $frame.entry -takefocus 1 -exportselection 0 \
+			-textvariable ::application::ask::Query -font TkTextFont \
+			-borderwidth 1 -relief solid -highlightthickness 1 \
+			-insertofftime 0]
+		set Priv(blinkPaused) 1
+	} else {
+		set entry [ttk::entry $frame.entry -takefocus 1 \
+			-textvariable ::application::ask::Query]
+		set Priv(blinkPaused) 0
+	}
 	set mic [ttk::button $frame.mic -text $::application::ask::mc::Mic \
 		-takefocus 0 -command ::application::speech::toggle]
 	pack $mic -side right -padx {2 2} -pady 1
@@ -165,10 +182,16 @@ proc ::application::ask::Build {notebook} {
 	bind $mic <ButtonRelease-1> {::application::speech::Release %W; break}
 	pack $entry -side left -fill x -expand yes -padx {2 2} -pady 1
 
+	set Priv(entry) $entry
+	StyleEntry
+	set placeholderBg [expr {[::theme::isDark] ? [::ttk::style lookup TEntry -fieldbackground] : ""}]
+	if {[tk windowingsystem] eq "aqua"} {
+		set placeholderBg [$entry cget -background]
+	}
 	set placeholder [ttk::label $frame.placeholder \
 		-text [PlaceholderText] \
 		-foreground [expr {[::theme::isDark] ? "#8b949e" : "grey"}] \
-		-background [expr {[::theme::isDark] ? [::ttk::style lookup TEntry -fieldbackground] : ""}]]
+		-background $placeholderBg]
 	place $placeholder -in $entry -relx 0 -x 4 -rely 0.5 -anchor w
 	bind $placeholder <ButtonPress-1> ::application::ask::Focus
 	bind $frame <<ThemeChanged>> [namespace code ThemeChanged]
@@ -193,6 +216,7 @@ proc ::application::ask::Build {notebook} {
 	bind $frame <Destroy> +::application::speech::CleanupSession
 	bind $frame <Destroy> +[namespace code CancelPrewarm]
 	bind $frame <Destroy> +[namespace code CancelRefresh]
+	bind $frame <Destroy> +[namespace code CancelBlink]
 	# a language switch relabels the field in place (i18n.tcl generates
 	# the event for every widget); typing is never touched
 	bind $frame <<LanguageChanged>> [namespace code Relabel]
@@ -201,13 +225,14 @@ proc ::application::ask::Build {notebook} {
 	PlaceholderState
 	RegisterAction
 	catch { InstallShortcutTags $notebook }
-	# Run filtering synchronously right after TEntry inserts a character on
-	# KeyPress, instead of waiting for KeyRelease (which adds hold latency
+	# Run filtering synchronously right after Entry/TEntry inserts a character
+	# on KeyPress, instead of waiting for KeyRelease (which adds hold latency
 	# and a second native display pass on Aqua). KeyRelease remains as a
 	# fallback for IME/paste paths; Typed short-circuits when unchanged.
 	set tags [bindtags $entry]
+	set entryClass [winfo class $entry]
 	if {"AskEntry" ni $tags} {
-		set pos [lsearch -exact $tags TEntry]
+		set pos [lsearch -exact $tags $entryClass]
 		if {$pos >= 0} {
 			bindtags $entry [linsert $tags [expr {$pos + 1}] AskEntry]
 		} else {
@@ -399,13 +424,78 @@ proc ::application::ask::Prewarm {} {
 	return
 }
 
+proc ::application::ask::StyleEntry {} {
+	variable Priv
+	if {[tk windowingsystem] ne "aqua"} { return }
+	if {![info exists Priv(entry)] || ![winfo exists $Priv(entry)]} { return }
+	if {[winfo class $Priv(entry)] ne "Entry"} { return }
+	if {[::theme::isDark]} {
+		set bg [::ttk::style lookup TEntry -fieldbackground]
+		if {$bg eq ""} { set bg "#1b1f27" }
+		set fg [::ttk::style lookup TEntry -foreground]
+		if {$fg eq ""} { set fg "#e6edf3" }
+		$Priv(entry) configure -background $bg -foreground $fg \
+			-insertbackground $fg -selectbackground "#2f6feb" \
+			-selectforeground "#ffffff" -highlightbackground "#30363d" \
+			-highlightcolor "#58a6ff"
+	} else {
+		$Priv(entry) configure -background "#ffffff" -foreground "#000000" \
+			-insertbackground "#000000" -selectbackground "#b3d7ff" \
+			-selectforeground "#000000" -highlightbackground "#c0c0c0" \
+			-highlightcolor "#4a90d9"
+	}
+	return
+}
+
+proc ::application::ask::CancelBlink {} {
+	variable Priv
+	if {[info exists Priv(blinkAfter)] && $Priv(blinkAfter) ne ""} {
+		catch { after cancel $Priv(blinkAfter) }
+		set Priv(blinkAfter) ""
+	}
+	return
+}
+
+proc ::application::ask::PauseBlink {} {
+	variable Priv
+	if {[tk windowingsystem] ne "aqua"} { return }
+	if {![info exists Priv(entry)] || ![winfo exists $Priv(entry)]} { return }
+	if {[winfo class $Priv(entry)] ne "Entry"} { return }
+	CancelBlink
+	if {![info exists Priv(blinkPaused)] || !$Priv(blinkPaused)} {
+		catch { $Priv(entry) configure -insertofftime 0 }
+		set Priv(blinkPaused) 1
+	}
+	set Priv(blinkAfter) [after 1500 [namespace code ResumeBlink]]
+	return
+}
+
+proc ::application::ask::ResumeBlink {} {
+	variable Priv
+	set Priv(blinkAfter) ""
+	if {[tk windowingsystem] ne "aqua"} { return }
+	if {![info exists Priv(entry)] || ![winfo exists $Priv(entry)]} { return }
+	if {[winfo class $Priv(entry)] ne "Entry"} { return }
+	if {[focus] ne $Priv(entry)} { return }
+	if {[info exists Priv(blinkPaused)] && $Priv(blinkPaused)} {
+		catch { $Priv(entry) configure -insertofftime 300 }
+		set Priv(blinkPaused) 0
+	}
+	return
+}
+
 proc ::application::ask::ThemeChanged {} {
 	variable Priv
 	InvalidateCache
+	StyleEntry
 	if {[info exists Priv(placeholder)] && [winfo exists $Priv(placeholder)]} {
+		set bg [expr {[::theme::isDark] ? [::ttk::style lookup TEntry -fieldbackground] : ""}]
+		if {[tk windowingsystem] eq "aqua" && [info exists Priv(entry)] && [winfo exists $Priv(entry)]} {
+			set bg [$Priv(entry) cget -background]
+		}
 		$Priv(placeholder) configure \
 			-foreground [expr {[::theme::isDark] ? "#8b949e" : "grey"}] \
-			-background [expr {[::theme::isDark] ? [::ttk::style lookup TEntry -fieldbackground] : ""}]
+			-background $bg
 	}
 	if {[ListVisible]} {
 		RefreshOpenList
@@ -417,6 +507,7 @@ proc ::application::ask::ThemeChanged {} {
 proc ::application::ask::EnterField {entry placeholder} {
 	variable Priv
 	variable FmtCache
+	PauseBlink
 	PlaceholderState
 	if {![info exists ::action::AskCachedStamp] || $::action::AskCachedStamp eq "" \
 	 || ![dict size $FmtCache] || $Priv(list) eq "" || ![winfo exists $Priv(list)]} {
@@ -425,6 +516,7 @@ proc ::application::ask::EnterField {entry placeholder} {
 }
 
 proc ::application::ask::LeaveField {entry placeholder} {
+	CancelBlink
 	PlaceholderState
 }
 
@@ -579,6 +671,7 @@ proc ::application::ask::Focus {} {
 		set Priv(focusBefore) [BoardWidget]
 	}
 	focus -force [Entry]
+	PauseBlink
 	catch { [Entry] selection range 0 end }
 	if {![info exists ::action::AskCachedStamp] || $::action::AskCachedStamp eq "" \
 	 || ![dict size $FmtCache] || $Priv(list) eq "" || ![winfo exists $Priv(list)]} {
@@ -692,6 +785,7 @@ proc ::application::ask::Typed {{key ""}} {
 
 	PlaceholderState
 	if {![winfo exists [Entry]]} { return }
+	PauseBlink
 
 	# KeyRelease follows every KeyPress, including the navigation keys.
 	# Only a real text change may refilter and reset the selection.
@@ -702,6 +796,7 @@ proc ::application::ask::Typed {{key ""}} {
 		return
 	}
 	CancelRefresh
+	if {$text ne ""} { CancelPrewarm }
 	set Priv(filtered) $text
 
 	if {$text eq ""} {

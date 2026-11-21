@@ -516,7 +516,9 @@ proc popdown {w} {
 
 	if {[winfo exists $w]} {
 		#update idletasks
-		wm withdraw $w
+		if {[catch { wm state $w } state] || $state ne "withdrawn"} {
+			wm withdraw $w
+		}
 	}
 }
 
@@ -556,10 +558,9 @@ proc hide {{fadeOk 0} {force 0}} {
 
 	if {!$force && $G(afterId) ne "" && [Keep $G(showing)]} { return }
 
-	after cancel $G(afterId)
-	after cancel $G(exposureId)
-	after cancel $G(fadeId)
-	set G(afterId) {}
+	if {$G(afterId) ne ""} { after cancel $G(afterId); set G(afterId) {} }
+	if {$G(exposureId) ne ""} { after cancel $G(exposureId); set G(exposureId) {} }
+	if {$G(fadeId) ne ""} { after cancel $G(fadeId); set G(fadeId) {} }
 
 	if {$fadeOk && $G(fade)} {
 		set w $G(toplevel)
@@ -667,7 +668,11 @@ proc Register {w arguments} {
 		if {![winfo exists $w]} {
 			return -code error "bad window path name \"$w\""
 		}
-		bind [winfo toplevel $w] <Any-KeyPress> +[namespace code { hide }]
+		set top [winfo toplevel $w]
+		set hideCmd [namespace code { hide }]
+		if {[string first $hideCmd [bind $top <Any-KeyPress>]] < 0} {
+			bind $top <Any-KeyPress> +$hideCmd
+		}
 		if {[info exists $key]} { set var $key } else { set var {} }
 
 		if {[info exists index]} {

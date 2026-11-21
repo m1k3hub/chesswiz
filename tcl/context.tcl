@@ -1358,9 +1358,34 @@ proc ::context::EnsureCascadeIdSet {} {
 	return $CascadeIdSet
 }
 
-proc ::context::HasObjectRule {id} {
+proc ::context::CollectDeclaredIds {rows outVar} {
+	upvar 1 $outVar out
+	foreach row $rows {
+		if {![llength $row] || $row eq "-"} { continue }
+		set kind [lindex $row 0]
+		if {$kind eq "ask" || $kind eq "header"} { continue }
+		if {$kind eq "cascade"} {
+			lappend out [lindex $row 1]
+			CollectDeclaredIds [lindex $row 2] out
+		} else {
+			lappend out $row
+		}
+	}
+}
+
+# All declared action/cascade ids for <cid>/<object> without evaluating
+# ::menu::state predicates. Used by AskStamp to check live inputs cheaply.
+proc ::context::DeclaredIds {cid object} {
+	set out {}
+	CollectDeclaredIds [Rows $cid $object] out
+	return $out
+}
+
+# Action ids with a direct non-cascade rule in ObjectRule. Pure cascades only
+# depend on whether any child is runnable, which is already covered by their
+# children's own predicates in AskStamp/AskLiveInputs.
+proc ::context::HasDirectObjectRule {id} {
 	if {![string match {c[0-9]*} $id]} { return 0 }
-	if {[dict exists [EnsureCascadeIdSet] $id]} { return 1 }
 	if {$id in {c2.add_variation c2.replace_move c2.strip c2.comment_before c2.comment_after \
 		c3.paste_games c3.sort_column c3.sort_asc c3.sort_desc c3.sort.column c3.sort.asc c3.sort.desc \
 		c3.delete c3.flags c3.open_url c4.save_changes c4.import.pgn c5.player_url \
@@ -1371,6 +1396,12 @@ proc ::context::HasObjectRule {id} {
 		return 1
 	}
 	return 0
+}
+
+proc ::context::HasObjectRule {id} {
+	if {![string match {c[0-9]*} $id]} { return 0 }
+	if {[dict exists [EnsureCascadeIdSet] $id]} { return 1 }
+	return [HasDirectObjectRule $id]
 }
 
 proc ::context::ActionCascade {id object} {

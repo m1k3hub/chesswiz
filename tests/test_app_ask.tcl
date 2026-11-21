@@ -1052,4 +1052,56 @@ tcltest::test ask-prewarm-defers-during-grab-and-dialog {idle prewarm defers whi
 	update
 } -result {1 1 1 1 1 1 1}
 
+tcltest::test ask-tooltip-dedup-cache-hit-and-typed-cancels-prewarm {tooltip KeyPress binding is deduplicated, Ask cache hits skip MenuIds, and Typed cancels deferred Prewarm} -setup {
+	set savedQuery $::application::ask::Query
+	set ::scidb::test::ask::MenuIdsCalls 0
+	proc ::scidb::test::ask::_countMenuIds {args} { incr ::scidb::test::ask::MenuIdsCalls }
+	catch { destroy .application.__asktip1 .application.__asktip2 }
+	ttk::label .application.__asktip1 -text "t1"
+	ttk::label .application.__asktip2 -text "t2"
+} -body {
+	# 1. Registering multiple tooltips must not append duplicate KeyPress bindings.
+	::tooltip::tooltip .application.__asktip1 "Tip one"
+	::tooltip::tooltip .application.__asktip2 "Tip two"
+	::tooltip::tooltip .application.__asktip1 "Tip one again"
+	set kpBind [bind .application <Any-KeyPress>]
+	set hideMatches [regexp -all {::tooltip \{ hide \}} $kpBind]
+
+	# 2. Warm cache hit must not invoke ::context::MenuIds while matching live state.
+	::action::labels asklist "help"
+	set ::scidb::test::ask::MenuIdsCalls 0
+	trace add execution ::context::MenuIds enter ::scidb::test::ask::_countMenuIds
+	set r1 [::action::labels asklist "h"]
+	set r2 [::action::labels asklist "he"]
+	set r3 [::action::labels asklist "hel"]
+	trace remove execution ::context::MenuIds enter ::scidb::test::ask::_countMenuIds
+	set menuIdsZero [expr {$::scidb::test::ask::MenuIdsCalls == 0}]
+	set ::action::AskCacheCheck 1
+	set rCheck [::action::labels asklist "hel"]
+	set ::action::AskCacheCheck 0
+	set cacheMatchesLive [expr {$r3 eq $rCheck && [llength $r1] > 0 && [llength $r2] > 0}]
+
+	# 3. Typing non-empty text cancels a pending deferred Prewarm timer.
+	::application::ask::HideList
+	set ::application::ask::Priv(prewarmAfter) [after 5000 ::application::ask::Prewarm]
+	set entry [::application::ask::Entry]
+	$entry delete 0 end
+	$entry insert 0 "help"
+	unset -nocomplain ::application::ask::Priv(filtered)
+	::application::ask::Typed "p"
+	set prewarmCancelled [expr {$::application::ask::Priv(prewarmAfter) eq ""}]
+
+	list [expr {$hideMatches == 1}] $menuIdsZero $cacheMatchesLive $prewarmCancelled
+} -cleanup {
+	catch { trace remove execution ::context::MenuIds enter ::scidb::test::ask::_countMenuIds }
+	set ::action::AskCacheCheck 0
+	catch { ::tooltip::tooltip clear .application.__asktip* }
+	catch { destroy .application.__asktip1 .application.__asktip2 }
+	::application::ask::HideList
+	::application::ask::CancelPrewarm
+	set ::application::ask::Query $savedQuery
+	::application::ask::PlaceholderState
+	update
+} -result {1 1 1 1}
+
 tcltest::cleanupTests
