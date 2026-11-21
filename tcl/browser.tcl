@@ -1926,10 +1926,11 @@ proc Resize {position mode board newSize delta ext} {
 
 		set x0 [winfo rootx $dlg]
 		set y0 [winfo rooty $dlg]
-		set x1 [expr {[winfo workareawidth  $dlg] - [winfo width  $dlg] - 25}]
-		set y1 [expr {[winfo workareaheight $dlg] - [winfo height $dlg] - 25}]
+		lassign [winfo workarea $dlg] ax ay aw ah
+		set x1 [expr {$ax + $aw - [winfo width  $dlg] - 25}]
+		set y1 [expr {$ay + $ah - [winfo height $dlg] - 25}]
 
-		if {$x1 >= 0 && $y1 >= 0 && ($x1 < $x0 || $y1 < $y0)} {
+		if {$x1 >= $ax && $y1 >= $ay && ($x1 < $x0 || $y1 < $y0)} {
 			wm geometry $dlg +[min $x0 $x1]+[min $y0 $y1]
 		}
 	}

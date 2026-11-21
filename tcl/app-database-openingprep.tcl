@@ -623,10 +623,15 @@ proc OpenOpeningPrepReport {parent file variant} {
 		wm protocol $dlg WM_DELETE_WINDOW [list destroy $dlg]
 		wm title $dlg [format $mc::OpeningPrepTitle [::util::databaseName $file]]
 		wm resizable $dlg true true
+		wm withdraw $dlg
 
-		set controls [ttk::frame $dlg.controls]
-		set info [ttk::frame $dlg.info]
-		set body [ttk::frame $dlg.body]
+		# The companion trainer is a playing dialog: the shared viewport
+		# gives a compact/scroll minimum on tiny windows and besideBoard keeps
+		# it clear of the board (GAP-003).
+		set root [::util::place::playingBody $dlg]
+		set controls [ttk::frame $root.controls]
+		set info [ttk::frame $root.info]
+		set body [ttk::frame $root.body]
 		pack $controls -side top -fill x -padx 6 -pady {6 2}
 		pack $info -side top -fill x -padx 6 -pady {0 4}
 		pack $body -side top -fill both -expand yes -padx 6 -pady {0 6}
@@ -683,14 +688,16 @@ proc OpenOpeningPrepReport {parent file variant} {
 		grid $controls.rareLimitLabel -row 0 -column 5 -sticky w -padx {4 0}
 		grid $controls.rareLimit -row 0 -column 6 -sticky ew
 		grid $controls.refresh -row 0 -column 7 -sticky ew -padx {8 0}
-		grid $controls.analyze -row 1 -column 8 -columnspan 2 -sticky ew -pady {4 0}
-		grid $controls.play -row 0 -column 8 -sticky ew -padx {4 0}
-		grid $controls.load -row 0 -column 9 -sticky ew -padx {4 0}
-		grid $controls.eco -row 0 -column 10 -sticky ew -padx {4 0}
-		grid $controls.switcher -row 0 -column 11 -sticky ew -padx {4 0}
-		grid $controls.savews -row 0 -column 12 -sticky ew -padx {4 0}
-		grid $controls.narrate -row 0 -column 13 -sticky ew -padx {4 0}
-		grid $controls.close -row 0 -column 14 -sticky e -padx {4 0}
+		# Actions wrap into two rows: one unwrapping row made the natural
+		# width 1,937 px and pushed the dialog over the board (GAP-003).
+		grid $controls.analyze -row 1 -column 0 -sticky ew -pady {4 0}
+		grid $controls.play -row 1 -column 1 -sticky ew -pady {4 0}
+		grid $controls.load -row 1 -column 2 -sticky ew -pady {4 0}
+		grid $controls.eco -row 1 -column 3 -sticky ew -pady {4 0}
+		grid $controls.switcher -row 2 -column 0 -sticky ew -pady {4 0}
+		grid $controls.savews -row 2 -column 1 -sticky ew -pady {4 0}
+		grid $controls.narrate -row 2 -column 2 -sticky ew -pady {4 0}
+		grid $controls.close -row 2 -column 3 -sticky ew -pady {4 0}
 		grid columnconfigure $controls 1 -weight 1
 		grid columnconfigure $controls 3 -weight 1
 		grid columnconfigure $controls 6 -weight 1
@@ -748,7 +755,8 @@ proc OpenOpeningPrepReport {parent file variant} {
 		bind $tv <Double-1> [namespace code [list OpeningPrepLoadSelectedGame $dlg]]
 		bind $dlg <Destroy> [namespace code [list CloseOpeningPrepReport %W]]
 		wm minsize $dlg 880 380
-		::util::place $dlg -parent [winfo toplevel $parent] -position center
+		::util::place::besideBoard $dlg [winfo toplevel $parent]
+		wm deiconify $dlg
 	}
 
 	raise $dlg

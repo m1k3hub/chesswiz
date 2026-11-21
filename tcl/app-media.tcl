@@ -2430,7 +2430,7 @@ proc application::media::OpenStream {parent} {
 	$dlg.cancel configure -command [list destroy $dlg]
 	bind $dlg <Return> [namespace code [list StreamChosen $dlg]]
 	bind $dlg <Escape> [list destroy $dlg]
-	::util::place $dlg -parent [winfo toplevel $parent] -position center
+	::util::place::besideBoard $dlg [winfo toplevel $parent]
 	wm deiconify $dlg
 	focus $top.url
 	$top.url selection range 0 end

@@ -1491,7 +1491,9 @@ proc ::mediainset::PostMediaMenu {w} {
 proc ::mediainset::PostMenuAt {w} {
 	if {![winfo exists $w.menu] || ![winfo ismapped $w]} { return }
 	set x [expr {[winfo rootx $w] + [winfo width $w] - [winfo reqwidth $w.menu]}]
-	tk_popup $w.menu [expr {max(0, $x)}] [expr {[winfo rooty $w] + [winfo height $w]}]
+	set y [expr {[winfo rooty $w] + [winfo height $w]}]
+	lassign [::application::MenuRootClamp $w $x $y $w.menu] x y
+	tk_popup $w.menu $x $y
 }
 
 # A player holds a media item: Stop can release it. Folded playback keeps
@@ -1591,23 +1593,36 @@ proc ::mediainset::Choose {row} {
 			::application::media::ViewReport $index
 		}
 	} elseif {[::application::media::ClassifyFile $path] == 1} {
-		# Reuse the picture renderer with a separate viewer surface.
-		::application::media::Stop
-		set viewer $::application::media::Priv(viewer)
-		if {[winfo exists .mediaPicture]} { destroy .mediaPicture }
-		toplevel .mediaPicture
-		wm title .mediaPicture $title
-		canvas .mediaPicture.canvas -width 640 -height 480 -background black
-		pack .mediaPicture.canvas -fill both -expand yes
-		set ::application::media::Priv(viewer) .mediaPicture
-		try { ::application::media::ShowImage $path } finally {
-			set ::application::media::Priv(viewer) $viewer
-		}
+		::mediainset::ShowPicture $title $path [winfo toplevel $tree]
 	} elseif {[::application::media::isStreamUrl $path]} {
 		::application::media::PlayStream $path
 	} else {
 		::application::media::PlaySelected $tree
 	}
+}
+
+# Picture entries open a separate surface. It is a board companion, so it
+# uses the shared placement helper and stays in the work area (GAP-003).
+proc ::mediainset::ShowPicture {title path {parent .application}} {
+	::application::media::Stop
+	set viewer $::application::media::Priv(viewer)
+	if {[winfo exists .mediaPicture]} { destroy .mediaPicture }
+	toplevel .mediaPicture -class Scidb
+	wm title .mediaPicture $title
+	wm withdraw .mediaPicture
+	canvas .mediaPicture.canvas -width 640 -height 480 -background black
+	pack .mediaPicture.canvas -fill both -expand yes
+	set ::application::media::Priv(viewer) .mediaPicture
+	try {
+		update idletasks
+		::application::media::ShowImage $path
+	} finally {
+		set ::application::media::Priv(viewer) $viewer
+	}
+	::util::place::besideBoard .mediaPicture [winfo toplevel $parent]
+	::util::place::fitWindow .mediaPicture
+	wm deiconify .mediaPicture
+	return .mediaPicture
 }
 
 proc ::mediainset::RefreshControls {{position {}}} {

@@ -53,6 +53,7 @@ proc ::td::ui::Open {path {tab event}} {
 	toplevel $Dialog -class Scidb
 	wm title $Dialog "Tournament Director"
 	wm transient $Dialog .application
+	wm withdraw $Dialog
 	wm protocol $Dialog WM_DELETE_WINDOW ::td::ui::Close
 	set body [::util::place::playingBody $Dialog]
 	set Notebook [ttk::notebook $body.tabs]

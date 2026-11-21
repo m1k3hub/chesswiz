@@ -611,6 +611,7 @@ proc open {parent} {
 	toplevel $top -class ChesswizStream
 	wm title $top $mc::Title
 	wm transient $top [winfo toplevel $parent]
+	wm withdraw $top
 	set f [::util::place::playingBody $top]
 	$f configure -padding 12
 	ttk::label $f.explain -text $mc::Explain -wraplength 560 -justify left
@@ -673,6 +674,7 @@ proc open {parent} {
 	update idletasks
 	::util::place::besideBoard $top [winfo toplevel $parent]
 	::util::place::fitWindow $top
+	wm deiconify $top
 	return $top
 }
 

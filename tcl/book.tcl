@@ -136,6 +136,7 @@ proc ::book::openEditor {parent} {
 	toplevel $dlg -class Scidb
 	wm title $dlg $mc::Title
 	wm transient $dlg [winfo toplevel $parent]
+	wm withdraw $dlg
 	wm protocol $dlg WM_DELETE_WINDOW [namespace code Close]
 	bind $dlg <Escape> [namespace code Close]
 
@@ -227,10 +228,13 @@ proc ::book::openEditor {parent} {
 		set Options(file) ""
 	}
 
-	if {[llength [info commands ::playengine::PlaceBesideBoard]] == 0
-	 || ![::playengine::PlaceBesideBoard $dlg]} {
-		::util::place $dlg -parent $parent -position center
-	}
+	# The editor is a live board companion: the shared viewport gives it a
+	# compact/scroll minimum and besideBoard keeps it clear of the board
+	# (GAP-003).
+	set body [::util::place::playingBody $dlg]
+	pack forget $top
+	pack $top -in $body -fill both -expand yes
+	::util::place::besideBoard $dlg [winfo toplevel $parent]
 	wm deiconify $dlg
 	Refresh
 

@@ -236,10 +236,7 @@ proc dialogGeometry {dlg parent args} {
 		set ry [expr {$ty + $gy}]
 		set rw [winfo reqwidth $dlg]
 		set rh [winfo reqheight $dlg]
-		set sw [winfo workareawidth $dlg]
-		set sh [winfo workareaheight $dlg]
-		set rx [expr {max(min($rx, $sw - $rw), 0)}]
-		set ry [expr {max(min($ry, $sh - $rh), 0)}]
+		lassign [::util::place::clampRoot $rx $ry $rw $rh [winfo workarea $dlg]] rx ry
 		set wd [expr {max(1, $gw)}]
 		set ht [expr {max(1, $gh)}]
 		wm geometry $dlg ${wd}x${ht}+${rx}+${ry}
