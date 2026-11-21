@@ -112,6 +112,7 @@ array set Priv {
 	list		{}
 	listVisible	0
 	prewarmAfter	{}
+	refreshAfter	{}
 	window		{}
 	prefs		{}
 	prefsStartup	{}
@@ -191,6 +192,7 @@ proc ::application::ask::Build {notebook} {
 	set Priv(filtered) ""
 	bind $frame <Destroy> +::application::speech::CleanupSession
 	bind $frame <Destroy> +[namespace code CancelPrewarm]
+	bind $frame <Destroy> +[namespace code CancelRefresh]
 	# a language switch relabels the field in place (i18n.tcl generates
 	# the event for every widget); typing is never touched
 	bind $frame <<LanguageChanged>> [namespace code Relabel]
@@ -255,9 +257,34 @@ proc ::application::ask::InvalidateCache {} {
 	return
 }
 
+proc ::application::ask::CancelRefresh {} {
+	variable Priv
+	if {[info exists Priv(refreshAfter)] && $Priv(refreshAfter) ne ""} {
+		catch { after cancel $Priv(refreshAfter) }
+		set Priv(refreshAfter) ""
+	}
+	return
+}
+
+# Coalesce bursts of registry/predicate/state invalidations into one idle
+# refresh when the Ask result list is currently open.
+proc ::application::ask::ScheduleRefresh {} {
+	variable Priv
+	if {[info exists ::menu::SwitchingLanguage] && $::menu::SwitchingLanguage} {
+		return
+	}
+	if {![ListVisible]} { return }
+	if {[info exists Priv(refreshAfter)] && $Priv(refreshAfter) ne ""} {
+		return
+	}
+	set Priv(refreshAfter) [after idle [namespace code RefreshOpenList]]
+	return
+}
+
 proc ::application::ask::RefreshOpenList {} {
 	variable Priv
 	variable Query
+	CancelRefresh
 	if {![ListVisible]} { return }
 	set text [string trim $Query]
 	if {$text eq ""} {
@@ -270,6 +297,16 @@ proc ::application::ask::RefreshOpenList {} {
 	if {$Priv(index) >= [llength $Priv(rows)] + 1} { set Priv(index) 0 }
 	ShowList
 	return
+}
+
+proc ::application::ask::PrewarmBlocked {} {
+	if {[llength [info commands grab]]} {
+		set currentGrab ""
+		catch { set currentGrab [grab current] }
+		if {$currentGrab ne ""} { return 1 }
+	}
+	if {[DialogOpen]} { return 1 }
+	return 0
 }
 
 proc ::application::ask::CancelPrewarm {} {
@@ -325,6 +362,12 @@ proc ::application::ask::Prewarm {} {
 	set Priv(prewarmAfter) ""
 	if {![winfo exists [Entry]]} { return }
 	if {![info exists ::application::Vars(ready)] || !$::application::Vars(ready)} { return }
+	if {[PrewarmBlocked]} {
+		# Defer popup creation and registry evaluation while a grab or modal
+		# dialog is active; reschedule via timer so update never spins on idle.
+		set Priv(prewarmAfter) [after 250 [namespace code Prewarm]]
+		return
+	}
 	if {[EnsureListWidget]} {
 		set w $Priv(list)
 		if {[tk windowingsystem] eq "aqua"} {
@@ -658,6 +701,7 @@ proc ::application::ask::Typed {{key ""}} {
 	 && [ListVisible]} {
 		return
 	}
+	CancelRefresh
 	set Priv(filtered) $text
 
 	if {$text eq ""} {
@@ -832,6 +876,7 @@ proc ::application::ask::ShowList {} {
 proc ::application::ask::HideList {} {
 	variable Priv
 	variable ListGeom
+	CancelRefresh
 	set Priv(listVisible) 0
 	if {[info exists Priv(list)] && $Priv(list) ne "" && [winfo exists $Priv(list)]} {
 		if {[tk windowingsystem] eq "aqua"} {

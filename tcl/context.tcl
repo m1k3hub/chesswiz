@@ -401,6 +401,9 @@ proc ::context::Define {cid rows} {
 	dict set Menus $cid [list list $rows]
 	incr MenusVersion
 	InvalidateCascadeIdSet
+	if {[llength [info commands ::application::ask::ScheduleRefresh]]} {
+		::application::ask::ScheduleRefresh
+	}
 	return
 }
 
@@ -420,6 +423,9 @@ proc ::context::DefineObject {cid key rows} {
 	dict set Menus $cid [list map $map]
 	incr MenusVersion
 	InvalidateCascadeIdSet
+	if {[llength [info commands ::application::ask::ScheduleRefresh]]} {
+		::application::ask::ScheduleRefresh
+	}
 	return
 }
 

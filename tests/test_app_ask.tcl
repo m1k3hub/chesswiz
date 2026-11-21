@@ -930,4 +930,126 @@ tcltest::test ask-cache-invalidation-language-theme-registry {open Ask rows and 
 	update
 } -result {1 1 1 1 1}
 
+tcltest::test ask-open-list-follows-registry-and-predicate-changes {open Ask list refreshes coalesced on registry add/remove and predicate changes} -setup {
+	set savedQuery $::application::ask::Query
+	set ::scidb::test::ask::PredAvail 1
+	proc ::scidb::test::ask::_predAvail {} { return $::scidb::test::ask::PredAvail }
+	set ::scidb::test::ask::RefreshCalls 0
+	proc ::scidb::test::ask::_countRefresh {args} { incr ::scidb::test::ask::RefreshCalls }
+	::application::ask::HideList
+	set ::application::ask::Query {Zebra Live Mutation}
+	focus -force [::application::ask::Entry]
+	unset -nocomplain ::application::ask::Priv(filtered)
+	::application::ask::Typed {}
+	update
+} -body {
+	# 1. Registering and unregistering while the Ask list is open updates rows and widget.
+	::scidb::test::ask::action test.ask.live {Zebra Live Mutation} {}
+	update
+	set afterAdd $::application::ask::Priv(rows)
+	set expectedAdd [::action::labels asklist {Zebra Live Mutation}]
+	set addWidget [string trim [.application.askList.list get 0]]
+	set addOk [expr {$afterAdd eq $expectedAdd && "test.ask.live" in [lmap r $afterAdd {lindex $r 0}] && $addWidget eq "Zebra Live Mutation"}]
+
+	::action::Unregister test.ask.live
+	update
+	set afterRemove $::application::ask::Priv(rows)
+	set removeOk [expr {"test.ask.live" ni [lmap r $afterRemove {lindex $r 0}]}]
+
+	# 2. Toggling an enabled predicate + NoteRegistryChange updates the open list.
+	::scidb::test::ask::action test.ask.pred {Zebra Predicate Mutation} [dict create enabled ::scidb::test::ask::_predAvail]
+	set ::application::ask::Query {Zebra Predicate Mutation}
+	unset -nocomplain ::application::ask::Priv(filtered)
+	::application::ask::Typed {}
+	update
+	set beforePred [expr {"test.ask.pred" in [lmap r $::application::ask::Priv(rows) {lindex $r 0}]}]
+
+	set ::scidb::test::ask::PredAvail 0
+	::action::NoteRegistryChange
+	update
+	set afterOff $::application::ask::Priv(rows)
+	set expectedOff [::action::labels asklist {Zebra Predicate Mutation}]
+	set offOk [expr {$beforePred && $afterOff eq $expectedOff && "test.ask.pred" ni [lmap r $afterOff {lindex $r 0}]}]
+
+	set ::scidb::test::ask::PredAvail 1
+	::action::NoteRegistryChange
+	update
+	set afterOn $::application::ask::Priv(rows)
+	set expectedOn [::action::labels asklist {Zebra Predicate Mutation}]
+	set onOk [expr {$afterOn eq $expectedOn && "test.ask.pred" in [lmap r $afterOn {lindex $r 0}]}]
+
+	# 3. A burst of mutations coalesces into a single RefreshOpenList on idle.
+	set ::scidb::test::ask::RefreshCalls 0
+	trace add execution ::application::ask::RefreshOpenList enter ::scidb::test::ask::_countRefresh
+	for {set i 0} {$i < 5} {incr i} {
+		::scidb::test::ask::action test.ask.burst.$i "Zebra Predicate Mutation Burst $i" {}
+	}
+	::action::NoteRegistryChange
+	update
+	trace remove execution ::application::ask::RefreshOpenList enter ::scidb::test::ask::_countRefresh
+	set burstIds [lmap r $::application::ask::Priv(rows) {lindex $r 0}]
+	set burstOk [expr {$::scidb::test::ask::RefreshCalls == 1 && "test.ask.burst.4" in $burstIds}]
+
+	list $addOk $removeOk $offOk $onOk $burstOk
+} -cleanup {
+	catch { trace remove execution ::application::ask::RefreshOpenList enter ::scidb::test::ask::_countRefresh }
+	catch { ::action::Unregister test.ask.live }
+	catch { ::action::Unregister test.ask.pred }
+	for {set i 0} {$i < 5} {incr i} {
+		catch { ::action::Unregister test.ask.burst.$i }
+	}
+	::application::ask::HideList
+	set ::application::ask::Query $savedQuery
+	::application::ask::PlaceholderState
+	update
+} -result {1 1 1 1 1}
+
+tcltest::test ask-prewarm-defers-during-grab-and-dialog {idle prewarm defers while a grab or modal dialog is active and runs once clear} -setup {
+	::application::ask::HideList
+	::application::ask::CancelPrewarm
+	set ::scidb::test::ask::LabelCalls 0
+	proc ::scidb::test::ask::_countLabels {args} { incr ::scidb::test::ask::LabelCalls }
+	set grabTarget [::application::ask::Entry]
+	trace add execution ::action::labels enter ::scidb::test::ask::_countLabels
+} -body {
+	# 1. Active Tk grab: prewarm must not invoke ::action::labels and must reschedule.
+	grab set $grabTarget
+	::application::ask::SchedulePrewarm
+	update
+	set grabCalls $::scidb::test::ask::LabelCalls
+	set grabRescheduled [expr {$::application::ask::Priv(prewarmAfter) ne ""}]
+
+	# Releasing the grab allows the rescheduled prewarm to run.
+	grab release $grabTarget
+	after 320
+	update
+	set afterGrabCalls $::scidb::test::ask::LabelCalls
+	set afterGrabIdle [expr {$::application::ask::Priv(prewarmAfter) eq ""}]
+
+	# 2. Open top-level dialog under .: prewarm defers until the dialog closes.
+	set ::scidb::test::ask::LabelCalls 0
+	catch { destroy .askPrewarmDlg }
+	toplevel .askPrewarmDlg
+	label .askPrewarmDlg.l -text "Modal"
+	pack .askPrewarmDlg.l
+	update
+	::application::ask::SchedulePrewarm
+	update
+	set dlgCalls $::scidb::test::ask::LabelCalls
+	set dlgRescheduled [expr {$::application::ask::Priv(prewarmAfter) ne ""}]
+	destroy .askPrewarmDlg
+	after 320
+	update
+	set afterDlgCalls $::scidb::test::ask::LabelCalls
+
+	list [expr {$grabCalls == 0}] $grabRescheduled [expr {$afterGrabCalls >= 1}] $afterGrabIdle \
+		[expr {$dlgCalls == 0}] $dlgRescheduled [expr {$afterDlgCalls >= 1}]
+} -cleanup {
+	catch { trace remove execution ::action::labels enter ::scidb::test::ask::_countLabels }
+	catch { grab release $grabTarget }
+	catch { destroy .askPrewarmDlg }
+	::application::ask::CancelPrewarm
+	update
+} -result {1 1 1 1 1 1 1}
+
 tcltest::cleanupTests

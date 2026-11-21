@@ -1013,6 +1013,9 @@ proc ::action::InvalidateAskRows {} {
 	if {[llength [info commands ::application::ask::InvalidateCache]]} {
 		::application::ask::InvalidateCache
 	}
+	if {[llength [info commands ::application::ask::ScheduleRefresh]]} {
+		::application::ask::ScheduleRefresh
+	}
 }
 
 # A menu build (or any state read outside an Ask rebuild) sees live
@@ -1031,7 +1034,12 @@ proc ::action::_ObserveState {id visible enabled} {
 	if {![info exists AskCachedStamp] || $AskCachedStamp eq ""} { return }
 	if {![info exists AskStateMap] || ![dict exists $AskStateMap $id]} { return }
 	set now [expr {$visible && $enabled ? 1 : 0}]
-	if {$now != [dict get $AskStateMap $id]} { set AskCachedStamp "" }
+	if {$now != [dict get $AskStateMap $id]} {
+		set AskCachedStamp ""
+		if {[llength [info commands ::application::ask::ScheduleRefresh]]} {
+			::application::ask::ScheduleRefresh
+		}
+	}
 }
 
 proc ::action::_stampOf {cmd} {
@@ -1054,8 +1062,9 @@ proc ::action::AskLiveInputs {ctxObjects ctxMenus} {
 	if {![info exists AskLiveScripts]} { set AskLiveScripts {} }
 	set predVer [expr {[info exists ::context::PredicateVersion] ? $::context::PredicateVersion : 0}]
 	set predSize [expr {[info exists ::context::Predicates] ? [dict size $::context::Predicates] : 0}]
+	set menusVer [expr {[info exists ::context::MenusVersion] ? $::context::MenusVersion : 0}]
 	set hasObjRule [llength [info commands ::context::ObjectRule]]
-	set scriptsKey [::list $RegistryVersion [dict size $Registry] $ctxObjects $ctxMenus $predVer $predSize $hasObjRule]
+	set scriptsKey [::list $RegistryVersion [dict size $Registry] $ctxObjects $ctxMenus $predVer $predSize $menusVer $hasObjRule]
 	if {$scriptsKey ne $AskLiveScriptsKey} {
 		set scripts [dict create]
 		dict for {id rec} $Registry {
@@ -1181,6 +1190,9 @@ proc ::action::AskStamp {ctxObjects ctxMenus} {
 	}
 	if {[info exists ::context::PredicateVersion]} {
 		lappend parts predver $::context::PredicateVersion
+	}
+	if {[info exists ::context::MenusVersion]} {
+		lappend parts menusver $::context::MenusVersion
 	}
 	# Each online control row follows ::online::view::Available, i.e. the
 	# presence and state of its widget, which no variable below covers.

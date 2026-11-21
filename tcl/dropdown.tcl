@@ -2135,13 +2135,13 @@ proc ::menu::FillLanguage {menu} {
 # menu widget is rebuilt so the top cascades and their leaves show them.
 proc ::menu::SwitchLanguage {lang} {
 	variable SwitchingLanguage
+	set SwitchingLanguage 1
 	if {[llength [info commands ::action::InvalidateAskRows]]} {
 		::action::InvalidateAskRows
 	}
 	# the View > Language rows pass the language's name (Deutsch); setLang wants its id (de)
 	set n [lsearch -exact -index 0 $::i18n::languages $lang]
 	if {$n >= 0} { set lang [lindex $::i18n::languages $n 1] }
-	set SwitchingLanguage 1
 	if {[catch { ::mc::setLang $lang }]} {
 		set SwitchingLanguage 0
 		return
@@ -2472,6 +2472,9 @@ proc ::menu::RegisterExtras {} {
 		# no-op. The enabled predicate is also what ::action::run enforces.
 		Register menu.view.panes.$uid [MC $labelName] "" "" \
 			[list ::menu::PaneOpenable $uid] [format "09.%03d" $order]
+	}
+	if {[llength [info commands ::action::NoteRegistryChange]]} {
+		::action::NoteRegistryChange
 	}
 }
 
@@ -2955,6 +2958,9 @@ proc ::menu::WireOperations {} {
 			dict set rec handler [list ::menu::InvokeOperationAlias $id $handler]
 		}
 		dict set ::action::Registry $id $rec
+	}
+	if {[llength [info commands ::action::NoteRegistryChange]]} {
+		::action::NoteRegistryChange
 	}
 }
 
