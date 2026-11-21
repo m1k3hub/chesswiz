@@ -746,6 +746,11 @@ proc ::playengine::SendOptions {} {
 	variable Priv
 
 	set features [EngineFeatures $Priv(engine)]
+	# Honour "set <engine> threads <n>" for the game engine too.
+	if {[llength [info commands ::engine::DefaultThreads]]} {
+		set threads [::engine::DefaultThreads $Priv(engine)]
+		if {$threads ne ""} { Send "setoption name Threads value $threads" }
+	}
 	if {$Priv(full)} {
 		set Priv(limited) 0
 		if {[dict exists $features limitStrength]} {

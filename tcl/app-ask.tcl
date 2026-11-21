@@ -4,14 +4,10 @@
 # Decision 003 / D-7: the Ask field in the top strip *is* the palette.
 # There is no separate palette window.
 #
-#   Typing filters the action registry on every keystroke into a result
-#   list under the field. Only runnable actions are listed (the same
-#   enabled/visible predicates as the main drop-down, VAL-RULE-004).
-#   Up/Down select, Enter runs the selection through ::action::run (so
-#   the registry confirm gate applies). The last row is always "Ask the
-#   assistant": selecting it, or a query with no matching action, sends
-#   the text to the assistant as plain language. Esc closes the list and
-#   restores the focus that was there before.
+#   Typing matches the fixed command table against application slot sources.
+#   Up/Down and clicks select; Enter runs the displayed action and arguments.
+#   Missing slots focus their placeholder and offer state-owned candidates.
+#   Questions are an explicit read-only mode, never an unmatched-text fallback.
 #
 #   Ctrl+K focuses the field and selects its text. D-2 is kept: in a
 #   multi-line text editor (comment editor, PGN text, engine console /
@@ -51,8 +47,18 @@ namespace eval application {
 namespace eval ask {
 
 namespace eval mc {
-set Placeholder		"Ask or tell Chesswiz what to do (Ctrl+K)"
+set Placeholder		"Type a command (Ctrl+K)"
 set AskAssistant		"Ask the assistant"
+set AskQuestion		"Ask a question"
+set Commands		"Commands"
+set Aliases			"Aliases"
+set AliasesTitle	"Command aliases"
+set AliasesHelp		"Select a command in Ask, then give it a short name."
+set AliasesSave		"Save highlighted command"
+set AliasesRemove	"Remove selected alias"
+set AliasesNeedCommand	"Select a complete command in Ask first."
+set AliasesSaved	"Saved. Type the exact alias in Ask, then press Enter."
+set AliasesRemoved	"Alias removed."
 set Send				"Send to the assistant"
 set Mic				"Speak"
 set Recording		"Recording… click to cancel"
@@ -97,6 +103,7 @@ foreach _name [lsort [info vars ::application::ask::mc::*]] {
 unset _name
 }
 
+variable Mode command
 variable Query ""
 variable FmtCache [dict create]
 variable ListTexts {}
@@ -177,6 +184,10 @@ proc ::application::ask::Build {notebook} {
 	}
 	set mic [ttk::button $frame.mic -text $::application::ask::mc::Mic \
 		-takefocus 0 -command ::application::speech::toggle]
+	ttk::button $frame.mode -text $::application::ask::mc::AskQuestion -takefocus 0 -command ::application::ask::ToggleMode
+	ttk::button $frame.alias -text $::application::ask::mc::Aliases -takefocus 0 -command ::application::ask::Aliases
+ pack $frame.alias -side right
+ pack $frame.mode -side right
 	pack $mic -side right -padx {2 2} -pady 1
 	# Own mouse gestures; the class binding invokes -command only on release.
 	bind $mic <ButtonPress-1> {::application::speech::Press %W; break}
@@ -225,6 +236,7 @@ proc ::application::ask::Build {notebook} {
 	SyncMic
 	PlaceholderState
 	RegisterAction
+ ::commandline::RegisterActions
 	catch { InstallShortcutTags $notebook }
 	# Run filtering synchronously right after Entry/TEntry inserts a character
 	# on KeyPress, instead of waiting for KeyRelease (which adds hold latency
@@ -319,7 +331,7 @@ proc ::application::ask::RefreshOpenList {} {
 		return
 	}
 	set Priv(filtered) $text
-	set Priv(rows) [::action::labels asklist $text]
+	PopulateRows $text
 	if {$Priv(index) >= [llength $Priv(rows)] + 1} { set Priv(index) 0 }
 	ShowList
 	return
@@ -382,6 +394,9 @@ proc ::application::ask::EnsureListWidget {} {
 	wm transient $w .application
 	listbox $w.list -exportselection 0 -takefocus 0 -activestyle none \
 		-height 1 -borderwidth 1 -relief solid -highlightthickness 0
+	ttk::scrollbar $w.scroll -orient horizontal -command [list $w.list xview]
+	$w.list configure -xscrollcommand [list $w.scroll set]
+	pack $w.scroll -side bottom -fill x
 	pack $w.list -fill both -expand yes
 	bind $w.list <ButtonPress-1> "[list ::application::ask::Click] %y"
 	bind $w.list <ButtonRelease-1> { break }
@@ -558,6 +573,7 @@ proc ::application::ask::MicText {} {
 # Preferences > Assistant dialog left open relabels itself.
 proc ::application::ask::Relabel {} {
 	variable Priv
+	variable Mode
 	variable mc
 
 	RegisterAction
@@ -569,12 +585,21 @@ proc ::application::ask::Relabel {} {
 	if {[info exists Priv(placeholder)] && [winfo exists $Priv(placeholder)]} {
 		$Priv(placeholder) configure -text [PlaceholderText]
 	}
+	if {[info exists Priv(frame)] && [winfo exists $Priv(frame)]} {
+		if {[winfo exists $Priv(frame).mode]} {
+			$Priv(frame).mode configure -text [expr {$Mode eq "command" ? $mc::AskQuestion : $mc::Commands}]
+		}
+		if {[winfo exists $Priv(frame).alias]} {
+			$Priv(frame).alias configure -text $mc::Aliases
+		}
+	}
 	PlaceholderState
 	if {[info exists Priv(mic)] && [winfo exists $Priv(mic)]} {
 		$Priv(mic) configure -text [MicText]
 	}
 	SyncMic
 	RelabelPreferences
+	RelabelAliases
 	if {[info exists ::menu::SwitchingLanguage] && $::menu::SwitchingLanguage} {
 		return
 	}
@@ -583,6 +608,17 @@ proc ::application::ask::Relabel {} {
 	} else {
 		SchedulePrewarm
 	}
+	return
+}
+
+proc ::application::ask::RelabelAliases {} {
+	variable mc
+	set w .application.commandAliases
+	if {![winfo exists $w]} { return }
+	wm title $w $mc::AliasesTitle
+	$w.help configure -text $mc::AliasesHelp
+	$w.save configure -text $mc::AliasesSave
+	$w.remove configure -text $mc::AliasesRemove
 	return
 }
 
@@ -823,9 +859,35 @@ proc ::application::ask::Typed {{key ""}} {
 		}
 		return
 	}
-	set Priv(rows) [::action::labels asklist $text]
+	PopulateRows $text
+	set Priv(context) [CommandContext]
 	set Priv(index) 0
 	ShowList
+}
+
+proc ::application::ask::PopulateRows {text} {
+	variable Priv
+	set Priv(commands) {}
+	set Priv(rows) {}
+	if {$::application::ask::Mode ne "question"} {
+		# The typed command grammar first, then the registry palette: the
+		# 200+ menu actions must stay reachable exactly as before.
+		foreach row [::commandline::Suggest $text] {
+			lappend Priv(commands) $row
+			lappend Priv(rows) [list [dict get $row action] [dict get $row label] Enter 1 1]
+		}
+		set seen {}
+		foreach row $Priv(commands) { dict set seen [dict get $row action] 1 }
+		foreach paletteRow [::action::labels asklist $text] {
+			lassign $paletteRow id label accel enabled visible
+			if {[string match command.* $id] || [dict exists $seen $id]} { continue }
+			dict set seen $id 1
+			lappend Priv(commands) [dict create id $id action $id args {} missing {} \
+				template {} label $label input $text palette 1]
+			lappend Priv(rows) [list $id $label $accel $enabled $visible]
+		}
+	}
+	return
 }
 
 proc ::application::ask::ShowList {} {
@@ -956,7 +1018,17 @@ proc ::application::ask::ShowList {} {
 		if {$RowHeight eq ""} {
 			set RowHeight [expr {[font metrics [$list cget -font] -linespace] + 4}]
 		}
-		set height [expr {min(320, max($RowHeight, $count * $RowHeight + 4))}]
+		if {$count <= 20} {
+			set listFont [$list cget -font]
+			foreach text $texts {
+				set width [expr {max($width, [font measure $listFont [string trimright $text]] + 24)}]
+			}
+		}
+		if {![catch { lassign [winfo workarea .application] wx wy ww wh }] && $ww > 32} {
+			set width [expr {min($width, $ww - 16)}]
+			set x [expr {max($wx, min($x, $wx + $ww - $width))}]
+		}
+		set height [expr {min(320, max($RowHeight, $count * $RowHeight + 24))}]
 		set geom "${width}x${height}+${x}+${y}"
 		# Avoid redundant wm geometry calls on Aqua: even an unchanged
 		# geometry triggers a native Cocoa window frame/display cycle.
@@ -1022,7 +1094,9 @@ proc ::application::ask::Move {direction} {
 		if {$direction < 0} { return [HistoryStep -1] }
 		return [HistoryStep 1]
 	}
-	set count [expr {[llength $Priv(rows)] + 1}]
+ # ShowList always appends the "Ask the assistant" row, so the navigable
+ # count is one more than the matched commands (and one when none match).
+ set count [expr {[llength $Priv(rows)] + 1}]
 	set index [expr {$Priv(index) + $direction}]
 	if {$index < 0} { set index 0 }
 	if {$index >= $count} { set index [expr {$count - 1}] }
@@ -1035,34 +1109,116 @@ proc ::application::ask::Click {y} {
 	set list .application.askList.list
 	set index [$list nearest $y]
 	set ::application::ask::Priv(index) $index
-	Choose
+	ShowList
 	return "break"
 }
 
+proc ::application::ask::CommandContext {} {
+ set context {}
+ catch {lappend context [::scidb::db::get name] [::application::database::currentVariant] [::scidb::pos::fen]}
+ return $context
+}
+proc ::application::ask::ToggleMode {} {
+ variable Mode
+ variable mc
+ set Mode [expr {$Mode eq "command" ? "question" : "command"}]
+ [winfo parent [Entry]].mode configure -text [expr {$Mode eq "command" ? $mc::AskQuestion : $mc::Commands}]
+ unset -nocomplain ::application::ask::Priv(filtered)
+ Typed
+}
 proc ::application::ask::Choose {} {
-	variable Priv
-	variable Query
-
-	if {![ListVisible] && [string trim $Query] eq ""} { return "break" }
-	if {![llength $Priv(rows)]} { return [SendToAssistant] }
-
-	set index $Priv(index)
-	if {$index < [llength $Priv(rows)]} {
-		lassign [lindex $Priv(rows) $index] id
-		HideList
-		catch { focus -force [Entry] }
-		set failed [catch { ::action::run $id } result]
-		if {$failed || [string match "error:*" $result] || [string match "declined*" $result]} {
-			# ::action::run reports errors as text; a raising handler is
-			# reported the same way, never as a Tk background error.
-			catch { ::ui::message $result }
-		} else {
-			set Query ""
-		}
-		PlaceholderState
-		return "break"
-	}
-	return [SendToAssistant]
+ variable Priv
+ variable Query
+ if {$::application::ask::Mode eq "question"} {return [SendToAssistant]}
+ if {![ListVisible] && [string trim $Query] eq ""} {return "break"}
+ set rows {}
+ if {[info exists Priv(rows)]} {set rows $Priv(rows)}
+ if {$Priv(index) < 0} {return "break"}
+ # Past the last row (or with no match at all) the text is a question.
+ if {![llength $rows] || $Priv(index) >= [llength $rows]} {return [SendToAssistant]}
+ lassign [lindex $rows $Priv(index)] id
+ # A row from the command grammar carries its resolved arguments; any
+ # other row is a plain registry palette action.
+ set row ""
+ if {[info exists Priv(commands)] && $Priv(index) < [llength $Priv(commands)]} {
+  set candidate [lindex $Priv(commands) $Priv(index)]
+  if {[dict exists $candidate action] && [dict get $candidate action] eq $id} {set row $candidate}
+ }
+ if {$row ne "" && ![dict exists $row palette]} {
+  if {[info exists Priv(context)] && ($Priv(filtered) ne [string trim $Query] \
+   || $Priv(context) ne [CommandContext])} {
+   unset -nocomplain Priv(filtered)
+   Typed
+   return "break"
+  }
+  if {[llength [dict get $row missing]]} {MissingSlot $row; return "break"}
+ set failed [catch {::commandline::Run $row} result]
+ if {$failed || [string match "error:*" $result] || [string match "declined*" $result]} {
+  catch {::ui::message $result error}
+ } else {
+  set Query ""
+  HideList
+  # Query actions return useful text too, without needing a model to narrate it.
+  if {$result ne ""} {catch {::ui::message $result}}
+ }
+ PlaceholderState
+ return "break"
+ }
+ # Registry palette action: run it through the same gate as a menu click.
+ HideList
+ catch { focus -force [Entry] }
+ set failed [catch {::action::run $id} result]
+ if {$failed || [string match "error:*" $result] || [string match "declined*" $result]} {
+  catch {::ui::message $result error}
+ } else {
+  set Query ""
+ }
+ PlaceholderState
+ return "break"
+}
+proc ::application::ask::MissingSlot {row} {
+ variable Query
+ variable Priv
+ set slot [lindex [dict get $row missing] 0]
+ set completed [::commandline::CompleteText [dict get $row template] [dict get $row args] [dict get $row missing]]
+ set marker <$slot>
+ set start [string first $marker $completed]
+ if {$start < 0} {
+  set completed "[string trim $Query] $marker"
+  set start [string first $marker $completed]
+ }
+ # A file slot has no useful typed candidates: open the platform picker and
+ # drop the chosen path into the sentence, quoted when it contains spaces.
+ if {[::commandline::FileSlot? $slot]} {
+  set picked [::commandline::PickFile $slot]
+  if {$picked ne ""} {
+   set quoted [::commandline::QuoteArgument $picked]
+   set Query [string replace $completed $start [expr {$start+[string length $marker]-1}] $quoted]
+   catch { [Entry] selection clear }
+   catch { [Entry] icursor end }
+   focus -force [Entry]
+   unset -nocomplain Priv(filtered)
+   Typed
+   return
+  }
+ }
+ set Query $completed
+ [Entry] selection range $start [expr {$start+[string length $marker]}]
+ [Entry] icursor $start
+ focus -force [Entry]
+ set Priv(filtered) [string trim $Query]
+ set Priv(commands) {}; set Priv(rows) {}
+ set ::commandline::Cache {}
+ foreach value [::commandline::Values $slot ""] {
+  set text [string replace $Query $start [expr {$start+[string length $marker]-1}] $value]
+  foreach candidate [::commandline::Suggest $text] {
+   if {[dict get $candidate id] ne [dict get $row id]} {continue}
+   lappend Priv(commands) $candidate
+   lappend Priv(rows) [list [dict get $candidate action] [dict get $candidate label] Enter 1 1]
+  }
+ }
+ set Priv(index) 0
+ ShowList
 }
 
 proc ::application::ask::SendToAssistant {} {
@@ -1081,7 +1237,10 @@ proc ::application::ask::SendToAssistant {} {
 	if {[llength [info commands ::application::assistant::show]]} {
 		catch { ::application::assistant::show }
 	}
-	if {[catch {::application::assistant::ask $text} accepted]} {
+	set ::application::assistant::QuestionMode 1
+ set failed [catch {::application::assistant::ask $text} accepted]
+ set ::application::assistant::QuestionMode 0
+ if {$failed} {
 		catch {::ui::message [format $mc::Failed $accepted]}
 		return "break"
 	}
@@ -1875,10 +2034,34 @@ proc ::application::speech::FinishTranscribe {} {
 # Put a transcript at the cursor in the Ask field. Editable, never sent.
 proc ::application::speech::InsertTranscript {text} {
 	set text [string trim $text]
+	# whisper-cli ends sentences with punctuation ("Go."). Ignore it for the
+	# spoken confirmation, but leave the transcript itself untouched.
+	set spoken $text
+	regsub {[\s.!?,;:]+$} $spoken {} spoken
+	if {[string equal -nocase $spoken "go"] && [::application::ask::ListVisible]} {
+		::application::ask::Choose
+		return 1
+	}
 	if {$text eq ""} { return 0 }
 	if {![winfo exists [::application::ask::Entry]]} { return 0 }
 	set entry [::application::ask::Entry]
-	$entry insert insert $text
+	# Do not fuse a transcript with the word on either side of the cursor.
+	set insert $text
+	set current [$entry get]
+	set pos [$entry index insert]
+	if {$pos > 0} {
+		set before [string index $current [expr {$pos - 1}]]
+		if {$before ne "" && ![string is space $before]} {
+			set insert " $insert"
+		}
+	}
+	if {$pos < [string length $current]} {
+		set after [string index $current $pos]
+		if {$after ne "" && ![string is space $after]} {
+			append insert " "
+		}
+	}
+	$entry insert insert $insert
 	focus -force $entry
 	Schedule idle ::application::ask::Typed
 	SetHint [format $::application::ask::mc::Heard $text]
@@ -2337,3 +2520,53 @@ if {[llength [info commands ::application::ask::Build]]} {
 }
 
 # vi:set ts=3 sw=3:
+
+# Save the highlighted concrete command; no alias text is ever executable Tcl.
+proc ::application::ask::Aliases {} {
+ variable Priv
+ variable mc
+ ::commandline::LoadLearning
+ set Priv(aliasRow) {}
+ if {[info exists Priv(commands)] && [llength $Priv(commands)]} {
+  set row [lindex $Priv(commands) $Priv(index)]
+  # Aliases persist grammar input and re-match it before execution. A raw
+  # registry palette row has no such command text; use the normal prompt.
+  if {$row ne "" && ![dict exists $row palette]} {set Priv(aliasRow) $row}
+ }
+ set w .application.commandAliases
+ if {[winfo exists $w]} {raise $w; return}
+ toplevel $w
+ wm title $w $mc::AliasesTitle
+ wm transient $w .application
+ ttk::label $w.help -text $mc::AliasesHelp -padding 8
+ ttk::entry $w.name -width 40
+ listbox $w.list -height 8 -exportselection 0
+ foreach alias [lsort [dict keys $::commandline::Aliases]] {$w.list insert end $alias}
+ ttk::button $w.save -text $mc::AliasesSave -command ::application::ask::SaveAlias
+ ttk::button $w.remove -text $mc::AliasesRemove -command ::application::ask::DeleteAlias
+ ttk::label $w.status -text "" -wraplength 420
+ if {$Priv(aliasRow) ne ""} {$w.status configure -text [dict get $Priv(aliasRow) label]}
+ pack $w.help $w.name $w.list $w.save $w.remove $w.status -fill x -padx 8 -pady 4
+ bind $w.name <Return> {::application::ask::SaveAlias; break}
+ bind $w <Escape> [list destroy $w]
+ focus -force $w.name
+}
+proc ::application::ask::SaveAlias {} {
+ variable Priv
+ variable mc
+ set w .application.commandAliases
+ if {$Priv(aliasRow) eq ""} {$w.status configure -text $mc::AliasesNeedCommand; return}
+ if {[catch {::commandline::AddAlias [$w.name get] $Priv(aliasRow)} error]} {$w.status configure -text $error; return}
+ $w.list delete 0 end
+ foreach alias [lsort [dict keys $::commandline::Aliases]] {$w.list insert end $alias}
+ $w.status configure -text $mc::AliasesSaved
+}
+proc ::application::ask::DeleteAlias {} {
+ variable mc
+ set w .application.commandAliases
+ set selection [$w.list curselection]
+ if {$selection eq ""} {return}
+ if {[catch {::commandline::RemoveAlias [$w.list get $selection]} error]} {$w.status configure -text $error; return}
+ $w.list delete $selection
+ $w.status configure -text $mc::AliasesRemoved
+}

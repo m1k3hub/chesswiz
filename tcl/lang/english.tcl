@@ -986,9 +986,20 @@
 ### application::ask ##################################################
 # The Ask field in the top strip: its placeholder, its last result row and
 # the messages a request can bring back into the field. German uses Strg
-# where these say Ctrl.
-::application::ask::mc::Placeholder		"Ask or tell Chesswiz what to do (Ctrl+K)"
+# where these say Ctrl. The field is a command line, so the placeholder
+# invites a verb phrase rather than a prose question.
+::application::ask::mc::Placeholder		"Type a command (Ctrl+K)"
 ::application::ask::mc::AskAssistant		"Ask the assistant"
+::application::ask::mc::AskQuestion		"Ask a question"
+::application::ask::mc::Commands		"Commands"
+::application::ask::mc::Aliases			"Aliases"
+::application::ask::mc::AliasesTitle		"Command aliases"
+::application::ask::mc::AliasesHelp		"Select a command in Ask, then give it a short name."
+::application::ask::mc::AliasesSave		"Save highlighted command"
+::application::ask::mc::AliasesRemove	"Remove selected alias"
+::application::ask::mc::AliasesNeedCommand	"Select a complete command in Ask first."
+::application::ask::mc::AliasesSaved		"Saved. Type the exact alias in Ask, then press Enter."
+::application::ask::mc::AliasesRemoved	"Alias removed."
 ::application::ask::mc::Send				"Send to the assistant"
 ::application::ask::mc::Mic				"Speak"
 ::application::ask::mc::Recording		"Recording\u2026 click to stop"

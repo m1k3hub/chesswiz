@@ -263,8 +263,8 @@ variable Actions {
 	}
 	search_games {
 		0 0 "search the games"
-		"Search the active database; nothing changes, the game list included. Returns the number of games found, the first of them, and the criteria as understood. Names may be partial. 'result' is win/draw/loss from the player's side, or 1-0/0-1/1/2-1/2 without a player. 'eco' is a code, class or range as for opening_score (map opening names to ECO yourself). Dates are YYYY, YYYY.MM or YYYY.MM.DD. Use top-level player, color, result, event or eco arguments. To show or filter games in the interface, call show_search afterwards. To also show the player card, then call open_view with kind player_card and name. 'pattern' keeps only games containing a position pattern (Chesswiz's pattern matcher reads their moves, which takes longer on a large database)."
-		{{"type":"object","properties":{"player":{"type":"string"},"color":{"type":"string","enum":["white","black","any"],"description":"the player's colour, default any"},"result":{"type":"string","enum":["win","draw","loss","1-0","0-1","1/2-1/2"]},"opponent":{"type":"string"},"eco":{"type":"string"},"from":{"type":"string","description":"earliest date"},"to":{"type":"string","description":"latest date"},"event":{"type":"string","description":"part of the event name"},"min_elo":{"type":"integer","description":"minimum average Elo of the two players"},"both_min_elo":{"type":"integer","description":"minimum Elo of each player: both players rated at least this"},"pattern":{"type":"string","enum":["checkmate","smothered_mate","stalemate","en_passant","underpromotion","double_check","opposite_castling","rook_endgame","pawn_endgame","endgame","isolated_queen_pawn","opposite_bishops","queenless","back_rank_mate","boden_mate","anastasia_mate","arabian_mate","knight_fork","greek_gift","rook_seventh","doubled_rooks_seventh","knight_outpost","hanging_pawns","carlsbad","maroczy_bind","stonewall","queen_vs_rook","wrong_bishop","lucena","epaulette_mate","queen_pawn_mate","skewer","discovered_check","double_bishop_sacrifice","alekhines_gun","minority_attack","hedgehog","protected_passed_pawn","weakened_fianchetto","pawn_fork","legals_mate","blackburne_mate","pin_attacked_by_pawn","double_attack_loose","philidor_position","vancura_position","backward_pawn","bad_bishop","closed_center","trebuchet","boleslavsky_hole","botvinnik_formation","rook_behind_passed_pawn"],"description":"a position pattern the game must contain, found by Chesswiz's pattern matcher: the game ends in checkmate, a smothered mate, the game ends in stalemate, an en-passant capture, an underpromotion, a double check, kings on opposite wings, a rook ending, a pawn ending, any endgame (at most two pieces a side), an isolated queen's pawn, opposite-coloured bishops, a queenless middlegame, a back-rank mate, a two-bishop (Boden's) mate, Anastasia's mate, an Arabian mate, a knight fork of king and queen or rook, a Greek gift Bxh7+, a rook on the seventh, doubled rooks on the seventh, a knight outpost, hanging pawns, a Carlsbad structure, a Maroczy bind, a Stonewall, queen against rook, a wrong-coloured bishop, a Lucena position (building a bridge), an epaulette mate, a queen-and-pawn (Damiano's, Lolli's) mate, a skewer, a discovered check, a double bishop sacrifice (Lasker-Bauer), Alekhine's gun, a minority attack, a hedgehog, a protected passed pawn, a weakened fianchetto, a pawn fork, Legal's mate, Blackburne's mate, a pinned piece attacked by a pawn, a double attack on loose pieces, the Philidor position (third-rank defence), the Vancura position, a backward pawn, a bad bishop, a closed centre, a trebuchet, the Boleslavsky hole, the Botvinnik formation, a rook behind a passed pawn"}}}}
+		"Search the active database; nothing changes, the game list included. Returns the number of games found, the first of them, and the criteria as understood. Names may be partial. 'result' is win/draw/loss from the player's side, or 1-0/0-1/1/2-1/2 without a player. 'eco' is a code, class or range as for opening_score (map opening names to ECO yourself). Dates are YYYY, YYYY.MM or YYYY.MM.DD. Use top-level player, color, result, event, site or eco arguments. To show or filter games in the interface, call show_search afterwards. To also show the player card, then call open_view with kind player_card and name. 'pattern' keeps only games containing a position pattern (Chesswiz's pattern matcher reads their moves, which takes longer on a large database)."
+		{{"type":"object","properties":{"player":{"type":"string"},"color":{"type":"string","enum":["white","black","any"],"description":"the player's colour, default any"},"result":{"type":"string","enum":["win","draw","loss","1-0","0-1","1/2-1/2"]},"opponent":{"type":"string"},"eco":{"type":"string"},"from":{"type":"string","description":"earliest date"},"to":{"type":"string","description":"latest date"},"event":{"type":"string","description":"part of the event name"},"site":{"type":"string","description":"part of the site name"},"min_elo":{"type":"integer","description":"minimum average Elo of the two players"},"both_min_elo":{"type":"integer","description":"minimum Elo of each player: both players rated at least this"},"pattern":{"type":"string","enum":["checkmate","smothered_mate","stalemate","en_passant","underpromotion","double_check","opposite_castling","rook_endgame","pawn_endgame","endgame","isolated_queen_pawn","opposite_bishops","queenless","back_rank_mate","boden_mate","anastasia_mate","arabian_mate","knight_fork","greek_gift","rook_seventh","doubled_rooks_seventh","knight_outpost","hanging_pawns","carlsbad","maroczy_bind","stonewall","queen_vs_rook","wrong_bishop","lucena","epaulette_mate","queen_pawn_mate","skewer","discovered_check","double_bishop_sacrifice","alekhines_gun","minority_attack","hedgehog","protected_passed_pawn","weakened_fianchetto","pawn_fork","legals_mate","blackburne_mate","pin_attacked_by_pawn","double_attack_loose","philidor_position","vancura_position","backward_pawn","bad_bishop","closed_center","trebuchet","boleslavsky_hole","botvinnik_formation","rook_behind_passed_pawn"],"description":"a position pattern the game must contain, found by Chesswiz's pattern matcher: the game ends in checkmate, a smothered mate, the game ends in stalemate, an en-passant capture, an underpromotion, a double check, kings on opposite wings, a rook ending, a pawn ending, any endgame (at most two pieces a side), an isolated queen's pawn, opposite-coloured bishops, a queenless middlegame, a back-rank mate, a two-bishop (Boden's) mate, Anastasia's mate, an Arabian mate, a knight fork of king and queen or rook, a Greek gift Bxh7+, a rook on the seventh, doubled rooks on the seventh, a knight outpost, hanging pawns, a Carlsbad structure, a Maroczy bind, a Stonewall, queen against rook, a wrong-coloured bishop, a Lucena position (building a bridge), an epaulette mate, a queen-and-pawn (Damiano's, Lolli's) mate, a skewer, a discovered check, a double bishop sacrifice (Lasker-Bauer), Alekhine's gun, a minority attack, a hedgehog, a protected passed pawn, a weakened fianchetto, a pawn fork, Legal's mate, Blackburne's mate, a pinned piece attacked by a pawn, a double attack on loose pieces, the Philidor position (third-rank defence), the Vancura position, a backward pawn, a bad bishop, a closed centre, a trebuchet, the Boleslavsky hole, the Botvinnik formation, a rook behind a passed pawn"}}}}
 		::application::assistant::DoSearchGames
 	}
 	find_positions {
@@ -305,8 +305,8 @@ variable Actions {
 	}
 	open_view {
 		0 0 "open the %s"
-		"Open one of Chesswiz's reports or dialogs for the user (they only show things; nothing changes). kind: player_card (a player's card: ratings, photo, links; needs 'name'), prep_report (a player's preparation report: scores by colour, openings, recent games, gaps, the opponent dossier; needs 'name'), crosstable (an event's tournament table; needs 'event', part of the event name), event_report (the story of an event: standings, leaders and upsets, told from its results; needs 'event'), opening_report (the opening report of the position on the board: statistics, main lines, fashion, plans), opening_prep (opening preparation: the moves played from the board's position), repertoire_report (the active repertoire database's report), duplicates (find duplicate games in the active database)."
-		{{"type":"object","properties":{"kind":{"type":"string","enum":["player_card","prep_report","crosstable","event_report","opening_report","opening_prep","repertoire_report","duplicates"]},"name":{"type":"string","description":"a player, for player_card and prep_report"},"event":{"type":"string","description":"part of an event name, for crosstable"}},"required":["kind"]}}
+		"Open one of Chesswiz's reports or dialogs for the user (they only show things; nothing changes). kind: player_card (a player's card: ratings, photo, links; needs 'name'), prep_report (a player's preparation report: scores by colour, openings, recent games, gaps, the opponent dossier; needs 'name'), crosstable (an event's tournament table; needs 'event', part of the event name), event_report (the story of an event: standings, leaders and upsets, told from its results; needs 'event'), opening_report (the opening report of the position on the board: statistics, main lines, fashion, plans), opening_prep (opening preparation: the moves played from the board's position), repertoire_report (the active repertoire database's report), duplicates (find duplicate games in the active database), trend (the database's opening trends, in the Report pane)."
+		{{"type":"object","properties":{"kind":{"type":"string","enum":["player_card","prep_report","crosstable","event_report","opening_report","opening_prep","repertoire_report","duplicates","trend"]},"name":{"type":"string","description":"a player, for player_card and prep_report"},"event":{"type":"string","description":"part of an event name, for crosstable"}},"required":["kind"]}}
 		::application::assistant::DoOpenView
 	}
 	opening_line {
@@ -867,6 +867,9 @@ proc ::application::assistant::show {} {
 #   -confirm CMD    asks the user instead of the dialog (CMD WHAT -> 0|1)
 # Returns 0 when the request was not started (empty, or another is running).
 proc ::application::assistant::ask {request args} {
+ if {[info exists ::application::assistant::QuestionMode] && $::application::assistant::QuestionMode} {
+  return [::application::assistant::Question $request]
+ }
 	variable Priv
 	variable System
 
@@ -1578,7 +1581,11 @@ proc ::application::assistant::Resolve {token reply} {
 	variable Priv
 	variable MaxReply
 
-	if {![info exists Priv(pending)] || [lindex $Priv(pending) 0] ne $token} { return 0 }
+	if {![info exists Priv(pending)] || [lindex $Priv(pending) 0] ne $token} {
+		# A queued command (not an assistant turn) may own this token.
+		if {[llength [info commands ::commandline::ResolveLater]] && [::commandline::ResolveLater $token $reply]} { return 1 }
+		return 0
+	}
 	lassign $Priv(pending) _ round name cargs calls isRouted planMode
 	set Priv(pending) {}
 	set reply [WithMenu $name [Scrub $reply]]
@@ -2490,7 +2497,7 @@ proc ::application::assistant::CheckArgs {name cargs} {
 		}
 		search_games {
 			set c {}
-			foreach key {player color result opponent eco from to event min_elo both_min_elo pattern} {
+			foreach key {player color result opponent eco from to event site min_elo both_min_elo pattern} {
 				dict set c $key [expr {[dict exists $cargs $key] ? [string trim [dict get $cargs $key]] : ""}]
 			}
 			dict with c {
@@ -2676,7 +2683,7 @@ proc ::application::assistant::CheckArgs {name cargs} {
 		}
 		open_view {
 			set kind [Arg $cargs kind]
-			set kinds {player_card prep_report crosstable event_report opening_report opening_prep repertoire_report duplicates}
+			set kinds {player_card prep_report crosstable event_report opening_report opening_prep repertoire_report duplicates trend}
 			if {$kind ni $kinds} { error "kind must be one of: [join $kinds {, }]" }
 			set name [expr {[dict exists $cargs name] ? [string trim [dict get $cargs name]] : ""}]
 			set event [expr {[dict exists $cargs event] ? [string trim [dict get $cargs event]] : ""}]
@@ -3188,9 +3195,9 @@ proc ::application::assistant::DoCompactDatabase {} {
 }
 
 
-proc ::application::assistant::DoConvertDatabase {} {
+proc ::application::assistant::DoConvertDatabase {{format ""}} {
 	lassign [ActiveBase] base variant
-	::application::database::ConvertDatabase .application $base $variant
+	::application::database::ConvertDatabase .application $base $variant $format
 	return "the conversion of [::util::databaseName $base no] was started; the user picks the version and the new file in Chesswiz's dialogs"
 }
 
@@ -3751,6 +3758,10 @@ proc ::application::assistant::BuildQuery {base variant criteria {includePattern
 		lappend common [list eventname [EventPattern $event]]
 		lappend summary "event matching '$event'"
 	}
+	if {[info exists site] && $site ne ""} {
+		lappend common [list sitename [EventPattern $site]]
+		lappend summary "site matching '$site'"
+	}
 	if {$min_elo ne ""} {
 		lappend common [list rating Elo average $min_elo-4000]
 		lappend summary "average Elo at least $min_elo"
@@ -4239,6 +4250,13 @@ proc ::application::assistant::DoOpenView {kind name event} {
 		duplicates {
 			::application::database::ShowDuplicates .application $base $variant
 			return "the duplicate search for $db is open"
+		}
+		trend {
+			if {[llength [info commands ::ai::trend::report]] == 0} {
+				return "error: the trend report is not available in this build"
+			}
+			::ai::trend::report .application
+			return "the opening trends of $db are opening in the Report pane"
 		}
 	}
 }
@@ -5287,6 +5305,18 @@ proc ::application::assistant::DoSetEngineOption {engine option value profile} {
 		lappend restarted [PaneLabel $number]
 	}
 	set reply "Set $option of $engine (profile '$profile') to $value; saved."
+	if {[llength $restarted]} { append reply " Restarted it in analysis pane [join $restarted {, }]." }
+	return $reply
+}
+
+
+proc ::application::assistant::DoSetEngineThreads {engine threads} {
+	set value [::engine::SetThreads $engine $threads]
+	set restarted {}
+	foreach number [RunningPanes] {
+		if {[::engine::engineName $number] eq $engine} { lappend restarted [PaneLabel $number] }
+	}
+	set reply "Set $engine to use $value threads; saved."
 	if {[llength $restarted]} { append reply " Restarted it in analysis pane [join $restarted {, }]." }
 	return $reply
 }

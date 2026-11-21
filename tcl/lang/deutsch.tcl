@@ -1058,8 +1058,18 @@
 # Das Eingabefeld in der oberen Leiste: Platzhaltertext, die letzte
 # Ergebniszeile und die Meldungen, die eine Anfrage zurück ins Feld
 # bringen kann.
-::application::ask::mc::Placeholder		"Chesswiz fragen oder sagen, was zu tun ist (Strg+K)"
+::application::ask::mc::Placeholder		"Befehl eingeben (Strg+K)"
 ::application::ask::mc::AskAssistant		"Den Assistenten fragen"
+::application::ask::mc::AskQuestion		"Frage stellen"
+::application::ask::mc::Commands		"Befehle"
+::application::ask::mc::Aliases			"Kurznamen"
+::application::ask::mc::AliasesTitle		"Befehlskurznamen"
+::application::ask::mc::AliasesHelp		"Wählen Sie im Feld Fragen einen Befehl und geben Sie ihm einen Kurznamen."
+::application::ask::mc::AliasesSave		"Hervorgehobenen Befehl speichern"
+::application::ask::mc::AliasesRemove	"Ausgewählten Kurznamen entfernen"
+::application::ask::mc::AliasesNeedCommand	"Wählen Sie zuerst im Feld Fragen einen vollständigen Befehl."
+::application::ask::mc::AliasesSaved		"Gespeichert. Geben Sie den exakten Kurznamen im Feld Fragen ein und drücken Sie die Eingabetaste."
+::application::ask::mc::AliasesRemoved	"Kurznamen entfernt."
 ::application::ask::mc::Send				"An den Assistenten senden"
 ::application::ask::mc::Mic				"Sprechen"
 ::application::ask::mc::Recording		"Aufnahme\u2026 Klicken zum Stoppen"

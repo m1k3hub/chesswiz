@@ -3,7 +3,7 @@
 # (tcl/app-ask.tcl, tcl/lang/english.tcl, tcl/lang/deutsch.tcl)
 # ======================================================================
 # Run 197: with the UI in German the Ask field kept the English
-# placeholder ("Ask or tell Chesswiz what to do (Ctrl+K)"). The field's
+# placeholder ("Type a command (Ctrl+K)"). The field's
 # text was set once, when it was built, so a language switch with the
 # window open left it behind; the module's English text also had no
 # entry in english.tcl, so switching back to English left the German
@@ -157,8 +157,8 @@ tcltest::test ask-i18n-placeholder {the placeholder follows a live language swit
 } -cleanup {
 	::scidb::test::askI18n::Clean
 } -result [list \
-	[list [::scidb::test::askI18n::PlatformHint {Ask or tell Chesswiz what to do (Ctrl+K)}] place] \
-	[list [::scidb::test::askI18n::PlatformHint {Chesswiz fragen oder sagen, was zu tun ist (Strg+K)}] place] \
+	[list [::scidb::test::askI18n::PlatformHint {Type a command (Ctrl+K)}] place] \
+	[list [::scidb::test::askI18n::PlatformHint {Befehl eingeben (Strg+K)}] place] \
 	1]
 
 tcltest::test ask-i18n-typed-text-survives {a language switch never overwrites what was typed} -body {
@@ -184,7 +184,7 @@ tcltest::test ask-i18n-typed-text-survives {a language switch never overwrites w
 } -result [list \
 	{{new game} {new game} {}} \
 	[list {new game} {new game} {} \
-		[::scidb::test::askI18n::PlatformHint {Chesswiz fragen oder sagen, was zu tun ist (Strg+K)}]] \
+		[::scidb::test::askI18n::PlatformHint {Befehl eingeben (Strg+K)}]] \
 	{{new game} {new game} {}}]
 
 # ----------------------------------------------------------------------
@@ -335,7 +335,7 @@ tcltest::test ask-i18n-german-coverage {every string of the field has a German t
 	list $checked $same
 } -cleanup {
 	::scidb::test::askI18n::Clean
-} -result {38 {}}
+} -result {48 {}}
 
 tcltest::test ask-i18n-fallback {ResetMC restores English defaults} -body {
 	::menu::SwitchLanguage Deutsch
@@ -350,7 +350,7 @@ tcltest::test ask-i18n-fallback {ResetMC restores English defaults} -body {
 	list [expr {$german ne $english}] $english
 } -cleanup {
 	::scidb::test::askI18n::Clean
-} -result {1 {{Ask or tell Chesswiz what to do (Ctrl+K)} {The assistant is busy. Try again when it finishes.} {a ggml model}}}
+} -result {1 {{Type a command (Ctrl+K)} {The assistant is busy. Try again when it finishes.} {a ggml model}}}
 
 tcltest::test ask-i18n-translated-languages {for es/it/hu/sv the Ask placeholder and assistant Send button differ from English} -body {
 	::menu::SwitchLanguage English

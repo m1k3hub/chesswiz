@@ -1076,7 +1076,7 @@
 ::application::tree::mc::T_FrequentPlayer		"Leggyakoribb játékos"
 
 ### application::ask ###################################################
-::application::ask::mc::Placeholder		"Kérdezze a Chesswizt, vagy mondja meg, mit tegyen (Ctrl+K)"
+::application::ask::mc::Placeholder		"Írjon be egy parancsot (Ctrl+K)"
 ::application::ask::mc::AskAssistant		"Kérdezze az asszisztenst"
 ::application::ask::mc::Send				"Küldés az asszisztensnek"
 ::application::ask::mc::Mic				"Beszéd"

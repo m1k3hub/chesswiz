@@ -1072,7 +1072,7 @@
 ::application::tree::mc::T_FrequentPlayer					"Jugador más frecuente"
 
 ### application::ask ###################################################
-::application::ask::mc::Placeholder		"Preguntar o decir a Chesswiz qué hacer (Ctrl+K)"
+::application::ask::mc::Placeholder		"Escriba un comando (Ctrl+K)"
 ::application::ask::mc::AskAssistant		"Preguntar al asistente"
 ::application::ask::mc::Send				"Enviar al asistente"
 ::application::ask::mc::Mic				"Hablar"

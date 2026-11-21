@@ -501,7 +501,7 @@ proc ConvertReportDatabase {dlg} {
 }
 
 
-proc ConvertDatabase {parent file variant} {
+proc ConvertDatabase {parent file variant {format ""}} {
 	variable mc
 
 	if {[::scidb::db::get unsaved? $file]} {
@@ -510,10 +510,21 @@ proc ConvertDatabase {parent file variant} {
 	}
 
 	set title $mc::ConvertTitle
-	set filetypes [list \
-		[list $mc::ScidbBases {.sci}] \
-		[list $::menu::mc::ChessBaseBases {.cbh}] \
-	]
+	set format [string tolower $format]
+	if {$format ni {"" sci cbh}} {
+		::dialog::error -parent $parent -title $title -message "Unknown conversion format '$format'."
+		return
+	}
+	if {$format eq "sci"} {
+		set filetypes [list [list $mc::ScidbBases {.sci}]]
+	} elseif {$format eq "cbh"} {
+		set filetypes [list [list $::menu::mc::ChessBaseBases {.cbh}]]
+	} else {
+		set filetypes [list \
+			[list $mc::ScidbBases {.sci}] \
+			[list $::menu::mc::ChessBaseBases {.cbh}] \
+		]
+	}
 	set dstFile [::dialog::saveFile \
 		-parent $parent \
 		-class database \
@@ -526,6 +537,14 @@ proc ConvertDatabase {parent file variant} {
 	lassign $dstFile dst dstEncoding
 
 	set ext [::util::fileExtension $dst]
+	if {$format eq "sci" && $ext ne ".sci"} {
+		::dialog::error -parent $parent -title $title -message "Choose a Scidb (.sci) destination for a SCDB conversion."
+		return
+	}
+	if {$format eq "cbh" && $ext ne ".cbh"} {
+		::dialog::error -parent $parent -title $title -message "Choose a ChessBase (.cbh) destination for a CBH conversion."
+		return
+	}
 
 	# docs/formats/SCI_CORRESPONDENCE_FORMAT.md §3: SCI databases default to
 	# v96 (native correspondence clock storage); offer legacy v95 explicitly.
