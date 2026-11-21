@@ -3722,6 +3722,13 @@
 ::td::actions::mc::Audit	"Verseny naplója"
 ::td::actions::mc::Export	"Verseny exportálása"
 ::td::actions::mc::Workspace	"Versenyigazgató munkaterülete"
+::td::actions::mc::LookupPlayer	"FIDE-játékos keresése"
+::td::actions::mc::RegisterFide	"FIDE-játékos nevezése"
+::td::actions::mc::CheckPairings	"Párosítások ellenőrzése"
+::td::actions::mc::Ruling	"Versenybírói döntés rögzítése"
+::td::actions::mc::Prizes	"Díjak számítása és rögzítése"
+::td::actions::mc::Print	"Versenylap nyomtatása"
+::td::actions::mc::ImportTrf	"Versenyjelentés importálása"
 # vi:set ts=8 sw=8:
 
 # Training > Online (2026-11-12)

@@ -199,9 +199,13 @@ SOURCES = \
 	td-store.tcl \
 	td-command.tcl \
 	td-pair.tcl \
+	td-swiss.tcl \
+	td-trf.tcl \
 	td-score.tcl \
 	td-openings.tcl \
 	td-model.tcl \
+	td-registration.tcl \
+	td-arbiter.tcl \
 	td-event.tcl \
 	td-ui.tcl \
 	td-actions.tcl \

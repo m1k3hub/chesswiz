@@ -3730,6 +3730,13 @@
 ::td::actions::mc::Audit	"Turneringsgranskning"
 ::td::actions::mc::Export	"Exportera turnering"
 ::td::actions::mc::Workspace	"Turneringsledarens arbetsyta"
+::td::actions::mc::LookupPlayer	"Sök FIDE-spelare"
+::td::actions::mc::RegisterFide	"Registrera FIDE-spelare"
+::td::actions::mc::CheckPairings	"Kontrollera lottning"
+::td::actions::mc::Ruling	"Registrera domarbeslut"
+::td::actions::mc::Prizes	"Beräkna och registrera priser"
+::td::actions::mc::Print	"Skriv ut turneringsblad"
+::td::actions::mc::ImportTrf	"Importera turneringsrapport"
 # vi:set ts=3 sw=3:
 
 # Training > Online (2026-11-12)

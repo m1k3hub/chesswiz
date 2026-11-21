@@ -35,13 +35,14 @@ proc ::td::model::EngineLabel {name existing} {
 
 proc ::td::model::EngineNames {} {
 	if {[llength [info commands ::enginematch::EngineNames]]} { return [::enginematch::EngineNames] }
-	return [::td::runner::EngineNames]
+	if {[llength [info commands ::td::runner::EngineNames]]} { return [::td::runner::EngineNames] }
+	return {}
 }
 
 proc ::td::model::MakePlayers {names kind start} {
 	set out {}
 	set existing {}
-	set configured [EngineNames]
+	set configured [expr {$kind eq "engine" ? [EngineNames] : {}}]
 	if {$kind eq "engine" && ![llength $names]} { error "no configured UCI engines" }
 	foreach name $names {
 		set name [string trim $name]
@@ -120,20 +121,32 @@ proc ::td::model::Enter {state domain correct} {
 	if {!$correct && [dg $p status pending] eq "complete"} { error "result already exists; use correct_result" }
 	if {$correct && [dg $p status pending] ne "complete"} { error "only a completed result can be corrected" }
 	set result [dg $domain result *]
-	if {$result ni {1-0 0-1 1/2-1/2 0-0}} { error "invalid result '$result'" }
+	if {$result ni {1-0 0-1 1/2-1/2 0-0 *}} { error "invalid result '$result'" }
 	set category [dg $domain category played]
-	if {$category ni {played forfeit forfeit-loss double-forfeit}} { error "invalid manual result category '$category'" }
-	if {$category eq "double-forfeit"} { set result 0-0 }
+	if {$category ni {played forfeit forfeit-loss double-forfeit adjourned}} { error "invalid manual result category '$category'" }
+	if {[dict get $p black] eq ""} { error "use the bye command for an unpaired player" }
+    foreach side {white black} {
+        if {[dict get [Player $state [dict get $p $side]] kind] eq "engine"} { error "manual OTB results require human seats" }
+    }
+    if {($result eq "*") != ($category eq "adjourned")} { error "only an adjourned game has an unknown result" }
+    set reason [dg $domain reason {}]
+    if {$correct && [dg $p signed_by {}] ne "" && [string trim $reason] eq ""} { error "correcting a signed result requires a reason" }
+    set deadline [dg $state correction_deadline 0]
+    if {$correct && $deadline && [clock seconds] > $deadline} { error "correction deadline passed; a human TD ruling is required" }
+    dict set p signed_by [dg $domain signed_by {}]
+    dict set p result_reason $reason
+    dict set p entered_at [clock seconds]
+    if {$category eq "double-forfeit"} { set result 0-0 }
 	if {$category in {forfeit forfeit-loss double-forfeit}} { dict set p played 0 } else { dict set p played 1 }
 	if {[dg $p result *] ni {* {}}} {
 		dict lappend p result_history [dict create result [dict get $p result] category [dg $p category played] corrected [clock seconds]]
 	}
 	dict set p result $result
 	dict set p category $category
-	dict set p status complete
+	dict set p status [expr {$category eq "adjourned" ? "adjourned" : "complete"}]
 	dict set p termination [expr {$category eq "played" ? "normal" : "abandoned"}]
-	dict set p count_standings 1
-	dict set p rating [dict get $p played]
+	dict set p count_standings [expr {$category ne "adjourned"}]
+	dict set p rating [expr {[dict get $p played] && $category ne "adjourned"}]
 	lset pairings $index $p
 	dict set state pairings $pairings
 	set state [PublishCorrection $state]
@@ -144,6 +157,45 @@ proc ::td::model::Withdraw {state domain} {
 	set id [FindPlayer $state [dg $domain player {}]]
 	set round [dg $domain round [dg $state current_round 1]]
 	set pairings [dg $state pairings {}]
+	if {[dg $state system round-robin] eq "swiss"} {
+		set changed 0
+		set afterPairing 0
+		for {set i 0} {$i < [llength $pairings]} {incr i} {
+			set p [lindex $pairings $i]
+			if {[IsBye $p] || ([dict get $p white] ne $id && [dict get $p black] ne $id)} { continue }
+			if {[dg $p status pending] eq "complete"} { continue }
+			set afterPairing 1
+			dict lappend p result_history [dict create result [dg $p result *] category [dg $p category {}] withdrawn [clock seconds]]
+			set opponent [expr {[dict get $p white] eq $id ? [dict get $p black] : [dict get $p white]}]
+			set other [FindPlayer $state $opponent]
+			set otherWithdrawn [dg [Player $state $other] withdrawn 0]
+			dict set p played 0
+			dict set p status complete
+			dict set p termination abandoned
+			dict set p rating 0
+			dict set p count_standings 1
+			if {$otherWithdrawn || [dg $domain policy forfeit-win] eq "double-forfeit"} {
+				dict set p category double-forfeit
+				dict set p result 0-0
+			} else {
+				dict set p category forfeit
+				dict set p result [expr {[dict get $p white] eq $id ? "0-1" : "1-0"}]
+			}
+			lset pairings $i $p
+			incr changed
+		}
+		set players [dg $state players {}]
+		for {set i 0} {$i < [llength $players]} {incr i} {
+			set p [lindex $players $i]
+			if {[dict get $p id] eq $id} { dict set p withdrawn $round; lset players $i $p }
+		}
+		set timing [expr {$afterPairing ? "withdrawal-after-pairing" : "withdrawal-before-pairing"}]
+		dict set state players $players
+		dict set state pairings $pairings
+		dict lappend state withdrawals [dict create player $id round $round timing $timing policy [expr {$afterPairing ? "forfeits" : "before-pairing"}] changed $changed]
+		set state [PublishCorrection $state]
+		return [list $state [dict create withdrawn $id round $round timing $timing policy [expr {$afterPairing ? "forfeits" : "before-pairing"}] changed $changed] {} 1]
+	}
 	set total 0
 	set played 0
 	foreach p $pairings {
@@ -211,6 +263,20 @@ proc ::td::model::Withdraw {state domain} {
 proc ::td::model::IsBye {p} { return [expr {[dg $p category {}] eq "pairing-bye" || [dict get $p black] eq ""}] }
 proc ::td::model::Player {state id} { foreach p [dg $state players {}] { if {[dict get $p id] eq $id} { return $p } }; error "unknown player '$id'" }
 
+proc ::td::model::FreezeEligibility {state {now 0}} {
+	if {$now <= 0} { set now [clock seconds] }
+	set elig [dg $state prize_eligibility {}]
+	foreach p [dg $state players {}] {
+		set pid [dict get $p id]
+		if {![dict exists $elig $pid]} {
+			dict set elig $pid [dict create rating [dg $p rating {}] sex [dg $p sex {}] \
+				born [dg $p born {}] federation [dg $p federation {}] title [dg $p title {}] frozen_at $now]
+		}
+	}
+	dict set state prize_eligibility $elig
+	return $state
+}
+
 proc ::td::model::Apply {command info domain} {
 	set state [dict get $info state]
 	set target {}
@@ -220,37 +286,119 @@ proc ::td::model::Apply {command info domain} {
 			set name [string trim [dg $domain name Tournament]]
 			if {$name eq ""} { error "event name cannot be empty" }
 			set system [dg $domain system round-robin]
-			if {$system ni {round-robin double-round-robin}} { error "P1 supports round-robin or double-round-robin events" }
+			if {$system ni {round-robin double-round-robin swiss}} { error "unsupported tournament system" }
+			if {$system eq "swiss"} { ::td::swiss::Executable }
 			set players [NewPlayers $domain]
 			if {[llength $players] < 2 && [dg $domain start 0]} { error "a tournament needs at least two players before it starts" }
 			set double [Double $system]
 			set rounds [expr {[llength $players] < 2 ? 0 : [Rounds [llength $players] $double]}]
+			if {$system eq "swiss"} {
+				set rounds [dg $domain rounds 5]
+				if {![string is integer -strict $rounds] || $rounds < 1 || $rounds > 99} { error "Swiss rounds must be 1..99" }
+				foreach p $players { if {[dict get $p kind] eq "engine"} { error "P2 Swiss requires human players" } }
+			}
 			set tc [TimeControl [dg $domain time_control 3+2]]
 			set path [dict get $info path]
 			set id [format "evt-%08x" [zlib crc32 $path]]
 			set opening [::td::openings::Resolve $domain]
-			set state [dict create schema 1 id $id name $name system $system status setup players $players pairings {} \
+			set now [dg $info now [clock seconds]]
+			set startDate [string trim [dg $domain start_date {}]]
+			if {$startDate eq ""} { set startDate [clock format $now -format %Y-%m-%d -gmt 1] }
+			set endDate [string trim [dg $domain end_date {}]]
+			if {$endDate eq ""} { set endDate $startDate }
+			set deputies {}
+			foreach dep [dg $domain deputy_arbiters {}] {
+				if {[string trim $dep] ne ""} { lappend deputies [string trim $dep] }
+			}
+			if {![llength $deputies] && [string trim [dg $domain deputy_arbiter {}]] ne ""} {
+				lappend deputies [string trim [dg $domain deputy_arbiter {}]]
+			}
+			set state [dict create schema 1 id $id name $name site [string trim [dg $domain site {}]] \
+				federation [string trim [dg $domain federation {}]] start_date $startDate end_date $endDate \
+				chief_arbiter [string trim [dg $domain chief_arbiter {}]] deputy_arbiters $deputies \
+				tournament_type [string trim [dg $domain tournament_type {}]] \
+				time_control_desc [string trim [dg $domain time_control_desc {}]] \
+				round_dates [dg $domain round_dates {}] \
+				system $system status setup players $players pairings {} \
 				rounds $rounds current_round 1 revision 0 regulations [dict create laws 2023 C05 current C07 2026 C04.3 2026] \
 				time_control $tc opening $opening opening_name [dg $domain opening {}] overhead_ms [dg $domain overhead_ms 100] concurrency [dg $domain concurrency 2] \
 				threads 1 max_plies [dg $domain max_plies 0] tablebase [dg $domain tablebase 1] online 0 \
 				colour_lot [dg $domain colour_lot white] tiebreaks {directEncounter sonnebornBerger koya gamesWon gamesWonWithBlack progressive} \
-				unrated_policy [dg $domain unrated_policy drop] publication_revision 0 published 0 publications {} withdrawals {} \
-				games {} created [clock seconds] updated [clock seconds]]
+				unrated_policy [dg $domain unrated_policy drop] publication_revision 0 published 0 publications {} withdrawals {} rulings {} \
+				games {} created $now updated $now]
+			if {$system eq "swiss"} { dict set state tiebreaks {buchholzCut1 buchholz sonnebornBerger wins} }
+			set state [FreezeEligibility $state $now]
 			set start [dg $domain start 0]
 			if {$start} {
-				dict set state pairings [::td::pair::RoundRobin $players $double [dict get $state colour_lot] $opening [dg $domain opening {}]]
+				if {$system eq "swiss"} {
+					dict set state pairings [::td::swiss::Pair $state 1]
+				} else {
+					dict set state pairings [::td::pair::RoundRobin $players $double [dict get $state colour_lot] $opening [dg $domain opening {}]]
+				}
 				dict set state status active
 			}
 			return [list $state [dict create created 1 start $start] $target $history]
 		}
+		import_trf {
+			set filename [dg $domain filename {}]
+			set content [dg $domain trf_text {}]
+			if {$content eq ""} {
+				if {$filename eq "" || ![file exists $filename]} { error "supply an existing TRF filename or trf_text" }
+				set f [open $filename r]
+				fconfigure $f -encoding utf-8
+				set content [read $f]
+				close $f
+			}
+			set parsed [::td::trf::Read $content [dg $domain through 0]]
+			set system [dg $domain system swiss]
+			set tcArg [string trim [dg $domain time_control {}]]
+			set encTc [dg $parsed encoded_time_control {}]
+			set tcDesc [dg $parsed time_control_desc {}]
+			if {$tcArg ne ""} {
+				set tc [TimeControl $tcArg]
+				set encTc {}
+				set tcDesc {}
+			} elseif {[regexp {^([0-9]+)\+([0-9]+)$} $encTc -> bSec iSec]} {
+				set bMin [expr {$bSec % 60 == 0 ? $bSec / 60 : [format %g [expr {$bSec / 60.0}]]}]
+				set tc [dict create text "${bMin}+${iSec}" base_ms [expr {$bSec * 1000}] increment_ms [expr {$iSec * 1000}]]
+			} else {
+				set tc [TimeControl 90+30]
+			}
+			set path [dict get $info path]
+			set id [format "evt-%08x" [zlib crc32 $path]]
+			set tbList {buchholzCut1 buchholz sonnebornBerger wins}
+			set parsedTb [::td::trf::ParseTrfTiebreaks [expr {[dg $parsed trf_tiebreaks {}] ne "" ? [dict get $parsed trf_tiebreaks] : [dg $parsed trf_tiebreaks_202 {}]}]]
+			if {[llength $parsedTb]} { set tbList $parsedTb }
+			set state [dict create schema 1 id $id name [dict get $parsed name] site [dict get $parsed site] \
+				federation [dict get $parsed federation] start_date [dict get $parsed start_date] end_date [dict get $parsed end_date] \
+				teams_count [dg $parsed teams_count {}] tournament_type [dg $parsed tournament_type {}] \
+				chief_arbiter [dict get $parsed chief_arbiter] deputy_arbiters [dg $parsed deputy_arbiters {}] \
+				time_control_desc $tcDesc encoded_time_control $encTc \
+				trf_tiebreaks [dg $parsed trf_tiebreaks {}] trf_tiebreaks_202 [dg $parsed trf_tiebreaks_202 {}] \
+				round_dates [dg $parsed round_dates {}] \
+				system $system status active \
+				players [dict get $parsed players] pairings [dict get $parsed pairings] \
+				rounds [dict get $parsed rounds] current_round [dict get $parsed current_round] revision 0 \
+				regulations [dict create laws 2023 C05 current C07 2026 C04.3 2026] time_control $tc opening {} opening_name {} \
+				overhead_ms 100 concurrency 2 threads 1 max_plies 0 tablebase 1 online 0 \
+				colour_lot [dict get $parsed colour_lot] tiebreaks $tbList \
+				unrated_policy drop publication_revision 0 published 0 publications {} withdrawals {} rulings {} \
+				games {} created [dg $info now [clock seconds]] updated [dg $info now [clock seconds]]]
+			set state [FreezeEligibility $state [dg $info now [clock seconds]]]
+			return [list $state [dict create imported [llength [dict get $parsed players]] rounds [dict get $parsed rounds] trf_format [dict get $parsed trf_format]] $target $history]
+		}
 		register {
-			if {[dg $state status setup] ne "setup" || [llength [dg $state pairings {}]]} { error "registration is closed after pairing starts" }
-			set players [MakePlayers [dg $domain players {}] [dg $domain kind human] [expr {[llength [dg $state players {}]]+1}]]
-			dict lappend state players {*}$players
-			dict set state rounds [Rounds [llength [dict get $state players]] [Double [dict get $state system]]]
-			return [list $state [dict create registered [llength $players]] $target $history]
+			lassign [::td::registration::Add $state $domain 0 $info] state res target history
+			set state [FreezeEligibility $state [dg $info now [clock seconds]]]
+			return [list $state $res $target $history]
+		}
+        register_fide {
+			lassign [::td::registration::Add $state $domain 1 $info] state res target history
+			set state [FreezeEligibility $state [dg $info now [clock seconds]]]
+			return [list $state $res $target $history]
 		}
 		pair_round {
+			if {[dict get $state system] eq "swiss"} { return [::td::swiss::PairRound $state $domain] }
 			set wanted [dg $domain round 0]
 			if {[llength [Pairings $state $wanted]]} { return [list $state [dict create paired 0] $target $history] }
 			set opening [dg $state opening {}]
@@ -260,6 +408,7 @@ proc ::td::model::Apply {command info domain} {
 			return [list $state [dict create paired [llength $all]] $target $history]
 		}
 		start {
+			if {[dict get $state system] eq "swiss"} { return [::td::swiss::PairRound $state $domain] }
 			if {[dg $state status setup] eq "active"} { return [list $state [dict create start 0] $target $history] }
 			if {![llength [dg $state pairings {}]]} {
 				dict set state pairings [::td::pair::RoundRobin [dict get $state players] [Double [dict get $state system]] [dg $state colour_lot white] [dg $state opening {}] [dg $state opening_name {}]]
@@ -332,29 +481,100 @@ proc ::td::model::Apply {command info domain} {
 			set pairings [dg $state pairings {}]
 			set p [lindex $pairings $index]
 			if {[dg $p status pending] ne "pending"} { error "only a pending pairing can be overridden" }
+			set round [dict get $p round]
 			set white [FindPlayer $state [dg $domain white {}]]
 			set black [FindPlayer $state [dg $domain black {}]]
 			if {$white eq $black} { error "a player cannot play itself" }
 			set reason [string trim [dg $domain reason {}]]
 			if {$reason eq ""} { error "a pairing override requires a reason" }
-			dict set p override [dict create white [dict get $p white] black [dict get $p black] reason $reason created [clock seconds]]
+			set prevWhite [dict get $p white]
+			set prevBlack [dict get $p black]
 			dict set p white $white
 			dict set p black $black
+			# If a swapped player was on another pending board in this round, swap the displaced player across so the round stays a valid partition.
+			for {set j 0} {$j < [llength $pairings]} {incr j} {
+				if {$j == $index} { continue }
+				set q [lindex $pairings $j]
+				if {[dict get $q round] != $round || [dg $q status pending] ne "pending" || [IsBye $q]} { continue }
+				set qChanged 0
+				if {[dict get $q white] eq $white && $prevWhite ni [list $white $black]} { dict set q white $prevWhite; set qChanged 1 }
+				if {[dict get $q black] eq $white && $prevWhite ni [list $white $black]} { dict set q black $prevWhite; set qChanged 1 }
+				if {[dict get $q white] eq $black && $prevBlack ni [list $white $black]} { dict set q white $prevBlack; set qChanged 1 }
+				if {[dict get $q black] eq $black && $prevBlack ni [list $white $black]} { dict set q black $prevBlack; set qChanged 1 }
+				if {$qChanged} {
+					set qOrig [lindex [dict get $info state pairings] $j]
+					dict set q override [dict create white [dict get $qOrig white] black [dict get $qOrig black] reason $reason created [clock seconds]]
+					lset pairings $j $q
+				}
+			}
 			lset pairings $index $p
 			dict set state pairings $pairings
-			return [list $state [dict create overridden [dict get $p id]] $target $history]
+			set check [::td::swiss::CheckRound $state $round]
+			set duplicates [lmap v [dict get $check violations] {expr {[dict get $v code] eq "C4-DUPLICATE" ? $v : [continue]}}]
+			if {[llength $duplicates]} {
+				error "structural round duplicate (C4-DUPLICATE: [join [lmap v $duplicates {dict get $v detail}] {; }]) cannot be committed even with a TD ruling"
+			}
+			set ruling [string trim [dg $domain ruling {}]]
+			set absolute [lmap v [dict get $check violations] {expr {[string match C\[1234\]-* [dict get $v code]] || [dict get $v code] eq "C04-CHECKER-UNAVAILABLE" ? $v : [continue]}}]
+			if {[llength $absolute] && $ruling eq ""} {
+				error "prohibited pairing ([join [lmap v $absolute {dict get $v code}] {, }]) requires an explicit TD ruling"
+			}
+			dict set p override [dict create white $prevWhite black $prevBlack reason $reason ruling $ruling compliant [dict get $check compliant] violations [dict get $check violations] created [clock seconds]]
+			lset pairings $index $p
+			dict set state pairings $pairings
+			if {$ruling ne ""} {
+				dict lappend state rulings [dict create kind override-ruling pairing [dict get $p id] round $round reason $reason ruling $ruling compliant [dict get $check compliant] violations [dict get $check violations] created [clock seconds]]
+			}
+			return [list $state [dict create overridden [dict get $p id] compliant [dict get $check compliant] violations [dict get $check violations] bbp_report [dict get $check bbp_report]] $target $history]
 		}
 		withdraw { return [Withdraw $state $domain] }
+		ruling { return [::td::arbiter::Record $state $domain] }
+		prizes {
+			set now [dg $info now [clock seconds]]
+			set state [FreezeEligibility $state $now]
+			set rows [::td::score::Compute $state]
+			set payouts [::td::score::ComputePrizes $state $rows $domain]
+			set paidPlayer [dg $domain pay_player {}]
+			if {$paidPlayer ne ""} {
+				set pid [FindPlayer $state $paidPlayer]
+				set updated {}
+				foreach entry $payouts {
+					if {[dict get $entry player] eq $pid} {
+						dict set entry paid 1
+						dict set entry paid_at $now
+						dict set entry receipt [dg $domain receipt "rcpt-$pid-$now"]
+					}
+					lappend updated $entry
+				}
+				set payouts $updated
+			}
+			dict set state prizes [dict create system [dg $domain system hort] rounding [dg $domain rounding cent] \
+				one_prize_per_player [dg $domain one_prize_per_player 1] categories [dg $domain categories {}] \
+				eligibility_snapshots [dict get $state prize_eligibility] payouts $payouts updated $now]
+			return [list $state [dict create payouts $payouts eligibility_snapshots [dict get $state prize_eligibility]] $target $history]
+		}
 		bye {
 			set id [FindPlayer $state [dg $domain player {}]]
 			set category [dg $domain category requested-bye]
-			if {$category ni {requested-bye full-point-bye pairing-bye}} { error "invalid bye category" }
-			set points [dg $domain points [expr {$category eq "requested-bye" ? 1 : 2}]]
-			set round [dg $domain round [dg $state current_round 1]]
+			if {$category ni {requested-bye zero-point-bye full-point-bye pairing-bye}} { error "invalid bye category" }
+			set defaultPoints [dict get {requested-bye 1 zero-point-bye 0 full-point-bye 2 pairing-bye 2} $category]
+			set supplied [dg $domain points -1]
+			set points [expr {$supplied < 0 ? $defaultPoints : $supplied}]
+			if {$points ni {0 1 2}} { error "bye points must be 0, 1 or 2 half-points" }
+			if {$category eq "zero-point-bye"} { set points 0 }
+			set round [dg $domain round 0]
+			if {$round <= 0} { set round [dg $state current_round 1] }
+			if {$round < 1 || ([dg $state rounds 0] > 0 && $round > [dg $state rounds 0])} { error "bye round out of range" }
+			foreach q [Pairings $state $round] {
+				if {[dict get $q white] eq $id || [dict get $q black] eq $id} {
+					error "player already has a pairing or bye in round $round"
+				}
+			}
 			set p [dict create id "bye-$id-r$round-[llength [dg $state pairings {}]]" round $round board 0 white $id black {} result * status complete \
 				category $category played 0 count_standings 1 rating 0 points $points attempt 0 game_id {} pgn {}]
 			dict lappend state pairings $p
-			return [list $state [dict create bye $id round $round] $target $history]
+			set state [PublishCorrection $state]
+			return [list $state [dict create bye $id round $round category $category points $points] {} 1]
 		}
 		publish {
 			set publication [expr {[dg $state publication_revision 0]+1}]
@@ -385,7 +605,7 @@ proc ::td::model::Apply {command info domain} {
 			if {![llength $stack]} { error "nothing to $command" }
 			set target [lindex $stack end]
 			set record [lindex [dict get $info records] [expr {$target-1}]]
-			if {[dict get $record command] eq "create"} { error "cannot undo event creation" }
+			if {[dict get $record command] in {create import_trf}} { error "cannot undo event creation" }
 			if {[HasRunning $state]} { error "stop active games before undo or redo" }
 			set state [dict get $record [expr {$command eq "undo" ? "before" : "after"}]]
 			set history 0

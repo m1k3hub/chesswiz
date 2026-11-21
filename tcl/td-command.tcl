@@ -53,8 +53,8 @@ proc ::td::command::Execute {command arguments} {
 	}
 	set before [dict get $info state]
 	set revision [llength [dict get $info records]]
-	if {$command ne "create" && $before eq ""} { error "no tournament exists at $path" }
-	if {$command eq "create" && $before ne ""} { error "a tournament already exists at $path" }
+	if {$command ni {create import_trf} && $before eq ""} { error "no tournament exists at $path" }
+	if {$command in {create import_trf} && $before ne ""} { error "a tournament already exists at $path" }
 	if {$expected != $revision} {
 		return -code error -errorcode [list CHESSWIZ TD STALE $expected $revision] \
 			"stale tournament revision: expected $expected, current $revision"

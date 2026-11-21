@@ -3445,5 +3445,12 @@
 ::td::actions::mc::Audit	"Tournament audit"
 ::td::actions::mc::Export	"Export tournament"
 ::td::actions::mc::Workspace	"Tournament Director workspace"
+::td::actions::mc::LookupPlayer	"Find FIDE player"
+::td::actions::mc::RegisterFide	"Register FIDE player"
+::td::actions::mc::CheckPairings	"Check pairings"
+::td::actions::mc::Ruling	"Record arbiter ruling"
+::td::actions::mc::Prizes	"Compute and record prizes"
+::td::actions::mc::Print	"Print tournament sheet"
+::td::actions::mc::ImportTrf	"Import tournament report"
 
 # vi:set ts=3 sw=3:

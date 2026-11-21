@@ -3781,6 +3781,13 @@
 ::td::actions::mc::Audit	"Turnierprotokoll"
 ::td::actions::mc::Export	"Turnier exportieren"
 ::td::actions::mc::Workspace	"Turnierleiter-Arbeitsbereich"
+::td::actions::mc::LookupPlayer	"FIDE-Spieler suchen"
+::td::actions::mc::RegisterFide	"FIDE-Spieler anmelden"
+::td::actions::mc::CheckPairings	"Paarungen prüfen"
+::td::actions::mc::Ruling	"Schiedsrichterentscheidung erfassen"
+::td::actions::mc::Prizes	"Preise berechnen und erfassen"
+::td::actions::mc::Print	"Turnierblatt drucken"
+::td::actions::mc::ImportTrf	"Turnierbericht importieren"
 # vi:set ts=3 sw=3:
 
 # Training > Online (2026-11-12)

@@ -27,7 +27,7 @@ proc ::td::score::PlayerName {state id} { if {$id eq ""} { return "BYE" }; retur
 proc ::td::score::IsBye {p} { return [expr {[dg $p category {}] eq "pairing-bye" || [dict get $p black] eq ""}] }
 proc ::td::score::Complete {p} { return [expr {[dg $p status pending] eq "complete" || [dg $p result *] ni {* {}}}] }
 proc ::td::score::Annulled {p} { return [expr {[dg $p category {}] eq "annulled" || ![dg $p count_standings 1]}] }
-proc ::td::score::ForfeitLoss {p player} { return [expr {[dg $p category {}] in {forfeit forfeit-loss withdrawal withdrawal-annulled} && ![dg $p played 1] && [Points $p $player] eq "0 1"}] }
+proc ::td::score::ForfeitLoss {p player} { return [expr {[dg $p category {}] in {forfeit forfeit-loss double-forfeit withdrawal withdrawal-annulled} && ![dg $p played 1] && [Points $p $player] eq "0 1"}] }
 
 proc ::td::score::Points {p player} {
 	if {[dg $p category {}] eq "annulled" || ![dg $p count_standings 1]} { return {0 1} }
@@ -65,13 +65,15 @@ proc ::td::score::BaseRows {state} {
 			set played [expr {[dg $p played 1] && ![IsBye $p] && [dg $p category {}] ni {forfeit forfeit-loss withdrawal withdrawal-annulled requested-bye full-point-bye pairing-bye double-forfeit}}]
 			if {$played} {
 				dict incr row games
-				if {$points eq "2 1"} { dict incr row won }
+				if {$points eq "2 1"} {
+					dict incr row won
+					dict incr row wins
+				}
 				if {$side eq "black"} {
 					dict incr row bpg
 					if {$points eq "2 1"} { dict incr row bwg }
 				}
 			}
-			if {$points eq "2 1"} { dict incr row wins }
 			set entry [dict create pairing [dict get $p id] round [dict get $p round] result [dg $p result *] points $points played $played category [dg $p category played]]
 			dict lappend row score_breakdown $entry
 			dict set rows $id $row
@@ -99,21 +101,49 @@ proc ::td::score::BaseRows {state} {
 
 proc ::td::score::AdjustedScores {state rows} {
 	set adjusted [dict create]
+	set maxCompleteRound 0
+	foreach q [dg $state pairings {}] {
+		if {[Complete $q] && ([dict get $q black] ne "" || [dg $q category {}] eq "pairing-bye")} {
+			set maxCompleteRound [expr {max($maxCompleteRound, [dict get $q round])}]
+		}
+	}
 	dict for {id row} $rows {
 		set score [dict get $row score2]
+		set pairedRounds [dict create]
 		foreach p [dg $state pairings {}] {
+			if {[dict get $p white] eq $id || [dict get $p black] eq $id} {
+				dict set pairedRounds [dict get $p round] 1
+			}
 			if {![Complete $p] || ([dict get $p white] ne $id && [dict get $p black] ne $id)} { continue }
 			set category [dg $p category {}]
-			if {$category ni {requested-bye trailing-bye}} { continue }
+			if {$category ni {requested-bye zero-point-bye trailing-bye}} { continue }
 			# C.07 16.2.5: a requested bye followed only by VURs, or in the
 			# last round, is a draw for opponents' tiebreak calculations.
 			set laterNonVur 0
 			foreach q [dg $state pairings {}] {
 				if {[dict get $q round] <= [dict get $p round] || ([dict get $q white] ne $id && [dict get $q black] ne $id)} { continue }
-				if {[dg $q category {}] ni {requested-bye forfeit forfeit-loss withdrawal trailing-bye}} { set laterNonVur 1 }
+				if {[dg $q category {}] ni {requested-bye zero-point-bye forfeit forfeit-loss double-forfeit withdrawal trailing-bye}} { set laterNonVur 1 }
 			}
 			if {[dict get $p round] == [dg $state rounds 0] || !$laterNonVur} {
 				set score [Add $score [Sub {1 1} [Points $p $id]]]
+			}
+		}
+		if {[dg $state system round-robin] eq "swiss"} {
+			set player [::td::model::Player $state $id]
+			set wRound [dg $player withdrawn 0]
+			if {$wRound > 0} {
+				# C.07 16.1.1: any unpaired round after a participant withdraws is a zero-point-bye.
+				for {set r $wRound} {$r <= $maxCompleteRound} {incr r} {
+					if {[dict exists $pairedRounds $r]} { continue }
+					set laterNonVur 0
+					foreach q [dg $state pairings {}] {
+						if {[dict get $q round] <= $r || ([dict get $q white] ne $id && [dict get $q black] ne $id)} { continue }
+						if {[dg $q category {}] ni {requested-bye zero-point-bye forfeit forfeit-loss double-forfeit withdrawal trailing-bye}} { set laterNonVur 1 }
+					}
+					if {$r == [dg $state rounds 0] || !$laterNonVur} {
+						set score [Add $score {1 1}]
+					}
+				}
 			}
 		}
 		dict set adjusted $id $score
@@ -157,7 +187,7 @@ proc ::td::score::Contributions {state rows} {
 				set opponentName "dummy for round [dict get $p round]"
 				set dummy 1
 			}
-			set vur [expr {$category in {requested-bye trailing-bye} || [ForfeitLoss $p $id]}]
+			set vur [expr {$category in {requested-bye zero-point-bye trailing-bye} || [ForfeitLoss $p $id]}]
 			set entry [dict create pairing [dict get $p id] round [dict get $p round] opponent $opponent opponent_name $opponentName \
 				points $points opponent_score $score category $category played $played dummy $dummy vur $vur]
 			dict lappend out $id $entry
@@ -176,10 +206,20 @@ proc ::td::score::CutLeast {entries field {vurException 0}} {
 		incr i
 	}
 	if {$vurException} {
+		set vurIndex -1
+		set vurChosen {}
 		set i 0
 		foreach entry $entries {
-			if {[dict get $entry vur] && [Cmp [dict get $entry $field] [dict get $chosen $field]] < 0} { set chosen $entry; set index $i }
+			if {[dict get $entry vur]} {
+				if {$vurIndex < 0 || [Cmp [dict get $entry $field] [dict get $vurChosen $field]] < 0} {
+					set vurChosen $entry
+					set vurIndex $i
+				}
+			}
 			incr i
+		}
+		if {$vurIndex >= 0} {
+			set index $vurIndex
 		}
 	}
 	return [lreplace $entries $index $index]
@@ -416,6 +456,90 @@ proc ::td::score::StandingsText {rows} {
 	return [join $lines \n]
 }
 
+proc ::td::score::PairingsText {state {round 0}} {
+	if {!$round} { set round [dg $state current_round 1] }
+	set lines [list "Board White Black Result Status Category"]
+	foreach p [::td::model::Pairings $state $round] {
+		set w [PlayerName $state [dict get $p white]]
+		set b [expr {[dict get $p black] eq "" ? "BYE" : [PlayerName $state [dict get $p black]]}]
+		lappend lines [join [list [dict get $p board] $w $b [dg $p result *] [dg $p status pending] [dg $p category {}]] " | "]
+	}
+	return [join $lines \n]
+}
+
+proc ::td::score::PairingsHTML {state {round 0}} {
+	if {!$round} { set round [dg $state current_round 1] }
+	append html "<html><head><meta charset=\"utf-8\"><style>body{font-family:sans-serif}table{border-collapse:collapse}td,th{border:1px solid #999;padding:.3em;text-align:left}</style></head><body>"
+	append html "<h1>[Escape [dg $state name Tournament]] — Round $round Pairings</h1><table><tr><th>Board</th><th>White</th><th>Black</th><th>Result</th><th>Status</th><th>Category</th></tr>"
+	foreach p [::td::model::Pairings $state $round] {
+		set w [PlayerName $state [dict get $p white]]
+		set b [expr {[dict get $p black] eq "" ? "BYE" : [PlayerName $state [dict get $p black]]}]
+		append html "<tr><td>[dict get $p board]</td><td>[Escape $w]</td><td>[Escape $b]</td><td>[Escape [dg $p result *]]</td><td>[Escape [dg $p status pending]]</td><td>[Escape [dg $p category {}]]</td></tr>"
+	}
+	append html "</table></body></html>"
+	return $html
+}
+
+proc ::td::score::StandingsHTML {state rows} {
+	set rules [dg $state tiebreaks {directEncounter sonnebornBerger koya gamesWon gamesWonWithBlack progressive}]
+	append html "<html><head><meta charset=\"utf-8\"><style>body{font-family:sans-serif}table{border-collapse:collapse}td,th{border:1px solid #999;padding:.3em;text-align:center}td.player,th.player{text-align:left}.score{font-weight:bold}</style></head><body>"
+	append html "<h1>[Escape [dg $state name Tournament]] — Standings</h1><table><tr><th>Rank</th><th class=\"player\">Player</th><th>Score</th>"
+	foreach rule $rules { append html "<th>[Escape $rule]</th>" }
+	append html "</tr>"
+	foreach row $rows {
+		append html "<tr><td>[dict get $row rank]</td><td class=\"player\">[Escape [dict get $row name]]</td><td class=\"score\">[dict get $row score text]</td>"
+		foreach rule $rules {
+			set val [dg [dg $row tiebreaks {}] $rule {}]
+			append html "<td>[Escape [expr {$val eq "" ? "" : [dict get $val text]}]]</td>"
+		}
+		append html "</tr>"
+	}
+	append html "</table></body></html>"
+	return $html
+}
+
+proc ::td::score::SimplePdf {title bodyText} {
+	set bodyLines [split $bodyText \n]
+	set perPage 55
+	set totalBody [llength $bodyLines]
+	set pageCount [expr {$totalBody == 0 ? 1 : ($totalBody + $perPage - 1) / $perPage}]
+	set obj1 "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n"
+	set obj3 "3 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>\nendobj\n"
+	set kids {}
+	set pageObjs {}
+	for {set p 0} {$p < $pageCount} {incr p} {
+		set pageObjId [expr {4 + 2 * $p}]
+		set contentObjId [expr {5 + 2 * $p}]
+		lappend kids "$pageObjId 0 R"
+		set start [expr {$p * $perPage}]
+		set chunk [lrange $bodyLines $start [expr {$start + $perPage - 1}]]
+		set hdr [expr {$pageCount > 1 ? [format "%s (Page %d of %d)" $title [expr {$p + 1}] $pageCount] : $title}]
+		set pageLines [concat [list $hdr ""] $chunk]
+		set stream "BT\n/F1 10 Tf\n36 756 Td\n12 TL\n"
+		foreach line $pageLines {
+			set safe [string map {\\ \\\\ ( \\( ) \\)} [regsub -all {[^\x20-\x7e]} $line ?]]
+			append stream "($safe) Tj T*\n"
+		}
+		append stream "ET\n"
+		lappend pageObjs "$pageObjId 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox \[0 0 612 792\] /Resources << /Font << /F1 3 0 R >> >> /Contents $contentObjId 0 R >>\nendobj\n"
+		lappend pageObjs "$contentObjId 0 obj\n<< /Length [string length $stream] >>\nstream\n${stream}endstream\nendobj\n"
+	}
+	set obj2 "2 0 obj\n<< /Type /Pages /Kids \[[join $kids { }]\] /Count $pageCount >>\nendobj\n"
+	set allObjs [concat [list $obj1 $obj2 $obj3] $pageObjs]
+	set pdf "%PDF-1.4\n"
+	set offsets {}
+	foreach obj $allObjs {
+		lappend offsets [string length $pdf]
+		append pdf $obj
+	}
+	set size [expr {[llength $allObjs] + 1}]
+	set xrefPos [string length $pdf]
+	append pdf "xref\n0 $size\n0000000000 65535 f \n"
+	foreach off $offsets { append pdf [format "%010d 00000 n \n" $off] }
+	append pdf "trailer\n<< /Size $size /Root 1 0 R >>\nstartxref\n$xrefPos\n%%EOF\n"
+	return $pdf
+}
+
 proc ::td::score::Crosstable {state rows} {
 	set ids [lmap row $rows {dict get $row id}]
 	set matrix [dict create]
@@ -468,6 +592,206 @@ proc ::td::score::CrosstableHTML {state rows} {
 		append html "<h3>[Escape [dict get $row name]]</h3><pre>[Escape [StandingsText [list $row]]]</pre>"
 	}
 	return $html
+}
+
+proc ::td::score::CategoryEligible {snap cat} {
+	set rating [dg $snap rating {}]
+	set hasRating [expr {[string is integer -strict $rating] && $rating > 0}]
+	if {[dg $cat unrated_only 0]} {
+		if {$hasRating} { return 0 }
+	}
+	if {[dg $cat max_rating {}] ne ""} {
+		set maxR [dict get $cat max_rating]
+		if {![string is integer -strict $maxR]} { error "category max_rating must be an integer" }
+		if {!$hasRating} {
+			if {![dg $cat include_unrated 0]} { return 0 }
+		} elseif {$rating > $maxR} {
+			return 0
+		}
+	}
+	if {[dg $cat min_rating {}] ne ""} {
+		set minR [dict get $cat min_rating]
+		if {![string is integer -strict $minR]} { error "category min_rating must be an integer" }
+		if {!$hasRating || $rating < $minR} { return 0 }
+	}
+	if {[dg $cat sex {}] ne ""} {
+		if {[string tolower [dg $snap sex {}]] ne [string tolower [dict get $cat sex]]} { return 0 }
+	}
+	if {[dg $cat min_born {}] ne ""} {
+		set born [dg $snap born {}]
+		if {![string is integer -strict $born] || $born < [dict get $cat min_born]} { return 0 }
+	}
+	if {[dg $cat max_born {}] ne ""} {
+		set born [dg $snap born {}]
+		if {![string is integer -strict $born] || $born > [dict get $cat max_born]} { return 0 }
+	}
+	if {[llength [dg $cat federation {}]]} {
+		set feds [lmap f [dict get $cat federation] {string toupper $f}]
+		if {[string toupper [dg $snap federation {}]] ni $feds} { return 0 }
+	}
+	if {[llength [dg $cat title {}]]} {
+		set titles [lmap t [dict get $cat title] {string toupper $t}]
+		if {[string toupper [dg $snap title {}]] ni $titles} { return 0 }
+	}
+	return 1
+}
+
+proc ::td::score::ComputePoolPrizes {poolName prizes poolRows system rounding} {
+	if {![llength $prizes] || ![llength $poolRows]} { return {} }
+	set groups {}
+	foreach row $poolRows {
+		set s [list [dict get $row score n] [dict get $row score d]]
+		set found 0
+		for {set i 0} {$i < [llength $groups]} {incr i} {
+			if {[Cmp $s [lindex $groups $i 0]] == 0} {
+				set g [lindex $groups $i 1]
+				lappend g $row
+				lset groups $i 1 $g
+				set found 1
+				break
+			}
+		}
+		if {!$found} { lappend groups [list $s [list $row]] }
+	}
+	set payouts {}
+	set pIdx 0
+	set poolRank 0
+	foreach group $groups {
+		if {$pIdx >= [llength $prizes]} { break }
+		set gRows [lindex $group 1]
+		set k [llength $gRows]
+		set slice [lrange $prizes $pIdx [expr {$pIdx + $k - 1}]]
+		while {[llength $slice] < $k} { lappend slice 0 }
+		incr pIdx $k
+		set pool {0 1}
+		foreach amt $slice { set pool [Add $pool [Rat [expr {int(round(double($amt)*100))}] 100]] }
+		for {set j 0} {$j < $k} {incr j} {
+			incr poolRank
+			set row [lindex $gRows $j]
+			set pid [dict get $row id]
+			set rankPrize [Rat [expr {int(round(double([lindex $slice $j])*100))}] 100]
+			if {$k == 1 || $system eq "indivisible"} {
+				set share $rankPrize
+			} elseif {$system eq "split"} {
+				set share [Div $pool [Rat $k 1]]
+			} else {
+				# Hort system: 50% by tiebreak rank + 50% shared equally among tied group
+				set halfRank [Mul $rankPrize {1 2}]
+				set halfPool [Div [Mul $pool {1 2}] [Rat $k 1]]
+				set share [Add $halfRank $halfPool]
+			}
+			if {[Cmp $share {0 1}] <= 0} { continue }
+			lassign $share sn sd
+			if {$rounding eq "integer"} {
+				set amountText [format "%d" [expr {int(round(double($sn)/$sd))}]]
+			} elseif {$rounding eq "cent"} {
+				set amountText [format "%.2f" [expr {round(double($sn)*100.0/$sd)/100.0}]]
+			} else {
+				set amountText [Text $share]
+			}
+			lappend payouts [dict create category $poolName player $pid name [dict get $row name] \
+				rank [dict get $row rank] pool_rank $poolRank score [dict get $row score text] \
+				tied_count $k system $system rounding $rounding exact_n $sn exact_d $sd amount $amountText paid 0]
+		}
+	}
+	return $payouts
+}
+
+proc ::td::score::ComputePrizes {state rows domain} {
+	set prizes [dg $domain prizes {1000 500 250}]
+	set categories [dg $domain categories {}]
+	set system [dg $domain system hort]
+	set rounding [dg $domain rounding cent]
+	set onePerPlayer [expr {[dg $domain one_prize_per_player 1] ? 1 : 0}]
+	if {$system ni {hort split indivisible}} { error "prize system must be hort, split or indivisible" }
+	if {$rounding ni {exact cent integer}} { error "prize rounding must be exact, cent or integer" }
+
+	set eligMap [dg $state prize_eligibility {}]
+	set nonWithdrawn {}
+	foreach row $rows {
+		set pid [dict get $row id]
+		set p [::td::model::Player $state $pid]
+		if {[dg $p withdrawn 0]} { continue }
+		if {![dict exists $eligMap $pid]} {
+			dict set eligMap $pid [dict create rating [dg $p rating {}] sex [dg $p sex {}] \
+				born [dg $p born {}] federation [dg $p federation {}] title [dg $p title {}]]
+		}
+		lappend nonWithdrawn $row
+	}
+
+	set pools {}
+	set poolIdx 0
+	if {[llength $prizes]} {
+		lappend pools [dict create idx [incr poolIdx] name Open prizes $prizes system $system eligible $nonWithdrawn]
+	}
+	foreach cat $categories {
+		set catName [string trim [dg $cat name {}]]
+		if {$catName eq ""} { error "prize category requires a non-empty name" }
+		set catSys [dg $cat system $system]
+		if {$catSys ni {hort split indivisible}} { error "category '$catName' system must be hort, split or indivisible" }
+		set catRows {}
+		foreach row $nonWithdrawn {
+			set pid [dict get $row id]
+			if {[CategoryEligible [dict get $eligMap $pid] $cat]} { lappend catRows $row }
+		}
+		lappend pools [dict create idx [incr poolIdx] name $catName prizes [dg $cat prizes {}] system $catSys eligible $catRows]
+	}
+
+	if {!$onePerPlayer} {
+		set out {}
+		foreach pool $pools {
+			lappend out {*}[ComputePoolPrizes [dict get $pool name] [dict get $pool prizes] [dict get $pool eligible] [dict get $pool system] $rounding]
+		}
+		return $out
+	}
+
+	set excluded [dict create]
+	set maxIter [expr {[llength $nonWithdrawn] * [llength $pools] + 2}]
+	set tentative {}
+	for {set iter 0} {$iter < $maxIter} {incr iter} {
+		set tentative {}
+		set winsByPlayer [dict create]
+		foreach pool $pools {
+			set pIdx [dict get $pool idx]
+			set avail {}
+			foreach row [dict get $pool eligible] {
+				if {![dict exists $excluded "$pIdx:[dict get $row id]"]} { lappend avail $row }
+			}
+			set poolOut [ComputePoolPrizes [dict get $pool name] [dict get $pool prizes] $avail [dict get $pool system] $rounding]
+			foreach entry $poolOut {
+				dict lappend winsByPlayer [dict get $entry player] [list $pIdx $entry]
+				lappend tentative $entry
+			}
+		}
+		set conflictPid {}
+		foreach row $nonWithdrawn {
+			set pid [dict get $row id]
+			if {[dict exists $winsByPlayer $pid] && [llength [dict get $winsByPlayer $pid]] > 1} {
+				set conflictPid $pid
+				break
+			}
+		}
+		if {$conflictPid eq ""} { break }
+		set wins [dict get $winsByPlayer $conflictPid]
+		set bestPool [lindex $wins 0 0]
+		set bestEntry [lindex $wins 0 1]
+		set bestRat [list [dict get $bestEntry exact_n] [dict get $bestEntry exact_d]]
+		foreach item [lrange $wins 1 end] {
+			lassign $item candPool candEntry
+			set candRat [list [dict get $candEntry exact_n] [dict get $candEntry exact_d]]
+			if {[Cmp $candRat $bestRat] > 0} {
+				set bestPool $candPool
+				set bestRat $candRat
+			}
+		}
+		foreach item $wins {
+			set candPool [lindex $item 0]
+			if {$candPool != $bestPool} {
+				dict set excluded "$candPool:$conflictPid" 1
+			}
+		}
+	}
+	return $tentative
 }
 
 # vi:set ts=3 sw=3:

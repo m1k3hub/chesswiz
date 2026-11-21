@@ -3741,6 +3741,13 @@
 ::td::actions::mc::Audit	"Audit del torneo"
 ::td::actions::mc::Export	"Esporta torneo"
 ::td::actions::mc::Workspace	"Area di lavoro del direttore del torneo"
+::td::actions::mc::LookupPlayer	"Trova giocatore FIDE"
+::td::actions::mc::RegisterFide	"Registra giocatore FIDE"
+::td::actions::mc::CheckPairings	"Controlla accoppiamenti"
+::td::actions::mc::Ruling	"Registra decisione arbitrale"
+::td::actions::mc::Prizes	"Calcola e registra premi"
+::td::actions::mc::Print	"Stampa foglio del torneo"
+::td::actions::mc::ImportTrf	"Importa rapporto del torneo"
 # vi:set ts=3 sw=3:
 
 # Training > Online (2026-11-12)
