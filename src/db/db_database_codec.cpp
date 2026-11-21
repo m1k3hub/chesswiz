@@ -759,6 +759,13 @@ DatabaseCodec::rename(mstl::string const& oldName, mstl::string const& newName)
 	M_REQUIRE(util::misc::file::suffix(oldName) == util::misc::file::suffix(newName));
 	M_REQUIRE(format() == format::Scidb || format() == format::Scid3 || format() == format::Scid4);
 
+	doRename(oldName, newName);
+}
+
+
+void
+DatabaseCodec::doRename(mstl::string const& oldName, mstl::string const& newName)
+{
 	mstl::string oldRoot(misc::file::rootname(oldName));
 	mstl::string newRoot(misc::file::rootname(newName));
 

@@ -2669,6 +2669,43 @@ Codec::findExactPosition(	GameInfo const& info,
 
 
 void
+Codec::doRename(mstl::string const& oldName, mstl::string const& newName)
+{
+	bool wasOpen = m_gameStream.is_open();
+	mstl::ios_base::openmode mode = m_gameStream.mode() & ~mstl::ios_base::trunc;
+
+	if (m_gameData)
+		m_gameData->sync();
+	if (wasOpen)
+		m_gameStream.close();
+
+	try
+	{
+		DatabaseCodec::doRename(oldName, newName);
+	}
+	catch (...)
+	{
+		if (wasOpen)
+		{
+			mstl::string oldGameFile(::util::misc::file::rootname(oldName) + ".scg");
+			m_gameStream.set_unbuffered();
+			m_gameStream.open(sys::file::internalName(oldGameFile), mode);
+		}
+		throw;
+	}
+
+	if (wasOpen)
+	{
+		mstl::string newGameFile(::util::misc::file::rootname(newName) + ".scg");
+		m_gameStream.set_unbuffered();
+		m_gameStream.open(sys::file::internalName(newGameFile), mode);
+		if (!m_gameStream.is_open())
+			IO_RAISE(Game, Open_Failed, "cannot reopen renamed game file '%s'", newGameFile.c_str());
+	}
+}
+
+
+void
 Codec::rename(mstl::string const& oldName, mstl::string const& newName)
 {
 	static char const Type[3] = { 'i', 'g', 'n' };

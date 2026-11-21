@@ -42,6 +42,36 @@ using namespace util;
 char util::misc::file::pathSeparator() { return Separator; }
 
 
+namespace {
+
+static char const*
+findLastSeparator(char const* path)
+{
+#ifdef _WIN32
+	char const* p1 = ::strrchr(path, '\\');
+	char const* p2 = ::strrchr(path, '/');
+	if (!p1) return p2;
+	if (!p2) return p1;
+	return p1 > p2 ? p1 : p2;
+#else
+	return ::strrchr(path, Separator);
+#endif
+}
+
+
+static bool
+containsSeparator(char const* path)
+{
+#ifdef _WIN32
+	return ::strchr(path, '\\') != nullptr || ::strchr(path, '/') != nullptr;
+#else
+	return ::strchr(path, Separator) != nullptr;
+#endif
+}
+
+} // namespace
+
+
 bool
 util::misc::file::hasSuffix(mstl::string const& path)
 {
@@ -50,14 +80,14 @@ util::misc::file::hasSuffix(mstl::string const& path)
 	if (!p || p == path.c_str())
 		return false;
 
-	return !::strchr(p + 1, Separator);
+	return !containsSeparator(p + 1);
 }
 
 
 mstl::string
 util::misc::file::dirname(mstl::string const& path)
 {
-	char const* p = ::strrchr(path.c_str(), Separator);
+	char const* p = findLastSeparator(path.c_str());
 
 	if (!p)
 		return mstl::string::empty_string;
@@ -69,7 +99,7 @@ util::misc::file::dirname(mstl::string const& path)
 mstl::string
 util::misc::file::basename(mstl::string const& path)
 {
-	char const* p = ::strrchr(path.c_str(), Separator);
+	char const* p = findLastSeparator(path.c_str());
 
 	if (!p)
 		return path;
@@ -86,9 +116,7 @@ util::misc::file::rootname(mstl::string const& path)
 	if (!p || p == path.c_str())
 		return path;
 
-	char const* q = ::strchr(p + 1, Separator);
-
-	if (q)
+	if (containsSeparator(p + 1))
 		return path;
 
 	return mstl::string(path.c_str(), p - path.c_str());
@@ -103,7 +131,7 @@ util::misc::file::suffix(mstl::string const& path)
 	if (!p || p == path.c_str())
 		return mstl::string::empty_string;
 
-	return ::strchr(p + 1, Separator) ? mstl::string::empty_string : mstl::string(p + 1);
+	return containsSeparator(p + 1) ? mstl::string::empty_string : mstl::string(p + 1);
 }
 
 

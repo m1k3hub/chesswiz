@@ -577,7 +577,13 @@ sys::file::rename(char const* oldFilename, char const* newFilename, bool preserv
 
 	Tcl_IncrRefCount(src);
 	Tcl_IncrRefCount(dst);
-	Tcl_FSRenameFile(src, dst);
+	if (Tcl_FSRenameFile(src, dst) != 0)
+	{
+#ifdef __WIN32__
+		Tcl_FSDeleteFile(dst);
+		Tcl_FSRenameFile(src, dst);
+#endif
+	}
 	Tcl_DecrRefCount(dst);
 	Tcl_DecrRefCount(src);
 

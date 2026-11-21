@@ -263,6 +263,7 @@ protected:
 								util::Progress& progress) = 0;
 	virtual unsigned doOpenProgressive(mstl::string const& rootname, mstl::string const& encoding);
 	virtual void doClear(mstl::string const& rootname);
+	virtual void doRename(mstl::string const& oldName, mstl::string const& newName);
 
 	virtual unsigned doDecoding(	::util::BlockFileReader* asyncReader,
 											GameInfo const& info,

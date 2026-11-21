@@ -837,6 +837,7 @@ Codec::doOpen(	mstl::string const& rootname,
 	namebases().setReadonly(false);
 	namebases().setModified(false);
 	namebases().update();
+	namebases().setModified(false);
 	namebases().setReadonly();
 
 	filename.assign(rootname + ".cba");

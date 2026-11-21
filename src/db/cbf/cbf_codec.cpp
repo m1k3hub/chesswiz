@@ -406,6 +406,7 @@ Codec::doOpen(	mstl::string const& rootname,
 	namebases().setReadonly(false);
 	namebases().setModified(false);
 	namebases().update();
+	namebases().setModified(false);
 	namebases().setReadonly();
 }
 
@@ -557,6 +558,7 @@ Codec::readIndexData(mstl::string const& indexFilename, util::Progress& progress
 	namebases().setReadonly(false);
 	namebases().setModified(false);
 	namebases().update();
+	namebases().setModified(false);
 	namebases().setReadonly();
 }
 

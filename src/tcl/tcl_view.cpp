@@ -287,10 +287,19 @@ cmdClose(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 {
 	CHECK_ARGS_RANGE(ti, objc, objv, 3, 4, "<database> ?<variant>? <view>");
 
+	char const* base = Tcl_GetString(objv[1]);
 	int view = intFromObj(objc, objv, objc > 3 ? 3 : 2);
 	variant::Type variant = objc > 3 ? tcl::game::variantFromObj(objv[2]) : variant::Undetermined;
 
-	scidb->cursor(Tcl_GetString(objv[1]), variant).closeView(view);
+	if (!scidb->contains(base, variant))
+		return TCL_OK;
+
+	Cursor& cursor = scidb->cursor(base, variant);
+
+	if (view <= 0 || !cursor.isValidView(unsigned(view)))
+		return TCL_OK;
+
+	cursor.closeView(unsigned(view));
 	return TCL_OK;
 }
 

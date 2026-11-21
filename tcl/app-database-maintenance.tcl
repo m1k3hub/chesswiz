@@ -423,6 +423,7 @@ proc OpenMaintenanceReport {parent file variant {tab overview}} {
 	} else {
 		raise $dlg
 	}
+	return $dlg
 }
 
 

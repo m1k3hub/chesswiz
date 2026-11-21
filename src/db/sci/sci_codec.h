@@ -126,6 +126,7 @@ public:
 	void unlock(mstl::string const& rootname);
 	void close() override;
 	void sync() override;
+	void doRename(mstl::string const& oldName, mstl::string const& newName) override;
 	void compact(::util::Progress& progress);
 	void removeAllFiles(mstl::string const& rootname) override;
 	void writeNamebases(mstl::ostream& stream, util::Progress& progress) override;

@@ -941,7 +941,13 @@ EcoTable::getOpening(Eco code) const
 	if (code == 0)
 		return Empty;
 
-	if (!isLoaded()) { return specimen(variant::Index_Normal).getOpening(Eco(1)); }
+	if (!isLoaded())
+	{
+		EcoTable const& normal = specimen(variant::Index_Normal);
+		if (this != &normal && normal.isLoaded() && normal.isUsed(Eco(1)))
+			return normal.getOpening(Eco(1));
+		return Empty;
+	}
 
 	M_REQUIRE(code <= Eco::Max_Code);
 	M_REQUIRE(isLoaded());

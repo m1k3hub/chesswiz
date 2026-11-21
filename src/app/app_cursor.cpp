@@ -475,8 +475,8 @@ Cursor::compact(::util::Progress& progress)
 		}
 
 		m_db = compacted.release();
-		m_db->rename(orig);
 		m_cursor.replace(m_db);
+		m_db->rename(orig);
 
 		guard.release();
 	}

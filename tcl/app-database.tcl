@@ -1081,6 +1081,10 @@ proc CloseBase {parent file} {
 
 	if {[::game::releaseAll $parent $file]} {
 		::widget::busyCursor on
+		if {[llength [info commands MaintenanceDialogName]]} {
+			set mdlg [MaintenanceDialogName $file]
+			if {[winfo exists $mdlg]} { destroy $mdlg }
+		}
 		$Vars(switcher) remove $file
 		::scidb::db::close $file
 		if {![file exists $file]} {
