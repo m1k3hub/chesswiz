@@ -4074,10 +4074,11 @@ Game::setStartPosition(mstl::string const& fen)
 	if (!board.setup(fen, m_variant))
 		DB_RAISE("invalid FEN");
 
+	if (board.validate(m_variant, castling::AllowHandicap) != Board::Valid)
+		DB_RAISE("invalid FEN");
+
 	setup(board);
 	moveToMainlineStart();
-
-	M_DEBUG(m_startBoard.validate(m_variant, castling::AllowHandicap) == Board::Valid);
 }
 
 

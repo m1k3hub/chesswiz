@@ -1377,7 +1377,8 @@ proc ::ics::parseSeek {line} {
 	foreach key {w ti rt t i r tp c rr a f} {
 		if {![dict exists $values $key]} { return {} }
 	}
-	if {[catch { scan [dict get $values ti] %x flags }]} { set flags 0 }
+	set flags 0
+	if {[scan [dict get $values ti] %x flags] != 1} { set flags 0 }
 	return [dict create \
 		index $index \
 		name [dict get $values w] \

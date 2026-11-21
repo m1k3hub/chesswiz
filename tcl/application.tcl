@@ -1971,6 +1971,11 @@ proc shutdown {} {
 proc prepareExit {{backup 1}} {
 	variable Vars
 
+	catch { ::ai::engine::shutdown }
+	catch { ::enginematch::Stop }
+	catch { ::board3d::webserver::stop }
+	catch { ::stream::stop }
+
 	if {$Vars(exit:save)} {
 		::log::delay
 		::remote::cleanup

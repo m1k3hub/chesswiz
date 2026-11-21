@@ -299,7 +299,7 @@ parseMaterialSignature(Tcl_Interp* ti, Tcl_Obj* obj, material::si3::Signature& s
 		return false;
 
 	mstl::string white(text, 0, sep);
-	mstl::string black(text, sep + 1);
+	mstl::string black(text, sep + 1, text.size() - (sep + 1));
 
 	return parseMaterialPart(white, sig, true)
 		&& parseMaterialPart(black, sig, false);

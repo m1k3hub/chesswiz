@@ -32,6 +32,7 @@
 #include "app_application.h"
 #include "app_cursor.h"
 
+#include "db_exception.h"
 #include "db_game.h"
 #include "db_game_info.h"
 #include "db_guess.h"
@@ -400,7 +401,20 @@ cmdSetup(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		return TCL_ERROR;
 	}
 
-	scidb->game().setStartPosition(stringFromObj(objc, objv, 1));
+	Game& game = scidb->game();
+
+	if (!game.isEmpty())
+		return error(::CmdSetup, nullptr, nullptr, "cannot set start position on non-empty game");
+
+	try
+	{
+		game.setStartPosition(stringFromObj(objc, objv, 1));
+	}
+	catch (db::Exception const& exc)
+	{
+		return error(::CmdSetup, nullptr, nullptr, "%s", exc.what());
+	}
+
 	return TCL_OK;
 }
 

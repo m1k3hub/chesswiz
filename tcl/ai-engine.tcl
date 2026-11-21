@@ -187,6 +187,7 @@ proc ::ai::engine::name {} {
 proc ::ai::engine::shutdown {} {
 	variable Proc
 	if {$Proc ne ""} {
+		catch { fileevent $Proc readable {} }
 		catch { puts $Proc "quit" ; flush $Proc }
 		catch { close $Proc }
 		set Proc ""
