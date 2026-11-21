@@ -2642,6 +2642,9 @@ proc Startup2 {} {
 	# Expose every surface operator now; synthesize descriptive knowledge
 	# when it is first requested, outside the startup interaction path.
 	catch { ::knowledge::Ensure 0 }
+	if {[llength [info commands ::application::ask::SchedulePrewarm]]} {
+		::application::ask::SchedulePrewarm
+	}
 }
 
 

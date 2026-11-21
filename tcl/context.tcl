@@ -382,16 +382,31 @@ proc ::context::AskArgs {argsDict} {
 namespace eval ::context {
 	variable Predicates [dict create]
 	variable PredicateVersion 0
+	variable MenusVersion 0
+	variable CascadeIdSet [dict create]
+	variable CascadeIdSetVersion -1
+}
+
+proc ::context::InvalidateCascadeIdSet {} {
+	variable CascadeIdSet
+	variable CascadeIdSetVersion
+	set CascadeIdSet [dict create]
+	set CascadeIdSetVersion -1
+	return
 }
 
 proc ::context::Define {cid rows} {
 	variable Menus
+	variable MenusVersion
 	dict set Menus $cid [list list $rows]
+	incr MenusVersion
+	InvalidateCascadeIdSet
 	return
 }
 
 proc ::context::DefineObject {cid key rows} {
 	variable Menus
+	variable MenusVersion
 	if {![dict exists $Menus $cid]} {
 		dict set Menus $cid [list map [dict create]]
 	}
@@ -403,6 +418,8 @@ proc ::context::DefineObject {cid key rows} {
 	}
 	dict set map $key $rows
 	dict set Menus $cid [list map $map]
+	incr MenusVersion
+	InvalidateCascadeIdSet
 	return
 }
 
@@ -582,12 +599,15 @@ proc ::context::Declare {} {
 	}
 	# The flags submenu is populated from the static flag table above.
 	variable Menus
+	variable MenusVersion
 	if {[llength $flagRows]} {
 		set rows [lindex [dict get $Menus C3] 1]
 		set at [lsearch -exact $rows {cascade c3.flags {}}]
 		if {$at >= 0} {
 			set rows [lreplace $rows $at $at [list cascade c3.flags $flagRows]]
 			dict set Menus C3 [list list $rows]
+			incr MenusVersion
+			InvalidateCascadeIdSet
 		}
 	}
 
@@ -1309,9 +1329,13 @@ proc ::context::CollectCascadeIds {rows setVar} {
 
 proc ::context::EnsureCascadeIdSet {} {
 	variable Menus
+	variable MenusVersion
 	variable CascadeIdSet
+	variable CascadeIdSetVersion
 	if {![info exists Menus]} { return {} }
-	if {![info exists CascadeIdSet] || ![dict size $CascadeIdSet]} {
+	if {![info exists MenusVersion]} { set MenusVersion 0 }
+	if {![info exists CascadeIdSet] || ![info exists CascadeIdSetVersion] \
+	 || $CascadeIdSetVersion != $MenusVersion} {
 		set CascadeIdSet [dict create]
 		dict for {cid entry} $Menus {
 			switch -- [lindex $entry 0] {
@@ -1323,6 +1347,7 @@ proc ::context::EnsureCascadeIdSet {} {
 				}
 			}
 		}
+		set CascadeIdSetVersion $MenusVersion
 	}
 	return $CascadeIdSet
 }
@@ -1357,12 +1382,16 @@ proc ::context::ActionCascade {id object} {
 }
 
 proc ::context::RunnableChildren {rows object} {
+	set pre [dict create objectResolved 1 \
+		gameLoaded [expr {[llength [info commands ::menu::GameLoaded]] ? [::menu::GameLoaded] : 1}] \
+		onDb [expr {[llength [info commands ::menu::OnDatabaseTab]] ? [::menu::OnDatabaseTab] : 0}] \
+		boardOnly [expr {[llength [info commands ::menu::BoardOnlyLayout]] ? [::menu::BoardOnlyLayout] : 0}]]
 	foreach row $rows {
 		if {$row eq "-" || [lindex $row 0] in {ask header}} { continue }
 		if {[lindex $row 0] eq "cascade"} {
 			set id [lindex $row 1]
 		} else { set id $row }
-		if {[Visible $id $object] && [Enabled $id $object]} { return 1 }
+		if {[Visible $id $object $pre] && [Enabled $id $object $pre]} { return 1 }
 	}
 	return 0
 }
@@ -1447,8 +1476,8 @@ proc ::context::Visible {id object {pre {}}} {
 	return $visible
 }
 
-proc ::context::Enabled {id object} {
-	set st [::menu::state $id $object]
+proc ::context::Enabled {id object {pre {}}} {
+	set st [::menu::state $id $object {} 0 $pre]
 	set enabled [dict get $st enabled]
 	switch -- $id {
 		c3.paste_games {

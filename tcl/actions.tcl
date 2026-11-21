@@ -218,6 +218,7 @@ proc ::action::register {id record} {
 
 	dict set Registry $id $normalized
 	dict unset BareCache $id
+	if {[info exists AskMetaCache]} { dict unset AskMetaCache $id }
 	incr RegistryVersion
 	InvalidateAskRows
 	return $id
@@ -227,10 +228,14 @@ proc ::action::register {id record} {
 # keeps the assistant's toolset equal to the approved set between dialogs.
 proc ::action::Unregister {id} {
 	variable Registry
+	variable BareCache
+	variable AskMetaCache
 	variable RegistryVersion
 
 	if {![dict exists $Registry $id]} { return 0 }
 	dict unset Registry $id
+	dict unset BareCache $id
+	if {[info exists AskMetaCache]} { dict unset AskMetaCache $id }
 	incr RegistryVersion
 	InvalidateAskRows
 	return 1
@@ -257,7 +262,9 @@ proc ::action::UpdateToolbarHandler {id handler} {
 # Direct ::action::Registry mutations (context rows, named sorts, menu
 # nodes) bypass register; they call this so the Ask snapshot sees them.
 proc ::action::NoteRegistryChange {} {
+	variable BareCache
 	variable RegistryVersion
+	set BareCache [dict create]
 	incr RegistryVersion
 	InvalidateAskRows
 }
@@ -989,9 +996,23 @@ proc ::action::labelAccelRecord {id record} {
 # any menu-state read outside an Ask rebuild.
 proc ::action::InvalidateAskRows {} {
 	variable AskCachedStamp
+	variable AskCachedRows
 	variable AskLiveScriptsKey
+	variable AskLiveScripts
+	variable AskMetaCache
+	variable AskStateMap
 	set AskCachedStamp ""
+	set AskCachedRows {}
 	set AskLiveScriptsKey ""
+	set AskLiveScripts {}
+	set AskMetaCache [dict create]
+	set AskStateMap [dict create]
+	if {[llength [info commands ::context::InvalidateCascadeIdSet]]} {
+		::context::InvalidateCascadeIdSet
+	}
+	if {[llength [info commands ::application::ask::InvalidateCache]]} {
+		::application::ask::InvalidateCache
+	}
 }
 
 # A menu build (or any state read outside an Ask rebuild) sees live
@@ -1367,10 +1388,39 @@ proc ::action::AskRows {query} {
 		return $output
 	}
 	set q [string tolower $query]
+	set qchars [split $q ""]
+	set qlen [llength $qchars]
+	set q0 [lindex $qchars 0]
 	set output {}
 	foreach row $rows {
 		lassign $row outRow text visible
-		set score [fuzzyScoreLower $q $text]
+		set pos [string first $q $text]
+		if {$pos >= 0} {
+			set score [expr {1000 - [string length $text] - $pos}]
+			if {$pos == 0} {
+				incr score 400
+			} elseif {[string first [string index $text [expr {$pos - 1}]] " _./-"] >= 0} {
+				incr score 200
+			}
+		} elseif {$qlen <= 1} {
+			continue
+		} else {
+			set first [string first $q0 $text]
+			if {$first < 0} { continue }
+			set i [expr {$first + 1}]
+			set last $first
+			set gaps 0
+			set matched 1
+			for {set k 1} {$k < $qlen} {incr k} {
+				set j [string first [lindex $qchars $k] $text $i]
+				if {$j < 0} { set matched 0; break }
+				incr gaps [expr {$j - $last - 1}]
+				set last $j
+				set i [expr {$j + 1}]
+			}
+			if {!$matched} { continue }
+			set score [expr {500 - $gaps - ($last - $first + 1) - [string length $text]}]
+		}
 		if {$score < 0} { continue }
 		# The indexed text also carries the stored "&" markup and the docs,
 		# so a longer label that merely starts with the query could beat an

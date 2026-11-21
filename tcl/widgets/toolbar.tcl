@@ -997,6 +997,7 @@ proc ::toolbar::RegistryCommand {toolbar w command {label ""}} {
 # Some tooltips are replaced at runtime (start/stop, enable/disable).
 proc ::toolbar::RefreshRegistryLabels {} {
 	variable Specs
+	set changed 0
 	foreach children [array names Specs children:*] {
 		set toolbar [string range $children 9 end]
 		foreach w $Specs($children) {
@@ -1012,8 +1013,12 @@ proc ::toolbar::RefreshRegistryLabels {} {
 			if {$label eq ""} { catch {set label [$w cget -text]} }
 			if {$label ne "" && [dict exists $::action::Registry $Specs($key)]} {
 				dict set ::action::Registry $Specs($key) label [::action::plainText [string trim $label]]
+				set changed 1
 			}
 		}
+	}
+	if {$changed && [llength [info commands ::action::NoteRegistryChange]]} {
+		::action::NoteRegistryChange
 	}
 }
 

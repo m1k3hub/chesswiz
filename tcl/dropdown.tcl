@@ -918,6 +918,9 @@ proc ::menu::RegisterTree {} {
 		dict set ::action::Registry $id operator 1
 	}
 	Register game.new.variants [MC NewGame] "" "" "" ""
+	if {[llength [info commands ::action::NoteRegistryChange]]} {
+		::action::NoteRegistryChange
+	}
 }
 
 proc ::menu::RegisterNodes {node order top} {
@@ -2131,13 +2134,18 @@ proc ::menu::FillLanguage {menu} {
 # registry labels are refreshed from the newly loaded mc strings, then the
 # menu widget is rebuilt so the top cascades and their leaves show them.
 proc ::menu::SwitchLanguage {lang} {
+	variable SwitchingLanguage
 	if {[llength [info commands ::action::InvalidateAskRows]]} {
 		::action::InvalidateAskRows
 	}
 	# the View > Language rows pass the language's name (Deutsch); setLang wants its id (de)
 	set n [lsearch -exact -index 0 $::i18n::languages $lang]
 	if {$n >= 0} { set lang [lindex $::i18n::languages $n 1] }
-	if {[catch { ::mc::setLang $lang }]} { return }
+	set SwitchingLanguage 1
+	if {[catch { ::mc::setLang $lang }]} {
+		set SwitchingLanguage 0
+		return
+	}
 	::toolbar::RefreshRegistryLabels
 	::menu::RegisterTree
 	::menu::RegisterExtras
@@ -2152,6 +2160,13 @@ proc ::menu::SwitchLanguage {lang} {
 		if {[llength [info commands ::application::UpdateSettingsText]]} {
 			catch { ::application::UpdateSettingsText .application.nb.menu_main }
 		}
+	}
+	set SwitchingLanguage 0
+	if {[llength [info commands ::action::NoteRegistryChange]]} {
+		::action::NoteRegistryChange
+	}
+	if {[llength [info commands ::application::ask::Relabel]]} {
+		::application::ask::Relabel
 	}
 	return $lang
 }

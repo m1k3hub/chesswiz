@@ -110,6 +110,8 @@ array set Priv {
 	focusBefore	{}
 	histIndex	-1
 	list		{}
+	listVisible	0
+	prewarmAfter	{}
 	window		{}
 	prefs		{}
 	prefsStartup	{}
@@ -188,6 +190,7 @@ proc ::application::ask::Build {notebook} {
 	set Priv(notebook) $notebook
 	set Priv(filtered) ""
 	bind $frame <Destroy> +::application::speech::CleanupSession
+	bind $frame <Destroy> +[namespace code CancelPrewarm]
 	# a language switch relabels the field in place (i18n.tcl generates
 	# the event for every widget); typing is never touched
 	bind $frame <<LanguageChanged>> [namespace code Relabel]
@@ -238,19 +241,144 @@ proc ::application::ask::PlaceholderState {} {
 	}
 }
 
+proc ::application::ask::InvalidateCache {} {
+	variable Priv
+	variable FmtCache
+	variable ListGeom
+	variable ListIndex
+	variable RowHeight
+	set FmtCache [dict create]
+	set ListGeom ""
+	set ListIndex -1
+	set RowHeight ""
+	unset -nocomplain Priv(filtered)
+	return
+}
+
+proc ::application::ask::RefreshOpenList {} {
+	variable Priv
+	variable Query
+	if {![ListVisible]} { return }
+	set text [string trim $Query]
+	if {$text eq ""} {
+		set Priv(rows) {}
+		HideList
+		return
+	}
+	set Priv(filtered) $text
+	set Priv(rows) [::action::labels asklist $text]
+	if {$Priv(index) >= [llength $Priv(rows)] + 1} { set Priv(index) 0 }
+	ShowList
+	return
+}
+
+proc ::application::ask::CancelPrewarm {} {
+	variable Priv
+	if {[info exists Priv(prewarmAfter)] && $Priv(prewarmAfter) ne ""} {
+		catch { after cancel $Priv(prewarmAfter) }
+		set Priv(prewarmAfter) ""
+	}
+	return
+}
+
+proc ::application::ask::SchedulePrewarm {} {
+	variable Priv
+	CancelPrewarm
+	set Priv(prewarmAfter) [after idle [namespace code Prewarm]]
+	return
+}
+
+proc ::application::ask::EnsureListWidget {} {
+	variable Priv
+	variable ListTexts
+	variable ListGeom
+	variable ListIndex
+	variable RowHeight
+
+	set w $Priv(list)
+	if {$w ne "" && [winfo exists $w]} { return 0 }
+	set w .application.askList
+	catch { destroy $w }
+	toplevel $w -class AskList
+	wm overrideredirect $w 1
+	wm transient $w .application
+	listbox $w.list -exportselection 0 -takefocus 0 -activestyle none \
+		-height 1 -borderwidth 1 -relief solid -highlightthickness 0
+	pack $w.list -fill both -expand yes
+	bind $w.list <ButtonPress-1> "[list ::application::ask::Click] %y"
+	bind $w.list <ButtonRelease-1> { break }
+	bind $w.list <Double-Button-1> { break }
+	set Priv(list) $w
+	set Priv(listVisible) 0
+	set ListTexts {}
+	set ListGeom ""
+	set ListIndex -1
+	set RowHeight [expr {[font metrics [$w.list cget -font] -linespace] + 4}]
+	return 1
+}
+
+proc ::application::ask::Prewarm {} {
+	variable Priv
+	variable FmtCache
+	variable RowHeight
+
+	set Priv(prewarmAfter) ""
+	if {![winfo exists [Entry]]} { return }
+	if {![info exists ::application::Vars(ready)] || !$::application::Vars(ready)} { return }
+	if {[EnsureListWidget]} {
+		set w $Priv(list)
+		if {[tk windowingsystem] eq "aqua"} {
+			# Keep the Aqua popup NSWindow warm and hidden offscreen so the
+			# first Ask keystroke avoids macOS WindowServer creation latency.
+			catch { wm attributes $w -alpha 0.0 }
+			catch { wm geometry $w 1x1+-10000+-10000 }
+			catch { wm deiconify $w }
+		} else {
+			catch { wm withdraw $w }
+		}
+		set Priv(listVisible) 0
+	} elseif {$RowHeight eq "" && [winfo exists $Priv(list).list]} {
+		set RowHeight [expr {[font metrics [$Priv(list).list cget -font] -linespace] + 4}]
+	}
+	if {[llength [info commands ::action::labels]]} {
+		if {![catch { set rows [::action::labels asklist ""] }]} {
+			if {[dict size $FmtCache] > 4096} { set FmtCache [dict create] }
+			foreach row $rows {
+				lassign $row id label accel
+				set key [list $label $accel]
+				if {![dict exists $FmtCache $key]} {
+					set plain [lindex [::menu::AmpText $label] 0]
+					dict set FmtCache $key [format " %-48s %s" [string trimleft $plain] $accel]
+				}
+			}
+		}
+	}
+	return
+}
+
 proc ::application::ask::ThemeChanged {} {
 	variable Priv
-	variable RowHeight
-	set RowHeight ""
+	InvalidateCache
 	if {[info exists Priv(placeholder)] && [winfo exists $Priv(placeholder)]} {
 		$Priv(placeholder) configure \
 			-foreground [expr {[::theme::isDark] ? "#8b949e" : "grey"}] \
 			-background [expr {[::theme::isDark] ? [::ttk::style lookup TEntry -fieldbackground] : ""}]
 	}
+	if {[ListVisible]} {
+		RefreshOpenList
+	} else {
+		SchedulePrewarm
+	}
 }
 
 proc ::application::ask::EnterField {entry placeholder} {
+	variable Priv
+	variable FmtCache
 	PlaceholderState
+	if {![info exists ::action::AskCachedStamp] || $::action::AskCachedStamp eq "" \
+	 || ![dict size $FmtCache] || $Priv(list) eq "" || ![winfo exists $Priv(list)]} {
+		SchedulePrewarm
+	}
 }
 
 proc ::application::ask::LeaveField {entry placeholder} {
@@ -279,9 +407,13 @@ proc ::application::ask::MicText {} {
 proc ::application::ask::Relabel {} {
 	variable Priv
 	variable mc
-	variable FmtCache
 
-	set FmtCache [dict create]
+	RegisterAction
+	if {[llength [info commands ::action::InvalidateAskRows]]} {
+		::action::InvalidateAskRows
+	} else {
+		InvalidateCache
+	}
 	if {[info exists Priv(placeholder)] && [winfo exists $Priv(placeholder)]} {
 		$Priv(placeholder) configure -text [PlaceholderText]
 	}
@@ -289,10 +421,16 @@ proc ::application::ask::Relabel {} {
 	if {[info exists Priv(mic)] && [winfo exists $Priv(mic)]} {
 		$Priv(mic) configure -text [MicText]
 	}
-	if {[ListVisible]} { ShowList }
-	RegisterAction
 	SyncMic
 	RelabelPreferences
+	if {[info exists ::menu::SwitchingLanguage] && $::menu::SwitchingLanguage} {
+		return
+	}
+	if {[ListVisible]} {
+		RefreshOpenList
+	} else {
+		SchedulePrewarm
+	}
 	return
 }
 
@@ -364,6 +502,9 @@ proc ::application::ask::RegisterAction {} {
 			dict set old $key [dict get $record $key]
 		}
 		dict set ::action::Registry app.preferences.assistant $old
+		if {[llength [info commands ::action::NoteRegistryChange]]} {
+			::action::NoteRegistryChange
+		}
 		return
 	}
 	::action::register app.preferences.assistant $record
@@ -386,6 +527,7 @@ proc ::application::ask::ContextFocus {} {
 
 proc ::application::ask::Focus {} {
 	variable Priv
+	variable FmtCache
 
 	if {![winfo exists [Entry]]} { return 0 }
 	set current [focus]
@@ -395,6 +537,10 @@ proc ::application::ask::Focus {} {
 	}
 	focus -force [Entry]
 	catch { [Entry] selection range 0 end }
+	if {![info exists ::action::AskCachedStamp] || $::action::AskCachedStamp eq "" \
+	 || ![dict size $FmtCache] || $Priv(list) eq "" || ![winfo exists $Priv(list)]} {
+		SchedulePrewarm
+	}
 	return 1
 }
 
@@ -554,30 +700,15 @@ proc ::application::ask::ShowList {} {
 			lappend texts $text
 		}
 	}
-	lappend texts " $mc::AskAssistant"
+	# Pad the permanent trailing assistant row so it remains the widest item in
+	# the listbox; deleting shorter action rows then never triggers Tk's O(N)
+	# maxWidth CoreText rescan across hundreds of remaining rows.
+	lappend texts [format " %-96s" $mc::AskAssistant]
 	set count [llength $texts]
 
+	set wasVisible [ListVisible]
+	set opening [EnsureListWidget]
 	set w $Priv(list)
-	set opening 0
-	if {$w eq "" || ![winfo exists $w]} {
-		set w .application.askList
-		catch { destroy $w }
-		toplevel $w -class AskList
-		wm overrideredirect $w 1
-		wm transient $w .application
-		listbox $w.list -exportselection 0 -takefocus 0 -activestyle none \
-			-height 1 -borderwidth 1 -relief solid -highlightthickness 0
-		pack $w.list -fill both -expand yes
-		bind $w.list <ButtonPress-1> "[list ::application::ask::Click] %y"
-		bind $w.list <ButtonRelease-1> { break }
-		bind $w.list <Double-Button-1> { break }
-		set Priv(list) $w
-		set ListTexts {}
-		set ListGeom ""
-		set ListIndex -1
-		set RowHeight ""
-		set opening 1
-	}
 	set list $w.list
 	# Consecutive prefixes often keep almost all rows in the same order.
 	# Avoid copying the widget contents out on every key, and strip any
@@ -679,18 +810,37 @@ proc ::application::ask::ShowList {} {
 		}
 	}
 	# Reordering an already visible Aqua window forces another native
-	# display pass on every key. Only map and raise when opening the list.
-	if {$opening || [wm state $w] ne "normal"} {
+	# display pass on every key. On Aqua, HideList keeps the NSWindow warm
+	# offscreen at alpha 0.0 so reopening does not pay WindowServer deiconify
+	# latency; reveal and raise only when transitioning hidden -> visible.
+	if {[tk windowingsystem] eq "aqua"} {
+		if {$opening || [wm state $w] ne "normal"} {
+			wm deiconify $w
+		}
+		if {$opening || !$wasVisible} {
+			catch { wm attributes $w -alpha 1.0 }
+			raise $w
+		}
+	} elseif {$opening || [wm state $w] ne "normal"} {
 		wm deiconify $w
 		raise $w
 	}
+	set Priv(listVisible) 1
 	return $w
 }
 
 proc ::application::ask::HideList {} {
 	variable Priv
-	if {[info exists Priv(list)] && $Priv(list) ne ""} {
-		catch { wm withdraw $Priv(list) }
+	variable ListGeom
+	set Priv(listVisible) 0
+	if {[info exists Priv(list)] && $Priv(list) ne "" && [winfo exists $Priv(list)]} {
+		if {[tk windowingsystem] eq "aqua"} {
+			catch { wm attributes $Priv(list) -alpha 0.0 }
+			catch { wm geometry $Priv(list) 1x1+-10000+-10000 }
+			set ListGeom ""
+		} else {
+			catch { wm withdraw $Priv(list) }
+		}
 	}
 }
 
@@ -698,6 +848,9 @@ proc ::application::ask::ListVisible {} {
 	variable Priv
 	if {![info exists Priv(list)] || $Priv(list) eq ""} { return 0 }
 	if {![winfo exists $Priv(list)]} { return 0 }
+	if {[tk windowingsystem] eq "aqua"} {
+		return [expr {[info exists Priv(listVisible)] && $Priv(listVisible) && [wm state $Priv(list)] eq "normal"}]
+	}
 	return [expr {[wm state $Priv(list)] eq "normal"}]
 }
 

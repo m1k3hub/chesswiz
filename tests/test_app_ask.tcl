@@ -856,4 +856,78 @@ tcltest::test ask-keystroke-no-label-recompute {synthetic-400 keystrokes do not 
 	}
 } -result {1 0 0 0 1 1}
 
+tcltest::test ask-cache-invalidation-language-theme-registry {open Ask rows and all caches update on language switch, theme change, relabel, and registry/context changes} -setup {
+	set savedLang $::mc::langID
+	set savedTheme [::theme::currentTheme]
+	set savedQuery $::application::ask::Query
+	::menu::SwitchLanguage en
+	update
+	set ::application::ask::Query Annotations
+	focus -force [::application::ask::Entry]
+	unset -nocomplain ::application::ask::Priv(filtered)
+	::application::ask::Typed {}
+	update
+} -body {
+	set enRows $::application::ask::Priv(rows)
+	set enText [string trim [.application.askList.list get 0]]
+	set enListText [string trim [lindex $::application::ask::ListTexts 0]]
+
+	# 1. Language switch en -> de while Ask list is open must recompute Priv(rows)
+	#    and redraw visible rows in German (not stale English FmtCache/Priv(rows)).
+	::menu::SwitchLanguage de
+	update
+	set deRows $::application::ask::Priv(rows)
+	set deExpected [::action::labels asklist Annotations]
+	set deVisible [string trim [.application.askList.list get 0]]
+	set deListText [string trim [lindex $::application::ask::ListTexts 0]]
+	set deExpectedText [string trim [lindex [::menu::AmpText [lindex $deExpected 0 1]] 0]]
+	set deOk [expr {$deRows eq $deExpected && $deVisible eq $deExpectedText && $deListText eq $deExpectedText && $deVisible ne $enText}]
+
+	# 2. Switch back de -> en while still open must restore English rows.
+	::menu::SwitchLanguage en
+	update
+	set backRows $::application::ask::Priv(rows)
+	set backExpected [::action::labels asklist Annotations]
+	set backVisible [string trim [.application.askList.list get 0]]
+	set backOk [expr {$backRows eq $backExpected && $backVisible eq $enText}]
+
+	# 3. Theme change while open must invalidate cached geometry/metrics/rows cleanly.
+	set otherTheme [expr {$savedTheme eq "dark" ? "clam" : "dark"}]
+	::theme::setTheme $otherTheme
+	update
+	set themeVisible [string trim [.application.askList.list get 0]]
+	set themeOk [expr {[::application::ask::ListVisible] && $themeVisible eq $enText}]
+
+	# 4. Registry add/remove and label update must invalidate AskMetaCache,
+	#    AskLiveScriptsKey, FmtCache, and Priv(filtered).
+	::scidb::test::ask::action test.ask.cacheinv "Zebra Cache Invalidator" {}
+	set afterAdd [expr {"test.ask.cacheinv" in [lmap r [::action::labels asklist "Zebra Cache Invalidator"] {lindex $r 0}]}]
+	set metaBefore [dict exists $::action::AskMetaCache test.ask.cacheinv]
+	::action::Unregister test.ask.cacheinv
+	set afterRemove [expr {"test.ask.cacheinv" ni [lmap r [::action::labels asklist "Zebra Cache Invalidator"] {lindex $r 0}]}]
+	set metaAfterUnreg [dict exists $::action::AskMetaCache test.ask.cacheinv]
+	set regOk [expr {$afterAdd && $metaBefore && $afterRemove && !$metaAfterUnreg}]
+
+	# 5. Context cascade definition updates must invalidate CascadeIdSet.
+	set savedMenus $::context::Menus
+	set hadFakeBefore [dict exists [::context::EnsureCascadeIdSet] test.ask.fake_cascade]
+	::context::Define C99 {{cascade test.ask.fake_cascade {test.ask.fake_child}}}
+	set hasFakeAfter [dict exists [::context::EnsureCascadeIdSet] test.ask.fake_cascade]
+	set ::context::Menus $savedMenus
+	if {[llength [info commands ::context::InvalidateCascadeIdSet]]} {
+		::context::InvalidateCascadeIdSet
+	}
+	set ctxOk [expr {!$hadFakeBefore && $hasFakeAfter}]
+
+	list $deOk $backOk $themeOk $regOk $ctxOk
+} -cleanup {
+	catch { ::action::Unregister test.ask.cacheinv }
+	catch { ::theme::setTheme $savedTheme }
+	catch { ::menu::SwitchLanguage $savedLang }
+	set ::application::ask::Query $savedQuery
+	::application::ask::HideList
+	::application::ask::PlaceholderState
+	update
+} -result {1 1 1 1 1}
+
 tcltest::cleanupTests
