@@ -46,7 +46,7 @@
 #include "nsPkgInt.h"
 #include "encodingNames.h"
 
-typedef enum {
+typedef enum : PRUint32 {
    eStart = 0,
    eError = 1,
    eItsMe = 2 

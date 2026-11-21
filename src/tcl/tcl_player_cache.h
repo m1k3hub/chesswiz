@@ -8,6 +8,15 @@
 #include <tcl.h>
 #include <errno.h>
 #include <sys/stat.h>
+#ifdef __WIN32__
+# ifndef WIN32_LEAN_AND_MEAN
+#  define WIN32_LEAN_AND_MEAN
+# endif
+# ifndef NOMINMAX
+#  define NOMINMAX
+# endif
+# include <windows.h>
+#endif
 
 namespace tcl { namespace startup_cache {
 // The cache is a startup operation: never retain player/site pointers across it.
@@ -149,7 +158,31 @@ bool writePlayerCache(Tcl_Interp* ti, Tcl_Obj* path, Tcl_Obj* sources)
                     offset+=n;
                 }
                 file.close();
-                if (cacheHeader(ti, sources).bytes!=header || Tcl_FSRenameFile(tmp.obj, path)!=0)
+                if (cacheHeader(ti, sources).bytes!=header)
+                    throw db::cache::Invalid();
+                bool renamed = (Tcl_FSRenameFile(tmp.obj, path) == 0);
+#ifdef __WIN32__
+                if (!renamed) {
+                    Tcl_Encoding enc = Tcl_GetEncoding(ti, "unicode");
+                    if (enc) {
+                        Tcl_DString wsrc, wdst;
+                        Tcl_DStringInit(&wsrc);
+                        Tcl_DStringInit(&wdst);
+                        char const* s = Tcl_GetString(tmp.obj);
+                        char const* d = Tcl_GetString(path);
+                        Tcl_UtfToExternalDString(enc, s, -1, &wsrc);
+                        Tcl_UtfToExternalDString(enc, d, -1, &wdst);
+                        renamed = MoveFileExW(
+                            reinterpret_cast<LPCWSTR>(Tcl_DStringValue(&wsrc)),
+                            reinterpret_cast<LPCWSTR>(Tcl_DStringValue(&wdst)),
+                            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
+                        Tcl_DStringFree(&wsrc);
+                        Tcl_DStringFree(&wdst);
+                        Tcl_FreeEncoding(enc);
+                    }
+                }
+#endif
+                if (!renamed)
                     throw db::cache::Invalid();
                 return true;
             } catch (...) {

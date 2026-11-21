@@ -51,6 +51,16 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/stat.h>
+#ifdef __WIN32__
+# ifndef WIN32_LEAN_AND_MEAN
+#  define WIN32_LEAN_AND_MEAN
+# endif
+# ifndef NOMINMAX
+#  define NOMINMAX
+# endif
+# include <windows.h>
+# include <vector>
+#endif
 #include "tcl_player_cache.h"
 
 using namespace db;
@@ -162,6 +172,64 @@ cmdFilterFideList(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 
 
+#ifdef __WIN32__
+static std::wstring
+utf8ToWide(char const* s)
+{
+	int n = MultiByteToWideChar(CP_UTF8, 0, s, -1, nullptr, 0);
+	if (n <= 0)
+		return std::wstring();
+	std::wstring w(static_cast<size_t>(n - 1), L'\0');
+	MultiByteToWideChar(CP_UTF8, 0, s, -1, &w[0], n);
+	return w;
+}
+
+static FILE*
+openWriteFile(char const* path)
+{
+	std::wstring w = utf8ToWide(path);
+	return w.empty() ? nullptr : ::_wfopen(w.c_str(), L"w");
+}
+
+static void
+removeTempFile(char const* path)
+{
+	std::wstring w = utf8ToWide(path);
+	if (!w.empty())
+		::_wremove(w.c_str());
+}
+
+static bool
+replaceFileAtomic(char const* src, char const* dst)
+{
+	std::wstring wsrc = utf8ToWide(src);
+	std::wstring wdst = utf8ToWide(dst);
+	if (wsrc.empty() || wdst.empty())
+		return false;
+	return MoveFileExW(wsrc.c_str(), wdst.c_str(),
+		MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
+}
+#else
+static FILE*
+openWriteFile(char const* path)
+{
+	return ::fopen(path, "w");
+}
+
+static void
+removeTempFile(char const* path)
+{
+	::remove(path);
+}
+
+static bool
+replaceFileAtomic(char const* src, char const* dst)
+{
+	return ::rename(src, dst) == 0;
+}
+#endif
+
+
 // ::scidb::app::filterRatingList <dwz|ecf|iccf> <in> <out> ?<min>?
 // <in>: the federation's download -- the DSB's zip (or the spieler.csv in it),
 // the ECF's and ICCF's CSV. Writes the players the dictionary keeps, rated at
@@ -200,7 +268,7 @@ cmdFilterRatingList(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			util::ZStream::setZipFileSuffixes(oldSuffixes);
 			return error(CmdFilterRating, 0, nullptr, "cannot open file '%s'", in);
 		}
-		fp = ::fopen(tmpOut.c_str(), "w");
+		fp = openWriteFile(tmpOut.c_str());
 		if (!fp)
 		{
 			util::ZStream::setZipFileSuffixes(oldSuffixes);
@@ -215,7 +283,7 @@ cmdFilterRatingList(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	{
 		if (fp)
 			::fclose(fp);
-		::remove(tmpOut.c_str());
+		removeTempFile(tmpOut.c_str());
 		util::ZStream::setZipFileSuffixes(oldSuffixes);
 		return error(CmdFilterRating, 0, nullptr, "cannot read '%s'", in);
 	}
@@ -223,13 +291,13 @@ cmdFilterRatingList(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 	if (!ok)
 	{
-		::remove(tmpOut.c_str());
+		removeTempFile(tmpOut.c_str());
 		return error(CmdFilterRating, 0, nullptr, "'%s' is not the %s rating list", in, kind);
 	}
 
-	if (::rename(tmpOut.c_str(), out) != 0)
+	if (!replaceFileAtomic(tmpOut.c_str(), out))
 	{
-		::remove(tmpOut.c_str());
+		removeTempFile(tmpOut.c_str());
 		return error(CmdFilterRating, 0, nullptr, "cannot write file '%s'", out);
 	}
 

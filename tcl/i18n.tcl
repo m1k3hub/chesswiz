@@ -430,6 +430,14 @@ proc extract {msg n} {
 }
 
 
+proc langDir {} {
+	if {[info exists ::scidb::dir::lang] && [file isdirectory $::scidb::dir::lang]} {
+		return $::scidb::dir::lang
+	}
+	return [file join $::scidb::dir::share lang]
+}
+
+
 proc setup {} {
 	variable languages
 
@@ -437,7 +445,7 @@ proc setup {} {
 	if {[info exists ::i18n::languages]} {
 		foreach entry $::i18n::languages {
 			lassign $entry lang code encoding file
-			set f [file join $::scidb::dir::share lang $file]
+			set f [file join [langDir] $file]
 
 			if [file readable $f] {
 				set [namespace current]::lang$lang $code
@@ -470,7 +478,7 @@ proc selectLang {{lang {}}} {
 	set langID [set ::mc::lang$Language]
 	set encoding [set ::mc::encoding$Language]
 
-	set file [file join $::scidb::dir::share lang $mc::input($Language)]
+	set file [file join [langDir] $mc::input($Language)]
 	if {[file readable $file]} {
 		set f [open $file r]
 		chan configure $f -encoding $encoding
@@ -491,7 +499,7 @@ proc selectLang {{lang {}}} {
 
 	if {[tk windowingsystem] eq "aqua"} { set ::mc::Ctrl "Cmd" }
 
-	set file [file join $::scidb::dir::share lang nag $mc::input($Language)]
+	set file [file join [langDir] nag $mc::input($Language)]
 	if {[file readable $file]} {
 		set f [open $file r]
 		chan configure $f -encoding $encoding
@@ -512,10 +520,10 @@ proc selectLang {{lang {}}} {
 	# English kept translating ECO names (e.g. "Defensa Sicilian").
 	set EcoMatch {}
 
-	set file [file join $::scidb::dir::share lang eco $mc::input($Language)]
+	set file [file join [langDir] eco $mc::input($Language)]
 	if {![file readable $file]} {
 		# use English descriptions as fallback
-		set file [file join $::scidb::dir::share lang eco $mc::input(English)]
+		set file [file join [langDir] eco $mc::input(English)]
 	}
 	if {[file readable $file]} {
 		set f [open $file r]

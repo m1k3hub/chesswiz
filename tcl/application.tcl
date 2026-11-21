@@ -1810,6 +1810,7 @@ proc openPane {uid {explicit true} {yieldEvents false}} {
 		# between construction and mapping instead of draining only paint.
 		if {$yieldEvents} { update } else { update idletasks }
 	}
+	if {[catch { set leaves [$twm leaves] }] || $uid ni $leaves} { return {} }
 	if {[catch { set frame [$twm leaf $uid] }] || ![winfo exists $frame]} { return {} }
 
 	if {$yieldEvents && [$Vars(notebook) select] ne $initialTab} { return $frame }

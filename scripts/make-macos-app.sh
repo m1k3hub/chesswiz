@@ -39,6 +39,19 @@ if [ -x "$ENGINE_DIR/reckless-chesswiz" ]; then
     cp "$ENGINE_DIR/reckless-chesswiz" "$RES/engines/"
     cp "$ROOT/engines/reckless/LICENSE" "$RES/engines/Reckless-License.txt"
 fi
+# Bundled Dutch Swiss pairing helper (bbpPairings v6.0.0) when built.
+BBP_BIN=""
+for cand in "$BUILD/build/bbp-native/bbpPairings" "$ENGINE_DIR/bbpPairings" "$ROOT/build/bbp-native/bbpPairings"; do
+    if [ -x "$cand" ]; then
+        BBP_BIN="$cand"
+        break
+    fi
+done
+if [ -n "$BBP_BIN" ]; then
+    cp "$BBP_BIN" "$STAGE/Chesswiz.app/Contents/MacOS/bbpPairings"
+    cp "$ROOT/engines/bbpPairings/LICENSE.txt" "$RES/engines/bbpPairings-LICENSE.txt"
+    cp "$ROOT/engines/bbpPairings/Apache-2.0.txt" "$RES/engines/bbpPairings-Apache-2.0.txt"
+fi
 ICONSET="$STAGE/Chesswiz.iconset"
 mkdir -p "$ICONSET"
 for size in 16 32 128 256 512; do

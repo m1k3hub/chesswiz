@@ -33,7 +33,7 @@ subdirs-man: Makefile.in check-mtime
 subdirs-src: Makefile.in check-mtime
 	@$(MAKE) -C src
 
-subdirs-engines: Makefile.in check-mtime
+subdirs-engines: Makefile.in check-mtime subdirs-src
 	@$(MAKE) -C engines
 
 subdirs-tcl: Makefile.in check-mtime

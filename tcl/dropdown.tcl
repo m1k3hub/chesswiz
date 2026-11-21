@@ -1167,6 +1167,7 @@ proc ::menu::PaneFloating {uid {twm ""}} {
 		if {[catch { set twm [::application::twm] }]} { return 0 }
 	}
 	if {$twm eq ""} { return 0 }
+	if {[catch { set leaves [$twm leaves] }] || $uid ni $leaves} { return 0 }
 	if {[catch { set leaf [$twm leaf $uid] }] || $leaf eq ""} { return 0 }
 	if {[catch { set top [$twm toplevel $leaf] }]} { return 0 }
 	if {[catch { set floating [$twm isfloat $top] }]} { return 0 }

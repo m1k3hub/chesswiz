@@ -340,8 +340,11 @@ namespace utility
       template <typename T>
       constexpr uint(const T &value, detail::floating_tag)
       {
-        assert(std::isfinite(value));
-        assert(value > -1.f);
+        if (!std::is_constant_evaluated())
+        {
+          assert(std::isfinite(value));
+          assert(value > -1.f);
+        }
         constexpr unsigned int radix = std::numeric_limits<T>::radix;
         constexpr unsigned int exponent =
           typesizes::minUint(
@@ -438,10 +441,12 @@ namespace utility
       constexpr uint() { }
       template <typename T>
       constexpr uint(const T value) : highPiece(value) {
-        assert(
-          !std::is_floating_point<T>::value || std::isfinite((long double)value)
-        );
-        assert(!std::is_floating_point<T>::value || value > -1.f);
+        if (!std::is_constant_evaluated()) {
+          assert(
+            !std::is_floating_point<T>::value || std::isfinite((long double)value)
+          );
+          assert(!std::is_floating_point<T>::value || value > -1.f);
+        }
       }
 
       constexpr bool operator==(const uint<1> that) const

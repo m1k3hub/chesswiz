@@ -1690,9 +1690,26 @@ getCodec(char const* database, variant::Type variant)
 
 
 static int
+checkDatabaseOpen(char const* database, variant::Type variant = variant::Undetermined)
+{
+	if (database)
+	{
+		if (!Scidb->contains(database, variant))
+			return error(::CmdGet, nullptr, nullptr, "database '%s' is not open", database);
+	}
+	else if (!Scidb->haveCurrentBase())
+	{
+		return error(::CmdGet, nullptr, nullptr, "no current database");
+	}
+	return TCL_OK;
+}
+
+
+static int
 getEncoding(char const* database, variant::Type variant)
 {
-	M_ASSERT(database == 0 || Scidb->contains(database, variant));
+	if (checkDatabaseOpen(database, variant) != TCL_OK)
+		return TCL_ERROR;
 	Cursor const& cursor = database ? Scidb->cursor(database, variant) : Scidb->cursor();
 	::tcl::setResult(cursor.database().encoding());
 	return TCL_OK;
@@ -1702,7 +1719,8 @@ getEncoding(char const* database, variant::Type variant)
 static int
 getUsedEncoding(char const* database, variant::Type variant)
 {
-	M_ASSERT(database == 0 || Scidb->contains(database, variant));
+	if (checkDatabaseOpen(database, variant) != TCL_OK)
+		return TCL_ERROR;
 	Cursor const& cursor = database ? Scidb->cursor(database, variant) : Scidb->cursor();
 	::tcl::setResult(cursor.database().usedEncoding());
 	return TCL_OK;
@@ -1712,7 +1730,8 @@ getUsedEncoding(char const* database, variant::Type variant)
 static int
 getCreated(char const* database = 0)
 {
-	M_ASSERT(database == 0 || Scidb->contains(database));
+	if (checkDatabaseOpen(database) != TCL_OK)
+		return TCL_ERROR;
 	::tcl::setResult(Scidb->cursor(database).database().created().asString());
 	return TCL_OK;
 }
@@ -1721,7 +1740,8 @@ getCreated(char const* database = 0)
 static int
 getModified(char const* database = 0)
 {
-	M_ASSERT(database == 0 || Scidb->contains(database));
+	if (checkDatabaseOpen(database) != TCL_OK)
+		return TCL_ERROR;
 	::tcl::setResult(Scidb->cursor(database).database().modified().asString());
 	return TCL_OK;
 }
@@ -1730,7 +1750,8 @@ getModified(char const* database = 0)
 static int
 getReadonly(char const* database, variant::Type variant __attribute__((unused)))
 {
-	M_ASSERT(database == 0 || Scidb->contains(database, variant));
+	if (checkDatabaseOpen(database, variant) != TCL_OK)
+		return TCL_ERROR;
 	MultiCursor const& cursor = database ? Scidb->multiCursor(database) : Scidb->multiCursor();
 	::tcl::setResult(cursor.isReadonly());
 	return TCL_OK;
@@ -1740,7 +1761,8 @@ getReadonly(char const* database, variant::Type variant __attribute__((unused)))
 static int
 getWritable(char const* database = 0)
 {
-	M_ASSERT(database == 0 || Scidb->contains(database));
+	if (checkDatabaseOpen(database) != TCL_OK)
+		return TCL_ERROR;
 	::tcl::setResult(Scidb->isWritable(database));
 	return TCL_OK;
 }
@@ -1749,7 +1771,8 @@ getWritable(char const* database = 0)
 static int
 getDescription(char const* database = 0)
 {
-	M_ASSERT(database == 0 || Scidb->contains(database));
+	if (checkDatabaseOpen(database) != TCL_OK)
+		return TCL_ERROR;
 	::tcl::setResult(Scidb->cursor(database).database().description());
 	return TCL_OK;
 }
@@ -1758,7 +1781,8 @@ getDescription(char const* database = 0)
 static int
 getVariant(char const* database = 0)
 {
-	M_ASSERT(database == 0 || Scidb->contains(database));
+	if (checkDatabaseOpen(database) != TCL_OK)
+		return TCL_ERROR;
 	::tcl::setResult(tcl::tree::variantToString(Scidb->cursor(database).database().variant()));
 	return TCL_OK;
 }
@@ -1767,7 +1791,8 @@ getVariant(char const* database = 0)
 static int
 getVariant(char const* database, unsigned number)
 {
-	M_ASSERT(database == 0 || Scidb->contains(database));
+	if (checkDatabaseOpen(database) != TCL_OK)
+		return TCL_ERROR;
 	::tcl::setResult(tcl::tree::variantToString(Scidb->cursor(database).database().variant(number)));
 	return TCL_OK;
 }
@@ -1776,7 +1801,8 @@ getVariant(char const* database, unsigned number)
 static int
 getVariants(char const* database)
 {
-	M_ASSERT(database);
+	if (!database || !Scidb->contains(database))
+		return error(::CmdGet, nullptr, nullptr, "database '%s' is not open", database ? database : "");
 
 	Application::Variants variants = Scidb->getAllVariants(database);
 

@@ -75,6 +75,17 @@ if [ -d "$ROOT/build/engines-win" ]; then
 	[ ! -f "$DIST/engines/reckless-chesswiz.exe" ] || cp "$ROOT/engines/reckless/LICENSE" "$DIST/engines/Reckless-License.txt"
 fi
 
+# Bundled Dutch Swiss pairing helper (bbpPairings v6.0.0) when built.
+for cand in "$BUILD/build/bbp-x86_64-windows-gnu/bbpPairings.exe" "$ROOT/build/bbp-x86_64-windows-gnu/bbpPairings.exe"; do
+	if [ -f "$cand" ]; then
+		cp "$cand" "$DIST/bbpPairings.exe"
+		mkdir -p "$DIST/engines"
+		cp "$ROOT/engines/bbpPairings/LICENSE.txt" "$DIST/engines/bbpPairings-LICENSE.txt"
+		cp "$ROOT/engines/bbpPairings/Apache-2.0.txt" "$DIST/engines/bbpPairings-Apache-2.0.txt"
+		break
+	fi
+done
+
 for d in tcl8.6 tk8.6 tcl8 json sha1; do
 	cp -R "$SYSROOT/lib/$d" "$DIST/lib/"
 done

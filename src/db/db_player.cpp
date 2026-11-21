@@ -1544,11 +1544,12 @@ Player::insertPlayer(uint32_t fideID, mstl::string const& name)
 {
 	M_REQUIRE(findFidePlayer(fideID) == 0);
 
-	Player* player = new Player;
-
+	Player* player = ::playerAllocator.alloc();
+	::playerDict.push_back(player);
 	::fidePlayerDict.insert_unique(fideID, player);
 
-	player->m_name = name;
+	mstl::string safeName(name.empty() ? "?" : name.c_str());
+	::alloc(player->m_name, safeName);
 	player->setFideID(fideID);
 
 	return player;

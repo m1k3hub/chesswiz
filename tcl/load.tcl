@@ -485,7 +485,13 @@ if {[llength [info commands winfo]]} {
 }
 
 # --- Load localization file -------------------------------------------
-set file [file join $scidb::dir::share lang localization.tcl]
+set _langDir [file join [file dirname [file normalize [info script]]] lang]
+if {![file readable [file join $_langDir localization.tcl]]} {
+	set _langDir [file join $::scidb::dir::share lang]
+}
+set ::scidb::dir::lang $_langDir
+unset _langDir
+set file [file join $::scidb::dir::lang localization.tcl]
 if {[file readable $file]} {
 	load::source $file -message [format $load::mc::Loading $load::mc::LocalizationFile] -encoding utf-8
 }

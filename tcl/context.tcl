@@ -1898,7 +1898,9 @@ proc ::context::CascadePrefix {id menu object} {
 			return 1
 		}
 		c10.show_column {
-			::table::MakeShowColumnMenu [dict get $object table] $menu
+			set table [dict get $object table]
+			if {![info exists ::table::IdMap($table)]} { return 0 }
+			::table::MakeShowColumnMenu $table $menu
 			set last [$menu index end]
 			if {$last ne "none"} {
 				for {set i 0} {$i <= $last} {incr i} {
@@ -2720,6 +2722,7 @@ proc ::context::Command {id object} {
 	}
 	if {$id eq "c10.show_column" && [dict exists $object targetColumn]} {
 		set table [dict get $object table]
+		if {![info exists ::table::IdMap($table)]} { return "error: unknown table '$table'" }
 		set column [dict get $object targetColumn]
 		set optId $::table::IdMap($table)
 		set ::table::${optId}::Options(-visible:$column) [expr {[dict get $object showColumn] ? 1 : 0}]
@@ -3135,6 +3138,7 @@ proc ::context::Command {id object} {
 		c10.hide { ::table::hideColumn [dict get $object table] [dict get $object column] }
 		c10.auto_stretch {
 			set table [dict get $object table]
+			if {![info exists ::table::IdMap($table)]} { return }
 			set column [dict get $object column]
 			set var ::table::$::table::IdMap($table)::Options(-stretch:$column)
 			set $var [expr {![set $var]}]

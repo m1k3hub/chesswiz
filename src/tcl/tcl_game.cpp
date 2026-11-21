@@ -4331,6 +4331,12 @@ cmdToPGN(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	else
 		return error(CmdToPGN, nullptr, nullptr, "unexpected source '%s'", arg);
 
+	unsigned pos = position == Application::InvalidPosition ? scidb->currentPosition() : position;
+	if (!scidb->containsGameAt(pos))
+		return error(CmdToPGN, nullptr, nullptr, "no game at position %u", pos);
+	if (source == copy::ModifiedVersion && !scidb->game(pos).isModified())
+		return error(CmdToPGN, nullptr, nullptr, "game at position %u is not modified", pos);
+
 	mstl::ostringstream strm;
 
 	if (save::isOk(scidb->exportGame(position, strm, flags, source, chessPadDiagramNag)))
