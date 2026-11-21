@@ -1081,17 +1081,19 @@ tcltest::test ask-tooltip-dedup-cache-hit-and-typed-cancels-prewarm {tooltip Key
 	set ::action::AskCacheCheck 0
 	set cacheMatchesLive [expr {$r3 eq $rCheck && [llength $r1] > 0 && [llength $r2] > 0}]
 
-	# 3. Typing non-empty text cancels a pending deferred Prewarm timer.
+	# 3. Typing non-empty text cancels the old pending Prewarm timer and reschedules it.
 	::application::ask::HideList
-	set ::application::ask::Priv(prewarmAfter) [after 5000 ::application::ask::Prewarm]
+	set oldTimer [after 5000 ::application::ask::Prewarm]
+	set ::application::ask::Priv(prewarmAfter) $oldTimer
 	set entry [::application::ask::Entry]
 	$entry delete 0 end
 	$entry insert 0 "help"
 	unset -nocomplain ::application::ask::Priv(filtered)
 	::application::ask::Typed "p"
-	set prewarmCancelled [expr {$::application::ask::Priv(prewarmAfter) eq ""}]
+	set newTimer $::application::ask::Priv(prewarmAfter)
+	set prewarmRescheduled [expr {$oldTimer ni [after info] && $newTimer ne "" && $newTimer ne $oldTimer}]
 
-	list [expr {$hideMatches == 1}] $menuIdsZero $cacheMatchesLive $prewarmCancelled
+	list [expr {$hideMatches == 1}] $menuIdsZero $cacheMatchesLive $prewarmRescheduled
 } -cleanup {
 	catch { trace remove execution ::context::MenuIds enter ::scidb::test::ask::_countMenuIds }
 	set ::action::AskCacheCheck 0
@@ -1103,5 +1105,107 @@ tcltest::test ask-tooltip-dedup-cache-hit-and-typed-cancels-prewarm {tooltip Key
 	::application::ask::PlaceholderState
 	update
 } -result {1 1 1 1}
+
+tcltest::test ask-typed-debounces-deferred-prewarm {Typed debounces deferred Prewarm instead of losing it, never fires between keystrokes, respects grabs, and runs on HideList} -setup {
+	set savedQuery $::application::ask::Query
+	::application::ask::HideList
+	::application::ask::CancelPrewarm
+	set ::scidb::test::ask::PrewarmCalls 0
+	set ::scidb::test::ask::PrewarmLabelCalls 0
+	proc ::scidb::test::ask::_countPrewarm {args} { incr ::scidb::test::ask::PrewarmCalls }
+	proc ::scidb::test::ask::_countPrewarmLabels {args} { incr ::scidb::test::ask::PrewarmLabelCalls }
+	set grabTarget [::application::ask::Entry]
+	trace add execution ::application::ask::Prewarm enter ::scidb::test::ask::_countPrewarm
+} -body {
+	set entry [::application::ask::Entry]
+
+	# 1. Deferred Prewarm cancelled by Typed still runs once typing goes quiet and grab clears (VAL-PAL-001).
+	set ::scidb::test::ask::PrewarmCalls 0
+	grab set $grabTarget
+	::application::ask::SchedulePrewarm
+	update
+	$entry delete 0 end
+	$entry insert 0 help
+	unset -nocomplain ::application::ask::Priv(filtered)
+	::application::ask::Typed p
+	grab release $grabTarget
+	after 400
+	update
+	set quietOk [expr {$::scidb::test::ask::PrewarmCalls >= 2 && $::application::ask::Priv(prewarmAfter) eq ""}]
+
+	# 2. Active typing resets the debounce timer so Prewarm never runs between keystrokes.
+	::application::ask::HideList
+	::application::ask::CancelPrewarm
+	set ::scidb::test::ask::PrewarmCalls 0
+	grab set $grabTarget
+	::application::ask::SchedulePrewarm
+	update
+	grab release $grabTarget
+	set text ""
+	set midTypingCalls {}
+	foreach ch {h e l p} {
+		append text $ch
+		$entry delete 0 end
+		$entry insert 0 $text
+		unset -nocomplain ::application::ask::Priv(filtered)
+		::application::ask::Typed $ch
+		after 120
+		update
+		lappend midTypingCalls $::scidb::test::ask::PrewarmCalls
+	}
+	set noMidTyping [expr {$midTypingCalls eq {1 1 1 1} && $::application::ask::Priv(prewarmAfter) ne ""}]
+	after 400
+	update
+	set afterQuiet [expr {$::scidb::test::ask::PrewarmCalls >= 2 && $::application::ask::Priv(prewarmAfter) eq ""}]
+
+	# 3. A still-active grab keeps Prewarm deferred even after typing goes quiet, then runs once released.
+	::application::ask::HideList
+	::application::ask::CancelPrewarm
+	set ::scidb::test::ask::PrewarmCalls 0
+	grab set $grabTarget
+	::application::ask::SchedulePrewarm
+	update
+	$entry delete 0 end
+	$entry insert 0 help
+	unset -nocomplain ::application::ask::Priv(filtered)
+	::application::ask::Typed p
+	set ::scidb::test::ask::PrewarmLabelCalls 0
+	trace add execution ::action::labels enter ::scidb::test::ask::_countPrewarmLabels
+	after 400
+	update
+	set stillBlocked [expr {$::scidb::test::ask::PrewarmLabelCalls == 0 && $::application::ask::Priv(prewarmAfter) ne ""}]
+	grab release $grabTarget
+	after 320
+	update
+	trace remove execution ::action::labels enter ::scidb::test::ask::_countPrewarmLabels
+	set ranAfterUnblock [expr {$::scidb::test::ask::PrewarmLabelCalls >= 1 && $::application::ask::Priv(prewarmAfter) eq ""}]
+
+	# 4. Closing the Ask list promotes a typing-deferred Prewarm to idle immediately.
+	::application::ask::HideList
+	::application::ask::CancelPrewarm
+	set ::scidb::test::ask::PrewarmCalls 0
+	grab set $grabTarget
+	::application::ask::SchedulePrewarm
+	update
+	$entry delete 0 end
+	$entry insert 0 help
+	unset -nocomplain ::application::ask::Priv(filtered)
+	::application::ask::Typed p
+	grab release $grabTarget
+	::application::ask::HideList
+	update
+	set ranOnClose [expr {$::scidb::test::ask::PrewarmCalls >= 2 && $::application::ask::Priv(prewarmAfter) eq ""}]
+
+	list $quietOk $noMidTyping $afterQuiet $stillBlocked $ranAfterUnblock $ranOnClose
+} -cleanup {
+	catch { trace remove execution ::application::ask::Prewarm enter ::scidb::test::ask::_countPrewarm }
+	catch { trace remove execution ::action::labels enter ::scidb::test::ask::_countPrewarmLabels }
+	catch { grab release $grabTarget }
+	::application::ask::HideList
+	::application::ask::CancelPrewarm
+	set ::application::ask::Query $savedQuery
+	::application::ask::PlaceholderState
+	update
+} -result {1 1 1 1 1 1}
 
 tcltest::cleanupTests

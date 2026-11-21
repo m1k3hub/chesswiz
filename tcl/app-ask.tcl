@@ -112,6 +112,7 @@ array set Priv {
 	list		{}
 	listVisible	0
 	prewarmAfter	{}
+	prewarmDeferred	0
 	refreshAfter	{}
 	blinkAfter	{}
 	blinkPaused	0
@@ -340,6 +341,7 @@ proc ::application::ask::CancelPrewarm {} {
 		catch { after cancel $Priv(prewarmAfter) }
 		set Priv(prewarmAfter) ""
 	}
+	set Priv(prewarmDeferred) 0
 	return
 }
 
@@ -348,6 +350,20 @@ proc ::application::ask::SchedulePrewarm {} {
 	CancelPrewarm
 	set Priv(prewarmAfter) [after idle [namespace code Prewarm]]
 	return
+}
+
+# Push a pending Prewarm past active typing so it never fires between
+# keystrokes, without losing the deferred work once typing goes quiet
+# (or when the Ask list closes).
+proc ::application::ask::DeferPrewarm {{delayMs 300}} {
+	variable Priv
+	if {![info exists Priv(prewarmAfter)] || $Priv(prewarmAfter) eq ""} {
+		return 0
+	}
+	catch { after cancel $Priv(prewarmAfter) }
+	set Priv(prewarmDeferred) 1
+	set Priv(prewarmAfter) [after $delayMs [namespace code Prewarm]]
+	return 1
 }
 
 proc ::application::ask::EnsureListWidget {} {
@@ -385,6 +401,7 @@ proc ::application::ask::Prewarm {} {
 	variable RowHeight
 
 	set Priv(prewarmAfter) ""
+	set Priv(prewarmDeferred) 0
 	if {![winfo exists [Entry]]} { return }
 	if {![info exists ::application::Vars(ready)] || !$::application::Vars(ready)} { return }
 	if {[PrewarmBlocked]} {
@@ -791,12 +808,12 @@ proc ::application::ask::Typed {{key ""}} {
 	# Only a real text change may refilter and reset the selection.
 	if {$key in {Up Down Return KP_Enter Escape Tab ISO_Left_Tab}} { return }
 	set text [string trim $Query]
+	if {$text ne ""} { DeferPrewarm }
 	if {[info exists Priv(filtered)] && $Priv(filtered) eq $text \
 	 && [ListVisible]} {
 		return
 	}
 	CancelRefresh
-	if {$text ne ""} { CancelPrewarm }
 	set Priv(filtered) $text
 
 	if {$text eq ""} {
@@ -981,6 +998,10 @@ proc ::application::ask::HideList {} {
 		} else {
 			catch { wm withdraw $Priv(list) }
 		}
+	}
+	if {[info exists Priv(prewarmDeferred)] && $Priv(prewarmDeferred) \
+	 && [info exists Priv(prewarmAfter)] && $Priv(prewarmAfter) ne ""} {
+		SchedulePrewarm
 	}
 }
 
