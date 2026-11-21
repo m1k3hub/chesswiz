@@ -18,13 +18,22 @@ proc ::td::swiss::Executable {} {
 }
 proc ::td::swiss::Readable {id pipe} {
     variable Jobs
-    if {[catch {read $pipe} data]} { set Jobs($id,error) $data; set Jobs($id,done) 1; return }
+    if {[catch {read $pipe} data]} {
+        catch {fileevent $pipe readable {}}
+        set Jobs($id,error) $data
+        set Jobs($id,done) 1
+        return
+    }
     append Jobs($id,data) $data
     if {[string length $Jobs($id,data)] > 4000000} { Expire $id $pipe; return }
-    if {[eof $pipe]} { set Jobs($id,done) 1 }
+    if {[eof $pipe]} {
+        catch {fileevent $pipe readable {}}
+        set Jobs($id,done) 1
+    }
 }
 proc ::td::swiss::Expire {id pipe} {
     variable Jobs
+    catch {fileevent $pipe readable {}}
     set Jobs($id,error) "bbpPairings exceeded time or output limit"
     foreach child [pid $pipe] {
         if {$::tcl_platform(platform) eq "windows"} { catch {exec taskkill /PID $child /T /F} } else { catch {exec kill -KILL -- $child} }

@@ -491,9 +491,14 @@ if {[file readable $file]} {
 }
 
 # --- Load piece sets --------------------------------------------------
-foreach file [glob -directory [file join $::scidb::dir::share pieces] -nocomplain *.tcl] {
+set _piecesDir [file join [file dirname [file normalize [info script]]] pieces]
+if {![file isdirectory $_piecesDir]} {
+	set _piecesDir [file join $::scidb::dir::share pieces]
+}
+foreach file [glob -directory $_piecesDir -nocomplain *.tcl] {
 	load::source $file -message [format $load::mc::Loading $load::mc::PieceSet]
 }
+unset _piecesDir
 
 set msg [format $load::mc::Loading $load::mc::Theme]
 
