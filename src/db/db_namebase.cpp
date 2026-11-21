@@ -1127,6 +1127,16 @@ Namebase::rename(NamebaseEntry* entry, mstl::string const& name)
 void
 Namebase::finishRenaming()
 {
+	// Preserve every live name before retiring the previous rename arena.
+	// Entries not renamed in this batch may still point into that arena.
+	if (!m_stringAllocator2) m_stringAllocator2 = new StringAllocator(32768);
+	for (unsigned i = 0; i < m_list.size(); ++i)
+	{
+		mstl::string const& name = m_list[i]->m_name;
+		char* copy = m_stringAllocator2->alloc(name.size() + 1);
+		::memcpy(copy, name.c_str(), name.size() + 1);
+		m_list[i]->m_name.hook(copy);
+	}
 	mstl::swap(m_stringAllocator2, m_stringAllocator3);
 	delete m_stringAllocator2;
 	m_stringAllocator2 = nullptr;

@@ -308,6 +308,8 @@ public:
 	void remove();
 	/// Reset changed status to unchanged
 	void resetChangedStatus();
+	/// Mark initial games of a renamed player changed in memory-only/PGN bases
+	void markPlayerGamesChanged(NamebasePlayer const* player);
 	/// Reset initial size to current size.
 	void resetInitialSize();
 	/// Reset initial size to given size.

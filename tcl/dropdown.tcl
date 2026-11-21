@@ -103,6 +103,8 @@ namespace eval menu::mc {
 	set ReportTimeControl			"Time-Control Profile…"
 	set ReportTrends					"Trends…"
 	set Maintenance						"Maintenance"
+	set MaintFixNames "Fix player names…"
+set NationalLists "National / correspondence lists…"
 	set MaintCompact					"Compact…"
 	set MaintStripMoves				"Strip Move Information…"
 	set MaintStripTags				"Strip PGN Tags…"
@@ -431,6 +433,7 @@ proc ::menu::DefineTree {} {
 				[list cmd menu.db.reports.trends ReportTrends "" {::menu::DbOpen} {::menu::ModulePresent trend}] \
 			]] \
 			[list cascade Maintenance "" [list \
+				[list cmd menu.db.maintenance.fix_names MaintFixNames "" {::menu::DbOpen}] \
 				[list cmd menu.db.maintenance.compact MaintCompact "" {::menu::DbOpen} {::menu::DbWritable}] \
 				[list cmd menu.db.maintenance.strip_moves MaintStripMoves "" {expr {[::menu::DbOpen] && ![::menu::TrialMode]}} {::menu::DbWritable}] \
 				[list cmd menu.db.maintenance.strip_tags MaintStripTags "" {expr {[::menu::DbOpen] && ![::menu::TrialMode]}} {::menu::DbWritable}] \
@@ -445,6 +448,7 @@ proc ::menu::DefineTree {} {
 			[list cmd menu.db.readonly ReadOnly "" {::menu::DbOpen}] \
 			[list sep] \
 			[list cascade PlayerData "" [list \
+				[list cmd menu.db.player.lists NationalLists] \
 				[list cmd menu.db.player.update UpdateRating "" {::menu::DbOpen} {::menu::DbWritable}] \
 				[list cmd menu.db.player.names CheckNames "" {::menu::DbOpen}] \
 			]] \
@@ -3154,6 +3158,8 @@ proc ::menu::Do {id} {
 		menu.db.reports.result { return [::application::assistant::runTool check_results {}] }
 		menu.db.reports.timecontrol { return [::application::assistant::runTool event_types {}] }
 		menu.db.reports.trends { return [::application::assistant::runTool database_trend {}] }
+		menu.db.maintenance.fix_names { return [::playerdata::fixNames .application [CurrentBase]] }
+		menu.db.player.lists { return [::playerdata::ratingLists .application] }
 		menu.db.maintenance.compact { return [::application::assistant::runTool compact_database {}] }
 		menu.db.maintenance.strip_moves { return [::application::database::StripMoveInfo .application [CurrentBase]] }
 		menu.db.maintenance.strip_tags { return [::application::database::StripPGNTags .application [CurrentBase]] }

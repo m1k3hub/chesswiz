@@ -3530,6 +3530,94 @@ numberOf(mstl::string const& field)
 }
 
 
+// Parse an optional numeric cell (empty, "-", "0", "0000" -> 0) and reject
+// non-digit text or uint32 overflow so malformed rows fail the whole import.
+bool
+parseOptionalNumber(mstl::string const& field, unsigned& value)
+{
+	mstl::string s(trimmed(field));
+	value = 0;
+
+	if (s.empty() || s == ListNone)
+		return true;
+
+	for (unsigned i = 0; i < s.size(); ++i)
+	{
+		if (!::isdigit(static_cast<unsigned char>(s[i])))
+			return false;
+
+		unsigned digit = unsigned(s[i] - '0');
+
+		if (value > (0xffffffffu - digit)/10u)
+			return false;
+
+		value = value*10u + digit;
+	}
+
+	return true;
+}
+
+
+// Installed lists store one record per line with '|' between its 8 fields.
+bool
+hasInstalledRecordSeparator(mstl::string const& s)
+{
+	for (unsigned i = 0; i < s.size(); ++i)
+	{
+		if (s[i] == '|' || s[i] == '\r' || s[i] == '\n' || s[i] == '\0')
+			return true;
+	}
+
+	return false;
+}
+
+
+// A DSB club ZPS is 5 ASCII alphanumeric characters (with digits in 1..3, e.g.
+// "10614" or "B000A"), never all zero and never containing '-' or '|'.
+bool
+isValidDwzZps(mstl::string const& s)
+{
+	if (s.size() != 5 || s == "00000" || hasInstalledRecordSeparator(s))
+		return false;
+
+	unsigned char c0 = static_cast<unsigned char>(s[0]);
+	unsigned char c1 = static_cast<unsigned char>(s[1]);
+	unsigned char c2 = static_cast<unsigned char>(s[2]);
+	unsigned char c3 = static_cast<unsigned char>(s[3]);
+	unsigned char c4 = static_cast<unsigned char>(s[4]);
+
+	return	c0 < 128 && ::isalnum(c0)
+			&& c1 < 128 && ::isdigit(c1)
+			&& c2 < 128 && ::isdigit(c2)
+			&& c3 < 128 && ::isdigit(c3)
+			&& c4 < 128 && ::isalnum(c4);
+}
+
+
+// An ECF player code is ASCII alphanumeric with at least one digit and no '|'.
+bool
+isValidEcfCode(mstl::string const& s)
+{
+	if (s.empty() || hasInstalledRecordSeparator(s))
+		return false;
+
+	bool hasDigit = false;
+
+	for (unsigned i = 0; i < s.size(); ++i)
+	{
+		unsigned char c = static_cast<unsigned char>(s[i]);
+
+		if (c >= 128 || !::isalnum(c))
+			return false;
+
+		if (::isdigit(c))
+			hasDigit = true;
+	}
+
+	return hasDigit;
+}
+
+
 // "m", "w" and "f" are the spellings of the three lists; "-" and "n" are none.
 sex::ID
 sexOf(mstl::string const& field)
@@ -3624,6 +3712,9 @@ personName(mstl::string const& field)
 
 	name = trimmed(name.substr(0, comma));
 
+	if (name.empty())
+		return mstl::string();
+
 	if (!first.empty())
 	{
 		name += ", ";
@@ -3668,7 +3759,7 @@ headerValue(mstl::string const& header, char const* key)
 
 // The fields of a comma-separated line: a field in double quotes may hold the
 // separator ("Carlsen,Magnus"), and "" inside it is a quote.
-void
+bool
 csvFields(mstl::string const& line, mstl::vector<mstl::string>& fields)
 {
 	fields.clear();
@@ -3715,6 +3806,7 @@ csvFields(mstl::string const& line, mstl::vector<mstl::string>& fields)
 	}
 
 	fields.push_back(field);
+	return !quoted;
 }
 
 
@@ -3742,9 +3834,11 @@ struct CsvColumns
 	// The number of the column named <a> (or <b>, or <c>), -1 when there is none.
 	int find(char const* a, char const* b = nullptr, char const* c = nullptr) const
 	{
-		for (unsigned i = 0; i < names.size(); ++i)
-			if (names[i] == a || (b && names[i] == b) || (c && names[i] == c))
-				return int(i);
+		char const* choices[] = { a, b, c };
+		for (unsigned k = 0; k < 3; ++k)
+			if (choices[k])
+				for (unsigned i = 0; i < names.size(); ++i)
+					if (names[i] == choices[k]) return int(i);
 
 		return -1;
 	}
@@ -3763,7 +3857,14 @@ fieldOf(mstl::vector<mstl::string> const& fields, int column)
 bool
 readListRecord(mstl::string const& text, ListRecord& r)
 {
-	mstl::string line(stripped(text));
+	mstl::string::size_type n = text.size();
+
+	if (n && text[n - 1] == '\n')
+		--n;
+	if (n && text[n - 1] == '\r')
+		--n;
+
+	mstl::string line(n == text.size() ? text : text.substr(0, n));
 
 	if (line.empty() || line[0] == '#')
 		return false;
@@ -3782,23 +3883,41 @@ readListRecord(mstl::string const& text, ListRecord& r)
 		b = i + 1;
 	}
 
-	if (f.size() < 8)
+	if (f.size() != 8)
 		return false;
 
+	for (unsigned i = 0; i < f.size(); ++i)
+	{
+		if (hasInstalledRecordSeparator(f[i]))
+			return false;
+	}
+
 	r = ListRecord();
+	mstl::string idField(trimmed(f[0]));
 
-	if (trimmed(f[0]) != ListNone)
-		r.id = trimmed(f[0]);
+	if (idField.empty() || hasInstalledRecordSeparator(idField))
+		return false;
 
-	r.fideID		= numberOf(f[1]);
+	if (idField != ListNone)
+		r.id = idField;
+
+	if (	!parseOptionalNumber(f[1], r.fideID)
+		|| !parseOptionalNumber(f[3], r.birthYear)
+		|| !parseOptionalNumber(f[4], r.rating)
+		|| r.rating > rating::Max_Value
+		|| (r.birthYear != 0 && (r.birthYear < Date::MinYear || r.birthYear > 2047)))
+	{
+		return false;
+	}
+
 	r.sex			= sexOf(f[2]);
-	r.birthYear	= numberOf(f[3]);
-	r.rating		= numberOf(f[4]);
 	r.federation	= federationOf(f[5]);
 	r.titles		= titlesOf(f[6]);
 	r.name			= personName(f[7]);
 
-	return !r.name.empty() && sys::utf8::validate(r.name);
+	return	!r.name.empty()
+			&& sys::utf8::validate(r.name)
+			&& !hasInstalledRecordSeparator(r.name);
 }
 
 
@@ -3920,27 +4039,46 @@ convertDwzList(	mstl::istream& stream,
 		else
 			codec.convertFromWindows(line, utf8);
 
-		csvFields(utf8, f);
+		if (!csvFields(utf8, f) || f.size() < columns.names.size())
+			return false;
 
 		ListRecord r;
 		r.name = personName(fieldOf(f, name));
 
-		if (r.name.empty() || !sys::utf8::validate(r.name))
-			continue;
-
 		// the federation's player number: the club's ZPS and the member's number
-		mstl::string member(trimmed(fieldOf(f, zps)));
+		mstl::string zpsCode(trimmed(fieldOf(f, zps)));
+		mstl::string memberNr(trimmed(fieldOf(f, nr)));
+		unsigned memberNum = 0;
+
+		if (	hasInstalledRecordSeparator(fieldOf(f, zps))
+			|| hasInstalledRecordSeparator(fieldOf(f, nr))
+			|| hasInstalledRecordSeparator(fieldOf(f, name))
+			|| !isValidDwzZps(zpsCode)
+			|| !isNumber(memberNr)
+			|| !parseOptionalNumber(memberNr, memberNum)
+			|| memberNum == 0
+			|| hasInstalledRecordSeparator(memberNr)
+			|| r.name.empty()
+			|| !sys::utf8::validate(r.name)
+			|| hasInstalledRecordSeparator(r.name)
+			|| !parseOptionalNumber(fieldOf(f, birth), r.birthYear)
+			|| !parseOptionalNumber(fieldOf(f, rating), r.rating)
+			|| !parseOptionalNumber(fieldOf(f, fideID), r.fideID)
+			|| r.rating > rating::Max_Value
+			|| (r.birthYear != 0 && (r.birthYear < Date::MinYear || r.birthYear > 2047)))
+		{
+			return false;
+		}
+
+		mstl::string member(zpsCode);
 		member += '-';
-		member += trimmed(fieldOf(f, nr));
+		member += memberNr;
 
 		if (members.has_key(member))
 			continue;
 
 		r.id			= member;
 		r.sex			= sexOf(fieldOf(f, sex));
-		r.birthYear	= numberOf(fieldOf(f, birth));
-		r.rating		= numberOf(fieldOf(f, rating));
-		r.fideID		= numberOf(fieldOf(f, fideID));
 		r.federation	= federationOf(fieldOf(f, fideLand));
 		r.titles		= titlesOf(fieldOf(f, titles)) | titlesOf(fieldOf(f, wTitles));
 
@@ -3988,7 +4126,7 @@ convertEcfList(	mstl::istream& stream,
 	int	rating2	= columns.find("original_standard", "standard");
 	int	grade		= columns.find("grade");
 
-	if (code < 0 || name < 0)
+	if (code < 0 || name < 0 || (rating < 0 && grade < 0))
 		return false;
 
 	sys::utf8::Codec codec(sys::utf8::Codec::windows());
@@ -4009,32 +4147,62 @@ convertEcfList(	mstl::istream& stream,
 		else
 			codec.convertFromWindows(line, utf8);
 
-		csvFields(utf8, f);
+		if (!csvFields(utf8, f) || f.size() < columns.names.size())
+			return false;
 
 		ListRecord r;
 		r.id			= trimmed(fieldOf(f, code));
 		r.name		= personName(fieldOf(f, name));
 
-		if (r.name.empty() || !sys::utf8::validate(r.name))
-			continue;
+		if (	hasInstalledRecordSeparator(fieldOf(f, code))
+			|| hasInstalledRecordSeparator(fieldOf(f, name))
+			|| !isValidEcfCode(r.id)
+			|| r.name.empty()
+			|| !sys::utf8::validate(r.name)
+			|| hasInstalledRecordSeparator(r.name))
+		{
+			return false;
+		}
 
 		r.sex			= sexOf(fieldOf(f, sex));
-		r.fideID		= numberOf(fieldOf(f, fideID));
 		r.titles		= titlesOf(fieldOf(f, titles));
+
+		if (!parseOptionalNumber(fieldOf(f, fideID), r.fideID))
+			return false;
 
 		if (rating >= 0)
 		{
 			// since 2020 the ECF publishes Elo-like ratings, recalculated nightly
-			r.rating = numberOf(fieldOf(f, rating));
+			unsigned fallback = 0;
 
-			if (r.rating == 0 && rating2 >= 0)
-				r.rating = numberOf(fieldOf(f, rating2));
+			if (!parseOptionalNumber(fieldOf(f, rating), r.rating))
+				return false;
+
+			if (rating2 >= 0 && rating2 != rating && !parseOptionalNumber(fieldOf(f, rating2), fallback))
+				return false;
+
+			if (fallback > rating::Max_Value)
+				return false;
+
+			if (r.rating == 0 && rating2 >= 0 && rating2 != rating)
+				r.rating = fallback;
 		}
 		else if (grade >= 0)
 		{
 			// the export until 2020 published grades: convert them to Elo
-			r.rating = rating::convertEcfToElo(numberOf(fieldOf(f, grade)));
+			unsigned ecfGrade = 0;
+
+			if (	!parseOptionalNumber(fieldOf(f, grade), ecfGrade)
+				|| ecfGrade > (rating::Max_Value - 600u)/8u)
+			{
+				return false;
+			}
+
+			r.rating = rating::convertEcfToElo(ecfGrade);
 		}
+
+		if (r.rating > rating::Max_Value)
+			return false;
 
 		// the nation a player plays for; the API marks a foreign club with an 'F'
 		// followed by the federation, and leaves the nation empty for an English one
@@ -4060,7 +4228,7 @@ convertEcfList(	mstl::istream& stream,
 
 
 // The ICCF list: iccf.com offers its rating grid as a CSV without a header --
-// <place> <id> <federation> <titles> <name> <games> <rating> <sex>, the place
+// <place> <id> <federation> <titles> <name> <games> <rating> <RD>, the place
 // column optional, separated by a semicolon or a tab. Without a header the
 // shape of a record has to be recognised, and a line that is not a player is
 // not written.
@@ -4076,7 +4244,7 @@ convertIccfList(	mstl::istream& stream,
 	mstl::string line;
 	mstl::vector<mstl::string> f;
 	mstl::string utf8;
-	unsigned failed = 0;
+	
 
 	while (stream.getline(line))
 	{
@@ -4091,6 +4259,12 @@ convertIccfList(	mstl::istream& stream,
 			utf8 = line;
 		else
 			codec.convertFromWindows(line, utf8);
+
+		for (unsigned i = 0; i < utf8.size(); ++i)
+		{
+			if (utf8[i] == '\r' || utf8[i] == '\n' || utf8[i] == '\0')
+				return false;
+		}
 
 		f.clear();
 
@@ -4113,37 +4287,51 @@ convertIccfList(	mstl::istream& stream,
 			o = 0;
 
 		ListRecord r;
+		unsigned idNum = 0;
 
 		if (o >= 0)
 		{
 			r.id			= f[o];
 			r.federation	= federationOf(f[o + 1]);
-			r.titles		= titlesOf(f[o + 2]);
+			// Correspondence titles have separate bits from OTB titles.
+			mstl::string ct = f[o + 2];
+			r.titles = ct == "GM" ? title::Mask_CGM
+				: ct == "IM" ? title::Mask_CIM
+				: ct == "SIM" ? title::Mask_CSIM
+				: ct == "LGM" ? title::Mask_CLGM
+				: ct == "LIM" ? title::Mask_CLIM : 0;
 			r.name		= personName(f[o + 3]);
-			r.rating		= numberOf(f[o + 5]);
 
-			if (f.size() > unsigned(o) + 6)
-				r.sex = sexOf(f[o + 6]);
+			unsigned games = 0;
+			unsigned rd = 0;
+
+			// RD is uncertainty, not sex; the dictionary has no RD field.
+			if (	f.size() <= unsigned(o) + 6
+				|| !parseOptionalNumber(f[o + 4], games)
+				|| !isNumber(f[o + 5])
+				|| !parseOptionalNumber(f[o + 5], r.rating)
+				|| !isNumber(f[o + 6])
+				|| !parseOptionalNumber(f[o + 6], rd))
+			{
+				return false;
+			}
 		}
 
 		if (	o < 0
 			|| r.federation == country::Unknown
 			|| !isNumber(r.id)
+			|| !parseOptionalNumber(r.id, idNum)
+			|| idNum == 0
 			|| r.id.size() > 7
+			|| hasInstalledRecordSeparator(r.id)
 			|| r.name.size() < 3
 			|| !sys::utf8::validate(r.name)
+			|| hasInstalledRecordSeparator(r.name)
 			|| r.rating == 0
 			|| r.rating > rating::Max_Value)
 		{
-			// a heading, a total, or a file of another shape
-			if (++failed == 100 && kept == 0)
-				return false;
-
-			continue;
+			return false; // reject malformed imports even after a valid prefix
 		}
-
-		if (r.sex == sex::Unspecified && title::containsFemaleTitle(r.titles))
-			r.sex = sex::Female;
 
 		if (r.rating < minRating && r.titles == 0)
 			continue;
@@ -4180,15 +4368,16 @@ Player::convertRatingList(	mstl::string const& kind,
 	mstl::string body;
 	body.reserve(4 << 20);
 
+	bool valid = false;
 	switch (list)
 	{
-		case List_Dwz:	convertDwzList(stream, body, minRating, read, kept); break;
-		case List_Ecf:	convertEcfList(stream, body, minRating, read, kept); break;
-		case List_Iccf:	convertIccfList(stream, body, minRating, read, kept); break;
-		default:			break;
+		case List_Dwz: valid = convertDwzList(stream, body, minRating, read, kept); break;
+		case List_Ecf: valid = convertEcfList(stream, body, minRating, read, kept); break;
+		case List_Iccf: valid = convertIccfList(stream, body, minRating, read, kept); break;
+		default: break;
 	}
 
-	if (kept == 0)
+	if (!valid || kept == 0)
 		return false;
 
 	if (out == nullptr)

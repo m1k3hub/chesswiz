@@ -48,6 +48,7 @@ set EcoColWhitePct				"White %"
 set EcoColDrawPct					"Draw %"
 set EcoColBlackPct				"Black %"
 set EcoColTrend					"Trend"
+set FixPlayerNames				"Fix player names…"
 set Refresh							"Refresh"
 set CopySummary					"Copy Summary"
 set ReviewDuplicates				"Review Duplicates"
@@ -80,7 +81,35 @@ set BlackTrend						"Black-leaning"
 set BalancedTrend					"Balanced"
 set MarkDeleted					"Mark as deleted"
 
+set ::application::database::MaintenanceDefaultMC {}
+foreach _name {
+	MaintenanceReport MaintenanceOverview MaintenanceOpenings MaintenanceDuplicates
+	DuplicatesTitle DuplicatesGroup NoDuplicatesFound EcoStatsTitle
+	MaintenanceReportTitle EcoColEco EcoColTotal EcoColWhite EcoColDraw
+	EcoColBlack EcoColWhitePct EcoColDrawPct EcoColBlackPct EcoColTrend
+	FixPlayerNames Refresh CopySummary ReviewDuplicates CheckDuplicateGroup
+	DuplicateVerdict CompactNow ScidbBases ConvertDatabase ConvertQuestion
+	ConvertTitle ConvertDestination ConvertDone OpeningsCovered DuplicateGroups
+	DuplicateGames DeletedGames LargestGroup TopOpening CompactionStatus
+	CompactionNeeded CompactionNotNeeded NoOpeningsFound DuplicateColSize
+	DuplicateColGames DuplicateSummary SelectExtraGames WhiteTrend DrawTrend
+	BlackTrend BalancedTrend MarkDeleted
+} {
+	lappend ::application::database::MaintenanceDefaultMC $_name [set $_name]
+}
+unset _name
+
 } ;# namespace mc
+
+proc ResetMaintenanceMC {} {
+	foreach {name value} $::application::database::MaintenanceDefaultMC {
+		set ::application::database::mc::$name $value
+	}
+	return
+}
+if {[llength [info commands ::mc::addDefaultReset]]} {
+	::mc::addDefaultReset ::application::database::ResetMaintenanceMC
+}
 
 proc MaintenanceDialogName {file} {
 	return .maintenance_[string map {: _ . _ / _ " " _} $file]
@@ -214,6 +243,9 @@ proc OpenMaintenanceReport {parent file variant {tab overview}} {
 		set actions [ttk::frame $dlg.actions]
 		pack $actions -side top -fill x -padx 6 -pady {6 2}
 
+		ttk::button $actions.names -text $mc::FixPlayerNames \
+			-command [list ::playerdata::fixNames $dlg $file]
+		pack $actions.names -side left -padx 4
 		ttk::button $actions.duplicates -text $mc::ReviewDuplicates \
 			-command [namespace code [list SelectMaintenanceTab $dlg duplicates]]
 		ttk::button $actions.compact -text $mc::CompactNow \

@@ -183,19 +183,18 @@ MultiBase::descriptionHasChanged() const
 bool
 MultiBase::isUnsaved(unsigned variantIndex) const
 {
-	if (type() != type::PGNFile)
-		return false;
-
 	Database const* base = m_bases[variantIndex];
-	return base && base->hasChanged();
+	if (!base)
+		return false;
+	if (type() == type::PGNFile)
+		return base->hasChanged();
+	return base->isUnsaved();
 }
 
 
 bool
 MultiBase::isUnsaved() const
 {
-	if (type() != type::PGNFile)
-		return false;
 	if (descriptionHasChanged())
 		return true;
 
@@ -364,8 +363,14 @@ MultiBase::setup(FileOffsets* fileOffsets)
 		m_fileOffsets = fileOffsets;
 	}
 
-	m_leader->setReadonly(isReadonly);
-	m_leader->setWritable(m_fileOffsets);
+	for (unsigned v = 0; v < variant::NumberOfVariants; ++v)
+	{
+		if (m_bases[v])
+		{
+			m_bases[v]->setWritable(m_fileOffsets);
+			m_bases[v]->setReadonly(isReadonly);
+		}
+	}
 }
 
 
@@ -517,11 +522,18 @@ MultiBase::setReadonly(bool flag)
 		{
 			for (unsigned v = 0; v < variant::NumberOfVariants; ++v)
 			{
-				if (m_leader != m_bases[v] && m_bases[v] && m_bases[v]->isEmpty())
+				if (m_leader != m_bases[v] && m_bases[v])
 				{
-					m_bases[v]->close();
-					delete m_bases[v];
-					m_bases[v] = nullptr;
+					if (m_bases[v]->isEmpty())
+					{
+						m_bases[v]->close();
+						delete m_bases[v];
+						m_bases[v] = nullptr;
+					}
+					else
+					{
+						m_bases[v]->setReadonly(true);
+					}
 				}
 			}
 		}
@@ -537,6 +549,9 @@ MultiBase::setReadonly(bool flag)
 			{
 				if (!m_bases[v])
 					m_bases[v] = new Database(name, encoding, storage, variant::fromIndex(v), type);
+
+				m_bases[v]->setWritable(m_fileOffsets);
+				m_bases[v]->setReadonly(false);
 			}
 		}
 	}

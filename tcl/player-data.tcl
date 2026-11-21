@@ -99,8 +99,8 @@ set SpellDone		"%s player name(s) linked."
 set NationalLists	"&National Rating Lists..."
 set ListsTitle		"National Rating Lists"
 set ListsIntro		"Chesswiz can keep the rating lists of three federations beside FIDE's. A list is fetched only when you ask for it, is kept in your own directory, and is never written into a database."
-set ListsFooter		"A fetched list is read at once, and replaces the shipped list at every start."
-set ListInstalled	"installed %s: %s players"
+set ListsFooter		"Installed lists take effect after restarting Chesswiz. This safely replaces the previous list without changing open databases."
+set ListInstalled	"installed %s: %s players (next start)"
 set ListNotInstalled	"not installed"
 set ListDownloading	"fetching..."
 set ListDownload	"&Fetch"
@@ -109,7 +109,7 @@ set ListChooseTitle	"The ICCF rating list (a CSV file)"
 set ListCsvFiles	"Rating lists"
 set ListAllFiles	"All files"
 set ListFailed		"The %s rating list could not be updated: %s"
-set ListDone		"The %s rating list of %s is installed: %s player(s) kept of %s."
+set ListDone		"The %s rating list acquired %s is installed for next start: %s player(s) kept of %s. Restart Chesswiz to use it."
 set ListFetching	"Fetching the %s rating list..."
 set Close			"&Close"
 
@@ -126,13 +126,43 @@ set FixNamesColOld	"Name in the database"
 set FixNamesColNew	"Name in the rating list"
 set FixNamesColGames	"Games"
 set FixNamesColSource	"Source"
+set FixNamesColVariant	"Variant"
 set FixNamesPickAll	"Tick &All"
 set FixNamesPickNone	"Tick &None"
 set FixNamesRevert	"&Undo Last Renaming"
 set FixNamesReverted	"%s player name(s) renamed back."
 set FixNamesNoUndo	"No renaming of this database to undo."
+set FixNamesApplyConfirm	"Apply %s selected name fixes (%s game references)?"
+set FixNamesApplyButton	"Apply selected name fixes"
+set FixNamesStale	"The database or reference data changed. Open a fresh preview."
+set FixNamesUndoConflict	"Undo conflicts with a database or reference-data change. No names changed."
+set FixNamesReasonNoPlayer	"no player of that index"
+set FixNamesReasonInvalidName	"not a name a database can hold"
+set FixNamesReasonNameExists	"the database has a player of that name"
+set FixNamesReasonDuplicateTarget	"another player of this database is renamed to it"
+set FixNamesReasonReadonly	"the database is read-only"
+set FixNamesReasonDuplicateSource	"duplicate source index"
+set FixNamesReasonStalePlayer	"stale preview: player name changed"
+set FixNamesReasonBadArgs	"<renames> needs <index> <expected-name> <name> for each player"
+
+set ::playerdata::DefaultMC {}
+foreach _name [lsort [info vars ::playerdata::mc::*]] {
+	if {[array exists $_name] || [string index [namespace tail $_name] 0] eq "_"} { continue }
+	lappend ::playerdata::DefaultMC [namespace tail $_name] [set $_name]
+}
+unset _name
 
 } ;# namespace mc
+
+proc ::playerdata::ResetMC {} {
+	foreach {name value} $::playerdata::DefaultMC {
+		set ::playerdata::mc::$name $value
+	}
+	return
+}
+if {[llength [info commands ::mc::addDefaultReset]]} {
+	::mc::addDefaultReset ::playerdata::ResetMC
+}
 
 variable Url https://ratings.fide.com/download/players_list.zip
 variable Busy 0
@@ -146,9 +176,8 @@ variable SpellThreshold 0.9
 
 # The national rating lists: whose list it is, where it comes from, and how.
 # "download": the federation publishes the list for anyone to fetch; "file":
-# the user has to fetch it (ICCF's download is a postback of its web
-# application, which no HTTP client can repeat -- see
-# docs/PLAYER_DATA_SOURCES.md). The notes are what the federations ask of us.
+# the user saves the official ICCF export and chooses it locally.
+# See docs/PLAYER_DATA_SOURCES.md for access restrictions and provenance.
 variable ListKinds {dwz ecf iccf}
 variable ListSource
 array set ListSource {
@@ -157,27 +186,28 @@ array set ListSource {
 		how		download
 		url		{https://www.schachbund.de/download-dwz-daten.html?file=files/wertungsportal/downloads/export/csv/LV-0-csv.zip}
 		saved		LV-0-csv.zip
-		note		"The DSB asks that its data not be published: Chesswiz fetches it only on your click, and keeps it in your own directory."
+		note		"Private, noncommercial use only. Publication requires prior agreement with the DWZ officer. Terms: https://www.schachbund.de/impressum.html and archive README.txt."
 	}
 	ecf {
 		name		"English Chess Federation (ECF)"
 		how		download
 		url		{https://rating.englishchess.org.uk/api/rating-list/csv}
 		saved		ecf-rating-list.csv
-		note		"The ECF's rating API is public, and asks that one address not take more than ten minutes of processing a day."
+		note		"Revised OTB standard ratings, with original fallback. Ten minutes of server processing daily per class-C network; resets at midnight GMT. Redistribution rights unresolved. Terms: https://rating.englishchess.org.uk/help/api"
 	}
 	iccf {
 		name		"International Correspondence Chess Federation (ICCF)"
 		how		file
 		url		{https://www.iccf.com/ratings}
 		saved		iccf-rating-list.csv
-		note		"ICCF's list is a button of its web application, which no client can press for you: save the rating list as a CSV file and choose it here."
+		note		"Save Download as CSV from https://www.iccf.com/ratings, then choose it here. Correspondence ratings. Third-party rating-list publication is discussed at https://iccf.com/message?message=1490; this is not an unlimited licence."
 	}
 }
 
-# The proposals of a name fix, their ticks, and the way back
+# The proposals of a name fix, their ticks (per dialog session), and the way back
 variable NameFix
 array set NameFix {}
+variable NameFixSeq 0
 
 } ;# namespace playerdata
 
@@ -398,8 +428,8 @@ proc ::playerdata::SpellReply {state item reply} {
 
 
 # <proposals> are the rows spellingCheck reported: the identity is the entry
-# of a rating list, "fide:1503014", "dsb:10614-1081", "ecf:100011B" or
-# "iccf:220015", not only a FIDE number.
+# of a rating list, "fide:999500001", "dsb:99014-9001", "ecf:990011B" or
+# "iccf:991018", not only a FIDE number.
 proc ::playerdata::applySpellings {base proposals} {
 	set linked 0
 	foreach prop $proposals {
@@ -533,7 +563,7 @@ proc ::playerdata::EmbedLists {w infoFont alertFont} {
 			::tk::AmpWidget ::ttk::button $w.button$kind -text " $mc::ListChoose" \
 				-command [namespace code [list ChooseList $kind $w]]
 		}
-		grid $w.name$kind $w.status$kind $w.button$kind -row $row -sticky w -padx {0 8} -pady {8 0 0 0}
+		grid $w.name$kind $w.status$kind $w.button$kind -row $row -sticky w -padx {0 8} -pady {8 0}
 		grid $w.note$kind -row [incr row] -column 0 -columnspan 3 -sticky w -padx {0 8}
 		grid columnconfigure $w 0 -weight 1
 		incr row
@@ -624,8 +654,7 @@ proc ::playerdata::ListFetched {kind w result} {
 }
 
 
-# ICCF's list is fetched by hand: its download is a postback of its web
-# application, which no HTTP client can repeat.
+# Explicit local import of an export saved from the official ICCF page.
 proc ::playerdata::ChooseList {kind w} {
 	variable Busy
 	variable mc
@@ -648,22 +677,44 @@ proc ::playerdata::ChooseList {kind w} {
 # user directory, and read it into the running dictionary; startup reads the
 # same file instead of the shipped list.
 proc ::playerdata::installList {kind source} {
+	set catalog [ListSource $kind]
 	file mkdir [Dir]
 	set file [listFile $kind]
-	lassign [::scidb::app::filterRatingList $kind $source $file.new] read kept
-	file rename -force $file.new $file
-	::scidb::app::load installed $file
-	::scidb::app::load done
-	# the new entries may fit names the dictionary did not have
-	linkOpen
-	set info [dict create date [clock format [clock seconds] -format %Y-%m-%d] \
-		players $kept read $read source [file tail $source]]
-	set chan [open [listInfoFile $kind] w]
-	puts -nonewline $chan $info
-	close $chan
+	set staged $file.[pid].new
+	set metadata [listInfoFile $kind]
+	set stagedInfo $metadata.[pid].new
+	set hadFile [file exists $file]
+	set hadInfo [file exists $metadata]
+	try {
+		lassign [::scidb::app::filterRatingList $kind $source $staged] read kept
+		set now [clock seconds]
+		set info [dict create date [clock format $now -format %Y-%m-%d] \
+			players $kept read $read source $kind url [dict get $catalog url] \
+			schema chesswiz-rating-list-v1 bytes [file size $source] \
+			downloadedAt [clock format $now -gmt 1 -format %Y-%m-%dT%H:%M:%SZ] \
+			effectivePeriod unknown activation next-start]
+		set chan [open $stagedInfo w]
+		try { puts -nonewline $chan $info } finally { close $chan }
+		if {$hadFile} { file copy -force $file $file.backup }
+		if {$hadInfo} { file copy -force $metadata $metadata.backup }
+		try {
+			file rename -force $staged $file
+			file rename -force $stagedInfo $metadata
+		} on error {message options} {
+			if {$hadFile} { file rename -force $file.backup $file } else { file delete -force $file }
+			if {$hadInfo} { file rename -force $metadata.backup $metadata } else { file delete -force $metadata }
+			return -options $options $message
+		}
+		InvalidateNames
+	} finally {
+		file delete -force $staged $stagedInfo $file.backup $metadata.backup
+	}
+	# The native dictionary is additive and owns pointers used by open databases.
+	# Activate a replacement only at startup, before databases are opened. This
+	# keeps the active dictionary intact on failure and removes stale records
+	# without invalidating live pointers or allocating a personal-data snapshot.
 	return [dict create ok 1 players $kept read $read]
 }
-
 
 proc ::playerdata::ReportList {kind parent answer} {
 	variable mc
@@ -747,7 +798,7 @@ proc ::playerdata::IsCanonicalName {new} {
 }
 
 
-# "fide:1503014" becomes "FIDE 1503014": the list a name comes from.
+# "fide:999500001" becomes "FIDE 999500001": the list a name comes from.
 proc ::playerdata::FormatSource {identity} {
 	set colon [string first : $identity]
 	if {$colon < 0} { return $identity }
@@ -798,11 +849,33 @@ proc ::playerdata::Mark {tick} {
 }
 
 
-proc ::playerdata::fixNames {parent} {
+# Conservative invalidation: lifecycle, database edits and dictionary reloads
+# invalidate every outstanding preview/undo. Snapshot comparison also catches
+# changed player rows and game counts. No event loop runs between check/apply.
+namespace eval ::playerdata { variable NameEpoch 0 }
+proc ::playerdata::InvalidateNames {args} { incr ::playerdata::NameEpoch }
+foreach command {open close clear renamePlayers import save savePGN compact linkPlayers linkPlayer set update copy} {
+	set command ::scidb::db::$command
+	if {[llength [info commands $command]]} {
+		trace add execution $command enter ::playerdata::InvalidateNames
+	}
+}
+trace add execution ::scidb::app::load enter ::playerdata::InvalidateNames
+
+proc ::playerdata::NameState {base} {
+	set state [list $::playerdata::NameEpoch $base]
+	foreach variant [::scidb::db::get variants $base] {
+		lappend state $variant [::scidb::db::playerLinks $base $variant]
+	}
+	return $state
+}
+
+proc ::playerdata::fixNames {parent {base {}}} {
 	variable NameFix
+	variable NameFixSeq
 	variable mc
 
-	set base [::scidb::db::get name]
+	if {$base eq ""} { set base [::scidb::db::get name] }
 	if {![string length $base]} {
 		::dialog::info -parent $parent -message $mc::FixNamesNoBase
 		return
@@ -810,30 +883,50 @@ proc ::playerdata::fixNames {parent} {
 	::widget::busyCursor on
 	set rows [NameProposals $base]
 	::widget::busyCursor off
-	if {![llength $rows]} {
+	if {![llength $rows] && (![info exists NameFix(undo,$base)] || ![llength $NameFix(undo,$base)])} {
 		::dialog::info -parent $parent -message $mc::FixNamesNone
 		return
 	}
 
-	set NameFix(base) $base
-	set NameFix(rows) $rows
-	set NameFix(tree) {}
+	set sid [incr NameFixSeq]
+	set NameFix($sid,state) [NameState $base]
+	set NameFix($sid,base) $base
+	set NameFix($sid,rows) $rows
+	set NameFix($sid,tree) {}
 	for {set i 0} {$i < [llength $rows]} {incr i} {
-		set NameFix(tick,$i) [lindex [lindex $rows $i] 6]
+		set NameFix($sid,tick,$i) [lindex [lindex $rows $i] 6]
 	}
 
-	set msg [format $mc::FixNamesConfirm [::locale::formatNumber [llength $rows]] \
-		[::util::databaseName $base]]
-	append msg "\n\n<embed>"
+	try {
+		set msg [format $mc::FixNamesConfirm [::locale::formatNumber [llength $rows]] \
+			[::util::databaseName $base]]
+		append msg "\n\n<embed>"
 
-	set reply [::dialog::question -parent $parent -title $mc::FixNamesTitle -default no \
-		-message $msg -detail $mc::FixNamesDetail \
-		-embed [namespace code EmbedNameFixes] \
-		-addbuttons [namespace code [list AddNameFixButtons $base]]]
+		set reply [::dialog::question -parent $parent -title $mc::FixNamesTitle -default no \
+			-message $msg -detail $mc::FixNamesDetail \
+			-embed [namespace code [list EmbedNameFixes $sid]] \
+			-addbuttons [namespace code [list AddNameFixButtons $sid $base]]]
 
-	switch -- $reply {
-		yes		{ ApplyNameFixes $parent $base }
-		revert	{ revertNames $parent $base }
+		switch -- $reply {
+			yes {
+				set selected 0
+				set games 0
+				set i 0
+				foreach row $rows {
+					if {$NameFix($sid,tick,$i)} { incr selected; incr games [lindex $row 4] }
+					incr i
+				}
+				if {$selected && [::dialog::question -parent $parent -default no \
+					-title $mc::FixNamesTitle \
+					-message [format $mc::FixNamesApplyConfirm [::locale::formatNumber $selected] [::locale::formatNumber $games]] \
+					-buttons [list [list yes $mc::FixNamesApplyButton] [list no $::mc::Cancel]]] eq "yes"} {
+					ApplyNameFixes $sid $parent $base
+				}
+			}
+			revert	{ revertNames $parent $base }
+		}
+	} finally {
+		array unset NameFix $sid,*
 	}
 	return
 }
@@ -841,18 +934,20 @@ proc ::playerdata::fixNames {parent} {
 
 # The rows of the preview, one tick per row: old name, new name, games
 # affected, and the list the new name comes from.
-proc ::playerdata::EmbedNameFixes {w infoFont alertFont} {
+proc ::playerdata::EmbedNameFixes {sid w infoFont alertFont} {
 	variable NameFix
 	variable mc
 
-	set rows $NameFix(rows)
+	set rows $NameFix($sid,rows)
 	ttk::frame $w.box
 	set tree [ttk::treeview $w.box.tree -show headings -selectmode none \
 		-height [expr {min(12, max(3, [llength $rows]))}] \
-		-columns {pick old new games source}]
+		-columns {pick old new games source variant}]
 	::ttk::scrollbar $w.box.scroll -command [list $tree yview]
 	$tree configure -yscrollcommand [list $w.box.scroll set]
 
+	$tree heading variant -text $mc::FixNamesColVariant -anchor w
+	$tree column variant -width 90
 	$tree heading pick -text ""
 	$tree heading old -text $mc::FixNamesColOld -anchor w
 	$tree heading new -text $mc::FixNamesColNew -anchor w
@@ -867,12 +962,12 @@ proc ::playerdata::EmbedNameFixes {w infoFont alertFont} {
 	set i 0
 	foreach row $rows {
 		lassign $row variant index old new games source tick
-		$tree insert {} end -id $i -values [list [Mark $tick] $old $new $games $source]
+		$tree insert {} end -id $i -values [list [Mark $tick] $old $new $games $source $variant]
 		incr i
 	}
 
-	bind $tree <Button-1> [namespace code [list ClickNameFix $tree %x %y]]
-	set NameFix(tree) $tree
+	bind $tree <Button-1> [namespace code [list ClickNameFix $sid $tree %x %y]]
+	set NameFix($sid,tree) $tree
 
 	grid $tree $w.box.scroll -sticky ns
 	grid rowconfigure $w.box 0 -weight 1
@@ -881,39 +976,40 @@ proc ::playerdata::EmbedNameFixes {w infoFont alertFont} {
 }
 
 
-proc ::playerdata::ClickNameFix {tree x y} {
+proc ::playerdata::ClickNameFix {sid tree x y} {
 	variable NameFix
 
 	set row [$tree identify row $x $y]
-	if {![string length $row] || ![info exists NameFix(tick,$row)]} { return }
-	set NameFix(tick,$row) [expr {!$NameFix(tick,$row)}]
-	$tree set $row pick [Mark $NameFix(tick,$row)]
+	if {![string length $row] || ![info exists NameFix($sid,tick,$row)]} { return }
+	set NameFix($sid,tick,$row) [expr {!$NameFix($sid,tick,$row)}]
+	$tree set $row pick [Mark $NameFix($sid,tick,$row)]
 }
 
 
-proc ::playerdata::TickNameFixes {pick} {
+proc ::playerdata::TickNameFixes {sid pick} {
 	variable NameFix
 
-	for {set i 0} {$i < [llength $NameFix(rows)]} {incr i} {
-		set NameFix(tick,$i) $pick
+	if {![info exists NameFix($sid,rows)]} { return }
+	for {set i 0} {$i < [llength $NameFix($sid,rows)]} {incr i} {
+		set NameFix($sid,tick,$i) $pick
 	}
-	if {[string length $NameFix(tree)] && [winfo exists $NameFix(tree)]} {
-		for {set i 0} {$i < [llength $NameFix(rows)]} {incr i} {
-			$NameFix(tree) set $i pick [Mark $pick]
+	if {[info exists NameFix($sid,tree)] && [string length $NameFix($sid,tree)] && [winfo exists $NameFix($sid,tree)]} {
+		for {set i 0} {$i < [llength $NameFix($sid,rows)]} {incr i} {
+			$NameFix($sid,tree) set $i pick [Mark $pick]
 		}
 	}
 }
 
 
 # Tick all, tick none, and the way back of the last renaming.
-proc ::playerdata::AddNameFixButtons {base f} {
+proc ::playerdata::AddNameFixButtons {sid base f} {
 	variable NameFix
 	variable mc
 
 	::tk::AmpWidget ::ttk::button $f.all -text " $mc::FixNamesPickAll" \
-		-command [namespace code [list TickNameFixes 1]]
+		-command [namespace code [list TickNameFixes $sid 1]]
 	::tk::AmpWidget ::ttk::button $f.none -text " $mc::FixNamesPickNone" \
-		-command [namespace code [list TickNameFixes 0]]
+		-command [namespace code [list TickNameFixes $sid 0]]
 	pack $f.all $f.none -side left -padx {0 6}
 
 	if {[info exists NameFix(undo,$base)] && [llength $NameFix(undo,$base)]} {
@@ -924,23 +1020,45 @@ proc ::playerdata::AddNameFixButtons {base f} {
 }
 
 
+proc ::playerdata::FormatRenameReason {reason} {
+	variable mc
+
+	regsub {^::scidb::db::renamePlayers:\s*} [string trim $reason] {} key
+	switch -- $key {
+		"no player of that index" { return $mc::FixNamesReasonNoPlayer }
+		"not a name a database can hold" { return $mc::FixNamesReasonInvalidName }
+		"the database has a player of that name" { return $mc::FixNamesReasonNameExists }
+		"another player of this database is renamed to it" { return $mc::FixNamesReasonDuplicateTarget }
+		"the database is read-only" { return $mc::FixNamesReasonReadonly }
+		"duplicate source index" { return $mc::FixNamesReasonDuplicateSource }
+		"stale preview: player name changed" { return $mc::FixNamesReasonStalePlayer }
+		"<renames> needs <index> <expected-name> <name> for each player" { return $mc::FixNamesReasonBadArgs }
+	}
+	return $reason
+}
+
+
 # Rename the ticked rows, all of a variant in one step: renaming sorts the
 # namebase, so an index is only valid until then.
-proc ::playerdata::ApplyNameFixes {parent base} {
+proc ::playerdata::ApplyNameFixes {sid parent base} {
 	variable NameFix
 	variable mc
 
+	if {![info exists NameFix($sid,state)] || [catch {NameState $base} state]
+		|| $state ne $NameFix($sid,state)} {
+		::dialog::info -parent $parent -message $mc::FixNamesStale
+		return 0
+	}
 	set byVariant {}
 	set undo {}
 	set picked 0
 	set i 0
 
-	foreach row $NameFix(rows) {
+	foreach row $NameFix($sid,rows) {
 		lassign $row variant index old new games source tick
-		if {$NameFix(tick,$i)} {
+		if {$NameFix($sid,tick,$i)} {
 			incr picked
-			dict lappend byVariant $variant $index $new
-			lappend undo [list $variant $new $old]
+			dict lappend byVariant $variant $index $old $new
 		}
 		incr i
 	}
@@ -954,18 +1072,25 @@ proc ::playerdata::ApplyNameFixes {parent base} {
 	set reasons {}
 	foreach variant [dict keys $byVariant] {
 		if {[catch { ::scidb::db::renamePlayers $base $variant [dict get $byVariant $variant] } result]} {
-			lappend reasons $result
+			set localized [FormatRenameReason $result]
+			if {[lsearch -exact $reasons $localized] < 0} { lappend reasons $localized }
 			continue
 		}
 		incr renamed [dict get $result renamed]
+		foreach operation [dict get $result applied] {
+			lassign $operation index old new
+			lappend undo [list $variant $new $old]
+		}
 		foreach row [dict get $result skipped] {
 			lassign $row index name reason
-			if {[lsearch -exact $reasons $reason] < 0} { lappend reasons $reason }
+			set localized [FormatRenameReason $reason]
+			if {[lsearch -exact $reasons $localized] < 0} { lappend reasons $localized }
 		}
 	}
 
 	if {$renamed} {
 		set NameFix(undo,$base) $undo
+		set NameFix(undoState,$base) [NameState $base]
 		if {$base eq [::scidb::db::get name]} {
 			catch { ::application::database::refreshBase $base }
 		}
@@ -976,7 +1101,7 @@ proc ::playerdata::ApplyNameFixes {parent base} {
 
 	set text [format $mc::FixNamesDone [::locale::formatNumber $renamed]]
 	if {[llength $reasons]} {
-		append text "\n" [format $mc::FixNamesSkipped [::locale::formatNumber $picked] [join $reasons "; "]]
+		append text "\n" [format $mc::FixNamesSkipped [::locale::formatNumber [expr {$picked - $renamed}]] [join $reasons "; "]]
 	}
 	::dialog::info -parent $parent -message $text
 	return $renamed
@@ -994,6 +1119,11 @@ proc ::playerdata::revertNames {parent base} {
 		return 0
 	}
 
+	if {![info exists NameFix(undoState,$base)] || [catch {NameState $base} state]
+		|| $state ne $NameFix(undoState,$base)} {
+		::dialog::info -parent $parent -message $mc::FixNamesUndoConflict
+		return 0
+	}
 	set byVariant {}
 	foreach item $NameFix(undo,$base) {
 		lassign $item variant new old
@@ -1007,7 +1137,7 @@ proc ::playerdata::revertNames {parent base} {
 			lassign $pair new old
 			set index [NameIndex $base $variant $new]
 			if {$index < 0} { continue }
-			lappend renames $index $old
+			lappend renames $index $new $old
 		}
 		if {![llength $renames]} { continue }
 		if {[catch { ::scidb::db::renamePlayers $base $variant $renames } result]} { continue }

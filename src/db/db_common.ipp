@@ -452,6 +452,9 @@ convertEcfToElo(unsigned ecf)
 	if (ecf < 216)
 		return ecf*5 + 1250;
 
+	if (ecf > (0xffffffffu - 600u)/8u)
+		return 0xffffffffu;
+
 	return ecf*8 + 600;
 }
 

@@ -172,6 +172,14 @@ tcltest::test deutsch-new-ui-namespaces-coverage {new UI string keys are present
 		::application::ai::models::mc::Backup1
 		::application::ai::models::mc::Backup2
 		::application::ai::models::mc::BackupNote
+		::playerdata::mc::FixNamesReasonNoPlayer
+		::playerdata::mc::FixNamesReasonInvalidName
+		::playerdata::mc::FixNamesReasonNameExists
+		::playerdata::mc::FixNamesReasonDuplicateTarget
+		::playerdata::mc::FixNamesReasonReadonly
+		::playerdata::mc::FixNamesReasonDuplicateSource
+		::playerdata::mc::FixNamesReasonStalePlayer
+		::playerdata::mc::FixNamesReasonBadArgs
 	}
 
 	set missing {}

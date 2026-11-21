@@ -55,18 +55,18 @@ tcltest::test rlists-dwz-convert {DWZ CSV download is converted to installed for
 	puts -nonewline $chan [encoding convertto cp1252 \
 		"ID,ZPS,Mitgliedsnummer,Status,\"Name,Vorname\",Geschlecht,Spielberechtigung,Geburtsjahr,\"Letzte Auswertung\",DWZ,Index,FIDE-Elozahl,FIDE-Titel,FIDE-ID,FIDE-Land,Vorname,Nachname,FIDE-Frauentitel,FIDE-Elozahl-Schnellschach,FIDE-Elozahl-Blitz\n"]
 	puts -nonewline $chan [encoding convertto cp1252 \
-		"NU4073762,10614,1081,P,\"Müller,Hans\",M,,1990,202517,2400,12,2500,GM,1503014,NOR,Hans,Müller,,,\n"]
+		"NU9900001,99014,9001,P,\"Testmüller,Hans\",M,,1990,202517,2400,12,2500,GM,999111000,GER,Hans,Testmüller,,,\n"]
 	puts -nonewline $chan [encoding convertto cp1252 \
-		"NU4073763,10614,1082,A,\"Schmidt,Peter\",M,,1985,202517,1900,8,,,,Peter,Schmidt,,,\n"]
+		"NU9900002,99014,9002,A,\"Testschmidt,Peter\",M,,1985,202517,1900,8,,,,,Peter,Testschmidt,,,\n"]
 	puts -nonewline $chan [encoding convertto cp1252 \
-		"NU4073764,10614,1083,A,\"Weiß,Anna\",W,,2000,202517,1700,5,,,,Anna,Weiß,,,\n"]
+		"NU9900003,99014,9003,A,\"Testweiß,Anna\",W,,2000,202517,1700,5,,,,,Anna,Testweiß,,,\n"]
 	close $chan
 
 	set result [::scidb::app::filterRatingList dwz $dwzCsv $out 1800]
 } -body {
 	lassign $result read kept
 
-	# read 3 rows, kept 2 (Müller has GM+FIDE, Schmidt has DWZ>=1800; Weiß below threshold)
+	# read 3 rows, kept 2 (Testmüller has GM+FIDE, Testschmidt has DWZ>=1800; Testweiß below threshold)
 	list $read $kept \
 		[expr {[file readable $out] ? "yes" : "no"}] \
 		[string match "#chesswiz-rating-list*" [readFile $out]]
@@ -124,16 +124,16 @@ tcltest::test rlists-ecf-convert {ECF CSV download is converted to installed for
 
 	set chan [open $ecfCsv w]
 	puts $chan "ECF_code,full_name,member_no,FIDE_no,gender,nation,original_standard,standard_original_category,revised_standard,standard_revised_category,club_code,club_name,title"
-	puts $chan "280660F,\"Arthurton, Robert J\",,400111,M,ENG,1850,C,1860,C,CHS001,Chess Club,"
-	puts $chan "100011B,\"Bloggs, John\",,0,M,,1500,D,1520,D,,,,"
-	puts $chan "300222C,\"Smith, Jane\",,500222,F,WLS,2100,B,2150,B,FUSA,Foreign Club,WGM"
+	puts $chan "990660F,\"Fixtureton, Robert J\",,999400111,M,ENG,1850,C,1860,C,CHS001,Chess Club,"
+	puts $chan "990011B,\"Samplelow, John\",,0,M,,1500,D,1520,D,,,,"
+	puts $chan "990222C,\"Samplehigh, Jane\",,999500222,F,WLS,2100,B,2150,B,FUSA,Foreign Club,WGM"
 	close $chan
 
 	set result [::scidb::app::filterRatingList ecf $ecfCsv $out 1600]
 } -body {
 	lassign $result read kept
 
-	# Arthurton (1860 >= 1600), Bloggs (1520 < 1600, no FIDE/title -> dropped), Smith (2150 + WGM)
+	# Fixtureton (1860 >= 1600), Samplelow (1520 < 1600, no FIDE/title -> dropped), Samplehigh (2150 + WGM)
 	list $read $kept \
 		[expr {[file readable $out] ? "yes" : "no"}] \
 		[string match "#chesswiz-rating-list*kind=ecf*" [readFile $out]]
@@ -176,19 +176,19 @@ tcltest::test rlists-iccf-convert {ICCF CSV download is converted to installed f
 
 	set chan [open $iccfCsv w]
 	# With place column
-	puts $chan "1;241018;ITA;GM;Riccio, Eros;437;2640;120;"
-	puts $chan "2;300001;GER;;Mueller, Hans;100;1900;80;"
+	puts $chan "1;991018;ITA;GM;Synthetic, Alpha;437;2640;120;"
+	puts $chan "2;991019;GER;;Synthetic, Beta;100;1900;80;"
 	# Without place column
-	puts $chan "400002;BRA;SIM;Silva, Maria;200;2200;90;F"
+	puts $chan "991020;BRA;SIM;Synthetic, Gamma;200;2200;90;F"
 	# Below threshold (should be dropped)
-	puts $chan "3;500003;FRA;;Dupont, Pierre;50;1500;60;"
+	puts $chan "3;991021;FRA;;Synthetic, Low;50;1500;60;"
 	close $chan
 
 	set result [::scidb::app::filterRatingList iccf $iccfCsv $out 1800]
 } -body {
 	lassign $result read kept
 
-	# Riccio (2640+GM), Mueller (1900>=1800), Silva (2200+SIM); Dupont dropped (1500<1800, no title)
+	# Synthetic Alpha (2640+GM), Beta (1900>=1800), Gamma (2200+SIM); Low dropped (1500<1800, no title)
 	list $read $kept \
 		[expr {[file readable $out] ? "yes" : "no"}] \
 		[string match "#chesswiz-rating-list*kind=iccf*" [readFile $out]]
@@ -202,7 +202,7 @@ tcltest::test rlists-iccf-shape-detection {ICCF CSV without place column is reco
 	set out [file join $::scidb::test::rlists::Dir iccf-noplace.txt]
 
 	set chan [open $iccfCsv w]
-	puts $chan "600001;ENG;IM;Jones, David;300;2350;100;M"
+	puts $chan "991022;ENG;IM;Synthetic, Noplace;300;2350;100;M"
 	close $chan
 
 	set result [::scidb::app::filterRatingList iccf $iccfCsv $out 1800]
