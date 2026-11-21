@@ -216,18 +216,48 @@ file::set_bufsize(unsigned size)
 	}
 	else if (size != m_bufsize)
 	{
+		int64_t pos = -1;
+
+		if (m_open)
+		{
+#ifdef _WIN32
+			pos = ::_ftelli64(m_fp);
+#else
+			pos = ::ftello(m_fp);
+#endif
+			::fflush(m_fp);
+		}
+
+		char* oldBuffer = 0;
+		char* newBuffer = m_buffer;
+
 		if (size > m_bufsize)
 		{
-			delete [] m_buffer;
-			m_buffer = new char[size];
+			oldBuffer = m_buffer;
+			newBuffer = new char[size];
 		}
 
 		if (m_open)
 		{
-			if (::setvbuf(m_fp, m_buffer, _IOFBF, size))
+			if (::setvbuf(m_fp, newBuffer, _IOFBF, size))
+			{
+				if (oldBuffer != 0 || newBuffer != m_buffer)
+					delete [] newBuffer;
 				M_RAISE("setvbuf() can't be honoured (fd=%d)", fileno(m_fp));
+			}
+
+			if (pos >= 0)
+			{
+#ifdef _WIN32
+				::_fseeki64(m_fp, pos, SEEK_SET);
+#else
+				::fseeko(m_fp, pos, SEEK_SET);
+#endif
+			}
 		}
 
+		m_buffer = newBuffer;
+		delete [] oldBuffer;
 		m_bufsize = size;
 		m_buffered = true;
 		m_line_buffered = false;

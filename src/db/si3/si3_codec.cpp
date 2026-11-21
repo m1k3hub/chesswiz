@@ -2073,6 +2073,7 @@ Codec::writeNamebases(mstl::string const& filename)
 		mstl::fstream namebaseStream;
 		openFile(namebaseStream, namebaseTempFilename, MagicNamebase, Truncate);
 		writeNamebases(namebaseStream);
+		namebaseStream.close();
 		sys::file::rename(namebaseTempFilename, filename, true);
 	}
 	catch (...)

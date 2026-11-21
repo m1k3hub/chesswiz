@@ -66,8 +66,7 @@ struct Position
 			uint64_t m_pieces[7];
 		};
 	};
-}
-__attribute__((packed));
+};
 
 struct ExactPosition : public Position
 {
@@ -79,8 +78,7 @@ struct ExactPosition : public Position
 	Byte		m_castle;				// flags for castle legality (these can be merged)
 	Square	m_epSquare;				// square of a possible ep capture
 	Byte		__alignment;			// needed for alignment (otherwise memcmp() won't work)
-}
-__attribute__((packed));
+};
 
 struct ExactZHPosition : public ExactPosition
 {
@@ -96,25 +94,29 @@ struct ExactZHPosition : public ExactPosition
 		{
 			Material m_holding[2];		// pieces in hand
 			uint32_t m_kingHasMoved;	// boolean flags whether king has moved
-		}
-		__attribute__((packed));
+			uint32_t __zhPadding;		// explicit 8-byte tail alignment (for memcmp())
+		};
 
 		// Three-check
 		struct
 		{
 			uint32_t m_checksGiven[2];	// number of checks given
-		}
-		__attribute__((packed));
+		};
 	};
-}
-__attribute__((packed));
+};
 
 struct UniquePosition : public ExactZHPosition
 {
 	uint32_t	m_halfMoveClock;	// number of moves since last pawn move or capture
 	uint32_t	m_plyNumber;		// ply number in game (incremented after each half move)
-}
-__attribute__((packed));
+};
+
+static_assert(alignof(ExactZHPosition) >= alignof(material::Count),
+				  "ExactZHPosition must preserve db::material::Count alignment");
+static_assert(sizeof(Position) == 64, "Position must have no hidden padding");
+static_assert(sizeof(ExactPosition) == 72, "ExactPosition must have no hidden padding");
+static_assert(sizeof(ExactZHPosition) == 88, "ExactZHPosition must have no hidden padding");
+static_assert(sizeof(UniquePosition) == 96, "UniquePosition must have no hidden padding");
 
 } // namespace board
 
@@ -841,8 +843,10 @@ private:
 	static Board m_runaway;
 	static Board m_queenVsRooks;
 	static Board m_upsideDown;
-}
-__attribute__((packed));
+};
+
+static_assert(alignof(Board) >= alignof(material::Count),
+				  "Board must preserve db::material::Count alignment");
 
 } // namespace db
 

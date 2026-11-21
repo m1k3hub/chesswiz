@@ -461,6 +461,9 @@ Engine::Engine(Protocol protocol, Command const& command, mstl::string const& di
 	}
 
 	m_engine->m_engine = this;
+	m_originalBoard.clear();
+	m_snapshot.m_board.clear();
+	m_engine->setCurrentBoard(Board::emptyBoard());
 
 	for (unsigned i = 0; i < MaxNumVariations; ++i)
 		m_map[i] = i;

@@ -1784,7 +1784,18 @@ cmdMove(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 	if (objc != 2)
 		return error(CmdMove, nullptr, nullptr, "wrong # args: should be \"%s <san>\"", CmdMove);
 
-	scidb->game().addMove(stringFromObj(objc, objv, 1));
+	Game& game = scidb->game();
+
+	if (!game.atLineEnd())
+		return error(CmdMove, nullptr, nullptr, "cannot append move: not at end of line");
+
+	mstl::string san(stringFromObj(objc, objv, 1));
+	Move move = game.parseMove(san);
+
+	if (!move || !game.currentBoard().checkMove(move, game.variant()))
+		return error(CmdMove, nullptr, nullptr, "illegal move '%s'", san.c_str());
+
+	game.addMove(move);
 	return TCL_OK;
 }
 
@@ -2442,10 +2453,18 @@ cmdVariation(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 			break;
 
 		case Cmd_New:
+		{
 			if (objc != 3)
 				return usage(::CmdVariation, "new", nullptr, subcommands, args);
-			setResult(game.addVariation(stringFromObj(objc, objv, 2)));
+			if (game.atLineEnd())
+				return error(::CmdVariation, "new", nullptr, "cannot add variation at end of line");
+			mstl::string san(stringFromObj(objc, objv, 2));
+			Move move = game.parseMove(san);
+			if (!move || !game.isValidVariation(MoveList(move), move::Post))
+				return error(::CmdVariation, "new", nullptr, "invalid variation move '%s'", san.c_str());
+			setResult(game.addVariation(move));
 			break;
+		}
 
 		case Cmd_Remove:
 			if (objc != 3)

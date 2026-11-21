@@ -35,7 +35,7 @@
 
 namespace db {
 
-inline Board::Board() :m_partner(this) {}
+inline Board::Board() :m_partner(this) { m_stm = color::White; }
 
 inline void Board::resetHolding()			{ m_holding[0].value = m_holding[1].value = 0; }
 inline void Board::clear()						{ *this = m_emptyBoard; }

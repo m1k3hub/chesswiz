@@ -472,6 +472,8 @@ public:
 	void addMoveInfo(MoveInfo const& info);
 	/// Sets the marks associated with current move
 	void setMarks(MarkSet const& marks);
+	/// Parse a SAN move string in the current board position
+	Move parseMove(mstl::string const& san) const;
 	/// Adds a move at the current position
 	void addMove(mstl::string const& san);
 	/// Adds a move at the current position
@@ -755,8 +757,6 @@ private:
 									bool ignoreEnPassant) const;
 	/// Return current move node.
 	MoveNode* currentNode() const;
-
-	Move parseMove(mstl::string const& san) const;
 
 	edit::Root* buildEditNodes() const;
 

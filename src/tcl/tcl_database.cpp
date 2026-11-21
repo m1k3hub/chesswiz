@@ -1018,7 +1018,18 @@ cmdLoad(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 
 	mstl::string path(Tcl_GetString(objv[1]));
 
-	if (util::misc::file::suffix(path) == "sci")
+	if (!util::misc::file::hasSuffix(path))
+		return error(CmdLoad, nullptr, nullptr, "file '%s' has no suffix", path.c_str());
+
+	mstl::string suffix(util::misc::file::suffix(path));
+
+	if (permission != permission::ReadOnly && format::fromString(suffix) != format::Scidb)
+	{
+		return error(CmdLoad, nullptr, nullptr,
+			"cannot open non-Scidb database '%s' in read-write mode", path.c_str());
+	}
+
+	if (suffix == "sci")
 		encoding = sys::utf8::Codec::utf8();
 
 	Progress	progress(objv[2], objv[3]);
@@ -3959,7 +3970,12 @@ cmdClose(ClientData, Tcl_Interp* ti, int objc, Tcl_Obj* const objv[])
 		return TCL_ERROR;
 	}
 
-	scidb->close(Tcl_GetString(objv[1]));
+	char const* name = Tcl_GetString(objv[1]);
+
+	if (!Scidb->contains(name))
+		return error(CmdClose, nullptr, nullptr, "database '%s' is not open", name);
+
+	scidb->close(name);
 	return TCL_OK;
 }
 
