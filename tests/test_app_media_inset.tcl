@@ -120,29 +120,4 @@ tcltest::test inset-surfaceready-tiny {0 while the canvas is mapped but still 1x
 	list $tiny $r $diag
 } -result {1 0 {1 1}}
 
-# FreeRect on a stand-alone canvas: a 400x400 "board" item in a wide or tall pane.
-proc ::scidb::test::freeRect {cw ch bx by} {
-	set c [canvas .freeRectTest -width $cw -height $ch -highlightthickness 0 -borderwidth 0]
-	place $c -x 0 -y 0 -width $cw -height $ch
-	$c create rectangle $bx $by [expr {$bx + 400}] [expr {$by + 400}] -tags board -outline {}
-	update idletasks
-	set r [::mediainset::FreeRect $c]
-	destroy $c
-	return $r
-}
-
-tcltest::test inset-free-right {a wide pane with the board on the left: the video goes right of it} -body {
-	lassign [::scidb::test::freeRect 1000 420 10 10] x y w h
-	list [expr {$x >= 416}] [expr {$x + $w <= 1000}] [expr {abs($w*9 - $h*16) <= 16}] [expr {$w >= 200}]
-} -result {1 1 1 1}
-
-tcltest::test inset-free-below {a tall pane: the video goes below the board} -body {
-	lassign [::scidb::test::freeRect 420 900 10 10] x y w h
-	list [expr {$y >= 416}] [expr {$y + $h <= 900}] [expr {$w >= 200}]
-} -result {1 1 1}
-
-tcltest::test inset-free-none {a pane the board fills: no free rectangle} -body {
-	::scidb::test::freeRect 420 420 10 10
-} -result {}
-
 tcltest::cleanupTests

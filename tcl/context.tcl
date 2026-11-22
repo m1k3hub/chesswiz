@@ -3181,7 +3181,7 @@ proc ::context::Command {id object} {
 		}
 		c9.board_setup { return [::action::run menu.board.setup] }
 		c9.tablebase { return [::action::run menu.analysis.tablebase.show] }
-		c9.not.configure { return [::action::run menu.edit.preferences.pgn] }
+		c9.not.configure { return [::application::pgn::ConfigureEditor] }
 		c9.assistant.model { return [::action::run menu.tools.choose_model] }
 		c9.not.font_inc {
 			return [::context::PaneFont $object +1]

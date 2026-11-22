@@ -198,50 +198,6 @@ proc ::scidb::test::lichess::Shown {key} {
 	return [expr {[llength [grid info [View $key]]] > 0}]
 }
 
-# ----------------------------------------------------------------------
-# Pure UCI helpers
-# ----------------------------------------------------------------------
-
-tcltest::test lichess-uci-from-fens {normal, capture, castling both sides/colours, en passant, promotion and under-promotion} -body {
-	list \
-		[::lichess::uciFromFens \
-			"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" \
-			"rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1"] \
-		[::lichess::uciFromFens \
-			"rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 2" \
-			"rnbqkbnr/ppp1pppp/8/3P4/8/8/PPPP1PPP/RNBQKBNR b KQkq - 0 2"] \
-		[::lichess::uciFromFens \
-			"r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1" \
-			"r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R4RK1 b kq - 1 1"] \
-		[::lichess::uciFromFens \
-			"r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1" \
-			"r3k2r/pppppppp/8/8/8/8/PPPPPPPP/2KR3R b kq - 1 1"] \
-		[::lichess::uciFromFens \
-			"r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R b KQkq - 0 1" \
-			"r4rk1/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQ - 1 2"] \
-		[::lichess::uciFromFens \
-			"r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R b KQkq - 0 1" \
-			"2kr3r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQ - 1 2"] \
-		[::lichess::uciFromFens \
-			"rnbqkbnr/ppp1p1pp/8/3pPp2/8/8/PPPP1PPP/RNBQKBNR w KQkq f6 0 3" \
-			"rnbqkbnr/ppp1p1pp/5P2/3p4/8/8/PPPP1PPP/RNBQKBNR b KQkq - 0 3"] \
-		[::lichess::uciFromFens \
-			"rnbqkbnr/pppp1ppp/8/8/3pP3/8/PPP2PPP/RNBQKBNR b KQkq e3 0 3" \
-			"rnbqkbnr/pppp1ppp/8/8/8/4p3/PPP2PPP/RNBQKBNR w KQkq - 0 4"] \
-		[::lichess::uciFromFens \
-			"4k3/P7/8/8/8/8/8/4K3 w - - 0 1" \
-			"Q3k3/8/8/8/8/8/8/4K3 b - - 0 1"] \
-		[::lichess::uciFromFens \
-			"4k3/P7/8/8/8/8/8/4K3 w - - 0 1" \
-			"N3k3/8/8/8/8/8/8/4K3 b - - 0 1"] \
-		[::lichess::uciFromFens \
-			"1r2k3/P7/8/8/8/8/8/4K3 w - - 0 1" \
-			"1R2k3/8/8/8/8/8/8/4K3 b - - 0 1"] \
-		[::lichess::uciFromFens \
-			"4k3/8/8/8/8/8/p7/1B2K3 b - - 0 1" \
-			"4k3/8/8/8/8/8/8/1b2K3 w - - 0 2"]
-} -result {e2e4 e4d5 e1g1 e1c1 e8g8 e8c8 e5f6 d4e3 a7a8q a7a8n a7b8r a2b1b}
-
 tcltest::test lichess-clock-countdown {only the ticking side to move counts down between snapshots} -setup {
 	set v [::online::window::gameTab test:clock Clock list w]
 } -body {

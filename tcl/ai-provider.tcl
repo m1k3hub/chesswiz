@@ -1511,23 +1511,6 @@ proc ::ai::provider::onOllamaChat {script token} {
 # forwards them), <tools> 1 when the model supports tool calling.
 # ----------------------------------------------------------------------
 
-proc ::ai::provider::ollamaModels {{base http://localhost:11434} {timeoutMs 3000}} {
-	need http
-
-	if {[string match -nocase https://* $base]} { ::platform::sys::tlsRegister }
-	set token [::http::geturl $base/api/tags -timeout $timeoutMs -binary 1]
-	set status [::http::status $token]
-	set code [::http::ncode $token]
-	set data [body $token]
-	::http::cleanup $token
-
-	if {$status ne "ok" || $code != 200} {
-		error "ai::provider: HTTP $code $status from $base/api/tags"
-	}
-	return [parseModels $data]
-}
-
-
 # Callback receives {ok 1 models LIST} or {ok 0 error MESSAGE}.
 # The chooser must not keep its menu callback waiting for the HTTP reply.
 proc ::ai::provider::ollamaModelsAsync {script {base http://localhost:11434} {timeoutMs 3000}} {

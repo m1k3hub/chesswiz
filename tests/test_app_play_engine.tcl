@@ -526,7 +526,7 @@ foreach {name board expected} {
 	# dialog on the board (VAL-DLG-011/012); the caller's reserve step then
 	# shrinks the board to make the strip below it fit.
 	tcltest::test playengine-beside-$name {the dialog goes beside the board, never on it} -body {
-		::playengine::BesidePosition {*}$board 323 215 1920 1080
+		lrange [::util::place::besidePosition {*}$board 323 215 {0 0 1920 1080}] 0 1
 	} -result $expected
 }
 

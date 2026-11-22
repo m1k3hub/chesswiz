@@ -428,30 +428,6 @@ proc GetEventName {base variant view index} {
 }
 
 
-proc OpenEventGamesInSwitcher {parent base variant view index {menu ""}} {
-	if {[string length $menu]} { ::tk::MenuUnpost $menu }
-
-	set eventIndex [::scidb::db::get eventIndex $index $view $base $variant]
-	set eventName [GetEventName $base $variant $view $index]
-	set tempView [::scidb::view::new $base $variant unused unused unused unused master slave]
-	::scidb::view::search $base $variant $tempView null none [list event $eventIndex]
-	set rc [::application::database::OpenFilteredViewInSwitcher $parent $base $variant $tempView event $eventName]
-	catch { ::scidb::view::close $base $variant $tempView }
-	return $rc
-}
-
-
-proc SaveEventGamesWorkingSet {parent base variant view index {menu ""}} {
-	if {[string length $menu]} { ::tk::MenuUnpost $menu }
-
-	set eventIndex [::scidb::db::get eventIndex $index $view $base $variant]
-	set eventName [GetEventName $base $variant $view $index]
-	set tempView [::scidb::view::new $base $variant unused unused unused unused master slave]
-	::scidb::view::search $base $variant $tempView null none [list event $eventIndex]
-	set rc [::application::database::SaveFilteredViewAsWorkingSet $parent $base $variant $tempView event $eventName]
-	catch { ::scidb::view::close $base $variant $tempView }
-	return $rc
-}
 
 
 proc popupMenu {parent menu base variant view index source} {

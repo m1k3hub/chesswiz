@@ -1941,11 +1941,6 @@ proc ::board3d::WebGLUrl {} {
 	return $base
 }
 
-proc ::board3d::WebGLBoardJson {board} {
-	set board [string map {\\ \\\\ \" \\\" \n \\n \r \\r \t \\t} $board]
-	return "{\"board\": \"$board\"}"
-}
-
 proc ::board3d::WebGLStartServer {} {
 	variable Priv
 	variable LibRoot

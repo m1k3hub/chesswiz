@@ -44,25 +44,20 @@ proc ::scidb::test::modelasync::ready {} {
 
 tcltest::test modelasync-open {opening the chooser returns without waiting for model discovery} -setup {
  # discovery is asked for asynchronously and has not answered when the
- # chooser is up; a synchronous lookup would be waiting for it (the time
- # the dialog takes to lay itself out varies with the machine, so it is
- # not measured)
- set ::scidb::test::modelasync::sync 0
+ # chooser is up; the time the dialog takes to lay itself out varies with
+ # the machine, so it is not measured
  set ::scidb::test::modelasync::async 0
- ::scidb::test::modelasync::stub ::ai::provider::ollamaModels {args} {
-  incr ::scidb::test::modelasync::sync; after 350; return {}
- }
  ::scidb::test::modelasync::stub ::ai::provider::ollamaModelsAsync {callback args} {
   incr ::scidb::test::modelasync::async
   lappend ::scidb::test::modelasync::Timers [after 350 [list {*}$callback {ok 1 models {}}]]
  }
 } -body {
  set dlg [::application::ai::models::show .application]
- list $::scidb::test::modelasync::sync [expr {$::scidb::test::modelasync::async > 0}] [winfo exists $dlg]
+ list [expr {$::scidb::test::modelasync::async > 0}] [winfo exists $dlg]
 } -cleanup {
  ::application::ai::models::Close
  ::scidb::test::modelasync::restore
-} -result {0 1 1}
+} -result {1 1}
 
 # The fake GPU command needs a shell with sleep; on Windows, modelfit-gpu-sums
 # covers the probe's output and this would test PowerShell's pipes.

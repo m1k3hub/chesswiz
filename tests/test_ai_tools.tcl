@@ -42,26 +42,36 @@ if {[::ai::engine::available]} {
 }
 
 # --- the tool loop, model side scripted ------------------------------
+proc awaitTools {{ms 30000}} {
+	set id [after $ms {set ::tresult {ok 0 error timeout attempts 0 text "" grounded 0 claims {}}}]
+	if {$::tresult eq ""} { vwait ::tresult }
+	after cancel $id
+	return $::tresult
+}
+
 set call [dict create function [dict create name chess_engine \
 	arguments [dict create fen $start depth 8]]]
 set msg1 [dict create role assistant content "" tool_calls [list $call]]
 set msg2 [dict create role assistant content "STRUCTURE: balanced."]
 
 ::ai::provider::configure -name stub -chatResponses [list $msg1 $msg2]
-set r [::ai::generate::positionTools $start -depth 8]
-check "tool loop calls the tool then finishes" [expr {[dict get $r attempts] == 2}]
+set ::tresult {}
+::ai::generate::positionToolsAsync $start [list set ::tresult] -depth 8
+set r [awaitTools]
+check "tool loop calls the tool then finishes" [expr {[dict get $r ok] == 1 && [dict get $r attempts] == 2}]
 check "tool loop returns the final text" \
 	[expr {[dict get $r text] eq "STRUCTURE: balanced."}]
 ::ai::engine::shutdown
 
 # --- optional live cloud model driving the engine --------------------
 if {[info exists ::env(SCIDB_AI_LIVE)]} {
-	if {[catch {
-		::ai::provider::configure -name ollama -model deepseek-v4.1-flash:cloud \
-			-timeout 180000 -options {num_predict 400}
-		set g [::ai::generate::positionTools $start -depth 10]
-	} e]} {
-		puts "SKIP: live tool run unavailable ($e)"
+	::ai::provider::configure -name ollama -model deepseek-v4.1-flash:cloud \
+		-timeout 180000 -options {num_predict 400}
+	set ::tresult {}
+	::ai::generate::positionToolsAsync $start [list set ::tresult] -depth 10
+	set g [awaitTools 180000]
+	if {![dict get $g ok]} {
+		puts "SKIP: live tool run unavailable ([dict get $g error])"
 	} else {
 		check "live model returns text" [expr {[string length [dict get $g text]] > 0}]
 		puts "LIVE rounds=[dict get $g attempts] grounded=[dict get $g grounded] flags=[llength [dict get $g claims]]"

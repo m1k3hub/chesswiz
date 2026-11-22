@@ -529,30 +529,6 @@ proc GetSite {path base variant view index} {
 }
 
 
-proc OpenSiteGamesInSwitcher {path base variant view index {menu ""}} {
-	if {[string length $menu]} { ::tk::MenuUnpost $menu }
-
-	set siteIndex [::scidb::db::get siteIndex $index $view $base $variant]
-	set site [GetSite $path $base $variant $view $index]
-	set tempView [::scidb::view::new $base $variant unused unused unused unused master slave]
-	::scidb::view::search $base $variant $tempView null none [list site $siteIndex]
-	set rc [::application::database::OpenFilteredViewInSwitcher $path $base $variant $tempView site $site]
-	catch { ::scidb::view::close $base $variant $tempView }
-	return $rc
-}
-
-
-proc SaveSiteGamesWorkingSet {path base variant view index {menu ""}} {
-	if {[string length $menu]} { ::tk::MenuUnpost $menu }
-
-	set siteIndex [::scidb::db::get siteIndex $index $view $base $variant]
-	set site [GetSite $path $base $variant $view $index]
-	set tempView [::scidb::view::new $base $variant unused unused unused unused master slave]
-	::scidb::view::search $base $variant $tempView null none [list site $siteIndex]
-	set rc [::application::database::SaveFilteredViewAsWorkingSet $path $base $variant $tempView site $site]
-	catch { ::scidb::view::close $base $variant $tempView }
-	return $rc
-}
 
 
 proc PopupMenu {path menu base variant index column} {

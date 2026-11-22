@@ -1340,21 +1340,6 @@ proc ::lichess::Takeback {answer} {
 }
 
 
-proc ::lichess::OfferTakeback {} {
-	Takeback yes
-}
-
-
-proc ::lichess::AcceptTakeback {} {
-	Takeback yes
-}
-
-
-proc ::lichess::DeclineTakeback {} {
-	Takeback no
-}
-
-
 proc ::lichess::SendChat {text} {
 	variable Priv
 	set text [string trim $text]
@@ -1576,89 +1561,6 @@ proc ::lichess::WriteOptions {chan} {
 # ======================================================================
 # Pure UCI helpers
 # ======================================================================
-
-# Difference of two FEN placements. The mover is the side to move in the
-# first FEN. King castling is recognised before the rook's two changed
-# squares can make the source/destination pair ambiguous. En passant's
-# removed opposing pawn does not participate in the mover's pair.
-proc ::lichess::uciFromFens {fenBefore fenAfter} {
-	if {[catch {
-		set before [Placement $fenBefore]
-		set after [Placement $fenAfter]
-	} err]} { return "" }
-	set white [expr {[lindex $fenBefore 1] eq "w"}]
-	set kingFrom [expr {$white ? "e1" : "e8"}]
-	set king [expr {$white ? "K" : "k"}]
-	if {[dict exists $before $kingFrom] && [dict get $before $kingFrom] eq $king} {
-		foreach kingTo [expr {$white ? {g1 c1} : {g8 c8}}] {
-			if {[dict exists $after $kingTo] && [dict get $after $kingTo] eq $king} {
-				return "$kingFrom$kingTo"
-			}
-		}
-	}
-
-	set froms {}
-	set tos {}
-	foreach {square piece} $before {
-		set isOwn [expr {$white ? [string match {[A-Z]} $piece] : [string match {[a-z]} $piece]}]
-		if {!$isOwn} { continue }
-		set new [expr {[dict exists $after $square] ? [dict get $after $square] : ""}]
-		if {$new ne $piece} { lappend froms $square }
-	}
-	foreach {square piece} $after {
-		set isOwn [expr {$white ? [string match {[A-Z]} $piece] : [string match {[a-z]} $piece]}]
-		if {!$isOwn} { continue }
-		set old [expr {[dict exists $before $square] ? [dict get $before $square] : ""}]
-		if {$old ne $piece} { lappend tos $square }
-	}
-
-	set answer {}
-	set count 0
-	foreach from $froms {
-		set old [dict get $before $from]
-		foreach to $tos {
-			set new [dict get $after $to]
-			set promotion {}
-			if {$new eq $old} {
-				# ordinary move, capture, or en passant
-			} elseif {$old in {P p} && $new ni {P p} &&
-				($white ? [string match {[A-Z]} $new] : [string match {[a-z]} $new])} {
-				set promotion [string tolower $new]
-			} else {
-				continue
-			}
-			set answer "$from$to$promotion"
-			incr count
-		}
-	}
-	return [expr {$count == 1 ? $answer : ""}]
-}
-
-
-proc ::lichess::Placement {fen} {
-	set board [dict create]
-	set rank 8
-	foreach row [split [lindex $fen 0] /] {
-		if {$rank < 1} { return -code error "invalid FEN placement" }
-		set file 0
-		foreach ch [split $row {}] {
-			if {[string is digit -strict $ch]} {
-				incr file $ch
-			} else {
-				if {$file >= 8 || $ch ni {p n b r q k P N B R Q K}} {
-					return -code error "invalid FEN placement"
-				}
-				dict set board [format "%c%d" [expr {97 + $file}] $rank] $ch
-				incr file
-			}
-		}
-		if {$file != 8} { return -code error "invalid FEN placement" }
-		incr rank -1
-	}
-	if {$rank != 0} { return -code error "invalid FEN placement" }
-	return $board
-}
-
 
 proc ::lichess::uciToSan {uci} {
 	return [::playengine::uciToSan $uci]

@@ -700,9 +700,9 @@ tcltest::test lichess-phase2-game-and-lobby-extras {correspondence/variant seek,
 	update
 
 	set tbOffered $::lichess::Priv(takebackOffer)
-	::lichess::OfferTakeback
-	::lichess::AcceptTakeback
-	::lichess::DeclineTakeback
+	::lichess::Takeback yes
+	::lichess::Takeback yes
+	::lichess::Takeback no
 	::lichess::SendChat "Good luck!"
 
 	# 4. Cloud eval (200 with PVs, then 404)

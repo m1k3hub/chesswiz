@@ -479,22 +479,6 @@ proc PopupMenu {path table menu base variant index column} {
 }
 
 
-proc OpenPositionGamesInSwitcher {path base variant positionId label} {
-	set tempView [::scidb::view::new $base $variant unused unused unused unused master slave]
-	::scidb::view::search $base $variant $tempView null none [list position $positionId]
-	set rc [::application::database::OpenFilteredViewInSwitcher $path $base $variant $tempView position $label]
-	catch { ::scidb::view::close $base $variant $tempView }
-	return $rc
-}
-
-
-proc SavePositionGamesWorkingSet {path base variant positionId label} {
-	set tempView [::scidb::view::new $base $variant unused unused unused unused master slave]
-	::scidb::view::search $base $variant $tempView null none [list position $positionId]
-	set rc [::application::database::SaveFilteredViewAsWorkingSet $path $base $variant $tempView position $label]
-	catch { ::scidb::view::close $base $variant $tempView }
-	return $rc
-}
 
 
 proc TableSelected {path index} {

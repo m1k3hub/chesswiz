@@ -135,14 +135,6 @@ variable FocusSections {
 variable UrgencyLevels {mild moderate severe}
 variable PriorityLevels {low medium high}
 
-variable TerminationCriteria {
-	board		"over-the-board defeat by checkmate or resignation"
-	time		"lost on time, clock flag, or time control forfeit"
-	disconnect	"abandoned game, connection lost, or player left"
-	adjudicated	"arbiter adjudication, rules infraction, default, or emergency"
-	unknown		"missing, unterminated, or cannot be determined"
-}
-
 # the wins / draws / losses segments of a bar (canvas -fill colors)
 variable BarColors {seagreen gray56 indianred}
 
@@ -719,7 +711,6 @@ proc ::insights::formatWdl {wins draws losses} {
 # System One (Jev) typed judgments:
 #   1. insights_focus       primary training focus (choice) + urgency (score)
 #   2. insights_weakness    weakest-opening repair priority re-ranking (noul + score)
-#   3. insights_termination free-text loss termination normalization (choice)
 # Every decision has a deterministic rule fallback and leaves the report's
 # database numbers untouched.
 # ======================================================================
@@ -1117,20 +1108,11 @@ proc ::insights::CompareWeaknessItem {a b} {
 
 
 # ----------------------------------------------------------------------
-# Decision 3: Free-text termination normalization (insights_termination)
+# PGN termination categories (rules only)
 # ----------------------------------------------------------------------
 
-proc ::insights::terminationQuestion {} {
-	variable TerminationCriteria
-
-	return [dict create type choice \
-		instructions "Which loss category does this chess game termination string describe?" \
-		criteria $TerminationCriteria]
-}
-
-
 # Deterministic mapping for standard PGN Termination strings; "" when
-# the string is unfamiliar and should be handed to the classifier.
+# the string is unfamiliar.
 proc ::insights::ruleTermination {reason} {
 	set r [string tolower [string trim $reason]]
 	if {$r eq "" || $r eq "?" || $r eq "unterminated"} { return unknown }
@@ -1155,43 +1137,6 @@ proc ::insights::ruleTermination {reason} {
 		return adjudicated
 	}
 	return ""
-}
-
-
-proc ::insights::UnknownTermination {} {
-	return unknown
-}
-
-
-# Bounded synchronous classification for callers that need a category value
-# directly (rule first, then chooseSync with a short timeout, else unknown).
-proc ::insights::chooseTerminationSync {reason} {
-	set rule [ruleTermination $reason]
-	if {$rule ne ""} { return $rule }
-	if {![llength [info commands ::ai::systemone::chooseSync]]} { return unknown }
-	set picked [::ai::systemone::chooseSync insights_termination \
-		"TERMINATION: [string trim $reason]" [terminationQuestion] \
-		-timeout 2000 -threshold [Threshold insights_termination 0.6]]
-	return [expr {$picked ne "" ? $picked : "unknown"}]
-}
-
-
-# Async classification for UI callers: rule first, then ::ai::decide.
-proc ::insights::classifyTermination {reason script} {
-	set rule [ruleTermination $reason]
-	if {$rule ne ""} {
-		after 0 [list {*}$script [list ok 1 label $rule confidence 1.0 source rules]]
-		return
-	}
-	if {![llength [info commands ::ai::decide]]} {
-		after 0 [list {*}$script [list ok 1 label unknown confidence {} source rules]]
-		return
-	}
-	::ai::decide insights_termination "TERMINATION: [string trim $reason]" \
-		[terminationQuestion] $script \
-		-fallback [namespace code UnknownTermination] \
-		-threshold [Threshold insights_termination 0.6]
-	return
 }
 
 

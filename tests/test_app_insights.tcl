@@ -578,37 +578,15 @@ tcltest::test insights-jev-weakness-fallback {rankWeakest keeps deterministic or
 	}
 } -result {{B01 C60} B01 rules}
 
-tcltest::test insights-jev-termination {known terminations use rules; free-text strings use System One with fallback} -body {
-	set known [list \
+tcltest::test insights-termination-rules {standard PGN terminations map to categories; unfamiliar strings to ""} -body {
+	list \
 		[::insights::ruleTermination normal] \
 		[::insights::ruleTermination {time forfeit}] \
 		[::insights::ruleTermination abandoned] \
 		[::insights::ruleTermination {rules infraction}] \
 		[::insights::ruleTermination ?] \
-		[::insights::ruleTermination "Zeitueberschreitung"]]
-
-	set reply [dict create ok 1 answers [dict create \
-		insights_termination [dict create type choice choice time confidence 0.91]]]
-
-	::scidb::test::insights::withStubbedSystemOne $reply time {
-		set syncKnown [::insights::chooseTerminationSync "time forfeit"]
-		set callsAfterKnown [llength $::scidb::test::insights::Calls]
-		set syncUnknown [::insights::chooseTerminationSync "Zeitueberschreitung"]
-		set callsAfterUnknown [llength $::scidb::test::insights::Calls]
-
-		unset -nocomplain ::scidb::test::insights::Term
-		::insights::classifyTermination "Zeitueberschreitung" {set ::scidb::test::insights::Term}
-		::scidb::test::insights::wait {[info exists ::scidb::test::insights::Term]}
-		set asyncUnknown [list [dict get $::scidb::test::insights::Term label] \
-			[dict get $::scidb::test::insights::Term source]]
-	}
-
-	::scidb::test::insights::withStubbedSystemOne [dict create ok 0 error "off"] "" {
-		set fallbackSync [::insights::chooseTerminationSync "Zeitueberschreitung"]
-	}
-
-	list $known $syncKnown $callsAfterKnown $syncUnknown $callsAfterUnknown $asyncUnknown $fallbackSync
-} -result {{board time disconnect adjudicated unknown {}} time 0 time 1 {time classifier} unknown}
+		[::insights::ruleTermination "Zeitueberschreitung"]
+} -result {board time disconnect adjudicated unknown {}}
 
 tcltest::test insights-jev-window-async {the window updates takeaway and weakest table asynchronously from System One} -setup {
 	lassign [::scidb::test::insights::openFixtureDatabase] base index
@@ -657,17 +635,15 @@ tcltest::test insights-jev-live-typesafe {live cloud check against TypeSafe jev-
 	::insights::advise $report {set ::scidb::test::insights::LiveAdv}
 	::scidb::test::insights::wait {[info exists ::scidb::test::insights::LiveAdv]} 10000
 	set adv $::scidb::test::insights::LiveAdv
-	set term [::insights::chooseTerminationSync "Zeitueberschreitung"]
 	list \
 		[dict get $adv ok] \
 		[expr {[dict get $adv focus] in [dict keys $::insights::FocusCriteria]}] \
-		[expr {[dict get $adv urgency] in $::insights::UrgencyLevels}] \
-		[expr {$term in [dict keys $::insights::TerminationCriteria]}]
+		[expr {[dict get $adv urgency] in $::insights::UrgencyLevels}]
 } -cleanup {
 	::ai::systemone::configure -backend [expr {
 		$::scidb::test::insights::SavedBackend eq "" ? "off" : $::scidb::test::insights::SavedBackend
 	}]
-} -result {1 1 1 1}
+} -result {1 1 1}
 
 tcltest::test insights-section-headings {numeric column headings are the translated labels, not variable names} -setup {
 	toplevel .insightsHeadTest

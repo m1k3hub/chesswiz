@@ -1299,44 +1299,6 @@ proc ::mediainset::RestoreAfterDialog {dlg} {
 }
 
 
-# The largest 16:9 rectangle {x y width height} that fits in a free margin
-# of the board canvas (left, right, above or below the board), centred in
-# that margin; "" when none is at least MinWidth wide.
-proc ::mediainset::FreeRect {canv {controlsHeight 0} {minimumWidth 0}} {
-	variable Options
-
-	set cw [winfo width $canv]
-	set ch [winfo height $canv]
-	set bb [$canv bbox board]
-	if {$cw < 2 || $ch < 2 || [llength $bb] != 4} { return "" }
-	lassign $bb x0 y0 x1 y1
-	set m $Options(margin)
-	# the side-to-move and material decorations sit just outside the board
-	set x0 [expr {$x0 - $m}]; set y0 [expr {$y0 - $m}]
-	set x1 [expr {$x1 + $m}]; set y1 [expr {$y1 + $m}]
-	set best ""
-	set bestArea 0
-	foreach region [list \
-		[list 0 0 $x0 $ch] [list $x1 0 [expr {$cw - $x1}] $ch] \
-		[list 0 0 $cw $y0] [list 0 $y1 $cw [expr {$ch - $y1}]] \
-	] {
-		lassign $region rx ry rw rh
-		set rw [expr {$rw - 2*$m}]
-		set rh [expr {$rh - 2*$m}]
-		if {$rw <= 0 || $rh <= 0} { continue }
-		set vw [expr {min($rw, ($rh - $controlsHeight)*16/9)}]
-		set vh [expr {$vw*9/16 + $controlsHeight}]
-		if {$vw < max($Options(minWidth), $minimumWidth)} { continue }
-		if {$vw*$vh > $bestArea} {
-			set bestArea [expr {$vw*$vh}]
-			set best [list \
-				[expr {$rx + $m + ($rw - $vw)/2}] [expr {$ry + $m + ($rh - $vh)/2}] $vw $vh]
-		}
-	}
-	return $best
-}
-
-
 # The board owns resize timing. This hook runs after decorations have their
 # final geometry; no independent 120ms timer can race the board rebuild.
 proc ::mediainset::Watch {} {

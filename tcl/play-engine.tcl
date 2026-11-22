@@ -411,15 +411,6 @@ proc ::playengine::PlaceBesideBoard {dlg} {
 }
 
 
-# Screen position {x y} for a dialog of <dw>x<dh> next to a board at
-# <bx>,<by> sized <bw>x<bh> on a <sw>x<sh> screen: delegates to
-# ::util::place::besidePosition.
-proc ::playengine::BesidePosition {bx by bw bh dw dh sw sh} {
-	lassign [::util::place::besidePosition $bx $by $bw $bh $dw $dh [list 0 0 $sw $sh]] x y
-	return [list $x $y]
-}
-
-
 # Close the dialog; the game on the board is untouched, a running session
 # is aborted (declared over, but the result stays "*").
 proc ::playengine::Close {} {

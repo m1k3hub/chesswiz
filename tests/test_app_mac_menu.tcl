@@ -34,32 +34,54 @@ tcltest::test mac-about-has-support {About uses the application dialog with its 
 	rename ::scidb::test::mac::RealAbout ::info::openDialog
 } -result {about .application}
 
-tcltest::test mac-preferences-hook {Preferences routes through ::tk::mac::ShowPreferences} -body {
+tcltest::test mac-preferences-hook {InstallMacHooks wires ::tk::mac::ShowPreferences to ::application::ShortcutPreferences} -setup {
 	set ::scidb::test::mac::called ""
-	set had [llength [info commands ::tk::mac::ShowPreferences]]
-	if {$had} { set savedBody [info body ::tk::mac::ShowPreferences] }
-	proc ::tk::mac::ShowPreferences {} { ::scidb::test::mac::Prefs }
-	::menu::MacPreferences
-	set got [::scidb::test::mac::Called]
-	rename ::tk::mac::ShowPreferences {}
-	if {$had} {
-		proc ::tk::mac::ShowPreferences {} $savedBody
+	set hadPrefs [llength [info commands ::tk::mac::ShowPreferences]]
+	if {$hadPrefs} {
+		set savedPrefs [info body ::tk::mac::ShowPreferences]
+		rename ::tk::mac::ShowPreferences {}
 	}
-	list $got
-} -result {prefs}
+	set hadQuit [llength [info commands ::tk::mac::Quit]]
+	set hadAbout [llength [info commands ::tkAboutDialog]]
+	rename ::application::ShortcutPreferences ::scidb::test::mac::RealPrefs
+	proc ::application::ShortcutPreferences {parent} { set ::scidb::test::mac::called [list prefs $parent] }
+} -body {
+	::menu::InstallMacHooks
+	after cancel ::menu::MirrorCommandBindings
+	::tk::mac::ShowPreferences
+	::scidb::test::mac::Called
+} -cleanup {
+	rename ::application::ShortcutPreferences {}
+	rename ::scidb::test::mac::RealPrefs ::application::ShortcutPreferences
+	catch { rename ::tk::mac::ShowPreferences {} }
+	if {$hadPrefs} { proc ::tk::mac::ShowPreferences {} $savedPrefs }
+	if {!$hadQuit} { catch { rename ::tk::mac::Quit {} } }
+	if {!$hadAbout} { catch { rename ::tkAboutDialog {} } }
+} -result {prefs .application}
 
-tcltest::test mac-quit-hook {Quit routes through ::tk::mac::Quit, not a second shutdown} -body {
+tcltest::test mac-quit-hook {InstallMacHooks wires ::tk::mac::Quit to ::application::shutdown} -setup {
 	set ::scidb::test::mac::called ""
-	set had [llength [info commands ::tk::mac::Quit]]
-	if {$had} { set savedBody [info body ::tk::mac::Quit] }
-	proc ::tk::mac::Quit {} { ::scidb::test::mac::Quit }
-	::menu::MacQuit
-	set got [::scidb::test::mac::Called]
-	rename ::tk::mac::Quit {}
-	if {$had} {
-		proc ::tk::mac::Quit {} $savedBody
+	set hadQuit [llength [info commands ::tk::mac::Quit]]
+	if {$hadQuit} {
+		set savedQuit [info body ::tk::mac::Quit]
+		rename ::tk::mac::Quit {}
 	}
-	list $got
+	set hadPrefs [llength [info commands ::tk::mac::ShowPreferences]]
+	set hadAbout [llength [info commands ::tkAboutDialog]]
+	rename ::application::shutdown ::scidb::test::mac::RealShutdown
+	proc ::application::shutdown {args} { ::scidb::test::mac::Quit }
+} -body {
+	::menu::InstallMacHooks
+	after cancel ::menu::MirrorCommandBindings
+	::tk::mac::Quit
+	::scidb::test::mac::Called
+} -cleanup {
+	rename ::application::shutdown {}
+	rename ::scidb::test::mac::RealShutdown ::application::shutdown
+	catch { rename ::tk::mac::Quit {} }
+	if {$hadQuit} { proc ::tk::mac::Quit {} $savedQuit }
+	if {!$hadPrefs} { catch { rename ::tk::mac::ShowPreferences {} } }
+	if {!$hadAbout} { catch { rename ::tkAboutDialog {} } }
 } -result {quit}
 
 tcltest::test mac-no-second-menu-bar {X11 installs no global menu bar and keeps the button} -body {

@@ -51,26 +51,6 @@ proc ::ai::generate::position {fen args} {
 }
 
 
-# ----------------------------------------------------------------------
-# Asynchronous variant, for the UI: the callback <script> is invoked with a
-# single dict {ok 1 text ... claims ... attempts ... grounded ...} or
-# {ok 0 error ...}.  The event loop keeps running throughout.
-# ----------------------------------------------------------------------
-
-proc ::ai::generate::positionAsync {fen script args} {
-	array set opts [list -retries 1 -audience club -perspective neutral -engine 1 -depth 12]
-	array set opts $args
-
-	set prompt [::ai::prompt::position $fen \
-		-audience $opts(-audience) -perspective $opts(-perspective) \
-		-engine $opts(-engine) -depth $opts(-depth)]
-
-	set state [dict create fen $fen prompt $prompt attempt 0 retries $opts(-retries) script $script]
-	attemptAsync $state
-	return
-}
-
-
 proc ::ai::generate::attemptAsync {state} {
 	dict incr state attempt
 	::ai::provider::completeAsync [dict get $state prompt] \
@@ -210,40 +190,6 @@ proc ::ai::generate::buildMessages {fen audience perspective depth {context ""}}
 	return [list \
 		[dict create role system content [::ai::prompt::rules]] \
 		[dict create role user content $user]]
-}
-
-
-proc ::ai::generate::positionTools {fen args} {
-	array set opts [list -audience club -perspective neutral -depth 12 -maxRounds 4]
-	array set opts $args
-
-	set messages [buildMessages $fen $opts(-audience) $opts(-perspective) $opts(-depth)]
-	set rounds 0
-	set text ""
-
-	while {$rounds < $opts(-maxRounds)} {
-		incr rounds
-		# the last round offers no tools, so the model has to answer in prose
-		set tools [expr {$rounds < $opts(-maxRounds) ? $::ai::generate::Tools : ""}]
-		set msg [::ai::provider::chat $messages $tools]
-
-		if {$tools ne "" && [dict exists $msg tool_calls] && [llength [dict get $msg tool_calls]]} {
-			lappend messages $msg
-			foreach call [dict get $msg tool_calls] {
-				set fn [dict get $call function]
-				set name [dict get $fn name]
-				set cargs [expr {[dict exists $fn arguments] ? [dict get $fn arguments] : {}}]
-				lappend messages [dict create role tool content [runTool $name $cargs] tool_name $name]
-			}
-			continue
-		}
-
-		set text [expr {[dict exists $msg content] ? [dict get $msg content] : ""}]
-		break
-	}
-
-	set problems [noAnswer $text [::ai::claims::check $fen $text]]
-	return [dict create text $text claims $problems attempts $rounds grounded [expr {[llength $problems] == 0}]]
 }
 
 

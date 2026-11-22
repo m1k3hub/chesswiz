@@ -212,25 +212,6 @@ proc ::menu::MacAbout {} {
 	::info::openDialog .application
 }
 
-# Preferences and Quit keep one implementation for the system menu and the
-# in-window menu; the Tk hook wins when the platform provides one.
-proc ::menu::MacPreferences {} {
-	if {[llength [info commands ::tk::mac::ShowPreferences]]} {
-		catch { ::tk::mac::ShowPreferences }
-		return
-	}
-	catch { ::application::ShortcutPreferences .application }
-}
-
-proc ::menu::MacQuit {} {
-	if {[llength [info commands ::tk::mac::Quit]]} {
-		catch { ::tk::mac::Quit }
-		return
-	}
-	catch { ::application::shutdown }
-}
-
-
 proc build {menu} {
 	# Decision 003: the button stays; its entries are the task cascades
 	# File..Help. See tcl/dropdown.tcl for the tree, state rules and dump.
@@ -586,13 +567,6 @@ proc fullscreen? {} {
 	return [set [namespace current]::Fullscreen]
 }
 
-
-# Run an AI action from the menu; its error is shown, not raised.
-proc RunAI {cmd} {
-	if {[catch { {*}$cmd } err]} {
-		::dialog::error -parent .application -message $err
-	}
-}
 
 
 

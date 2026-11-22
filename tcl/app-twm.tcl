@@ -1644,13 +1644,6 @@ proc AlignToLine {twm uid newHeight} {
 }
 
 
-proc RestoreLayout {twm layoutVariant name list} {
-	variable [namespace parent]::Vars
-	variable Options
-
-	set Options($Vars($twm:id):layout:list:$layoutVariant) $list
-}
-
 
 
 proc SaveLayout {twm parent cmd name title} {

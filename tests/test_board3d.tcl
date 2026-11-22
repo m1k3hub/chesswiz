@@ -9,9 +9,11 @@
 package require tcltest 2.5
 
 set board3dSource [file normalize [file join [file dirname [info script]] .. tcl board-3d.tcl]]
+set web3dServerSource [file normalize [file join [file dirname [info script]] .. tcl web3d-server.tcl]]
 interp create b3d
 b3d eval {namespace eval util {proc source {args} {}}}
 b3d eval [list source $board3dSource]
+b3d eval [list source $web3dServerSource]
 
 proc b3dEval {script} { b3d eval $script }
 
@@ -306,10 +308,11 @@ tcltest::test board3d-pick-fallback {pickSquare falls back to the canvas project
 
 tcltest::test board3d-webgl-helpers {WebGL URL and JSON body are well formed} -body {
 	b3dEval {
-		join [list \
-			[::board3d::WebGLUrl] \
-			[::board3d::WebGLBoardJson "rnbq"] \
-			[::board3d::WebGLBoardJson {a"b\c}]] "\n"
+		::board3d::webserver::setBoard "rnbq"
+		set j1 [::board3d::webserver::BoardJson]
+		::board3d::webserver::setBoard {a"b\c}
+		set j2 [::board3d::webserver::BoardJson]
+		join [list [::board3d::WebGLUrl] $j1 $j2] "\n"
 	}
 } -result {http://127.0.0.1:0
 {"board": "rnbq"}

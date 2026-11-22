@@ -84,9 +84,10 @@ proc awaitResult {{ms 30000}} {
 	after cancel $id
 }
 
-::ai::provider::configure -name stub -responses {"The position is balanced."}
+::ai::provider::configure -name stub -chatResponses [list \
+	[dict create role assistant content "The position is balanced."]]
 set ::gresult {}
-::ai::generate::positionAsync $start [list set ::gresult] -engine 0
+::ai::generate::positionToolsAsync $start [list set ::gresult]
 awaitResult
 check "async generate succeeds" [expr {[dict get $::gresult ok] == 1}]
 check "async generate is grounded" [expr {[dict get $::gresult grounded] == 1}]
@@ -94,12 +95,11 @@ check "async generate takes one attempt" [expr {[dict get $::gresult attempts] =
 check "async result carries evidence" [dict exists $::gresult evidence]
 
 # --- async retry on an ungrounded claim -------------------------------
-::ai::provider::configure -name stub -responses {
-	"White has an isolated pawn."
-	"The position is balanced."
-}
+::ai::provider::configure -name stub -chatResponses [list \
+	[dict create role assistant content "White has an isolated pawn."] \
+	[dict create role assistant content "The position is balanced."]]
 set ::gresult {}
-::ai::generate::positionAsync $start [list set ::gresult] -engine 0 -retries 1
+::ai::generate::positionToolsAsync $start [list set ::gresult] -retries 1
 awaitResult
 check "async retry happens" [expr {[dict get $::gresult attempts] == 2}]
 check "async retry recovers" [expr {[dict get $::gresult grounded] == 1}]
