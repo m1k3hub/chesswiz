@@ -247,7 +247,6 @@ set NationalLists "National / correspondence lists…"
 	set EngineDictionary				"Engine Dictionary…"
 	set CompareEngines				"Compare Engines…"
 	set MenuEngines					"Engines…"
-	set GameReview						"Game Review…"
 	set AnnotateGameWithAI			"Annotate Game with AI…"
 	set FactCheckAnnotations		"Fact-Check Annotations"
 	set Tablebase						"Tablebase"
@@ -496,7 +495,6 @@ proc ::menu::DefineTree {} {
 			[list cmd menu.analysis.review_engine ChooseReviewEngine "" {::menu::ModulePresent chooseengine}] \
 			[list sep] \
 			[list cmd menu.analysis.analyze AnalyzePosition "F4" {::menu::ModulePresent ai}] \
-			[list cmd menu.analysis.game_review GameReview "" {::menu::ModulePresent review}] \
 			[list cascade Explain "" [list \
 				[list cmd menu.analysis.explain.position ExplainPosition "" {::menu::ModulePresent ai}] \
 				[list cmd menu.analysis.explain.line ExplainLine "" {::menu::ModulePresent ai}] \
@@ -2562,7 +2560,6 @@ proc ::menu::OperationKind {id} {
 		menu.training.repertoire { return repertoire }
         menu.training.play_engine { return play-engine }
         menu.training.engine_match { return engine-match }
-        menu.analysis.game_review { return game-review }
         menu.analysis.review_engine { return review-engine }
         menu.tools.iccf { return iccf-settings }
         menu.tools.download { return download }
@@ -2659,12 +2656,6 @@ proc ::menu::OperationSpec {id} {
             {username {type string default {}}}
             {password {type string default {}}}
             {endpoint {type string default {} description {XFCC endpoint; empty retains the existing endpoint}}}
-        }
-    }
-    if {$kind eq "game-review"} {
-        return {
-            {operation {type enum default {} enum {{} start cancel status}}}
-            {depth {type integer default 12 range {1 64}}}
         }
     }
     if {$kind eq "play-engine"} {
@@ -2777,7 +2768,7 @@ proc ::menu::OperationSpec {id} {
 }
 
 proc ::menu::OperationSupplied {id arguments} {
-	if {[OperationKind $id] in {endgame tactics repertoire keyboard pgn-options log engine-log play-engine engine-match game-review review-engine iccf-settings download training-set private-card correspondence comparison engine-admin}} {
+	if {[OperationKind $id] in {endgame tactics repertoire keyboard pgn-options log engine-log play-engine engine-match review-engine iccf-settings download training-set private-card correspondence comparison engine-admin}} {
 		return [expr {[dict exists $arguments operation] && [dict get $arguments operation] ne ""}]
 	}
 	if {[OperationKind $id] eq "book"} {
@@ -2824,7 +2815,7 @@ proc ::menu::WriteDatabaseFile {filename format encoding overwrite {base ""} {va
 
 proc ::menu::RunOperation {id arguments} {
 	set kind [OperationKind $id]
-    if {$kind in {play-engine engine-match game-review review-engine iccf-settings download training-set private-card correspondence comparison engine-admin}} {
+    if {$kind in {play-engine engine-match review-engine iccf-settings download training-set private-card correspondence comparison engine-admin}} {
         return [RunSessionOperation $kind $arguments]
     }
 	if {$kind in {keyboard pgn-options log engine-log}} { return [RunDialogOperation $kind $arguments] }
@@ -2953,7 +2944,7 @@ proc ::menu::WireOperations {} {
 		}
 		dict set rec args $spec
 		set kind [OperationKind $id]
-		if {$kind in {keyboard pgn-options log engine-log tactics repertoire play-engine engine-match game-review review-engine iccf-settings download training-set private-card correspondence comparison engine-admin}} {
+		if {$kind in {keyboard pgn-options log engine-log tactics repertoire play-engine engine-match review-engine iccf-settings download training-set private-card correspondence comparison engine-admin}} {
 			dict set rec doc "Run [dict get $rec label] with operation arguments; omit operation to open its window. Use the list or status operation where available to inspect current state."
 		}
 		if {$kind eq "engine-match"} {dict set rec validate ::menu::ValidateMatchArgs}
@@ -3218,7 +3209,6 @@ proc ::menu::Do {id} {
 		menu.analysis.compare_engines { return [::application::analysis::openComparison .application] }
 		menu.analysis.review_engine { return [::ai::engine::chooseDialog .application] }
 		menu.analysis.analyze { return [::application::analysis::AnalyzeCurrentPosition] }
-		menu.analysis.game_review { return [::gamereview::run .application] }
 		menu.analysis.explain.position { return [::application::ai::analyze .application] }
 		menu.analysis.explain.line {
 			set running [::application::analysis::Running]
@@ -3593,13 +3583,6 @@ proc ::menu::RunSessionOperation {kind arguments} {
             }
             # Credentials never enter the assistant reply.
             return [dict create configured [::iccf::xfcc::configured?] endpoint $::iccf::xfcc::Config(endpoint)]
-        }
-        game-review {
-            switch -- $operation {
-                start { return [::gamereview::run .application -depth [dict get $arguments depth]] }
-                cancel { return [::gamereview::cancel] }
-                status { return [dict create running [::gamereview::running?]] }
-            }
         }
         play-engine {
             switch -- $operation {

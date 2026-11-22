@@ -454,7 +454,6 @@
 ::menu::mc::ChooseModel	"Välj modell…"
 ::menu::mc::MenuAssignFileTypes	"Tilldela filtyper…"
 ::menu::mc::CompareEngines	"Jämför motorer…"
-::menu::mc::GameReview	"Partianalys…"
 ::menu::mc::MenuTipOfTheDay	"Dagens tips…"
 ::menu::mc::MenuPrivatePlayerCard	"Privat spelarkort…"
 ::menu::mc::PaneBoard	"Bräde"

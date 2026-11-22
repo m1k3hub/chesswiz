@@ -26,7 +26,6 @@ namespace eval ::scidb::test::reachability {
         menu.training.training_set {runs a database job}
         menu.training.check_results {runs a database job}
         menu.analysis.analyze {starts an engine job}
-        menu.analysis.game_review {starts an engine job}
         menu.analysis.engine_toggle {starts an engine process}
         menu.analysis.explain.position {starts a model job}
         menu.analysis.explain.line {starts a model job}

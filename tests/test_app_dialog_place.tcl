@@ -944,7 +944,6 @@ proc ::scidb::test::dlgplace::callers {} {
         002A {::playengine::open .application} {.application.playengine} {::playengine::Close}
         002B {::guessmove::start white} {.application.__guessmove__} {::guessmove::stop; catch {destroy .application.__guessmove__}}
         002C {::reptrainer::open .application} {.application.__reptrainer__} {::reptrainer::Close .application.__reptrainer__}
-        003B {set review [::gamereview::classify {{san e4 before 0 after 0 best 1}}]; ::gamereview::ShowWindow .application $review {} 0} {.application.__gamereview} {destroy .application.__gamereview}
         003D {set ::annotation::Position {}; ::annotation::open .application} {.application.__annotation__} {::annotation::close; destroy .application.__annotation__; set ::annotation::Vars(dialog) {}}
         endgame {::endtrainer::open .application} {.application.__endtrainer__} {::endtrainer::Close}
         engine-match {::enginematch::open .application} {.application.enginematch} {::enginematch::Close}
@@ -992,7 +991,6 @@ foreach {target openScript dialog closeScript} {
     002A {::playengine::open .application} {.application.playengine} {::playengine::Close}
     002B {::guessmove::start white} {.application.__guessmove__} {::guessmove::stop; catch {destroy .application.__guessmove__}}
     002C {::reptrainer::open .application} {.application.__reptrainer__} {::reptrainer::Close .application.__reptrainer__}
-    003B {set review [::gamereview::classify {{san e4 before 0 after 0 best 1} {san e5 before 0 after -250 best 0}}]; ::gamereview::ShowWindow .application $review {} 0} {.application.__gamereview} {destroy .application.__gamereview}
     003C {lassign [::scidb::test::dlgplace::openInsightsFixture] insBase insIdx; set insDlg [::insights::show .application $insBase Normal $insIdx]} {$insDlg} {destroy $insDlg; ::scidb::db::close $insBase; file delete -force [file dirname $insBase]}
     003D {set savedPos $::annotation::Position; set ::annotation::Position {}; ::annotation::open .application} {.application.__annotation__} {::annotation::close; destroy .application.__annotation__; set ::annotation::Vars(dialog) {}; set ::annotation::Position $savedPos}
     endgame {::endtrainer::open .application} {.application.__endtrainer__} {::endtrainer::Close}
@@ -1017,7 +1015,6 @@ foreach {target openScript dialog closeScript} {
     002A {::playengine::open .application} {.application.playengine} {::playengine::Close}
     002B {::guessmove::start white} {.application.__guessmove__} {::guessmove::stop; catch {destroy .application.__guessmove__}}
     002C {::reptrainer::open .application} {.application.__reptrainer__} {::reptrainer::Close .application.__reptrainer__}
-    003B {set review [::gamereview::classify {{san e4 before 0 after 0 best 1}}]; ::gamereview::ShowWindow .application $review {} 0} {.application.__gamereview} {destroy .application.__gamereview}
     003D {set ::annotation::Position {}; ::annotation::open .application} {.application.__annotation__} {::annotation::close; destroy .application.__annotation__; set ::annotation::Vars(dialog) {}}
     endgame {::endtrainer::open .application} {.application.__endtrainer__} {::endtrainer::Close}
     engine-match {::enginematch::open .application} {.application.enginematch} {::enginematch::Close}
@@ -1332,7 +1329,7 @@ proc ::scidb::test::dlgplace::requireScroll039 {target dlg} {
     }
     return $count
 }
-# VAL-DLG-039: Game Review, the Endgame trainer and the Repertoire trainer
+# VAL-DLG-039: the Endgame trainer and the Repertoire trainer
 # keep every control whole at the real minimum (a) and at the lowered
 # minimum (b) 500x420. On 5cfd077f the review list asks for 436 px, the
 # endgame tree for 332 px and the repertoire source box for 323 px, all wider
@@ -1342,7 +1339,7 @@ foreach {label width height real} {
     realmin 0 0 1
     500x420 500 420 0
 } {
-    foreach who {gamereview endgame repertoire} {
+    foreach who {endgame repertoire} {
         tcltest::test dlg-039-scroll-$label-$who {in scroll mode every control stays whole and reachable} -setup [format {
             ::scidb::test::dlgplace::setupBoard
             if {%d} {
@@ -1356,11 +1353,7 @@ foreach {label width height real} {
             puts "DLG-GEOMETRY ([expr {%d ? "a" : "b"}]) dlg-039 main=[wm geometry .application] workarea=[winfo workarea .application]"
         } $real $width $height $real] -body [format {
             set who "%s"
-            if {$who eq "gamereview"} {
-                set review [::gamereview::classify {{san e4 before 0 after 0 best 1} {san e5 before 0 after -250 best 0}}]
-                ::gamereview::ShowWindow .application $review {} 0
-                set dlg .application.__gamereview
-            } elseif {$who eq "endgame"} {
+            if {$who eq "endgame"} {
                 ::endtrainer::open .application
                 set dlg .application.__endtrainer__
             } else {
@@ -1371,57 +1364,14 @@ foreach {label width height real} {
             ::scidb::test::dlgplace::requireScroll039 dlg-039-scroll-%s-%s $dlg
             expr {1}
         } $who $label $who] -cleanup {
-            catch {destroy .application.__gamereview}
-            catch {set ::gamereview::Priv(running) 0}
             catch {::endtrainer::Close}
+                        catch {::endtrainer::Close}
             catch {::reptrainer::Close .application.__reptrainer__}
             ::scidb::test::dlgplace::stopTrace
             ::scidb::test::dlgplace::restoreMainMinimum
         } -result 1
     }
 }
-# Use the normal review entry and NextPly/Progress/Finish lifecycle. Only the
-# engine is replaced, so measurement is independent of engine speed/availability.
-proc ::scidb::test::dlgplace::reviewMove {args} {
-    variable reviewCheck
-    set reviewCheck [catch {
-        set dlg .application.__gamereview_progress
-        require [expr {[[::util::place::playingBody $dlg].top.status cget -text] ne ""}] "review did not populate its status"
-        check 003A $dlg
-        # A later, longer status must grow the same window and update its plan.
-        set before [winfo reqwidth $dlg]
-        ::gamereview::Progress "Reviewing move 100 of 120: O-O-O+"
-        check 003A-growth $dlg
-        require [expr {[winfo reqwidth $dlg] > $before}] "status did not exercise content growth"
-    } ::scidb::test::dlgplace::reviewError]
-    ::gamereview::cancel
-    return {evalBeforeCp 0 evalAfterCp 0 uci e2e4 bestMove e2e4}
-}
-tcltest::test dlg-003A {normal review status and later growth fit, then results use the shared plan} -setup {
-    ::scidb::test::dlgplace::setupBoard
-    rename ::ai::engine::available ::scidb::test::dlgplace::realAvailable
-    rename ::ai::engine::classify ::scidb::test::dlgplace::realClassify
-    proc ::ai::engine::available {} {return 1}
-    proc ::ai::engine::classify {args} {::scidb::test::dlgplace::reviewMove {*}$args}
-    set ::scidb::test::dlgplace::reviewCheck -1
-} -body {
-    ::scidb::test::dlgplace::require [::gamereview::run .application -depth 6] "review did not start"
-    for {set i 0} {$i < 50 && $::gamereview::Priv(running)} {incr i} {
-        ::scidb::test::dlgplace::waitFor 100
-    }
-    ::scidb::test::dlgplace::require [expr {$::scidb::test::dlgplace::reviewCheck == 0}] \
-        "review status check failed: $::scidb::test::dlgplace::reviewError"
-    ::scidb::test::dlgplace::check 003B-run .application.__gamereview
-} -cleanup {
-    ::gamereview::cancel
-    catch {destroy .application.__gamereview_progress}
-    catch {destroy .application.__gamereview}
-    rename ::ai::engine::available {}
-    rename ::ai::engine::classify {}
-    rename ::scidb::test::dlgplace::realAvailable ::ai::engine::available
-    rename ::scidb::test::dlgplace::realClassify ::ai::engine::classify
-    ::scidb::test::dlgplace::stopTrace
-} -result 1
 # The report body scrolls, so its own request is a sliver; the dialog must
 # still request its declared usable minimum, and placement must keep it. This
 # is what keeps a narrow strip beside the board from shrinking Insights below
@@ -1692,7 +1642,6 @@ foreach {target openScript dialog closeScript} {
     follow-tactics {::tactics::open .application} {.tactics} {::tactics::close}
     follow-playengine {::playengine::open .application} {.application.playengine} {::playengine::Close}
     follow-guessmove {::guessmove::start white} {.application.__guessmove__} {::guessmove::stop}
-    follow-gamereview {set review [::gamereview::classify {{san e4 before 0 after 0 best 1} {san e5 before 0 after -250 best 0}}]; ::gamereview::ShowWindow .application $review {} 0} {.application.__gamereview} {destroy .application.__gamereview}
     follow-trainer {::endtrainer::open .application} {.application.__endtrainer__} {::endtrainer::Close}
 } {
     tcltest::test dlg-$target {dialog follows board on resize, move and fullscreen without covering it} -setup {
@@ -1944,7 +1893,6 @@ tcltest::test dlg-frame-request-invalidation {unchanged board still replans for 
 set ::scidb::test::dlgplace::closeScripts [dict create \
     playengine {::playengine::Close} \
     guessmove {::guessmove::stop; catch {destroy .application.__guessmove__}} \
-    gamereview {catch {destroy .application.__gamereview}} \
     reptrainer {::reptrainer::Close .application.__reptrainer__} \
     endtrainer {::endtrainer::Close} \
     enginematch {::enginematch::Close}]
@@ -2033,7 +1981,6 @@ proc ::scidb::test::dlgplace::noRoomCleanup {} {
 foreach {short openScript dialog} {
     playengine {::playengine::open .application} {.application.playengine}
     guessmove {::guessmove::start white} {.application.__guessmove__}
-    gamereview {set review [::gamereview::classify {{san e4 before 0 after 0 best 1} {san e5 before 0 after -250 best 0}}]; ::gamereview::ShowWindow .application $review {} 0} {.application.__gamereview}
     reptrainer {::reptrainer::open .application} {.application.__reptrainer__}
     endtrainer {::endtrainer::open .application} {.application.__endtrainer__}
     enginematch {::enginematch::open .application} {.application.enginematch}
@@ -2151,7 +2098,6 @@ proc ::scidb::test::dlgplace::videoRestoreCheck {target insBefore boardBefore} {
 foreach {target openScript dialog closeScript} {
     playengine-video {::playengine::open .application} {.application.playengine} {::playengine::Close}
     guessmove-video {::guessmove::start white} {.application.__guessmove__} {::guessmove::stop; catch {destroy .application.__guessmove__}}
-    gamereview-video {set review [::gamereview::classify {{san e4 before 0 after 0 best 1} {san e5 before 0 after -250 best 0}}]; ::gamereview::ShowWindow .application $review {} 0} {.application.__gamereview} {destroy .application.__gamereview}
     reptrainer-video {::reptrainer::open .application} {.application.__reptrainer__} {::reptrainer::Close .application.__reptrainer__}
     endtrainer-video {::endtrainer::open .application} {.application.__endtrainer__} {::endtrainer::Close}
     enginematch-video {::enginematch::open .application} {.application.enginematch} {::enginematch::Close}
@@ -2174,7 +2120,7 @@ foreach {target openScript dialog closeScript} {
             catch {::scidb::test::dlgplace::stopVideo}
             catch {destroy .application.playengine}
             catch {destroy .application.__guessmove__}
-            catch {destroy .application.__gamereview}
+            catch {::endtrainer::Close}
             catch {destroy .application.__reptrainer__}
             catch {destroy .application.__endtrainer__}
             catch {destroy .application.enginematch}
@@ -2376,10 +2322,9 @@ tcltest::test dlg-v14-d-video-stop-regrows-board {stopping video replans dialog 
     ::scidb::test::dlgplace::noRoomState board-only
     wm geometry .application [::scidb::test::dlgplace::fitGeometry 1000 [expr {min(640,$wh)}]]
     ::scidb::test::dlgplace::waitFor 1000
-    # Compare equivalent dialog states: Game Review may reserve space even
+    # Compare equivalent dialog states: the dialog may reserve space even
     # without video, so its settled no-video board is the restoration baseline.
-    set review [::gamereview::classify {{san e4 before 0 after 0 best 1} {san e5 before 0 after -250 best 0}}]
-    ::gamereview::ShowWindow .application $review {} 0
+    ::reptrainer::open .application
     ::scidb::test::dlgplace::waitFor 1000
     set squareBefore $::application::board::Dim(squaresize:Normal)
     set boardBefore [::scidb::test::dlgplace::boardRect]
@@ -2388,14 +2333,14 @@ tcltest::test dlg-v14-d-video-stop-regrows-board {stopping video replans dialog 
     ::scidb::test::dlgplace::require [expr {$::application::board::ReservePixels > 0 && $videoSquare >= $::application::board::MinimumReserveSquare && $videoSquare < $squareBefore}] "above-floor fixture did not shrink for video: app=[wm geometry .application] before=$squareBefore square=$videoSquare reserve=$::application::board::ReserveSide/$::application::board::ReservePixels"
     puts "VIDEO-RESERVE live=[winfo workarea .application] side=$::application::board::ReserveSide pixels=$::application::board::ReservePixels before=$squareBefore square=$videoSquare baseline={$boardBefore}"
     set boardDuring [::scidb::test::dlgplace::boardRect]
-    set dlgDuring [::scidb::test::dlgplace::widgetRect .application.__gamereview]
+    set dlgDuring [::scidb::test::dlgplace::widgetRect .application.__reptrainer__]
     set reserveDuring [list $::application::board::ReserveSide $::application::board::ReservePixels]
 
     # Stop video:
     ::scidb::test::dlgplace::stopVideo
     ::scidb::test::dlgplace::waitFor 1000
     set boardAfter [::scidb::test::dlgplace::boardRect]
-    set dlgAfter [::scidb::test::dlgplace::widgetRect .application.__gamereview]
+    set dlgAfter [::scidb::test::dlgplace::widgetRect .application.__reptrainer__]
     set reserveAfter [list $::application::board::ReserveSide $::application::board::ReservePixels]
     # The surviving dialog may still own a strip after video releases its own.
     set videoReleased [expr {$reserveAfter eq {{} 0} || $::application::board::ReserveKind eq "dialog"}]
@@ -2410,7 +2355,7 @@ tcltest::test dlg-v14-d-video-stop-regrows-board {stopping video replans dialog 
          [expr {$overlap == 0}]
 } -cleanup {
     catch {::scidb::test::dlgplace::stopVideo}
-    catch {destroy .application.__gamereview}
+    catch {::reptrainer::Close .application.__reptrainer__}
     ::scidb::test::dlgplace::stopTrace
     ::scidb::test::dlgplace::noRoomCleanup
 } -result {1 1 1 1}
@@ -3010,7 +2955,7 @@ tcltest::test dlg-w9i-pair-deadline {both playing dialogs record and settle befo
 # W9j: use the actual WM frames, including both borders, with no tolerance.
 # Keep a measurement transaction alive over a queued resize, as a completed
 # board callback can do when a helper's idle drain applies the parent request.
-tcltest::test dlg-w9j-native-resize-containment {Game Review and Endgame Trainer stay inside the live main frame} -setup {
+tcltest::test dlg-w9j-native-resize-containment {Repertoire and Endgame Trainer stay inside the live main frame} -setup {
     ::scidb::test::dlgplace::setupBoard
     ::scidb::test::dlgplace::loweredMinimum
 } -constraints haveWmctrl -body {
@@ -3018,12 +2963,11 @@ tcltest::test dlg-w9j-native-resize-containment {Game Review and Endgame Trainer
     ::scidb::test::dlgplace::waitFor 900
     ::scidb::test::dlgplace::zoomBoard 0
     ::scidb::test::dlgplace::realVideo
-    set review [::gamereview::classify {{san e4 before 0 after 0 best 1} {san e5 before 0 after -250 best 0}}]
-    ::gamereview::ShowWindow .application $review {} 0
+    ::reptrainer::open .application
     ::scidb::test::dlgplace::waitFor 800
     ::endtrainer::open .application
     ::scidb::test::dlgplace::waitFor 900
-    set ds {.application.__gamereview .application.__endtrainer__}
+    set ds {.application.__reptrainer__ .application.__endtrainer__}
     set seq $::util::place::BesideRecordSeq
     set start [clock milliseconds]
     ::util::place::besideMeasureBegin
@@ -3066,7 +3010,7 @@ tcltest::test dlg-w9j-native-resize-containment {Game Review and Endgame Trainer
     puts "W9J resize native=$stable workarea=$wa"
     return 1
 } -cleanup {
-    catch {destroy .application.__gamereview}
+    catch {::reptrainer::Close .application.__reptrainer__}
     catch {::endtrainer::Close}
     ::scidb::test::dlgplace::realCleanup
 } -result 1
@@ -3189,8 +3133,8 @@ tcltest::test dlg-w9d-pair-release {all playing pairs restore reserve side, pixe
     ::scidb::test::dlgplace::waitFor 700
     ::scidb::test::dlgplace::zoomBoard 1
     ::scidb::test::dlgplace::realVideo
-    set dialogs [dict create playengine .application.playengine enginematch .application.enginematch guessmove .application.__guessmove__ reptrainer .application.__reptrainer__ gamereview .application.__gamereview endtrainer .application.__endtrainer__]
-    foreach pair {{playengine enginematch} {guessmove reptrainer} {gamereview endtrainer}} {
+    set dialogs [dict create playengine .application.playengine enginematch .application.enginematch guessmove .application.__guessmove__ reptrainer .application.__reptrainer__ endtrainer .application.__endtrainer__]
+    foreach pair {{playengine enginematch} {guessmove reptrainer}} {
         foreach opening [list $pair [lreverse $pair]] {
             foreach closing [list $pair [lreverse $pair]] {
                 set before [::scidb::test::dlgplace::reserveState]
@@ -3200,10 +3144,6 @@ tcltest::test dlg-w9d-pair-release {all playing pairs restore reserve side, pixe
                         enginematch {::enginematch::open .application}
                         guessmove {::guessmove::start white}
                         reptrainer {::reptrainer::open .application}
-                        gamereview {
-                            set review [::gamereview::classify {{san e4 before 0 after 0 best 1} {san e5 before 0 after -250 best 0}}]
-                            ::gamereview::ShowWindow .application $review {} 0
-                        }
                         endtrainer {::endtrainer::open .application}
                     }
                     ::scidb::test::dlgplace::waitFor 600
@@ -3251,12 +3191,12 @@ tcltest::test dlg-v21-reserve-before-overlap {playing dialogs reserve down to sq
     if {[info exists ::env(DLG021_SIZE)]} { set size [split $::env(DLG021_SIZE) x] }
     wm geometry .application [::scidb::test::dlgplace::fitGeometry {*}$size]
     ::scidb::test::dlgplace::waitFor 1000
-    set windows [dict create playengine .application.playengine gamereview .application.__gamereview enginematch .application.enginematch]
+    set windows [dict create playengine .application.playengine endtrainer .application.__endtrainer__ enginematch .application.enginematch]
     # Real libmpv is loaded and advancing; include the ordinary no-video
     # reproduction as well as placement while playback owns a strip.
     foreach media {0 1} {
         if {$media} {::scidb::test::dlgplace::realVideo}
-        foreach opening {{playengine gamereview} {gamereview playengine} {enginematch}} {
+        foreach opening {{playengine endtrainer} {endtrainer playengine} {enginematch}} {
             foreach reverse {0 1} {
                 set before [::scidb::test::dlgplace::reserveState]
                 set boardBefore [::scidb::test::dlgplace::boardRect]
@@ -3265,10 +3205,7 @@ tcltest::test dlg-v21-reserve-before-overlap {playing dialogs reserve down to sq
                     switch $short {
                         playengine {::playengine::open .application}
                         enginematch {::enginematch::open .application}
-                        gamereview {
-                            set review [::gamereview::classify {{san e4 before 0 after 0 best 1} {san e5 before 0 after -250 best 0}}]
-                            ::gamereview::ShowWindow .application $review {} 0
-                        }
+                        endtrainer {::endtrainer::open .application}
                     }
                     ::scidb::test::dlgplace::waitFor 650
                 }
@@ -3369,7 +3306,7 @@ tcltest::test dlg-v21-reserve-before-overlap {playing dialogs reserve down to sq
     }
     return 1
 } -cleanup {
-    catch {destroy .application.__gamereview}
+    catch {::endtrainer::Close}
     ::scidb::test::dlgplace::realCleanup
 } -result 1
 
@@ -3385,8 +3322,7 @@ tcltest::test dlg-v21-video-after-reserve-zoom {video recovers its strip when a 
     set reserveBefore [::scidb::test::dlgplace::reserveState]
     ::playengine::open .application
     ::scidb::test::dlgplace::waitFor 650
-    set review [::gamereview::classify {{san e4 before 0 after 0 best 1} {san e5 before 0 after -250 best 0}}]
-    ::gamereview::ShowWindow .application $review {} 0
+    ::endtrainer::open .application
     ::scidb::test::dlgplace::waitFor 650
     ::scidb::test::dlgplace::realVideo
     ::scidb::test::dlgplace::zoomBoard 1
@@ -3398,14 +3334,14 @@ tcltest::test dlg-v21-video-after-reserve-zoom {video recovers its strip when a 
     puts "DLG021-ZOOM video=$video board=$board overlap=$overlap reserve=[::scidb::test::dlgplace::reserveState]"
     ::scidb::test::dlgplace::require [expr {$overlap == 0 && $::application::board::ReservePixels > 0 && $::application::board::Dim(squaresize:Normal) >= 32}] "stale dialog dodge covered the board despite a feasible video reserve"
     ::playengine::Close
-    destroy .application.__gamereview
+    ::endtrainer::Close
     ::application::media::Stop
     ::scidb::test::dlgplace::zoomBoard 0
     ::scidb::test::dlgplace::waitFor 700
     ::scidb::test::dlgplace::require [expr {$before eq [::scidb::test::dlgplace::boardRect] && $reserveBefore eq [::scidb::test::dlgplace::reserveState]}] "post-video-start zoom did not restore exactly"
     return 1
 } -cleanup {
-    catch {destroy .application.__gamereview}
+    catch {::endtrainer::Close}
     ::scidb::test::dlgplace::realCleanup
 } -result 1
 
@@ -3420,7 +3356,7 @@ tcltest::test dlg-v22-small-scroll {compact only after reserve exhaustion; all a
     if {[info exists ::env(DLG022_SIZE)]} {set size $::env(DLG022_SIZE)}
     wm geometry .application [::scidb::test::dlgplace::fitGeometry {*}[split $size x]]
     ::scidb::test::dlgplace::waitFor 1000
-    foreach scenario {{0 playengine enginematch} {0 enginematch} {1 playengine gamereview} {1 gamereview playengine}} {
+    foreach scenario {{0 playengine enginematch} {0 enginematch} {1 playengine endtrainer} {1 endtrainer playengine}} {
         lassign $scenario video
         set opening [lrange $scenario 1 end]
         set before [::scidb::test::dlgplace::boardRect]
@@ -3434,10 +3370,7 @@ tcltest::test dlg-v22-small-scroll {compact only after reserve exhaustion; all a
             switch $kind {
                 playengine {::playengine::open .application; set dlg .application.playengine}
                 enginematch {::enginematch::open .application; set dlg .application.enginematch}
-                gamereview {
-                    ::gamereview::ShowWindow .application [::gamereview::classify {{san e4 before 0 after 0 best 1}}] {} 0
-                    set dlg .application.__gamereview
-                }
+                endtrainer {::endtrainer::open .application; set dlg .application.__endtrainer__}
             }
             lappend dialogs $dlg
             ::scidb::test::dlgplace::waitFor 900
@@ -3700,54 +3633,6 @@ tcltest::test dlg-v22-interactive-classes {all interactive widget classes reveal
     catch {destroy .playingViewportProbe}
 } -result 1
 
-tcltest::test dlg-v22-review-native-left {listbox and its scrollbar remain operable in compacted video/review pair} -setup {
- ::scidb::test::dlgplace::setupBoard
- ::scidb::test::dlgplace::loweredMinimum
- wm geometry .application [::scidb::test::dlgplace::fitGeometry 800 600]
- ::scidb::test::dlgplace::waitFor 700
-} -body {
- ::scidb::test::dlgplace::realVideo
- ::playengine::open .application
- ::scidb::test::dlgplace::waitFor 700
- ::gamereview::ShowWindow .application [::gamereview::classify {{san e4 before 0 after -250 best 0} {san e5 before 0 after -300 best 0}}] {} 0
- ::scidb::test::dlgplace::waitFor 700
- set dlg .application.__gamereview
- set c $dlg.__viewport.canvas
- set lb $c.body.top.list.list
- focus -force $lb
- update
- ::scidb::test::dlgplace::pressKey $lb Home
- ::scidb::test::dlgplace::waitFor 100
- puts "REVIEW_LIST focus=[focus] selection=[$lb curselection] items=[$lb size] rect=[::scidb::test::dlgplace::widgetRect $lb] viewport=[::scidb::test::dlgplace::widgetRect $c]"
- ::scidb::test::dlgplace::require [expr {[focus] eq $lb && [$lb curselection] eq "0"}] "review listbox inaccessible to keyboard"
- ::scidb::test::dlgplace::waitFor 1000
-
- set bar $dlg.__viewport.x
- set before [$c xview]
- ::scidb::test::dlgplace::clickAt $bar [expr {[winfo rootx $bar]+5}] [expr {[winfo rooty $bar]+[winfo height $bar]/2}] 10
- ::scidb::test::dlgplace::waitFor 500
- lassign [::scidb::test::dlgplace::widgetRect $lb] x y w h
- lassign [::scidb::test::dlgplace::widgetRect $c] u v a d
- set leftVisible [expr {$x >= $u && $x < $u+$a && [focus] eq $lb}]
- puts "REVIEW_NATIVE_LEFT visible=$leftVisible focus=[focus] before=$before after=[$c xview] list=[::scidb::test::dlgplace::widgetRect $lb] viewport=[::scidb::test::dlgplace::widgetRect $c] bar=[::scidb::test::dlgplace::widgetRect $bar]"
- if {[info exists ::env(DLG022_EVIDENCE)]} {exec import -window root [file join $::env(DLG022_EVIDENCE) review-native-left.png]}
- ::scidb::test::dlgplace::require $leftVisible "native scrollbar cannot expose focused listbox left edge"
- set sb $c.body.top.list.vs
- focus -force $sb
- update
- ::scidb::test::dlgplace::require [::scidb::test::dlgplace::inside [::scidb::test::dlgplace::widgetRect $sb] [::scidb::test::dlgplace::widgetRect $c]] "review list scrollbar unreachable"
- if {[info exists ::env(DLG022_EVIDENCE)]} {exec import -window root [file join $::env(DLG022_EVIDENCE) review-list.png]}
- destroy $dlg
- ::playengine::Close
- ::application::media::Stop
- return 1
-} -cleanup {::scidb::test::dlgplace::realCleanup} -result 1
-
-# VAL-DLG-033: leaving focus-follows-size zoom must put the pre-zoom pane
-# sizes back exactly. focuszoom::Restore used to re-place every recorded
-# sash; Tk re-clamps a sash that holds a pane below its -minsize, so the
-# analysis pane (269 px against a 300 px minimum at 1000x600) snapped to the
-# minimum and never returned.
 proc ::scidb::test::dlgplace::paneSizes {} {
     set t [::application::reflow::boardTwm]
     set result {}
@@ -3882,11 +3767,6 @@ proc ::scidb::test::dlgplace::lifetimeOpen {kind} {
     switch -- $kind {
         playengine { ::playengine::open .application; return .application.playengine }
         enginematch { ::enginematch::open .application; return .application.enginematch }
-        gamereview {
-            set review [::gamereview::classify {{san e4 before 0 after 0 best 1}}]
-            ::gamereview::ShowWindow .application $review {} 0
-            return .application.__gamereview
-        }
         guessmove { ::guessmove::start white; return .application.__guessmove__ }
         default { error "unknown dialog $kind" }
     }
@@ -3896,7 +3776,6 @@ proc ::scidb::test::dlgplace::lifetimeClose {kind dlg} {
         switch -- $kind {
             playengine { ::playengine::Close }
             enginematch { ::enginematch::Close }
-            gamereview { destroy .application.__gamereview }
             guessmove { ::guessmove::stop; destroy .application.__guessmove__ }
         }
     }
@@ -3926,7 +3805,7 @@ proc ::scidb::test::dlgplace::lifetimeCleanup {} {
     catch {destroy .application.playengine}
     catch {destroy .application.enginematch}
     catch {destroy .application.__guessmove__}
-    catch {destroy .application.__gamereview}
+    catch {::endtrainer::Close}
     catch {wm attributes .application -fullscreen 0}
     catch {wm state .application normal}
     ::scidb::test::dlgplace::restoreMainMinimum
@@ -4248,7 +4127,7 @@ proc ::scidb::test::dlgplace::noCoverCase {kind} {
     ::scidb::test::dlgplace::lifetimeClose $kind $dlg
     return 1
 }
-foreach kind {playengine guessmove gamereview} {
+foreach kind {playengine guessmove} {
     tcltest::test dlg-046-no-cover-$kind {a non-pinned playing dialog over the board is re-placed; the pin control is honoured} -setup {
         ::scidb::test::dlgplace::setupBoard
     } -body [format {
@@ -4270,8 +4149,8 @@ tcltest::test dlg-030-pair-tiny {two playing dialogs in a tiny window stay board
     foreach {first second sequence} {
         playengine enginematch {playengine enginematch}
         playengine enginematch {enginematch playengine}
-        playengine gamereview {playengine gamereview}
-        playengine gamereview {gamereview playengine}
+        playengine guessmove {playengine guessmove}
+        playengine guessmove {guessmove playengine}
     } {
             incr order
             set opened {}

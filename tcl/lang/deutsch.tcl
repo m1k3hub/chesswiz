@@ -448,7 +448,6 @@
 ::menu::mc::DownloadGames	"Partien herunterladen..."
 ::menu::mc::ChooseModel	"Modell wählen..."
 ::menu::mc::CompareEngines	"Motoren vergleichen..."
-::menu::mc::GameReview	"Partieanalyse..."
 ::menu::mc::PaneBoard	"Brett"
 ::menu::mc::PaneEditor	"Editor"
 ::menu::mc::PaneGameList	"Partienliste"

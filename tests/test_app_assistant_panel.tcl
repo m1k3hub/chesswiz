@@ -227,17 +227,17 @@ tcltest::test panel-suggestions-empty-profile {with no database and no game the 
 	}
 	list [expr {[lsearch -glob $ids menu.file.*] >= 0}] \
 		[expr {[lsearch -glob $ids menu.training.*] >= 0}] \
-		[expr {[lsearch -exact $ids menu.analysis.game_review] < 0}]
+		[expr {[lsearch -exact $ids menu.analysis.analyze] < 0}]
 } -result {1 1 1}
 
-tcltest::test panel-suggestions-loaded-game {a game on the board gets review and explanation suggestions} -setup {
+tcltest::test panel-suggestions-loaded-game {a game on the board gets analysis and explanation suggestions} -setup {
 	set savedProvider $::application::ai::Config(provider)
 	set ::application::ai::Config(provider) stub
 } -body {
 	::scidb::test::panel::withState 0 1 {
 		set ids [::application::assistant::panel::SuggestIds]
 	}
-	list [expr {[lsearch -exact $ids menu.analysis.game_review] >= 0}] \
+	list [expr {[lsearch -exact $ids menu.analysis.analyze] >= 0}] \
 		[expr {[lsearch -exact $ids menu.analysis.explain.position] >= 0}] \
 		[expr {[lsearch -glob $ids menu.training.*] >= 0}]
 } -cleanup {
@@ -251,7 +251,7 @@ tcltest::test panel-game-detected {a loaded game is seen without the gamebar} -s
 	set loaded [::application::assistant::panel::GameLoaded]
 	set ids [::application::assistant::panel::SuggestIds]
 	::scidb::test::panel::unloadGame
-	list $loaded [expr {[lsearch -exact $ids menu.analysis.game_review] >= 0}]
+	list $loaded [expr {[lsearch -exact $ids menu.analysis.analyze] >= 0}]
 } -result {1 1}
 
 tcltest::test panel-buttons {the pane shows one button per suggestion and each runs its action id} -body {

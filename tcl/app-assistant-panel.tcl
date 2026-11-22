@@ -375,7 +375,7 @@ proc ::application::assistant::panel::SuggestIds {} {
 	set pool {}
 	set loaded [GameLoaded]
 	if {$loaded} {
-		lappend pool menu.analysis.game_review menu.analysis.explain.position
+		lappend pool menu.analysis.analyze menu.analysis.explain.position
 	}
 	if {[DbOpen]} {
 		if {!$loaded} { lappend pool menu.db.search.plain menu.db.reports.eco }
@@ -397,7 +397,7 @@ proc ::application::assistant::panel::SuggestIds {} {
 
 	# Fill a short list from the same state's pool.
 	foreach id [concat $pool {menu.file.open menu.file.new.normal menu.db.search.plain \
-		menu.analysis.game_review menu.analysis.explain.position \
+		menu.analysis.analyze menu.analysis.explain.position \
 		menu.training.tactics menu.training.guess}] {
 		if {[llength $ids] >= 3} break
 		if {[Usable $id] && $id ni $ids} { lappend ids $id }

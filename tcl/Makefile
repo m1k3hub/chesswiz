@@ -238,7 +238,6 @@ SOURCES = \
 	ai-prompt.tcl \
 	ai-precedent.tcl \
 	ai-annotations.tcl \
-	game-review.tcl \
 	ai-generate.tcl \
 	ai-trend.tcl \
 	ai-openingprep.tcl \

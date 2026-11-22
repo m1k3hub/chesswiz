@@ -491,11 +491,8 @@ proc ::guessmove::describeReview {label} {
 
 
 # Lichess win-probability in [0,100] from centipawns (or #N mate marker)
-# from the mover's perspective. Delegates to ::gamereview::wp when loaded.
+# from the mover's perspective.
 proc ::guessmove::wp {score} {
-	if {[llength [info commands ::gamereview::wp]]} {
-		return [::gamereview::wp $score]
-	}
 	if {[string match "#*" $score]} {
 		set n [string range $score 1 end]
 		if {![string is integer -strict $n]} { return 50.0 }

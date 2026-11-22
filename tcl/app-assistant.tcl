@@ -2192,7 +2192,7 @@ proc ::application::assistant::RunTool {name cargs {approval {}}} {
 	}
 
 	if {[info exists Priv(lastRequest)] && [AnalysisProhibited $Priv(lastRequest)]
-	 && $target in {engine_evaluate engine_check_move explain_position explain_side explain_game_result start_engine study_plan annotate_game training_set check_results game_review opponent_brief}} {
+	 && $target in {engine_evaluate engine_check_move explain_position explain_side explain_game_result start_engine study_plan annotate_game training_set check_results opponent_brief}} {
 		set Priv(prohibitedAnalysis) 1
 		return [list error 0 "error: the user prohibited engine analysis; this action was not run"]
 	}

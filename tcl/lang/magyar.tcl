@@ -462,7 +462,6 @@
 ::menu::mc::ChooseModel	"Modell választása…"
 ::menu::mc::MenuAssignFileTypes	"Fájltípusok hozzárendelése…"
 ::menu::mc::CompareEngines	"Motorok összehasonlítása…"
-::menu::mc::GameReview	"Játszmaelemzés…"
 ::menu::mc::MenuTipOfTheDay	"Napi tipp…"
 ::menu::mc::MenuPrivatePlayerCard	"Privát játékoskártya…"
 ::menu::mc::PaneBoard	"Tábla"

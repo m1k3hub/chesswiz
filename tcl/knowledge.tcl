@@ -590,7 +590,6 @@ foreach {id purpose keywords} {
 	menu.analysis.engines "Open the engine manager to add, remove and configure chess engines." {engines engine manage manager add remove configure install list}
 	menu.analysis.engine_toggle "Start or stop the engine analysing the board position." {engine start stop analyse analysis toggle on off}
 	menu.analysis.explorer "Open the opening explorer." {explorer opening}
-	menu.analysis.game_review "Review the game with the engine." {review game mistakes engine}
 	menu.training.play_engine "Play a game against a chess engine (the computer)." {play against computer engine stockfish game opponent bot}
 	menu.training.play_online "Play people online on the Free Internet Chess Server (FICS)." {play online internet server fics people human opponent seek}
 	menu.training.play_lichess "Play people or the Lichess computer online on lichess.org." {play online internet lichess people human opponent seek computer}
@@ -2320,7 +2319,6 @@ dict set ::knowledge::Explicit menu.analysis.compare_engines when {When comparin
 dict set ::knowledge::Explicit menu.analysis.engine_toggle when {When beginning or pausing live analysis of the board.}
 dict set ::knowledge::Explicit menu.analysis.engines when {When adding an engine or editing an installed engine's configuration.}
 dict set ::knowledge::Explicit menu.analysis.explorer when {When exploring the opening choices available from the board position.}
-dict set ::knowledge::Explicit menu.analysis.game_review when {When looking for mistakes and turning points throughout a game.}
 dict set ::knowledge::Explicit menu.analysis.review_engine when {When a game review should use a different engine.}
 dict set ::knowledge::Explicit menu.db.discover when {When locating chess collections whose disk locations you have forgotten.}
 dict set ::knowledge::Explicit menu.db.player.names when {When inconsistent player spellings may split one player's statistics.}

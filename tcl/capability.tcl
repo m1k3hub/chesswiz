@@ -35,7 +35,6 @@ proc ::capability::DefineAll {} {
 	Define trend       {expr {[llength [info commands ::ai::trend::report]] > 0}}
 	Define factcheck   {expr {[llength [info commands ::ai::factcheck::current]] > 0}}
 	Define annotate    {expr {[llength [info commands ::ai::annotate::toggle]] > 0}}
-	Define review      {expr {[llength [info commands ::gamereview::run]] > 0}}
 	Define chooseengine {expr {[llength [info commands ::ai::engine::chooseDialog]] > 0}}
 	Define voice       {expr {[llength [info commands ::application::voice::toggle]] > 0}}
 	Define download    {expr {[llength [info commands ::application::download::openActive]] > 0}}
@@ -134,7 +133,6 @@ namespace eval ::capability {
 		quality {check_results menu.training.check_results}
 		report {menu.view.panes.report}
 		reptrainer {menu.training.repertoire}
-		review {menu.analysis.game_review}
 		stream {c7.open_stream c9.media.stream open_stream}
 		stream_overlay {menu.training.stream}
 		studyplan {study_plan menu.training.studyplan}

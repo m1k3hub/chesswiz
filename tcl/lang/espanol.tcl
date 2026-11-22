@@ -464,7 +464,6 @@
 ::menu::mc::ChooseModel	"Elegir modelo…"
 ::menu::mc::MenuAssignFileTypes	"Asignar tipos de archivo…"
 ::menu::mc::CompareEngines	"Comparar motores…"
-::menu::mc::GameReview	"Análisis de partida…"
 ::menu::mc::MenuTipOfTheDay	"Consejo del día…"
 ::menu::mc::MenuPrivatePlayerCard	"Tarjeta privada de jugador…"
 ::menu::mc::PaneBoard	"Tablero"

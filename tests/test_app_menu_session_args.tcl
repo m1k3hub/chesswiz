@@ -60,24 +60,6 @@ tcltest::test session-args-iccf {save credentials through real config writer; re
     array set ::iccf::xfcc::Config $config
 } -result {1 0 generated-user generated-secret 0}
 
-tcltest::test session-args-review-cancel {cancel a real scheduled review; no forged running state} -setup {
-    ::scidb::test::actions::ready
-    ::application::assistant::runTool open_database [list path [::scidb::test::actions::fixture]]
-    ::application::assistant::runTool open_game {number 1}
-    set config [array get ::ai::engine::Config]
-    ::ai::engine::configure -engine [::scidb::test::actions::engineProgram]
-} -body {
-    set started [::scidb::test::sessionargs::call menu.analysis.game_review operation start depth 1]
-    set running [dict get [::scidb::test::sessionargs::call menu.analysis.game_review operation status] running]
-    set cancelled [::scidb::test::sessionargs::call menu.analysis.game_review operation cancel]
-    ::scidb::test::sessionargs::until {!$::gamereview::Priv(running)}
-    list $started $running $cancelled $::gamereview::Priv(cancel) $::gamereview::Priv(index)
-} -cleanup {
-    ::ai::engine::shutdown
-    array set ::ai::engine::Config $config
-    catch {destroy .application.__gamereview__}
-} -result {1 1 1 1 0}
-
 tcltest::test session-args-play {real UCI reply, draw decline, takeback, resignation and pipe cleanup through public operator} -setup {
     ::scidb::test::actions::ready
     set engines $::engine::Engines

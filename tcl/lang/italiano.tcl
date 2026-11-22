@@ -447,7 +447,6 @@
 ::menu::mc::ChooseModel	"Scegli modello…"
 ::menu::mc::MenuAssignFileTypes	"Assegna tipi di file…"
 ::menu::mc::CompareEngines	"Confronta motori…"
-::menu::mc::GameReview	"Analisi partita…"
 ::menu::mc::MenuTipOfTheDay	"Consiglio del giorno…"
 ::menu::mc::PaneBoard	"Scacchiera"
 ::menu::mc::PaneEditor	"Editor"
