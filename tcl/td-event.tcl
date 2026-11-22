@@ -240,7 +240,6 @@ proc ::td::event::ExportPGN {path filename} {
 }
 
 proc ::td::event::Observe {path command} { variable Observers; dict lappend Observers $path $command }
-proc ::td::event::Unobserve {path command} { variable Observers; set rows [dg $Observers $path {}]; dict set Observers $path [lsearch -all -inline -not -exact $rows $command] }
 proc ::td::event::Notify {path state} {
 	variable Observers
 	foreach command [dg $Observers $path {}] { catch {uplevel #0 [list {*}$command $path $state]} }

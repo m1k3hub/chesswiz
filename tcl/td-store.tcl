@@ -38,7 +38,6 @@ proc ::td::store::Register {state path} {
 
 proc ::td::store::SetCurrent {path} { variable Current; set Current $path }
 proc ::td::store::CurrentPath {} { variable Current; return $Current }
-proc ::td::store::ResetCache {} { variable Paths [dict create]; variable Current {} }
 
 proc ::td::store::Resolve {arguments} {
 	variable Paths

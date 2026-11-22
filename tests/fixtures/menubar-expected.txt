@@ -160,7 +160,6 @@ MENU Analysis
   ENTRY Choose Engine for Review…
   SEP
   ENTRY Analyze This Position F4
-  ENTRY Game Review…
   ENTRY Explain ▸
     SUBMENU Explain
       ENTRY Position

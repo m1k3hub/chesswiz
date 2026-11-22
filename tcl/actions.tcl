@@ -949,16 +949,6 @@ proc ::action::displayLabel {label} {
 	return [::action::plainText [::action::markupLabel $label]]
 }
 
-# The text a query is matched against: visible label, stored markup label,
-# doc and accelerator. The visible label comes first so typing exactly what
-# a menu/Ask row shows wins the prefix bonus; the stored label follows only
-# when it differs, so typing the raw "&" markup still matches too.
-proc ::action::searchText {id} {
-	variable Registry
-	set record [get $id]
-	return [searchTextRecord $record]
-}
-
 # The display accelerator of an action, honouring a key-editor override.
 proc ::action::labelAccel {id} {
 	if {[llength [info commands ::menu::Accel]]} {

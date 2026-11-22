@@ -433,12 +433,6 @@ proc hasPythonModule {module} {
 	return ""
 }
 
-# Probe if a Python interpreter has an importable module without leaking stderr.
-proc pythonHasModule {py module} {
-	set null [expr {$::tcl_platform(platform) eq "windows" ? "NUL" : "/dev/null"}]
-	return [expr {![catch { ::util::execSafe $py -c "import $module" 2> $null }]}]
-}
-
 # Run a command piping 'yes' on stdin for confirmations (such as xdg-mime).
 proc execWithYes {args} {
 	if {$::tcl_platform(platform) eq "windows"} {
@@ -447,10 +441,6 @@ proc execWithYes {args} {
 		# Linux as now
 		::util::execSafe yes | {*}$args
 	}
-}
-
-proc pipeYes {args} {
-	execWithYes {*}$args
 }
 
 # Are file names case-insensitive on this system?

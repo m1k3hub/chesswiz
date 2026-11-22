@@ -421,22 +421,6 @@ proc resultToPgn {result} {
 }
 
 
-proc timeRemaining {game} {
-	# Extract time remaining for player and opponent from a game dict.
-	# Returns: {playerTime opponentTime} as ISO 8601 duration strings.
-	set dp [dict get $game daysPlayer]
-	set hp [dict get $game hoursPlayer]
-	set mp [dict get $game minutesPlayer]
-	set do [dict get $game daysOpponent]
-	set ho [dict get $game hoursOpponent]
-	set mo [dict get $game minutesOpponent]
-
-	set playerTime [format "P%sDT%sH%sM" $dp $hp $mp]
-	set opponentTime [format "P%sDT%sH%sM" $do $ho $mo]
-
-	return [list $playerTime $opponentTime]
-}
-
 
 # ======================================================================
 # Credential persistence (options file)

@@ -1652,14 +1652,6 @@ proc RestoreLayout {twm layoutVariant name list} {
 }
 
 
-proc CheckLink {attr} {
-	variable Options
-
-	if {[info exists Options($attr:link)] && [string length $Options($attr:link)] == 0} {
-		array unset Options $attr:link
-	}
-}
-
 
 proc SaveLayout {twm parent cmd name title} {
 	if {![::application::reflow::allowSave $twm $parent]} { return 0 }
@@ -1872,35 +1864,6 @@ proc DoSaveLayout {twm parent layoutVariant names} {
 	return 1
 }
 
-
-proc CopyLayout {id layoutVariant name} {
-	variable [namespace parent]::Vars
-	variable Options
-
-	set myLayoutVariant $Vars($id:layout:variant)
-
-	if {	$layoutVariant eq $myLayoutVariant
-		|| ![info exists Options($id:layout:list:$layoutVariant)]
-		|| ![llength $Options($id:layout:list:$layoutVariant)]} {
-		set file [makeFilename $id $layoutVariant $name]
-		if {[catch { ::load::source $file -encoding utf-8 -throw 1 } -> opts]} {
-			puts stderr "error while loading $file"
-			return {*}$opts -rethrow 1
-		}
-	} else {
-		set Options($id:layout:list:$myLayoutVariant) $Options($id:layout:list:$layoutVariant)
-		::options::restore $Vars($id:twm) $layoutVariant
-		::toolbar::restore $id
-	}
-
-	set Options($id:layout:list) $Options($id:layout:list:$layoutVariant)
-	set Options($id:layout:changed:$myLayoutVariant) 1
-	set Vars($id:layout:changed:$myLayoutVariant) 1
-
-	set Vars(loading) 1
-	$Vars($id:twm) load $Options($id:layout:list)
-	set Vars(loading) 0
-}
 
 
 proc WriteLayout_ {twm id layoutVariant} {

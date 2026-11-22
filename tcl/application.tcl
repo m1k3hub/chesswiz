@@ -3502,8 +3502,6 @@ proc tallShape {} {variable S; return $S(tallShape)}
 proc liveShape {} {return [shapeOf [::application::twm::inspectLayout [boardTwm]]]}
 proc loadCount {} {variable S; return $S(loadCount)}
 proc resetLoadCount {} {variable S; set S(loadCount) 0}
-proc wideAspect {} {variable WideAspect; return $WideAspect}
-proc tallAspect {} {variable TallAspect; return $TallAspect}
 proc reset {} {
  variable S
  cancelPending

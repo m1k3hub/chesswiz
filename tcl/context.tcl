@@ -1457,15 +1457,6 @@ proc ::context::ClipboardEmpty {} {
 	return [::game::clipboard::hidden?]
 }
 
-proc ::context::ClipboardCanPaste {} {
-	if {[::game::clipboard::hidden?]} { return 0 }
-	set base ""
-	set variant ""
-	catch { set base [::scidb::db::get name] }
-	catch { set variant [::scidb::db::get variant?] }
-	return [expr {[::game::clipboard::reason $base $variant] eq ""}]
-}
-
 proc ::context::Visible {id object {pre {}}} {
 	set st [::menu::state $id $object {} 1 $pre]
 	set visible [dict get $st visible]

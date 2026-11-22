@@ -1589,14 +1589,6 @@ proc resetFonts {context} {
 }
 
 
-proc increaseSize {context} {
-	changeSize $context +1
-}
-
-
-proc decreaseSize {context} {
-	changeSize $context -1
-}
 
 
 proc changeSize {context incr {scope local}} {
@@ -1949,15 +1941,6 @@ proc textFont {context} {
 	return [lindex $Options($context:html:user) 0]
 }
 
-
-proc fixedFont {context} {
-	variable [namespace parent]::Options
-
-	if {[string length $Options($context:html:family)]} {
-		return [lindex [lookupFixedFonts $Options($context:html:family)] 0]
-	}
-	return [lindex $Options($context:html:user) 1]
-}
 
 
 proc userTextFont {context} {

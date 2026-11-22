@@ -1722,62 +1722,6 @@ proc application::media::PlayInProcess {path {startMs {}} {endMs {}}} {
 }
 
 
-# Load the optional ChessBase script-stream sidecar for a media file:
-#
-# 	media-console/wmv2timeline.py writes the real per-move timecodes
-# 	(one media-ms per line, replay order; decoded with the verified
-# 	file-major square conventions).  When present, "board follows
-# 	video" follows the actual lesson replay instead of the linear
-# 	duration mapping; without it the state machine keeps the linear
-# 	fallback.
-# Load the optional board-annotation sidecar (one event per line:
-# "ms kind payload...").  Loaded alongside the timeline so the sync
-# state machine can fire board annotations during playback.
-proc application::media::LoadSyncEvents {path} {
-	set eventsfile [file rootname $path].events
-	if {![file exists $eventsfile]} {
-		::media::sync::load-events {}
-		MediaDebug "SyncEvents: none for [file tail $path]"
-		return
-	}
-	set events [list]
-	if {![catch {open $eventsfile r} fh]} {
-		set data [read $fh]
-		close $fh
-		foreach line [split $data "\n"] {
-			set line [string trim $line]
-			if {[llength $line] >= 3 && ![string match "#*" $line]} {
-				lappend events $line
-			}
-		}
-	}
-	::media::sync::load-events $events
-	MediaDebug "SyncEvents: [llength $events] loaded from [file tail $eventsfile]"
-}
-
-
-proc application::media::LoadSyncSidecar {path} {
-	variable Priv
-	set syncfile [file rootname $path].plytimes
-	if {![file exists $syncfile]} {
-		::media::sync::load-timeline {}
-		MediaDebug "SyncSidecar: none for [file tail $path]"
-		return
-	}
-	set marks [list]
-	if {![catch {open $syncfile r} fh]} {
-		set data [read $fh]
-		close $fh
-		foreach line [split $data "\n"] {
-			set line [string trim $line]
-			if {[string is integer -strict $line]} {
-				lappend marks $line
-			}
-		}
-	}
-	::media::sync::load-timeline $marks
-	MediaDebug "SyncSidecar: [llength $marks] timecodes loaded from [file tail $syncfile]"
-}
 
 
 # Verify a just-started playback actually started. An unsupported or

@@ -472,10 +472,6 @@ proc hidePosition {parent} {
 }
 
 
-proc showPosition? {parent} {
-	return [winfo exists .application.showboard:browser]
-}
-
 
 proc refresh {{unused -1}} {
 	variable Active

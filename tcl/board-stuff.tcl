@@ -158,11 +158,6 @@ proc showPromoted {w flag} {
 }
 
 
-proc showPromoted? {w} {
-	variable ${w}::Board
-	return $Board(show:promoted)
-}
-
 
 proc setTargets {w args} {
 	variable ${w}::Board
@@ -668,11 +663,6 @@ proc cancelDrag {w} {
 }
 
 
-proc dragTarget {w} {
-	variable ${w}::Board
-	return [getSquare $w $Board(pointer:x) $Board(pointer:y)]
-}
-
 
 proc setDragSquare {w {sq -1}} {
 	variable ${w}::Board
@@ -917,10 +907,6 @@ proc drawFull {canv squareSize color x y {tag tag}} {
 	makeHiliteRect $canv rect $tag $squareSize $x $y $color
 }
 
-
-proc drawSquare {canv squareSize color x y} {
-	SetImage $canv $squareSize $x $y [MakeSquare $squareSize $color]
-}
 
 
 proc drawCircle {canv squareSize color x y} {

@@ -1136,11 +1136,6 @@ proc TooltipShowNag {w key type value} {
 }
 
 
-proc TooltipShowEmoticon {w emotion} {
-	::tooltip::show $w $::emoticons::mc::Tooltip($emotion)
-	$w configure -cursor question_arrow
-}
-
 
 proc TooltipHide {w} {
 	::tooltip::tooltip hide
@@ -2396,11 +2391,6 @@ proc UpdateFormatButtons {w} {
 	}
 }
 
-
-proc InvokeDefaultButton {} {
-	variable Vars
-	::widget::dialogButtonInvoke $Vars(dialog)
-}
 
 
 proc TextInsert {w s} {

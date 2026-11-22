@@ -68,38 +68,6 @@ proc ::game::clipboard::copy {base variant numbers} {
 }
 
 
-# Remember several (base, variant, numbers) entries, e.g. a selection
-# that spans games loaded from more than one database.
-proc ::game::clipboard::copyEntries {entries} {
-	variable Games
-	variable Label
-
-	set stored {}
-	set total 0
-	foreach entry $entries {
-		lassign $entry base variant numbers
-		if {$base eq "" || ![llength $numbers]} { continue }
-		set count [::scidb::db::count games $base $variant]
-		set clean {}
-		foreach number $numbers {
-			if {![string is integer -strict $number] || $number < 0 || $number >= $count} {
-				return -code error [format $mc::UnknownGame $number]
-			}
-			if {$number ni $clean} { lappend clean $number }
-		}
-		if {[llength $clean]} {
-			lappend stored [list $base $variant $clean]
-			incr total [llength $clean]
-		}
-	}
-	if {![llength $stored]} {
-		return -code error "cannot copy: no game selected"
-	}
-	set Games $stored
-	set Label [expr {$total == 1 ? $mc::CopyGame : $mc::CopyGames}]
-	return $total
-}
-
 
 proc ::game::clipboard::count {} {
 	variable Games

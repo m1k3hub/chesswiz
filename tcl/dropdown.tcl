@@ -315,22 +315,6 @@ proc ::menu::Sep {} {
 	return {sep}
 }
 
-proc ::menu::CmdNode {id label {accel ""} {visible ""} {enabled ""}} {
-	return [list cmd $id $label $accel $visible $enabled]
-}
-
-proc ::menu::CascadeNode {label {accel ""} {children dynamic}} {
-	return [list cascade $label $accel $children]
-}
-
-proc ::menu::DynNode {label} {
-	return [list dyn $label]
-}
-
-proc ::menu::ToggleNode {id label accel labelScript} {
-	return [list toggle $id $label $accel $labelScript]
-}
-
 proc ::menu::DefineTree {} {
 	variable DropdownTree
 

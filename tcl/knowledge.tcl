@@ -794,12 +794,6 @@ proc ::knowledge::EndsWithDot {text} {
 	return $text
 }
 
-proc ::knowledge::LowerStart {text} {
-	set text [string trim $text]
-	if {$text eq ""} { return $text }
-	return "[string tolower [string index $text 0]][string range $text 1 end]"
-}
-
 proc ::knowledge::LabelText {label} {
 	set text [::action::displayLabel $label]
 	regsub {\.\.\.$} $text "" text

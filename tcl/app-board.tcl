@@ -799,14 +799,6 @@ proc unbind {key} {
 }
 
 
-proc unbindGameControls {position base variant} {
-	variable Vars
-
-	Unsubscribe $position
-	set Vars(current:game) {}
-	UpdateGameButtonState(list) $position
-}
-
 
 proc needBinding {w} {
 	variable Vars

@@ -1562,7 +1562,7 @@ proc WrapSelect {w x y args} {
 proc WrapExtendSelection {w x y args} {
 	incr x [winfo x $w]
 	incr y [winfo y $w]
-	ExtendSelect [winfo parent $w] $x $y {*}$args
+	ExtendSelection [winfo parent $w] $x $y {*}$args
 }
 
 

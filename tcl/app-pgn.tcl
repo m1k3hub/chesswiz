@@ -580,11 +580,6 @@ proc setModified {position} {
 }
 
 
-proc gamebarIsEmpty? {} {
-	variable Vars
-	return [::gamebar::empty? $Vars(gamebar)]
-}
-
 
 proc historyChanged {} {
 	Raise logo

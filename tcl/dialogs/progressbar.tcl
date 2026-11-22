@@ -230,10 +230,6 @@ proc setInformation {w msg} {
 }
 
 
-proc setMessage {w msg} {
-	$w.l configure -text $msg
-}
-
 
 proc setTitle {w title} {
 	set t [tk appname]

@@ -540,12 +540,6 @@ proc buttonSetText {w var args} {
 }
 
 
-proc setBoldFont {w} {
-	set font [$w cget -font]
-	set bold [list [font configure $font -family]  [font configure $font -size] bold]
-	$w configure -font $font
-}
-
 
 proc busyCursor {w {state on}} {
 	variable Priv

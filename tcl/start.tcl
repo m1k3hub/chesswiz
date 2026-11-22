@@ -484,12 +484,6 @@ proc arrayEqual {lhs rhs} {
 }
 
 
-proc arrayListEqual {lhs rhs} {
-	array set foo $lhs
-	array set bar $rhs
-	return [arrayEqual foo bar]
-}
-
 
 proc makeState {cond} {
 	if {[string index $cond 0] eq "!"} {
@@ -499,10 +493,6 @@ proc makeState {cond} {
 	return [expr {$cond ? "normal" : "disabled"}]
 }
 
-
-proc test? {query then else} {
-	uplevel [list if $query [list return $then] [list return $else]]
-}
 
 
 proc require {myNamespace requiredNamespaces} {
@@ -524,18 +514,6 @@ proc lremove {list elem} {
 	return $l
 }
 
-
-proc lsubst {list elem arg} {
-	upvar $list l
-	set result {}
-	if {[info exists l]} {
-		foreach k $l {
-			if {$k eq $elem} { lappend result $arg } else { lappend result $k }
-		}
-	}
-	set l $result
-	return $result
-}
 
 
 proc lsub {list remove} {
@@ -744,16 +722,6 @@ proc altIsHeldDown? {state} {
 }
 
 
-proc controlIsHeldDown? {state} {
-	variable controlMask
-	return [expr {($state & $controlMask) != 0}]
-}
-
-
-proc shiftIsLocked? {state} {
-	variable lockMask
-	return [expr {($state & $lockMask) != 0}]
-}
 
 
 proc databasePath {file} {

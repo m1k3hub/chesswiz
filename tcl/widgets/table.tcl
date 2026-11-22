@@ -534,10 +534,6 @@ proc itemconfigure {table index args} {
 }
 
 
-proc configureItem {table index id args} {
-	$table.t item element configure $index $id elemTxt$id {*}$args
-}
-
 
 proc lookupColor {color} {
 	variable ColorLookup

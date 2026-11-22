@@ -1701,29 +1701,6 @@ proc DoAction {table row move action} {
 }
 
 
-proc ToggleView {table} {
-	variable Options
-	variable Vars
-
-	if {$Vars(show:tree) == $Options(show:tree)} { return }
-
-	if {$Options(show:tree)} {
-		if {$Vars(eco:visible)} {
-			::table::showColumn $table eco
-		}
-		::toolbar::childconfigure $Vars(widget:exact) -state normal
-		::toolbar::childconfigure $Vars(widget:fast) -state normal
-	} else {
-		set Vars(eco:visible) [::table::visible? $table eco]
-		::table::hideColumn $table eco
-		::toolbar::childconfigure $Vars(widget:exact) -state disabled
-		::toolbar::childconfigure $Vars(widget:fast) -state disabled
-	}
-
-	games::clear
-	set Vars(show:tree) $Options(show:tree)
-}
-
 
 proc PopupMenu {table x y} {
 	variable ::scidb::clipbaseName
@@ -2930,15 +2907,6 @@ proc dictGet {row key} {
 # ======================================================================
 # Compatibility wrapper
 # ======================================================================
-
-proc ShowEnhancedOpeningReport {parent base variant} {
-	::application::tree::openingreport::show $parent
-}
-
-proc PopulateEnhancedOpeningReport {args} {}
-proc AnalyzeMovesByPosition {args} {}
-proc BuildTrendAnalysis {args} {}
-proc BuildComparisonAnalysis {args} {}
 
 
 } ;# namespace tree

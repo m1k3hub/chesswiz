@@ -96,20 +96,6 @@ proc formatFileSize {size} {
 }
 
 
-proc formatByteCount {size {prec 2}} {
-	if {$size >= 536870912} {
-		set size [expr {$size/1073741824.0}]
-		set unit GB
-	} elseif {$size >= 524288} {
-		set size [expr {$size/1048576.0}]
-		set unit MB
-	} else {
-		set size [expr {$size/1024.0}]
-		set unit KB
-	}
-	return "[formatDouble $size $prec] $unit"
-}
-
 
 proc formatNormalDate {date} {
 	variable Pattern

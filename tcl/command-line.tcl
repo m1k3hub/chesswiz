@@ -666,9 +666,5 @@ proc ::application::assistant::QuestionReply {result} {
  if {[dict exists $message content]} {Append assistant [dict get $message content]}
 }
 
-proc ::commandline::ShortName {a b} {
- return [expr {[string length $a]-[string length $b]}]
-}
-
 # Plain Tcl consumers can use the matcher without loading persistence or Tk.
 proc ::commandline::Suggest {text} {return [Match $text]}

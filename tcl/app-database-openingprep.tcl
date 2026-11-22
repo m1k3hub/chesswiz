@@ -147,18 +147,6 @@ proc OpeningPrepMethodFromLabel {label} {
 }
 
 
-proc OpeningPrepSortValue {value kind} {
-	switch -- $kind {
-		int {
-			if {[string is integer -strict $value]} { return $value }
-			return -1
-		}
-		default {
-			return [string tolower $value]
-		}
-	}
-}
-
 
 proc PopulateOpeningPrepTable {dlg rows} {
 	variable OpeningPrepData

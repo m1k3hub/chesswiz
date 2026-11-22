@@ -98,6 +98,4 @@ proc ::td::command::Execute {command arguments} {
 	return $result
 }
 
-proc ::td::command::ClearPreviews {} { variable Pending [dict create] }
-
 # vi:set ts=3 sw=3:

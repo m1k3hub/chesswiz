@@ -79,19 +79,6 @@ proc names {} {
 }
 
 
-proc deleteCursor {cursor} {
-	variable Lookup
-
-	if {$cursor eq "None"} { return }
-
-	if {![dict exists $Lookup $cursor]} {
-		return -code error "cursor \"$cursor\" unknown"
-	}
-
-	FreeCursor [dict get $Lookup $cursor]
-	set Lookup [dict remove $Lookup $cursor]
-}
-
 
 proc supported? {} {
 	return [expr {[llength [info commands LoadFromFile]] > 0}]

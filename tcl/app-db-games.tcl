@@ -530,18 +530,6 @@ namespace eval searchPresets {
 }
 
 
-proc LoadSearchPresets {} {
-	variable searchPresets::presets
-	variable searchPresets::filename
-	variable searchPresets::legacyFilename
-
-	if {[file exists $filename]} {
-		catch { source $filename }
-	} elseif {[file exists $legacyFilename]} {
-		catch { source $legacyFilename }
-	}
-}
-
 
 proc SaveSearchPresets {} {
 	variable searchPresets::presets
@@ -595,46 +583,6 @@ proc RemoveSearchPreset {name} {
 }
 
 
-proc GetSearchPreset {name} {
-	variable searchPresets::presets
-
-	foreach preset $presets {
-		if {[lindex $preset 0] eq $name} {
-			return [lindex $preset 1]
-		}
-	}
-	return {}
-}
-
-
-proc ShowSearchPresetsMenu {parent base variant view} {
-	variable searchPresets::presets
-	variable mc
-
-	set menu .searchPresetsMenu
-	if {[winfo exists $menu]} { destroy $menu }
-	tk_menu $menu -tearoff false
-
-	# Add existing presets
-	foreach preset $presets {
-		lassign $preset name query
-		$menu add command -label $name -command [list ApplySearchPreset $parent $base $variant $view $query]
-	}
-
-	if {![llength $presets]} {
-		$menu add command -label "(No saved presets)" -state disabled
-	}
-
-	$menu add separator
-
-	# Add "Save Current Search" option
-	$menu add command -label $mc::SaveCurrentSearch -command [list SaveCurrentSearchAsPreset $parent $base $variant $view]
-
-	# Add "Manage Presets" option
-	$menu add command -label $mc::ManageSearchPresets -command [list ManageSearchPresets $parent]
-
-	return $menu
-}
 
 
 proc ApplySearchPreset {parent base variant view query} {

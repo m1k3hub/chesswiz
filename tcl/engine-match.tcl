@@ -906,58 +906,6 @@ proc ::enginematch::RunnerDone {id outcome} {
 }
 
 
-# Sets up game <white> vs <black> on the match slot: the board is reset
-# to the start (plus the opening suite's plies), clocks and adjudication
-# state are fresh, then the side to move is asked for its move.
-proc ::enginematch::SetupGame {white black opening} {
-	variable Priv
-	variable mc
-	variable StartFen
-
-	set Priv(white) $white
-	set Priv(black) $black
-	set Priv(side) w
-	set Priv(history) {}
-	set Priv(eval:w) {}
-	set Priv(eval:b) {}
-	set Priv(tbLatch) 0
-	set Priv(clock:w) [expr {$Priv(minutes) * 60 * 1000}]
-	set Priv(clock:b) [expr {$Priv(minutes) * 60 * 1000}]
-	unset -nocomplain Priv(seg:w) Priv(seg:b)
-	set Priv(pending:w) 0
-	set Priv(pending:b) 0
-	incr Priv(token)
-
-	# the suite's moves go in under the busy flag: the board
-	# subscription rolls back any move it sees otherwise
-	set Priv(busy) 1
-	set failed [catch {
-		::scidb::game::clear $StartFen
-		if {$opening >= 0} {
-			set bad ""
-			foreach san [lindex $Priv(openings) $opening] {
-				set before [::scidb::game::query length]
-				if {[catch { ::scidb::game::move $san }]
-				 || [::scidb::game::query length] == $before} {
-					set bad $san
-					break
-				}
-				::scidb::game::go 1
-			}
-			if {$bad ne ""} { error [format $mc::BadSuiteMove $bad] }
-		}
-		::scidb::game::go end
-	} err]
-	set Priv(busy) 0
-	if {$failed} {
-		AbortMatch $err
-		return
-	}
-
-	set Priv(phase) play
-	StartTurn [::scidb::pos::stm]
-}
-
 
 # Hands the turn to <side> (the side to move): the move request itself
 # is the stub seam of the tests.

@@ -82,14 +82,6 @@ proc entryDouble {w} {
 }
 
 
-proc entryUnsigned {w} {
-	$w configure -validatecommand [namespace code { validateUnsigned %P }] -invalidcommand { bell }
-	bind $w <FocusOut> +[namespace code { formatUnsigned %W }]
-	bind $w <FocusOut> {+ %W selection clear }
-	bind $w <FocusOut> +[namespace code { SendData %W }]
-	bind $w <FocusIn>  {+ %W configure -validate key }
-}
-
 
 proc validateUnsigned {value maxlen} {
 	set valid 1
@@ -102,17 +94,6 @@ proc validateUnsigned {value maxlen} {
 	return $valid
 }
 
-
-proc validateInteger {value maxlen} {
-	set valid 1
-	set value [string trim $value]
-	if {	[string length $value] > $maxlen
-		|| ![regexp {[+-]?[0-9]*} $value result]
-		|| [string length $value] != [string length $result]} {
-		set valid 0
-	}
-	return $valid
-}
 
 
 proc validateDouble {value {callback {}}} {

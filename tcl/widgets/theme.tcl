@@ -307,10 +307,6 @@ proc disableScale {scale} {
 }
 
 
-proc configureDefaultButton {but} {
-	$but configure -default active
-}
-
 
 proc configureBackground {w} {
 	$w configure -background [::ttk::style lookup [currentTheme] -background]

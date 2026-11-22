@@ -314,16 +314,6 @@ proc MakeFilename {{variant ""}} {
 }
 
 
-proc ProcessFiles {script {suffix ""}} {
-	set filename [MakeFilename]${suffix}
-	if {[file exists $filename]} { uplevel 1 $script }
-
-	foreach variant $::layoutVariants {
-		set filename [MakeFilename $variant]${suffix}
-		if {[file exists $filename]} { uplevel 1 $script }
-	}
-}
-
 } ;# namespace options
 
 

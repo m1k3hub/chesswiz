@@ -107,24 +107,6 @@ proc lookupEmotion {code} {
 }
 
 
-proc getCharCode {emotion} {
-	variable CharMap
-	return $CharMap($emotion)
-}
-
-
-proc lookupChar {ch} {
-	variable ReverseMap
-
-	if {![info exists ReverseMap]} {
-		variable CharMap
-		foreach {name ch} [array get CharMap] {
-			set ReverseMap($ch) $name
-		}
-	}
-
-	return $ReverseMap($ch)
-}
 
 
 set icon(smile) [image create photo -data {

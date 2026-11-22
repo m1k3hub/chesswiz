@@ -713,14 +713,6 @@ proc getState {toolbar} {
 }
 
 
-proc getIconSize {toolbar}	{
-	variable Specs
-
-	set size $Specs(iconsize:$toolbar)
-	if {$size eq "default"} { set size $Specs(default:$toolbar) }
-	return $size
-}
-
 
 proc setState {toolbar state} {
 	variable Specs
@@ -829,13 +821,6 @@ proc addToolbarMenu {menu parent {index -1} {var {}}} {
 	return $index
 }
 
-
-proc removeToolbarMenu {menu index {var {}}} {
-	if {[llength $var] == 0} { set var [namespace current]::mc::Toolbar }
-	set cmd "[namespace current]::SetMenuLabel $menu $index"
-	trace remove variable $var write $cmd
-	destroy $menu.__tb__Toolbar
-}
 
 
 proc realpath {toolbar} {

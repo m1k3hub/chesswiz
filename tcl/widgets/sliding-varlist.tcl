@@ -277,18 +277,6 @@ proc active? {} {
 }
 
 
-proc addToMenu {m} {
-	foreach pos {hidden bottom top right left} {
-		$m add radiobutton \
-			-compound left \
-			-label [set ::mc::[string toupper $pos 0 0]] \
-			-variable [namespace current]::Options(slide:position) \
-			-value $pos \
-			;
-		::theme::configureRadioEntry $m
-	}
-}
-
 
 proc Go {dir} {
 	variable Options

@@ -330,8 +330,6 @@ array set encoding2Region {
 }
 
 
-proc currentLanguage {} { return [set [namespace current]::Language] }
-
 
 proc countryForLang {lang} {
 	variable langToCountry
@@ -415,7 +413,6 @@ proc translate {str} {
 
 
 proc mapForSort {str}	{ return [string map $mc::SortMapping $str] }
-proc mapToAscii {str}	{ return [string map $mc::AsciiMapping $str] }
 
 proc mappingForSort {}	{ return $mc::SortMapping }
 proc mappingToAscii {}	{ return $mc::AsciiMapping }

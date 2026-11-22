@@ -1034,12 +1034,6 @@ proc ::board3d::DrawMarks {canv} {
 }
 
 
-proc ::board3d::MarksFromSelection {} {
-	variable State
-	if {$State(selected) < 0} { return {} }
-	return [list $State(selected) #3d7fd0]
-}
-
 
 proc ::board3d::DrawPieces {canv} {
 	variable State
@@ -1952,10 +1946,6 @@ proc ::board3d::WebGLBoardJson {board} {
 	return "{\"board\": \"$board\"}"
 }
 
-proc ::board3d::WebGLServerUp {} {
-	return [expr {$::board3d::webserver::listener ne ""}]
-}
-
 proc ::board3d::WebGLStartServer {} {
 	variable Priv
 	variable LibRoot
@@ -2172,15 +2162,5 @@ proc ::board3d::viewerPreset {name} {
 }
 
 
-proc ::board3d::viewerThemeSelected {w} {
-	set val [$w get]
-	if {$val ne ""} { setTheme $val }
-}
-
-
-proc ::board3d::viewerStyleSelected {w} {
-	set val [$w get]
-	if {$val ne ""} { setPieceStyle $val }
-}
 
 # vi:set ts=3 sw=3:

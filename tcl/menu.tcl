@@ -595,11 +595,6 @@ proc RunAI {cmd} {
 }
 
 
-proc IncrUL {pos} {
-	if {$pos >= 0} { incr pos }
-	return $pos
-}
-
 
 proc CheckFullscreen {app} {
 	variable Fullscreen

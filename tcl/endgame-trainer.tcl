@@ -1210,10 +1210,6 @@ proc ::endtrainer::RefreshTree {} {
 }
 
 
-proc ::endtrainer::StartSelected {} {
-	return [DialogOperation start]
-}
-
 
 # The list gives way to the session panel while an attempt runs.
 proc ::endtrainer::ShowPanel {} {
