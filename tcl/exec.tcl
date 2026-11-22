@@ -252,7 +252,9 @@ namespace eval ::scidb::startup {
 		variable calibratedDpi
 		variable scalingFloor
 		variable appliedScaling
+		variable lastDpi
 		set dpi [expr {round([::scidb::tk::wm dpi $w])}]
+		set lastDpi $dpi
 		set current [tk scaling]
 		if {![info exists appliedScaling]} {
 			# Tk may already have adopted a high OS DPI before we start.

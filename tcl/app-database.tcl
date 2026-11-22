@@ -434,7 +434,16 @@ proc preOpen {parent} {
 		if {[file readable $file]} {
 			::log::hide 1
 			set active [expr {$CurrentBase eq $file}]
-			openBase $parent $file no -encoding $encoding -readonly $readonly -switchToBase $active
+			if {[llength [info commands ::application::bgstatus::show]]} {
+				catch { ::application::bgstatus::show preopen "Reopening database '[file tail $file]'..." }
+			}
+			try {
+				openBase $parent $file no -encoding $encoding -readonly $readonly -switchToBase $active
+			} finally {
+				if {[llength [info commands ::application::bgstatus::clear]]} {
+					catch { ::application::bgstatus::clear preopen }
+				}
+			}
 			if {$active} { set current $file }
 			::log::hide 0
 		} 

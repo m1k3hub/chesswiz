@@ -31,6 +31,15 @@ namespace eval shadow {
 
 set offset 5
 set size 5
+# Simulated drop-shadows use XGetImage on the root window and map two extra
+# override-redirect toplevels per popup. Under Wayland/Xwayland (e.g. Mutter),
+# root-window XGetImage is unsupported/slow and each extra toplevel map adds
+# 30-100 ms of compositor latency while the compositor already handles shadows.
+variable enabled [expr {
+	[tk windowingsystem] eq "x11"
+	&& !([info exists ::env(WAYLAND_DISPLAY)] && $::env(WAYLAND_DISPLAY) ne "")
+	&& !([info exists ::env(XDG_SESSION_TYPE)] && $::env(XDG_SESSION_TYPE) eq "wayland")
+}]
 
 array set Used {}
 array set Prevent {}
@@ -58,9 +67,11 @@ proc allow {w} {
 
 
 proc prepare {w x y width height} {
+	variable enabled
 	variable Geometry
 	variable Prevent
 
+	if {!$enabled} { return }
 	if {[info exists Prevent($w)]} { return }
 
 	if {$width > 1 && $height > 1} {
@@ -89,10 +100,13 @@ proc prepare {w x y width height} {
 
 
 proc map {w {checkIfGrabbed 0}} {
+	variable enabled
 	variable Geometry
 	variable Mapped
 	variable offset
 	variable size
+
+	if {!$enabled} { return }
 
 	if {$checkIfGrabbed} {
 		# sometimes the order of map/unmap events is confused,

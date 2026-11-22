@@ -414,6 +414,7 @@ proc ::tk::MbPost {w {x {}} {y {}}} {
 
     set Priv(tearoff) $tearoff
     if {$tearoff != 0} {
+	set Priv(menuActivated) 1
     	focus $menu
 	if {[winfo viewable $w]} {
 	    SaveGrabInfo $w
@@ -469,10 +470,7 @@ proc ::tk::MenuUnpost menu {
     set Priv(menuActivated) 0
     ### FIX end ##################################################################
 
-    if {$::tk::MenuDelay > 0} {
-        after cancel [array get Priv menuActivatedTimer]
-        after cancel [array get Priv menuDeactivatedTimer]
-    }
+    MenuCancelTimers
 
     catch {
 	if {$mb ne ""} {
@@ -641,20 +639,37 @@ proc ::tk::MenuMotion {menu x y state} {
 	}
         if {$::tk::MenuDelay > 0} {
             set index [$menu index @$x,$y]
-            if {$Priv(menuActivated) && $index ne "none" && $index ne $activeindex} {
+            if {$Priv(menuActivated) && $index ne "none"} {
                 set mode [option get $menu clickToFocus ClickToFocus]
                 if {[string is false $mode]} {
                     set delay [expr {[$menu cget -type] eq "menubar" ? 0 : 50}]
-                    if {[$menu type $index] eq "cascade"} {
-                        ### FIX begin ####################################################
-                        set Priv(menuActivatedTimer) \
-                            [after $delay [list ::tk::MenuTrigger $menu postcascade active]]
-                        ### FIX end ######################################################
-                    } else {
-                        ### FIX begin ####################################################
-                        set Priv(menuDeactivatedTimer) \
-                            [after $delay [list ::tk::MenuTrigger $menu postcascade none]]
-                        ### FIX end ######################################################
+                    if {$Priv(menuTimerMenu) ne $menu || $Priv(menuTimerIndex) ne $index} {
+                        MenuCancelTimers
+                    }
+                    if {[$menu type $index] eq "cascade" \
+                            && [$menu entrycget $index -state] ne "disabled"} {
+                        set sub [$menu entrycget $index -menu]
+                        set subMapped [expr {$sub ne "" \
+                                && [winfo exists $sub] && [winfo ismapped $sub]}]
+                        if {!$subMapped && !($Priv(menuTimerMenu) eq $menu \
+                                && $Priv(menuTimerIndex) eq $index)} {
+                            ### FIX begin ####################################################
+                            set Priv(menuTimerMenu) $menu
+                            set Priv(menuTimerIndex) $index
+                            set Priv(menuActivatedTimer) \
+                                [after $delay [list ::tk::MenuTrigger $menu postcascade $index]]
+                            ### FIX end ######################################################
+                        }
+                    } elseif {$index ne $activeindex} {
+                        if {!($Priv(menuTimerMenu) eq $menu \
+                                && $Priv(menuTimerIndex) eq $index)} {
+                            ### FIX begin ####################################################
+                            set Priv(menuTimerMenu) $menu
+                            set Priv(menuTimerIndex) $index
+                            set Priv(menuDeactivatedTimer) \
+                                [after $delay [list ::tk::MenuTrigger $menu postcascade none]]
+                            ### FIX end ######################################################
+                        }
                     }
                 }
             }
@@ -664,8 +679,31 @@ proc ::tk::MenuMotion {menu x y state} {
 
 
 ### FIX begin ###############################################################
+proc ::tk::MenuCancelTimers {} {
+    variable ::tk::Priv
+    foreach key {menuActivatedTimer menuDeactivatedTimer} {
+        if {[info exists Priv($key)] && $Priv($key) ne ""} {
+            after cancel $Priv($key)
+            set Priv($key) ""
+        }
+    }
+    set Priv(menuTimerMenu) ""
+    set Priv(menuTimerIndex) ""
+}
+
 proc ::tk::MenuTrigger {menu args} {
-    if {[winfo exists $menu]} { $menu {*}$args }
+    variable ::tk::Priv
+    set Priv(menuActivatedTimer) ""
+    set Priv(menuDeactivatedTimer) ""
+    set Priv(menuTimerMenu) ""
+    set Priv(menuTimerIndex) ""
+    if {![winfo exists $menu] || ![winfo ismapped $menu]} { return }
+    if {$Priv(menu:window) ne $menu} { return }
+    if {[lindex $args 0] eq "postcascade" && [lindex $args 1] ne "none"} {
+        set idx [lindex $args 1]
+        if {$idx ne "active" && [$menu index active] ne $idx} { return }
+    }
+    $menu {*}$args
 }
 ### FIX end #################################################################
 
@@ -692,8 +730,10 @@ proc ::tk::MenuButtonDown menu {
     if {![winfo viewable $menu]} {
         return
     }
+    MenuCancelTimers
     $menu postcascade active
     if {$Priv(postedMb) ne "" && [winfo viewable $Priv(postedMb)]} {
+	set Priv(menuActivated) 1
 	grab -global $Priv(postedMb)
     } else {
         ### FIX begin ################################################################
@@ -746,6 +786,9 @@ proc ::tk::MenuButtonDown menu {
 
 proc ::tk::MenuLeave {menu rootx rooty state} {
     variable ::tk::Priv
+    if {$Priv(menuTimerMenu) eq $menu} {
+        MenuCancelTimers
+    }
     set Priv(menu:window) {}
     if {[$menu index active] eq "none"} {
 	return
@@ -771,6 +814,7 @@ proc ::tk::MenuLeave {menu rootx rooty state} {
 
 proc ::tk::MenuInvoke {w buttonRelease} {
     variable ::tk::Priv
+    MenuCancelTimers
 
     if {$buttonRelease && $Priv(menu:window) eq ""} {
 	# Mouse was pressed over a menu without a menu button, then
@@ -1481,6 +1525,7 @@ proc ::tk_popdown {menu parent} {
     }
     set Priv(fix:active) $menu
     set Priv(fix:popup) 1
+    set Priv(menuActivated) 1
     set x [winfo rootx $parent]
     set y [expr {[winfo rooty $parent] + [winfo height $parent]}]
     tk::PostOverPoint $menu $x $y
@@ -1561,6 +1606,10 @@ proc ::tk::menu::WidgetProc {m command args} {
 ### FIX begin ####################################################################
 namespace eval tk { set Priv(menu:window) "" }
 namespace eval tk { set Priv(menuActivated) 0 }
+namespace eval tk { set Priv(menuTimerMenu) "" }
+namespace eval tk { set Priv(menuTimerIndex) "" }
+namespace eval tk { set Priv(menuActivatedTimer) "" }
+namespace eval tk { set Priv(menuDeactivatedTimer) "" }
 ### FIX end ######################################################################
 
 # vi:set et ts=8 sw=4:

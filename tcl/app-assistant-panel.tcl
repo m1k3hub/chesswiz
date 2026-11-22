@@ -237,7 +237,16 @@ proc ::application::assistant::panel::DeferredStartup {initialTab} {
 	# A native layout rebuild can move focus internally. Active composition
 	# takes precedence; sending the request will open the assistant normally.
 	if {$previous eq $entry && $entry ne "" && [$entry get] ne ""} { return }
-	Startup true
+	if {[llength [info commands ::application::bgstatus::show]]} {
+		catch { ::application::bgstatus::show assistant-startup "Opening assistant panel..." }
+	}
+	try {
+		Startup true
+	} finally {
+		if {[llength [info commands ::application::bgstatus::clear]]} {
+			catch { ::application::bgstatus::clear assistant-startup }
+		}
+	}
 	set current [focus]
 	if {$previous eq $entry && $entry ne "" && [winfo exists $entry]
 		&& ($current in [list "" .application $entry] || [string match .application.nb.board.board.* $current])} {

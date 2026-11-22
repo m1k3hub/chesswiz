@@ -110,7 +110,7 @@ proc build {tab width height} {
 	set Priv(welcome) [expr {$Options(welcome) || $::beta::WhatsNew}]
 
 	if {!$Options(welcome)} {
-		after idle [namespace code [list FetchNews $::mc::langID 0]]
+		after 1500 [namespace code [list FetchNews $::mc::langID 0]]
 	}
 }
 
@@ -307,7 +307,7 @@ proc Configure {width} {
 
 	if {$Priv(active)} {
 		after cancel $Priv(afterid)
-		after 150 [namespace code [list activate [winfo parent $Priv(html)] 1]]
+		set Priv(afterid) [after 150 [namespace code [list activate [winfo parent $Priv(html)] 1]]]
 	}
 }
 
@@ -550,6 +550,9 @@ proc RemoveRecentFile {id} {
 proc FetchNews {lang update} {
 	variable URL
 
+	if {[llength [info commands ::application::bgstatus::show]]} {
+		catch { ::application::bgstatus::show info-news "Checking for news..." }
+	}
 	::web::downloadURL .application [format $URL $lang] \
 		-successcmd [namespace code [list Response $lang $update]] \
 		-failedcmd [namespace code [list Failed $lang $update]] \
@@ -561,6 +564,9 @@ proc FetchNews {lang update} {
 proc Failed {lang update parent url reason} {
 	variable Priv
 
+	if {[llength [info commands ::application::bgstatus::clear]]} {
+		catch { ::application::bgstatus::clear info-news }
+	}
 	switch $reason {
 		down - http {
 			# No internet available
@@ -584,6 +590,9 @@ proc Failed {lang update parent url reason} {
 proc Response {lang update parent url data} {
 	variable Priv
 
+	if {[llength [info commands ::application::bgstatus::clear]]} {
+		catch { ::application::bgstatus::clear info-news }
+	}
 	set Priv(news) $data
 	set Priv(checksum) [::zlib::crc $data]
 	update

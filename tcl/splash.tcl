@@ -67,7 +67,7 @@ proc open {} {
 
 
 proc close {} {
-	after 300 [namespace code { Close }]
+	after 100 [namespace code { Close }]
 }
 
 

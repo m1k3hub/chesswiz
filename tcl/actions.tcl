@@ -1001,6 +1001,21 @@ proc ::action::InvalidateAskRows {} {
 	variable AskLiveScripts
 	variable AskMetaCache
 	variable AskStateMap
+	set listVisible 0
+	if {[llength [info commands ::application::ask::ListVisible]]} {
+		catch { set listVisible [::application::ask::ListVisible] }
+	}
+	if {!$listVisible \
+	 && (![info exists AskCachedStamp] || $AskCachedStamp eq "") \
+	 && (![info exists AskCachedRows] || [llength $AskCachedRows] == 0) \
+	 && (![info exists AskLiveScriptsKey] || $AskLiveScriptsKey eq "") \
+	 && (![info exists AskMetaCache] || [dict size $AskMetaCache] == 0) \
+	 && (![info exists AskStateMap] || [dict size $AskStateMap] == 0)} {
+		if {[llength [info commands ::context::InvalidateCascadeIdSet]]} {
+			::context::InvalidateCascadeIdSet
+		}
+		return
+	}
 	set AskCachedStamp ""
 	set AskCachedRows {}
 	set AskLiveScriptsKey ""

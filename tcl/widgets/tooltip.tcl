@@ -485,11 +485,14 @@ proc popup {w b {at {}}} {
 		set focus [focus]
 	}
 
-	if {[tk windowingsystem] eq "aqua" && $b eq $G(toplevel)} {
-		# init sets this help window's attributes once. Only an interrupted
-		# fade needs its opacity restored; unchanged attributes dirty Aqua.
-		catch {
-			if {[wm attributes $b -alpha] < 0.99} { wm attributes $b -alpha 0.99 }
+	if {$b eq $G(toplevel) && [tk windowingsystem] in {aqua x11}} {
+		# init sets this tooltip window's type/topmost attributes once.
+		# Re-sending them on every hover triggers extra WM property/map work
+		# (especially under Mutter/Xwayland and Aqua); only restore opacity if faded.
+		if {$G(fade) || [tk windowingsystem] eq "aqua"} {
+			catch {
+				if {[wm attributes $b -alpha] < 0.99} { wm attributes $b -alpha 0.99 }
+			}
 		}
 	} else {
 		# Other callers supply their own popup, without going through init.

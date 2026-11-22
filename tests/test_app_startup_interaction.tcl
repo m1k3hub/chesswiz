@@ -156,4 +156,23 @@ tcltest::test startup-deferred-interaction-keeps-tab-and-focus {a tab switch and
 	catch { destroy .tipoftheday }
 } -result {board 1 0}
 
+tcltest::test startup-bgstatus-shows-and-clears {background activity banner explains active tasks and hides when idle} -body {
+	::application::bgstatus::show test-a "Loading player & rating index..."
+	set t1 [::application::bgstatus::text]
+	set vis1 [expr {[winfo exists .application.__bgstatus__]
+		&& [winfo manager .application.__bgstatus__] eq "place"}]
+	::application::bgstatus::show test-b "Saving player cache..."
+	set t2 [::application::bgstatus::text]
+	::application::bgstatus::clear test-b
+	set t3 [::application::bgstatus::text]
+	::application::bgstatus::clear test-a
+	set t4 [::application::bgstatus::text]
+	set vis4 [expr {[winfo exists .application.__bgstatus__]
+		&& [winfo manager .application.__bgstatus__] eq "place"}]
+	list $t1 $vis1 $t2 $t3 $t4 $vis4
+} -cleanup {
+	::application::bgstatus::clear test-a
+	::application::bgstatus::clear test-b
+} -result {{Background: Loading player & rating index...} 1 {Background (2): Saving player cache...} {Background: Loading player & rating index...} {} 0}
+
 ::tcltest::cleanupTests

@@ -267,4 +267,109 @@ tcltest::test main-menu-focus-zoom-without-layout {focus-follows-size targets th
 	::scidb::test::mainmenu::ReleaseBgErrors
 } -result [list 1 0 1 {}]
 
+proc ::scidb::test::mainmenu::FindEntry {menu pattern} {
+	set n [$menu index end]
+	if {$n eq "" || $n eq "none"} { return "" }
+	for {set i 0} {$i <= $n} {incr i} {
+		if {[$menu type $i] eq "separator"} { continue }
+		if {[string match $pattern [$menu entrycget $i -label]]} { return $i }
+	}
+	return ""
+}
+
+# Hover over a menu entry using real Enter/Motion events (not postcascade),
+# then optionally wait for MenuMotion's hover delay.
+proc ::scidb::test::mainmenu::HoverEntry {menu index {waitMs 120}} {
+	set y0 [$menu yposition $index]
+	set last [$menu index end]
+	if {$index < $last} {
+		set y1 [$menu yposition [expr {$index + 1}]]
+	} else {
+		set y1 [winfo height $menu]
+	}
+	set y [expr {($y0 + $y1) / 2}]
+	set x [expr {max(4, [winfo width $menu] / 2)}]
+	if {$::tk::Priv(menu:window) ne $menu} {
+		event generate $menu <Enter> -x $x -y $y
+	}
+	event generate $menu <Motion> -x $x -y $y
+	if {$waitMs > 0} {
+		after $waitMs
+		update
+	}
+}
+
+proc ::scidb::test::mainmenu::HoverCascade {menu pattern {waitMs 120}} {
+	set index [FindCascade $menu $pattern]
+	if {$index eq ""} { return "" }
+	HoverEntry $menu $index $waitMs
+	return [$menu entrycget $index -menu]
+}
+
+tcltest::test main-menu-hover-first-cascade {hovering the first cascade (File) expands it after clicking Main Menu} -constraints tkMenuWindows -setup {
+	::scidb::test::mainmenu::CaptureBgErrors
+	::scidb::test::mainmenu::SelectPage information
+	::scidb::test::mainmenu::Click $::scidb::test::mainmenu::mb
+	set m [$::scidb::test::mainmenu::mb cget -menu]
+} -body {
+	set fileMenu [::scidb::test::mainmenu::CascadeMenu $m *File*]
+	set before [expr {[winfo exists $fileMenu] && [winfo ismapped $fileMenu] ? 1 : 0}]
+	::scidb::test::mainmenu::HoverCascade $m *File*
+	set after [expr {[winfo exists $fileMenu] && [winfo ismapped $fileMenu] ? 1 : 0}]
+	list $before $after [grab current] $::scidb::test::mainmenu::errors
+} -cleanup {
+	::scidb::test::mainmenu::Unpost
+	::scidb::test::mainmenu::ReleaseBgErrors
+} -result [list 0 1 .application.nb.menu_main {}]
+
+tcltest::test main-menu-hover-switches-and-nests {hovering switches cascades, opens nested submenus, and collapses on non-cascade} -constraints tkMenuWindows -setup {
+	::scidb::test::mainmenu::CaptureBgErrors
+	::scidb::test::mainmenu::SelectPage board
+	::scidb::test::mainmenu::Click $::scidb::test::mainmenu::mb
+	set m [$::scidb::test::mainmenu::mb cget -menu]
+} -body {
+	set fileMenu [::scidb::test::mainmenu::HoverCascade $m *File*]
+	set fileOpen [winfo ismapped $fileMenu]
+	set viewMenu [::scidb::test::mainmenu::HoverCascade $m *View*]
+	set viewOpen [winfo ismapped $viewMenu]
+	set fileClosed [expr {![winfo ismapped $fileMenu]}]
+	set layoutMenu [::scidb::test::mainmenu::HoverCascade $viewMenu *Layout*]
+	set layoutOpen [winfo ismapped $layoutMenu]
+	set loadMenu [::scidb::test::mainmenu::HoverCascade $layoutMenu *Load*]
+	set loadOpen [winfo ismapped $loadMenu]
+	set saveIdx [::scidb::test::mainmenu::FindEntry $layoutMenu {*Save Layout}]
+	::scidb::test::mainmenu::HoverEntry $layoutMenu $saveIdx
+	set loadClosed [expr {![winfo ismapped $loadMenu]}]
+	list $fileOpen $viewOpen $fileClosed $layoutOpen $loadOpen $loadClosed \
+		[grab current] $::scidb::test::mainmenu::errors
+} -cleanup {
+	::scidb::test::mainmenu::Unpost
+	::scidb::test::mainmenu::SelectPage information
+	::scidb::test::mainmenu::ReleaseBgErrors
+} -result [list 1 1 1 1 1 1 .application.nb.menu_main {}]
+
+tcltest::test main-menu-hover-leave-cancels-timer {leaving the menu before the hover delay cancels cascade posting and unpost clears timers} -constraints tkMenuWindows -setup {
+	::scidb::test::mainmenu::CaptureBgErrors
+	::scidb::test::mainmenu::SelectPage information
+	::scidb::test::mainmenu::Click $::scidb::test::mainmenu::mb
+	set m [$::scidb::test::mainmenu::mb cget -menu]
+} -body {
+	set editMenu [::scidb::test::mainmenu::HoverCascade $m *Edit* 0]
+	event generate $m <Leave> -rootx 0 -rooty 0
+	after 120
+	update
+	set openedAfterLeave [expr {[winfo exists $editMenu] && [winfo ismapped $editMenu] ? 1 : 0}]
+	::scidb::test::mainmenu::Unpost
+	set pendingTriggers 0
+	foreach id [after info] {
+		if {[string match *MenuTrigger* [lindex [after info $id] 0]]} {
+			incr pendingTriggers
+		}
+	}
+	list $openedAfterLeave $::tk::Priv(menuActivated) $pendingTriggers $::scidb::test::mainmenu::errors
+} -cleanup {
+	::scidb::test::mainmenu::Unpost
+	::scidb::test::mainmenu::ReleaseBgErrors
+} -result [list 0 0 0 {}]
+
 tcltest::cleanupTests

@@ -475,7 +475,7 @@ set scidb::revision [::scidb::misc::revision]
 
 # --- Initalization ----------------------------------------------------
 
-splash::print "$load::mc::Startup..."
+splash::print "Initializing theme and fonts..."
 mc::setup
 font::useLanguage $mc::langID
 theme::setTheme $menu::Theme
@@ -485,6 +485,7 @@ tooltip::init
 font::setupDefaultFonts
 font::setupChessFonts
 #if {$beta::Welcome} { ::html::preload $mc::langID }
+splash::print "Building workspace..."
 application::open
 
 # vi:set ts=3 sw=3:

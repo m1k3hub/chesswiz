@@ -64,6 +64,39 @@ variable LastMsg	""
 variable Log		{}
 variable CacheWritable 1
 variable CacheHit 0
+variable ReadyCallbacks {}
+
+proc BgStatus {action key {msg ""}} {
+	if {$action eq "set"} {
+		if {[llength [info commands ::application::bgstatus::show]]} {
+			catch { ::application::bgstatus::show $key $msg }
+		}
+	} else {
+		if {[llength [info commands ::application::bgstatus::clear]]} {
+			catch { ::application::bgstatus::clear $key }
+		}
+	}
+}
+
+proc whenDataReady {cmd} {
+	variable ReadyCallbacks
+	if {[info exists ::load::DataLoaded] && $::load::DataLoaded} {
+		after idle $cmd
+		return
+	}
+	if {$cmd ni $ReadyCallbacks} {
+		lappend ReadyCallbacks $cmd
+	}
+}
+
+proc NotifyDataReady {} {
+	variable ReadyCallbacks
+	set cbs $ReadyCallbacks
+	set ReadyCallbacks {}
+	foreach cb $cbs {
+		after idle $cb
+	}
+}
 
 
 proc source {path args} {
@@ -107,6 +140,8 @@ proc load {msg type path} {
 	if {$msg ne $LastMsg} {
 		if {![llength [info commands winfo]] || [winfo exists .splash]} {
 			::splash::print "${msg}..."
+		} elseif {[info coroutine] eq "::load::DataLoader" || ([winfo exists .application] && [winfo ismapped .application])} {
+			BgStatus set load-data "${msg}..."
 		}
 		set LastMsg $msg
 	}
@@ -196,9 +231,14 @@ proc writeCacheWhenUp {start {tries 50}} {
 proc writeCacheNow {start} {
 	set written 0
 	set begin [clock milliseconds]
-	catch {
-		file mkdir [file dirname $::load::CachePath]
-		set written [::scidb::app::load cache-write $::load::CachePath $::load::CacheSources]
+	BgStatus set cache-write "Saving player & rating cache for faster startup..."
+	try {
+		catch {
+			file mkdir [file dirname $::load::CachePath]
+			set written [::scidb::app::load cache-write $::load::CachePath $::load::CacheSources]
+		}
+	} finally {
+		BgStatus clear cache-write
 	}
 	::debuglog::log startup "player cache write success=$written [expr {[clock milliseconds]-$begin}]ms deferred=[expr {$begin-$start}]ms"
 }
@@ -225,22 +265,50 @@ proc ::load::ensureEco {args} {
 	foreach cmd $EcoGuards {
 		trace remove execution $cmd enter ::load::ensureEco
 	}
-	uplevel #0 {
+	catch { trace remove execution ::scidb::db::get enter ::load::ensureEcoForDbGet }
+	if {[llength [info commands winfo]] && ![winfo exists .splash]
+			&& [winfo exists .application] && [winfo ismapped .application]} {
+		::load::BgStatus set load-eco "Loading opening classification (ECO)..."
+	}
+	try {
+		uplevel #0 {
 # --- Load ECO file ----------------------------------------------------
 load::load	[format $load::mc::Loading $load::mc::ECOFile] \
 				eco \
 				[file join $scidb::dir::data eco.bin] \
 				;
 
+		}
+	} finally {
+		::load::BgStatus clear load-eco
 	}
+}
+
+# Metadata-only ::scidb::db::get queries (e.g. `types sci` during startup
+# script evaluation) do not touch the ECO table; avoid pulling the ~600 ms
+# ECO load onto the pre-window startup path.
+proc ::load::ensureEcoForDbGet {command op} {
+	set sub [lindex $command 1]
+	if {$sub in {types clipbase scratchbase open? type name codec encoding created? readonly? memoryOnly? variants writable?}} {
+		return
+	}
+	::load::ensureEco
 }
 set ::load::EcoLoaded 0
 set ::load::EcoGuards {}
 foreach pattern {::scidb::game::* ::scidb::db::* ::scidb::app::lookup
 	::scidb::misc::lookup ::scidb::ai::eco} {
 	foreach cmd [info commands $pattern] {
-		lappend ::load::EcoGuards $cmd
-		trace add execution $cmd enter ::load::ensureEco
+		if {$cmd in {::scidb::db::subscribe ::scidb::db::unsubscribe
+				::scidb::game::subscribe ::scidb::game::unsubscribe}} {
+			continue
+		}
+		if {$cmd eq "::scidb::db::get"} {
+			trace add execution $cmd enter ::load::ensureEcoForDbGet
+		} else {
+			lappend ::load::EcoGuards $cmd
+			trace add execution $cmd enter ::load::ensureEco
+		}
 	}
 }
 
@@ -262,6 +330,7 @@ proc ::load::ensureData {args} {
 	trace remove execution ::scidb::app::load enter ::load::ensureDataForLoad
 	::load::ensureEco
 	LoadData
+	::load::NotifyDataReady
 }
 
 proc ::load::ensureDataForLoad {command op} {
@@ -289,29 +358,37 @@ proc ::load::startBackgroundData {} {
 	# while the first window is still settling, and parsing there keeps the
 	# window from repainting (or answering the startup responsiveness probe)
 	# for the length of the shard. The coroutine yields after every file.
-	after 10 ::load::runBackgroundData
+	after 40 ::load::runBackgroundData
 }
 
 proc ::load::runBackgroundData {} {
 	if {$::load::DataLoaded || [llength [info commands ::load::DataLoader]]} { return }
 	coroutine ::load::DataLoader ::load::backgroundData
-	after 1 ::load::resumeBackgroundData
+	after 15 ::load::resumeBackgroundData
 }
 
 proc ::load::resumeBackgroundData {} {
 	if {![llength [info commands ::load::DataLoader]]} { return }
 	::load::DataLoader
-	after 1 ::load::resumeBackgroundData
+	if {[llength [info commands ::load::DataLoader]]} {
+		after 15 ::load::resumeBackgroundData
+	}
 }
 
 proc ::load::backgroundData {} {
-	::load::ensureEco
-	LoadData
+	try {
+		::load::ensureEco
+		LoadData
+	} finally {
+		::load::BgStatus clear load-data
+		::load::BgStatus clear load-eco
+	}
 	set ::load::DataLoaded 1
 	foreach cmd $::load::DataGuards {
 		trace remove execution $cmd enter ::load::ensureData
 	}
 	trace remove execution ::scidb::app::load enter ::load::ensureDataForLoad
+	::load::NotifyDataReady
 }
 
 # The shipped spellcheck dictionary is stored in equal shards. The startup
@@ -375,6 +452,10 @@ if {![::process::testOption fast-load]} {
 	}
 	foreach name {wikipedia-de.txt wikipedia-en.txt chessgames.com.zip cities.txt} {
 		lappend ::load::CacheSources [file join $::scidb::dir::data $name]
+	}
+	if {[info coroutine] eq "::load::DataLoader"} {
+		::load::BgStatus set load-data "Loading player & rating index..."
+		yield
 	}
 	set cacheStart [clock milliseconds]
 	catch { set ::load::CacheHit [::scidb::app::load cache-read $::load::CachePath $::load::CacheSources] }

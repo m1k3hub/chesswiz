@@ -51,6 +51,131 @@ proc message {text {kind info}} {
 }
 
 namespace eval application {
+
+# Non-blocking floating status bar explaining background work to the user
+# without changing .application.nb layout geometry or stealing focus.
+namespace eval bgstatus {
+	variable Tasks [dict create]
+	variable Order {}
+	variable Widget .application.__bgstatus__
+	variable CurrentText ""
+	variable Dismissed 0
+
+	proc Build {} {
+		variable Widget
+		if {[winfo exists $Widget]} { return $Widget }
+		if {![winfo exists .application]} { return "" }
+		set dark [expr {[llength [info commands ::theme::isDark]] && [::theme::isDark]}]
+		set bg [expr {$dark ? "#2b313c" : "#eef3fa"}]
+		set fg [expr {$dark ? "#e6edf3" : "#1e293b"}]
+		set bd [expr {$dark ? "#475569" : "#94a3b8"}]
+		tk::frame $Widget -background $bg -highlightthickness 1 \
+			-highlightbackground $bd -highlightcolor $bd -borderwidth 0
+		tk::label $Widget.dot -text "\u25cf" -foreground "#2563eb" -background $bg \
+			-font TkSmallCaptionFont -padx 4 -pady 2
+		tk::label $Widget.text -text "" -foreground $fg -background $bg \
+			-font TkSmallCaptionFont -anchor w -padx 2 -pady 2
+		tk::label $Widget.close -text "\u00d7" -foreground $fg -background $bg \
+			-font TkSmallCaptionFont -padx 5 -pady 2 -cursor hand2
+		bind $Widget.close <Button-1> [namespace code Dismiss]
+		bind $Widget <<ThemeChanged>> [namespace code ApplyTheme]
+		pack $Widget.dot -side left
+		pack $Widget.text -side left
+		pack $Widget.close -side right
+		return $Widget
+	}
+
+	proc ApplyTheme {} {
+		variable Widget
+		if {![winfo exists $Widget]} { return }
+		set dark [expr {[llength [info commands ::theme::isDark]] && [::theme::isDark]}]
+		set bg [expr {$dark ? "#2b313c" : "#eef3fa"}]
+		set fg [expr {$dark ? "#e6edf3" : "#1e293b"}]
+		set bd [expr {$dark ? "#475569" : "#94a3b8"}]
+		$Widget configure -background $bg -highlightbackground $bd -highlightcolor $bd
+		$Widget.dot configure -background $bg
+		$Widget.text configure -background $bg -foreground $fg
+		$Widget.close configure -background $bg -foreground $fg
+	}
+
+	proc Dismiss {} {
+		variable Dismissed
+		variable Widget
+		set Dismissed 1
+		if {[winfo exists $Widget]} { place forget $Widget }
+	}
+
+	proc Render {} {
+		variable Tasks
+		variable Order
+		variable Widget
+		variable CurrentText
+		variable Dismissed
+
+		set count [llength $Order]
+		if {$count == 0} {
+			set CurrentText ""
+			set Dismissed 0
+			if {[winfo exists $Widget]} { place forget $Widget }
+			return
+		}
+		set latestKey [lindex $Order end]
+		set msg [dict get $Tasks $latestKey]
+		if {$count > 1} {
+			set text "Background ($count): $msg"
+		} else {
+			set text "Background: $msg"
+		}
+		set CurrentText $text
+		if {$Dismissed} { return }
+		set w [Build]
+		if {$w eq ""} { return }
+		$w.text configure -text $text
+		place $w -in .application -relx 0.0 -rely 1.0 -x 8 -y -8 -anchor sw
+		raise $w
+		if {[winfo ismapped .application]} {
+			update idletasks
+		}
+	}
+
+	proc show {key msg} {
+		variable Tasks
+		variable Order
+		variable Dismissed
+		set msg [string trim $msg]
+		if {$msg eq ""} { clear $key; return }
+		if {![dict exists $Tasks $key]} {
+			set Dismissed 0
+			lappend Order $key
+		}
+		dict set Tasks $key $msg
+		Render
+	}
+
+	proc clear {key} {
+		variable Tasks
+		variable Order
+		if {![dict exists $Tasks $key]} { return }
+		dict unset Tasks $key
+		set idx [lsearch -exact $Order $key]
+		if {$idx >= 0} { set Order [lreplace $Order $idx $idx] }
+		Render
+	}
+
+	proc active {} {
+		variable Tasks
+		variable Order
+		set out {}
+		foreach k $Order { lappend out [list $k [dict get $Tasks $k]] }
+		return $out
+	}
+
+	proc text {} {
+		variable CurrentText
+		return $CurrentText
+	}
+}
+
 namespace eval mc {
 
 set Tab(information)			"&Information"
@@ -879,20 +1004,23 @@ proc NotifyScalingListener {listener} {
 # exists, and in every case watch the effective scaling and the screen/work
 # area with a cheap one-second poll that does nothing when they are
 # unchanged. A change runs the same relayout/re-clamp as the wrapper path.
-proc displaySignature {} {
+proc displaySignature {{dpi ""}} {
 	if {![winfo exists .application]} { return {} }
 	set floating {}
 	foreach w [FloatingWindows] {
 		lappend floating $w [::util::place::activeWorkAreasFor $w] \
 			[catch {::scidb::tk::wm monitor $w} monitor] $monitor \
-			[expr {[catch {::scidb::tk::wm dpi $w} dpi] ? 0 : round($dpi)}]
+			[expr {[catch {::scidb::tk::wm dpi $w} fdpi] ? 0 : round($fdpi)}]
+	}
+	if {$dpi eq ""} {
+		set dpi [expr {round([::scidb::tk::wm dpi .application])}]
 	}
 	return [list [tk scaling] \
 		[winfo screenwidth .application] [winfo screenheight .application] \
 		[winfo workarea .application] \
 		[::util::place::activeWorkAreasFor .application] \
 		[::scidb::tk::wm monitor .application] \
-		[expr {round([::scidb::tk::wm dpi .application])}] \
+		$dpi \
 		$floating]
 }
 
@@ -926,7 +1054,8 @@ proc displayWatch {} {
 	# Do this before capturing the signature, so the calibrated factor is
 	# consumed by exactly the same notification as the OS change.
 	::scidb::startup::calibrateDpi .application
-	set signature [displaySignature]
+	set dpi [expr {[info exists ::scidb::startup::lastDpi] ? $::scidb::startup::lastDpi : ""}]
+	set signature [displaySignature $dpi]
 	if {$signature ne $Vars(display:signature)} {
 		set Vars(display:signature) $signature
 		incr Vars(display:changes)
@@ -2524,7 +2653,9 @@ proc Startup {main args} {
 	set app .application
 	set nb $app.nb
 
+	if {[winfo exists .splash]} { ::splash::print "Building information view..." }
 	information::build $Vars(frame:information) $width $height
+	if {[winfo exists .splash]} { ::splash::print "Building database views..." }
 	database::build $Vars(frame:database) $width $height
 
 	$nb add $Vars(frame:information) -sticky nsew
@@ -2552,7 +2683,9 @@ proc Startup {main args} {
 	bind $main <Map> +[list [namespace current]::board::activate $frame 1]
 	bind $main <Unmap> +[list [namespace current]::board::activate $frame 0]
 
+	if {[winfo exists .splash]} { ::splash::print "Opening main window..." }
 	RestoreWindowGeometry $app
+	update idletasks
 	bind $app <Configure> +[namespace code {RememberWindowGeometry %W}]
 	bind $app <Configure> +[namespace code {WindowResized %W}]
 	# Fullscreen changes the board extent; the resize hook normally sees it
@@ -2568,8 +2701,7 @@ proc Startup {main args} {
 	set Vars(ready) 1
 	set Vars(startup:tab) [activeTab]
 
-	# we need a small timeout for HTML widget (tab "Information");
-	# for any reason "update idletasks" is not sufficient
+	# Paint the Information window before background dictionary/session work.
 	after 1 [namespace code Startup2]
 }
 
@@ -2645,8 +2777,8 @@ proc Startup2 {} {
 	# Let background dictionary chunks finish before restoring databases,
 	# whose native open requires the complete player dictionary.
 	if {!$::load::DataLoaded} {
+		::load::whenDataReady [namespace code Startup2]
 		::load::startBackgroundData
-		after 1 [namespace code Startup2]
 		return
 	}
 	set app .application
@@ -2654,6 +2786,7 @@ proc Startup2 {} {
 	set keep [StartupKeepView]
 	set recovered 0
 	set Vars(startup:opening) 1
+	bgstatus::show startup-session "Restoring session..."
 	try {
 		ChooseLanguage $app
 		::load::writeLog
@@ -2665,13 +2798,19 @@ proc Startup2 {} {
 		foreach file [::process::arguments] {
 			set path [::util::databasePath $file]
 			if {![::scidb::db::get open? $path]} {
-				database::openBase .application $path yes -encoding $::encoding::autoEncoding
+				bgstatus::show startup-open "Opening database '[file tail $path]'..."
+				try {
+					database::openBase .application $path yes -encoding $::encoding::autoEncoding
+				} finally {
+					bgstatus::clear startup-open
+				}
 			}
 		}
 
 		set recovered [expr {[::game::recover $app] + [::game::reopenLockedGames $app]}]
 	} finally {
 		set Vars(startup:opening) 0
+		bgstatus::clear startup-session
 	}
 
 	if {$keep || $Vars(startup:interacted)} { set keep 1 }

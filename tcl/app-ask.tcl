@@ -120,6 +120,8 @@ array set Priv {
 	listVisible	0
 	prewarmAfter	{}
 	prewarmDeferred	0
+	prewarmed	0
+	lastTheme	{}
 	refreshAfter	{}
 	blinkAfter	{}
 	blinkPaused	0
@@ -225,6 +227,7 @@ proc ::application::ask::Build {notebook} {
 	set Priv(mic) $mic
 	set Priv(notebook) $notebook
 	set Priv(filtered) ""
+	set Priv(lastTheme) [list [::theme::currentTheme] [::theme::isDark]]
 	bind $frame <Destroy> +::application::speech::CleanupSession
 	bind $frame <Destroy> +[namespace code CancelPrewarm]
 	bind $frame <Destroy> +[namespace code CancelRefresh]
@@ -453,6 +456,7 @@ proc ::application::ask::Prewarm {} {
 			}
 		}
 	}
+	set Priv(prewarmed) 1
 	return
 }
 
@@ -518,6 +522,12 @@ proc ::application::ask::ResumeBlink {} {
 
 proc ::application::ask::ThemeChanged {} {
 	variable Priv
+	set themeKey [list [::theme::currentTheme] [::theme::isDark]]
+	if {[info exists Priv(lastTheme)] && $Priv(lastTheme) eq $themeKey} {
+		return
+	}
+	set Priv(lastTheme) $themeKey
+	set Priv(prewarmed) 0
 	InvalidateCache
 	StyleEntry
 	if {[info exists Priv(placeholder)] && [winfo exists $Priv(placeholder)]} {
@@ -538,11 +548,10 @@ proc ::application::ask::ThemeChanged {} {
 
 proc ::application::ask::EnterField {entry placeholder} {
 	variable Priv
-	variable FmtCache
 	PauseBlink
 	PlaceholderState
-	if {![info exists ::action::AskCachedStamp] || $::action::AskCachedStamp eq "" \
-	 || ![dict size $FmtCache] || $Priv(list) eq "" || ![winfo exists $Priv(list)]} {
+	if {$Priv(list) eq "" || ![winfo exists $Priv(list)] \
+	 || ![info exists Priv(prewarmed)] || !$Priv(prewarmed)} {
 		SchedulePrewarm
 	}
 }
@@ -603,6 +612,7 @@ proc ::application::ask::Relabel {} {
 	if {[info exists ::menu::SwitchingLanguage] && $::menu::SwitchingLanguage} {
 		return
 	}
+	set Priv(prewarmed) 0
 	if {[ListVisible]} {
 		RefreshOpenList
 	} else {
@@ -726,8 +736,8 @@ proc ::application::ask::Focus {} {
 	focus -force [Entry]
 	PauseBlink
 	catch { [Entry] selection range 0 end }
-	if {![info exists ::action::AskCachedStamp] || $::action::AskCachedStamp eq "" \
-	 || ![dict size $FmtCache] || $Priv(list) eq "" || ![winfo exists $Priv(list)]} {
+	if {$Priv(list) eq "" || ![winfo exists $Priv(list)] \
+	 || ![info exists Priv(prewarmed)] || !$Priv(prewarmed)} {
 		SchedulePrewarm
 	}
 	return 1
