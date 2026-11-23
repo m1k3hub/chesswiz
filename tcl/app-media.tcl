@@ -212,7 +212,6 @@ proc application::media::BuildBackend {twm frame width height} {
 	::media::sync::configure \
 		annotate-cmd	[namespace code SyncAnnotate] \
 		clearann-cmd	[namespace code SyncClearAnnotations] \
-		transport-cmd	[namespace code SyncTransport] \
 		boardforward-cmd	[namespace code SyncBoardForward] \
 		boardstart-cmd	[namespace code SyncBoardStart] \
 		boardlength-cmd	[namespace code SyncBoardLength] \

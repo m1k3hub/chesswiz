@@ -4,9 +4,9 @@
 # Couples the media panel's transport (audio/video via the selected
 # backend) with the chess-board replay:
 #
-#   * transport sync — when the board autoplays a game the media plays
-#     along; stopping/pausing the autoplay pauses the media; manual
-#     navigation pauses the media (it no longer matches the position).
+#   * transport sync — manual board navigation reseeks the media to the
+#     new position (board autoplay drives in-app playback directly, see
+#     ToggleAutoPlay in app-board.tcl).
 #
 #   * follow mode — the board follows the media: while the video plays,
 #     the main board advances through the game. With a per-move timeline
@@ -23,7 +23,7 @@
 # The state machine is UI-free: the media panel wires it to the libmpv player
 # and the scidb board commands (see application::media::SyncTransport,
 # application::media::SyncBoard*), while tests inject stubs. Board code
-# reports playback events through ::media::sync::autoplay / ::step.
+# reports navigation through ::media::sync::step.
 # ======================================================================
 
 ::util::source media-sync
@@ -54,7 +54,6 @@ namespace eval ::media::sync {
 	array set State {
 		transport 1
 		follow    1
-		autoplay  0
 		playing   0
 		driving   0
 		usertouch 0
@@ -68,7 +67,6 @@ namespace eval ::media::sync {
 
 	variable Delegates
 	array set Delegates {
-		transport     {}
 		boardforward  {}
 		boardstart    {}
 		boardlength   {}
@@ -79,7 +77,7 @@ namespace eval ::media::sync {
 		clearann      {}
 	}
 
-	namespace export configure set-config autoplay step drive driving? \
+	namespace export configure set-config step drive driving? \
 		onPlaybackStarted onPlaybackStopped load-timeline load-events
 }
 
@@ -87,7 +85,6 @@ proc ::media::sync::configure {args} {
 	variable Delegates
 	foreach {key value} $args {
 		switch -- $key {
-			transport-cmd     { set Delegates(transport) $value }
 			boardforward-cmd  { set Delegates(boardforward) $value }
 			boardstart-cmd    { set Delegates(boardstart) $value }
 			boardlength-cmd   { set Delegates(boardlength) $value }
@@ -118,21 +115,6 @@ proc ::media::sync::config {} {
 }
 
 
-# Called by board code when game-board autoplay starts (state 1) or
-# stops (state 0).
-proc ::media::sync::autoplay {state} {
-	variable State
-	set State(autoplay) [expr {$state ? 1 : 0}]
-
-	if {!$State(transport) || !$State(playing)} { return }
-	if {$State(autoplay)} {
-		Transport play
-	} else {
-		Transport pause
-	}
-}
-
-
 # Called by board code after the board navigated one step (any direction,
 # any distance). Board and media are coupled: the media keeps playing and
 # the media panel reseeks it to the new board position (PlySeek in
@@ -146,7 +128,6 @@ proc ::media::sync::step {} {
 	# the next drive tick yield and could self-pause the transport).
 	if {$State(driving)} { return }
 	if {!$State(transport) || !$State(playing)} { return }
-	if {$State(autoplay)} { return }
 
 	# R8: a manual move during follow must not trigger a spurious
 	# rewind/annotation-reset on the next tick: re-sync the goal to the
@@ -172,7 +153,6 @@ proc ::media::sync::onPlaybackStarted {} {
 proc ::media::sync::onPlaybackStopped {} {
 	variable State
 	set State(playing) 0
-	set State(autoplay) 0
 	set State(usertouch) 0
 	set State(lastgoal) -1
 	set State(evidx) 0
@@ -417,14 +397,6 @@ proc ::media::sync::_fire_events {timeMs} {
 
 
 # --- internal helpers ---------------------------------------------------
-
-proc ::media::sync::Transport {what} {
-	variable Delegates
-	if {[llength $Delegates(transport)]} {
-		catch { uplevel #0 $Delegates(transport) [list $what] }
-	}
-}
-
 
 proc ::media::sync::BoardForward {} {
 	variable Delegates
