@@ -62,7 +62,6 @@ namespace eval ::media::sync {
 		lasttime  -1
 		reach     50
 		timeline  {}
-		tlidx     0
 		events    {}
 		evidx     0
 	}
@@ -166,7 +165,6 @@ proc ::media::sync::onPlaybackStarted {} {
 	set State(playing) 1
 	set State(usertouch) 0
 	set State(lastgoal) -1
-	set State(tlidx) 0
 	set State(evidx) 0
 }
 
@@ -177,7 +175,6 @@ proc ::media::sync::onPlaybackStopped {} {
 	set State(autoplay) 0
 	set State(usertouch) 0
 	set State(lastgoal) -1
-	set State(tlidx) 0
 	set State(evidx) 0
 }
 
@@ -211,7 +208,6 @@ proc ::media::sync::load-timeline {msList} {
 			lappend State(timeline) $mark
 		}
 	}
-	set State(tlidx) 0
 	set State(lastgoal) -1
 }
 
@@ -359,7 +355,6 @@ proc ::media::sync::drive {timeMs durationMs {force 0}} {
 		set State(driving) 1
 		try {
 			if {[BoardPly] > $goal} {
-				set State(tlidx) $goal
 				set State(evidx) 0
 				BoardStart
 				BoardClearAnnotations

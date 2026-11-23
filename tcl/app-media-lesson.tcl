@@ -190,18 +190,6 @@ proc loadFromSidecar {videoPath} {
 	return $lesson
 }
 
-# Drop a cached lesson (e.g. after the media file changed). The sidecar
-# is deleted as well so the next get() re-decodes from scratch.
-proc flush {videoPath} {
-	variable Cache
-	set k [key $videoPath]
-	catch { unset Cache($k) }
-	catch {
-		set path [sidecarPath $k]
-		if {[file exists $path]} { file delete -force $path }
-	}
-}
-
 # ---------------------------------------------------------------------
 # WP3 (Media Lesson v2): pure-Tcl move applier.
 #

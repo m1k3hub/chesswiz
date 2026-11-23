@@ -120,13 +120,4 @@ proc ::media::mpv::stop {} {
 	catch { ::mpv::close }
 }
 
-# How the last stop is going: "pending" while libmpv shuts down on its own
-# threads, the completed teardown in milliseconds, or {} when no player has
-# been released since start. Stop returns before the player is gone, so this
-# is the only view of the shutdown that follows it.
-proc ::media::mpv::teardown {} {
-	if {![available?] || [llength [info commands ::mpv::teardown]] == 0} { return {} }
-	return [::mpv::teardown]
-}
-
 # vi:set ts=3 sw=3:

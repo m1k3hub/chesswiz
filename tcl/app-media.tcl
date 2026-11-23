@@ -20,17 +20,12 @@ set NoMedia			"No media for this game."
 set NoDatabase		"Open a database to see media."
 set ColumnType		"Type"
 set ColumnTitle		"Title"
-set ColumnPath		"Path"
 set TypePicture		"Picture"
 set TypeAudio		"Audio"
 set TypeVideo		"Video"
 set TypeStream		"Stream"
-set TypeNone			"Unknown"
-set Play				"Play"
 set Stop				"Stop"
 set OpenError		"Cannot open media file: %s"
-set NoPlayer			"No media player found (libmpv or xdg-open)"
-set SyncBoard		"Sync with board"
 set ViewReport		"View report"
 set OpenExternal		"Open externally"
 set OpenStream		"Open stream..."
@@ -49,7 +44,6 @@ set SectionPictures	"Pictures"
 set SectionAudio		"Audio"
 set SectionVideo		"Video"
 set SectionOther		"Other"
-set FollowBoard	"Board follows video"
 
 # Chess Media System control-strip palette (see the ChessBase help
 # "Chess Media System" page): a light bar with a round blue transport
@@ -77,7 +71,6 @@ array set Priv {
 	tree			{}
 	statusbar		{}
 	viewer			{}
-	viewerimg		{}
 	inprocess	0
 	checkid		{}
 	seekgrab		0
@@ -195,7 +188,6 @@ proc application::media::BuildBackend {twm frame width height} {
 	MediaDebug "build: pane twm=[list $twm] frame=[list $frame] tree=[list $tree] mapped=[winfo ismapped $tree]"
 	set Priv(viewer) $viewer
 	set Priv(statusbar) $mc::NoDatabase
-	set Priv(ctrl) $ctrl
 	set Priv(ctrlbuttons) $ctrl.buttons
 	set Priv(seekbar) $ctrl.seek
 	set Priv(listbox) $frame.listbox
@@ -746,14 +738,6 @@ proc application::media::ViewReport {{index {}}} {
 }
 
 
-proc application::media::Navigate {step} {
-	variable Priv
-	if {$Priv(position) < 0} { return }
-	::application::board::goto $step
-	catch { after cancel $Priv(seekid) }
-	PlySeek $Priv(position)
-}
-
 proc application::media::TogglePlayback {} {
 	variable Priv
 	if {!$Priv(inprocess)} {
@@ -1205,7 +1189,7 @@ proc application::media::ResolveIndex {path position} {
 
 	# position-matched clip?  .smv wins over .cms when both exist
 	set fen ""
-	if {![info exists ::application::media::Priv(suppress:fen)] && [info commands ::scidb::game::fen] ne "" && $position >= 0 && $position != 9} {
+	if {[info commands ::scidb::game::fen] ne "" && $position >= 0 && $position != 9} {
 		catch { set fen [::scidb::game::fen $position] }
 	}
 	set hit {}
@@ -1701,8 +1685,6 @@ proc application::media::PlayInProcess {path {startMs {}} {endMs {}}} {
 
 	set Priv(playBase) $Priv(base)
 	set Priv(lastMedia) $path
-	set Priv(lastStartMs) $startMs
-	set Priv(lastEndMs) $endMs
 	$canvas delete all
 	catch { after cancel $Priv(rangeid) }	;# a stale stop timer must not kill the new clip
 	set Priv(rangeid) {}

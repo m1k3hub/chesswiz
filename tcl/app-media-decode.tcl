@@ -195,40 +195,6 @@ proc decodeCommand {hexstr} {
 }
 
 # ---------------------------------------------------------------------
-# decode one record (hex-byte list) into an event dict (unused by the
-# main flow — kept as a documented per-record helper)
-# ---------------------------------------------------------------------
-
-proc parseRecord {rec} {
-	if {[llength $rec] < 4} { return {} }
-	binary scan [binary format H* [join [lrange $rec 0 3] {}]] i opcode
-
-	set result [dict create opcode $opcode name [opcodeName $opcode]]
-
-	switch -- $opcode {
-		3 {
-			# GotoIndex: index at +4 (pad the trimmed tail with zeros)
-			set tail [join [lrange $rec 4 end] {}]
-			if {[string length $tail] > 8} { set tail [string range $tail 0 7] }
-			append tail [string repeat 0 [expr {max(0, 8 - [string length $tail])}]]
-			binary scan [binary format H* $tail] i idx
-			dict set result gotoIndex $idx
-		}
-		4 {
-			# board action: class u32le + 2 file-major squares + modifier u16le
-			if {[llength $rec] >= 12} {
-				binary scan [binary format H* [join [lrange $rec 4 11] {}]] iccs class s0 s1 mod
-				dict set result class [format %x $class]
-				dict set result from [sq0 $s0]
-				dict set result to [sq0 $s1]
-				dict set result modifier $mod
-			}
-		}
-	}
-	return $result
-}
-
-# ---------------------------------------------------------------------
 # main entry: decode the script stream from a media-lesson video.
 # Returns a list of entry dicts:
 #   {opcode name pkt ms type gotoIndex from to class modifier}

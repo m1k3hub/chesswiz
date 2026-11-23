@@ -28,7 +28,6 @@
 namespace eval ::mediainset {
 namespace eval mc {
 
-set ShowInBoard	"Show Video in the Board Window"
 # Button faces: the inset's size control names its state (Expand vs Restore).
 set Expand		"⤢"
 set Restore		"⤡"
@@ -47,7 +46,6 @@ set VideoTooltip	"Double-click to expand"
 array set Options {
 	enabled 1
 	size 0.34
-	margin 6
 	minWidth 160
 }
 
