@@ -252,6 +252,7 @@ proc ::playengine::open {parent} {
 	pack $btns.resign -side left
 	pack $btns.draw -side left -padx $::theme::padx
 	pack $btns.takeback -side left
+	set Priv(widget:takeback) $btns.takeback
 	pack $btns -anchor w -pady [list 0 $::theme::pady]
 
 	::util::place::playingButtons $dlg {ok cancel}
@@ -275,6 +276,9 @@ proc ::playengine::open {parent} {
 
 	# beside the board, never on it: the user plays on the board while the
 	# dialog is open, and clicks on the board must reach the board
+	# Level with the board's bottom: the top of the notation beside it,
+	# where the moves appear, stays readable.
+	::util::place::besideAlign $dlg bottom
 	::util::place::besideBoard $dlg $parent
 	wm deiconify $dlg
 	return $dlg
@@ -1193,6 +1197,12 @@ proc ::playengine::Status {text} {
 	set Priv(statusText) $text
 	if {[DialogExists]} {
 		$Priv(widget:status) configure -text $text
+		# Takeback needs a move to undo and the user to be on move.
+		if {[info exists Priv(widget:takeback)] && [winfo exists $Priv(widget:takeback)]} {
+			set can [expr {$Priv(active) && $Priv(phase) eq "user"
+				&& ![catch {::scidb::game::query length} n] && $n > 0}]
+			$Priv(widget:takeback) state [expr {$can ? "!disabled" : "disabled"}]
+		}
 	}
 }
 

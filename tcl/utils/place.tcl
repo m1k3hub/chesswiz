@@ -81,6 +81,8 @@ variable BesideBoardProbe	{}
 variable BesideBoardProbeAt	0
 variable BesideBoardProbeWaits	0
 variable BesideDialogs		{}
+# Per-dialog vertical alignment beside the board: top (default) or bottom.
+variable BesideAlign
 variable BesideState
 variable BesideReplacements	0
 variable BesideBoardBound	{}
@@ -3446,6 +3448,11 @@ proc besideResetReplaceCount {} {
 # apply the shrink. VAL-DLG-005 still caps content larger than the whole work
 # area into a strip, retaining at least 320x160 (or the natural request) when
 # possible. The reservation is released on close/unregister.
+proc besideAlign {dlg how} {
+	variable BesideAlign
+	set BesideAlign($dlg) $how
+}
+
 proc besideBoard {dlg {parent ""}} {
 	besideMeasureBegin
 	# The plan releases and re-applies the inset's squeeze; the inset must
@@ -3964,6 +3971,20 @@ proc BesideBoardPlan {dlg parent {retry 0}} {
 	if {[dict get $plan rule] ne "outside" && $liveArea ne $workarea && $retry < 2} {
 		return [BesideBoardPlan $dlg $parent [expr {$retry+1}]]
 	}
+	# A dialog beside the board may ask to sit level with the board's bottom
+	# instead of its top (besideAlign): ::playengine keeps the top of the
+	# neighbouring notation, where the moves appear, readable. Part of the
+	# plan, so every re-plan (resize, maximise, video) keeps it.
+	variable BesideAlign
+	if {[info exists BesideAlign($dlg)] && $BesideAlign($dlg) eq "bottom"
+		&& [dict get $plan rule] in {right left}} {
+		set board [besideBoardRect]
+		if {[llength $board] == 4} {
+			lassign [dict get $plan geometry] ax ay aw ah
+			set by [expr {[lindex $board 1] + [lindex $board 3] - ($ah + $fh)}]
+			if {$by > $ay} { dict set plan geometry [list $ax $by $aw $ah] }
+		}
+	}
 	lassign [dict get $plan geometry] x y w h
 	set clampArea $liveArea
 	if {[dict get $plan rule] eq "outside" && [dict exists $plan workarea]} {
@@ -4067,6 +4088,8 @@ proc BesideDestroy {dlg window} {
 	variable BesidePending
 	if {$window ne $dlg} { return }
 	unset -nocomplain BesideRequests($dlg)
+	variable BesideAlign
+	unset -nocomplain BesideAlign($dlg)
 	if {[info exists BesidePending($dlg)]} {
 		after cancel $BesidePending($dlg)
 		unset BesidePending($dlg)

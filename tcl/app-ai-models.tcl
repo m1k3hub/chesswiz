@@ -257,10 +257,12 @@ proc ::application::ai::models::show {{parent .application}} {
 		$ctree heading #0 -text $mc::Classifier -anchor w
 		$ctree heading where -text $mc::Where -anchor w
 		$ctree heading model -text $mc::Model -anchor w
-		$ctree column #0 -width 120 -stretch no
+		# Wide enough for the heading (it was cut to "System One class").
+		set cw [expr {max(120, [font measure TkHeadingFont $mc::Classifier] + 24)}]
+		$ctree column #0 -width $cw -stretch no
 		$ctree column where -width 110 -stretch no
 		$ctree column model -width 260
-		$ctree column #0 -minwidth 120
+		$ctree column #0 -minwidth $cw
 		ttk::scrollbar $clist.vs -orient vertical -command [list $ctree yview]
 		$ctree configure -yscrollcommand [list $clist.vs set]
 		pack $clist.vs -side right -fill y
@@ -463,6 +465,9 @@ proc ::application::ai::models::RenderModels {memory} {
 			[expr {$tools ? $mc::Yes : $mc::No}]]
 		if {[dict exists $Priv(fit) $name]} {
 			lappend values [dict get $Priv(fit) $name]
+		} elseif {[dict get $m remote]} {
+			# Cloud models run on the provider's hardware: fit does not apply.
+			lappend values ""
 		} elseif {[llength [info commands ::ai::modelfit::recommend]]} {
 			lappend values $mc::NoSize
 		}

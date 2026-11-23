@@ -65,6 +65,16 @@ namespace eval ::ai::import {
 		InvalidCountryCode bad-tags \
 		InvalidRating bad-tags \
 		RatingTooHigh bad-tags \
+		UnknownEventType bad-tags \
+		UnknownTitle bad-tags \
+		UnknownPlayerType bad-tags \
+		UnknownSex bad-tags \
+		UnknownTermination bad-tags \
+		UnknownMode bad-tags \
+		ValueTooLong bad-tags \
+		TooManyNags bad-tags \
+		BraceSeenOutsideComment truncated \
+		UnsupportedVariant variant \
 		InvalidNag bad-tags \
 		UnexpectedTag bad-tags \
 		UnexpectedResultToken bad-tags \
@@ -102,13 +112,15 @@ proc ::ai::import::Codes {codes} {
 
 
 # The rule-only diagnosis, as text. Codes the table does not know count as
-# "other" (the classifier is only used by ::ai::import::diagnose).
+# "other" (the classifier is only used by ::ai::import::diagnose). Every
+# message counts, so a code repeated on 170 games reports 170.
 proc ::ai::import::Text {codes} {
 	variable Categories
 	variable Fix
 
 	set counts {}
-	foreach code [Codes $codes] {
+	foreach code $codes {
+		if {$code eq ""} { continue }
 		set cat [Rule $code]
 		if {$cat eq ""} { set cat other }
 		dict incr counts $cat

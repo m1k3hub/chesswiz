@@ -695,10 +695,14 @@ tcltest::test systemone-import-text {the rule-only doctor groups the messages} -
 	set expected [join [list \
 		"Import doctor:" \
 		"  the file's character encoding is wrong (1 message(s)): pick the source's character encoding in the import dialog" \
-		"  some moves could not be played (1 message(s)): the PGN is corrupt, or the game is a variant; check the moves" \
+		"  some moves could not be played (2 message(s)): the PGN is corrupt, or the game is a variant; check the moves" \
 		"  an unclassified problem (1 message(s)): review the messages above"] \n]
 	expr {[::ai::import::Text {InvalidMove EncodingFailed InvalidMove BogusCode}] eq $expected}
 } -result 1
+
+tcltest::test systemone-import-event-type {TWIC's unknown EventType warnings are tag problems, counted per game} -body {
+	::ai::import::Text [lrepeat 3 UnknownEventType]
+} -result "Import doctor:\n  some tag values are malformed (3 message(s)): clean the affected tag values at the source"
 
 tcltest::test systemone-import-diagnose {the classifier answers when a code is unknown} -setup {
 	::scidb::test::s1::start [list [::scidb::test::s1::answer import_diagnosis bad-fen 0.9]]

@@ -43,12 +43,31 @@ variable TempSuffix "927568377322.tmp"
 proc sourceFile {{variant ""}} {
 	set filename [MakeFilename $variant]
 	if {![file readable $filename]} { return 0 }
+	ProvideNamespaces $filename
 	::load::source $filename \
 		-message $::load::mc::ReadingFile(options) \
 		-encoding utf-8 \
 		-throw 1 \
 		;
 	return 1
+}
+
+
+# A saved file can name options of a feature that has since been removed
+# (::gamereview::Options after the Game Review window went): setting them
+# failed with "parent namespace doesn't exist" and the app never started.
+# Create such namespaces so the stale values load harmlessly; the next save
+# writes only the options that are still registered.
+proc ProvideNamespaces {filename} {
+	if {[catch {
+		set fd [open $filename r]
+		fconfigure $fd -encoding utf-8
+		set data [read $fd]
+		close $fd
+	}]} { return }
+	foreach {_ ns} [regexp -all -inline -line {^\s*(?:array\s+)?set\s+(::[A-Za-z0-9_:]+)::[^\s:(]+} $data] {
+		if {![namespace exists $ns]} { namespace eval $ns {} }
+	}
 }
 
 

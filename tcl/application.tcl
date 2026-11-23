@@ -753,6 +753,15 @@ proc RestoreWindowGeometry {app} {
 	} else {
 		::util::place $app -position center
 		set geometry [::util::place::fitWindow $app]
+		# First start: the layout's natural request is small (about 1000x720
+		# on a 1920x1080 screen), which leaves the analysis pane two lines
+		# tall. Start at 80% of the work area when that is larger.
+		lassign [GeometrySize $geometry] gw gh
+		set default [DefaultNormalGeometry $app]
+		lassign [GeometrySize $default] dw dh
+		if {$gw ne "" && $dw > $gw && $dh > $gh} {
+			set geometry [::util::place::fitWindow $app $default]
+		}
 		if {[BelowMinimum? $geometry]} {
 			set geometry [::util::place::fitWindow $app [DefaultNormalGeometry $app]]
 		}

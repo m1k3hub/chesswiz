@@ -574,9 +574,53 @@ Process::puts(mstl::string const& msg)
 }
 
 
+// Closing a pipeline channel detaches its child, and close() drops the pid
+// from the map, so nobody waited for an engine that was stopped: it stayed a
+// zombie until the next pipeline opened. Wait for that pid ourselves, shortly
+// after the kill or the pipe end lands, retrying a few times for a slow exit.
+// A pid Tcl reaped first just fails with ECHILD.
+#ifndef __WIN32__
+struct ReapEntry { pid_t pid; int left; };
+
+static void
+reapChild(ClientData data)
+{
+	ReapEntry* entry = static_cast<ReapEntry*>(data);
+	int status;
+	pid_t rc = waitpid(entry->pid, &status, WNOHANG);
+
+	if (rc == 0 && --entry->left > 0)
+	{
+		Tcl_CreateTimerHandler(500, reapChild, entry);
+		return;
+	}
+
+	delete entry;
+}
+#endif
+
+
+static void
+scheduleReap(long pid)
+{
+#ifndef __WIN32__
+	if (pid > 0)
+	{
+		ReapEntry* entry = new ReapEntry;
+		entry->pid = pid_t(pid);
+		entry->left = 6;
+		Tcl_CreateTimerHandler(50, reapChild, entry);
+	}
+#else
+	(void) pid;
+#endif
+}
+
+
 void
 Process::close()
 {
+	scheduleReap(m_pid);
 	// kill() clears m_pid. Remove the original PID now, before a late
 	// SIGCHLD could find this object after exited() deletes it.
 	m_processMap.erase(m_pid);
@@ -704,6 +748,7 @@ Process::closeHandler(void* clientData)
 {
 	Process* process = reinterpret_cast<Process*>(clientData);
 
+	scheduleReap(process->m_pid);
 	process->m_calledExited = true;
 	process->m_pipeClosed = true;
 	process->exited();

@@ -1715,7 +1715,7 @@ proc ::context::BuildRows {cid menu rows object} {
 			CascadePrefix $id $sub $object
 			BuildRows $cid $sub $subs $object
 			set any [HasRunnableRow $sub]
-			$menu add cascade -label " [L $id] ▸" -menu $sub -state [expr {$any ? "normal" : "disabled"}]
+			$menu add cascade -label " [L $id]" -menu $sub -state [expr {$any ? "normal" : "disabled"}]
 			incr shown
 			continue
 		}
