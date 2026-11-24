@@ -42,13 +42,17 @@ tcltest::test knowledge-clutter-toplevels {a fresh start adds no dialog} -body {
     set extra
 } -result {}
 
-tcltest::test knowledge-clutter-geometry {the default window keeps its G3-b size} -body {
+tcltest::test knowledge-clutter-geometry {the default window keeps its first-start size} -body {
     ::scidb::test::kclutter::ready
     set geometry [wm geometry .application]
     regexp {^(\d+)x(\d+)} $geometry -> width height
-    puts "KNOW-007 geometry: $geometry (G3-b main=1007x718+453+170)"
-    list $width $height
-} -result {1007 718}
+    # First start opens at 80% of the work area (b2dfb4cc6). G3-b measured
+    # 1007x718, the layout's natural size, before the initial layout stopped
+    # shrinking that window (1a7601f5a).
+    set default [::application::DefaultNormalGeometry .application]
+    puts "KNOW-007 geometry: $geometry (default $default)"
+    expr {[list $width $height] eq [::application::GeometrySize $default]}
+} -result 1
 
 tcltest::test knowledge-clutter-no-new-toolbar {no toolbar was added for discovery} -body {
     ::scidb::test::kclutter::ready
