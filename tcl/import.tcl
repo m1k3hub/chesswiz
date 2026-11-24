@@ -1277,7 +1277,13 @@ proc Log {sink arguments} {
 	if {!$Priv(showOnlyEncodingWarnings) || $code eq "EncodingFailed"} {
 		set type [lindex $arguments 0]
 		::${sink}::${type} [makeLog $arguments]
-		update idletasks
+		# A bad file logs thousands of lines; repaint the log at most every
+		# 50 ms instead of once per line.
+		set now [clock milliseconds]
+		if {![::info exists Priv(logPainted)] || $now - $Priv(logPainted) >= 50} {
+			set Priv(logPainted) $now
+			update idletasks
+		}
 	}
 }
 

@@ -138,7 +138,13 @@ proc DoCmd {cmd parent {value 0}} {
 		}
 
 		interrupted? {
-			update idletasks
+			# Repaint at most every 50 ms (idle work cannot deliver a click on
+			# Cancel anyway; the throttled update above does).
+			set now [clock milliseconds]
+			if {![info exists Priv(idlePainted)] || $now - $Priv(idlePainted) >= 50} {
+				set Priv(idlePainted) $now
+				update idletasks
+			}
 			return [::dialog::progressbar::interrupted? .progress]
 		}
 
