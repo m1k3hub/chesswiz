@@ -58,7 +58,8 @@ Not changed (your call):
 - CQL6 -DASSERTIONS (worker AssertPos): only ~5% now; kept as a corruption guard.
 - CQL6 producer still decodes on the Tcl thread (now ~2.5 s/100k). Parallel decoding needs a thread-safe codec per worker (agy-A A2 fix 3); medium/high risk.
 - Engine default threads = cpus-1 (47 here): +1.3 s analysis start and 2x slower stepping while analysing vs 4 threads. A cap trades strength.
-- Pre-existing failures (also on the pre-session build 853489efe): test_app_pane_zoom2.tcl pane-zoom2-user-events (full-file run), test_app_ask.tcl ask-field-present, test_app_board_media_layout.tcl (all 26).
+- Pre-existing failures (also on the pre-session build 853489efe): test_app_pane_zoom2.tcl pane-zoom2-user-events (full-file run), test_app_ask.tcl ask-field-present, test_app_board_media_layout.tcl (all 26), test_app_nlsearch.tcl nls-checkargs, test_app_toolbar_knowledge.tcl knowledge-plain-words-guard, test_app_dropdown.tcl dropdown-fixture-structure, test_app_menu_removed_extras.tcl, test_app_menu_reseal_term22b.tcl (2), test_app_menu_toolset.tcl, test_app_dialog_place.tcl dlg-v14-d-video-stop-regrows-board; test_app_cql6.tcl and test_app_media_stop_state.tcl time out (900 s) on both.
+- Final check on HEAD 32b1f0429: 62 board/media/database/tree/pane/layout/engine/notation/import/search files; the only failures are pre-existing ones above.
 - Figurine leak (agy-B B5): board-pieceset.tcl unregisterFigurines decrements an undeclared BoardSizeDict, so figurine photos are never freed (12 per board size used). Fixing it needs app-board.tcl's register/unregister bookkeeping fixed first (it would unregister a size it just registered). Not changed.
 - Header search / A3 legacy CQL re-parse per game: deliberate (per-game counters); not changed.
 
