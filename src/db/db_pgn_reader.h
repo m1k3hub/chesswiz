@@ -253,6 +253,8 @@ private:
 	unsigned					m_gameNumberInFile;
 	unsigned					m_currentOffset;
 	unsigned					m_lineOffset;
+	uint64_t					m_nextLineOffset;
+	bool						m_haveNextLineOffset;
 	unsigned					m_putback;
 	char						m_putbackBuf[10];
 	mstl::string			m_line;

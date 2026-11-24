@@ -356,6 +356,8 @@ PgnReader::PgnReader(mstl::istream& stream,
 	,m_gameNumberInFile(0)
 	,m_currentOffset(0)
 	,m_lineOffset(0)
+	,m_nextLineOffset(0)
+	,m_haveNextLineOffset(false)
 	,m_putback(0)
 	,m_linePos(0)
 	,m_lineEnd(0)
@@ -1901,10 +1903,23 @@ PgnReader::get(bool allowEndOfInput)
 
 	if (m_lineEnd <= m_linePos)
 	{
-		m_lineOffset = m_stream.tellg();
+		// ftell() costs an lseek() per call; ask the stream once and count
+		// the bytes of each line after that (getline() consumes the line
+		// and its '\n'; only the last line may lack it, and no offset is
+		// taken after the last line).
+		if (!m_haveNextLineOffset)
+		{
+			m_nextLineOffset = m_stream.tellg();
+			m_haveNextLineOffset = m_nextLineOffset != uint64_t(-1);
+		}
+
+		m_lineOffset = m_haveNextLineOffset ? unsigned(m_nextLineOffset) : unsigned(m_stream.tellg());
 
 		if (m_stream.getline(m_line))
 		{
+			if (m_haveNextLineOffset)
+				m_nextLineOffset += m_line.size() + 1;
+
 			m_linePos = m_line.begin();
 			m_lineEnd = m_line.end();
 

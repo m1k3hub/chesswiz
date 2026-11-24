@@ -1,0 +1,29 @@
+# Performance bottleneck log
+
+Started 2026-11-24. Each entry: ID, area, measurement (how), cause, status.
+Tools: docs/perf/wrap.tcl (wraps update/winfo/image/font/wm/... and times
+them per caller; launch `src/tkchesswiz -encoding utf-8 docs/perf/wrap.tcl`,
+dump with `send Chesswiz profdump`, env PROFOUT=file), docs/perf/poll.tcl
+(time-to-mapped probe: `wish docs/perf/poll.tcl $(date +%s%3N)`).
+
+## P1 Startup on the GNOME/Xwayland desktop (:0)
+- Before the 2026-11-24 reboot: >45 s (each X window ~200 ms, degraded gnome-shell). After reboot: main window mapped at 4.8-5.4 s on :0 vs 2.0-2.3 s on Xvfb, same HOME.
+- Plain X round-trip on :0 is 24 us, so not latency. Drawing is ~5x slower on :0: canvas image draw 0.9 ms vs 0.17 ms (Xvfb); semi-transparent photo 2.5 ms vs 0.75 ms (Tk reads the background back with XGetImage to blend alpha; GPU readback under Xwayland/glamor); text 1.4 ms vs 0.28 ms.
+- gdb on _XReply during startup: 2506 synchronous replies: ~620 XGetImage from Tk_RedrawImage (alpha blending: canvas, labels, ttk tileimage), ~600 XSync from `update idletasks`, ~350 XSync from Tk_DeleteErrorHandler inside Xft font loading (Tk_MeasureChars), 256 XAllocColor from Tk_GetImage.
+- Tcl-level (wrap.tcl), :0 vs Xvfb:
+  - `update idletasks` in splash::print ("Opening main window..."): 1.3 s vs 83 ms total. This is the first paint of the whole main window.
+  - switchTab -> RebuildBoard `::update`: 1.4-1.5 s vs 0.44 s (first board tab paint, during Startup2 tab selection).
+  - GenerateTableMinSizeEvent `update idletasks` (app-db-games.tcl:375): 0.63 s vs 0.05 s.
+  - font actual <- getFontFamilyName: 158 ms (26 calls); image create (1234 at load): 105 ms.
+- Status: diagnosed. Levers: paint fewer times during startup (info tab painted, then board tab painted), fewer alpha images redrawn, avoid forced `update` in RebuildBoard / GenerateTableMinSizeEvent.
+
+## Bugs found while driving (not perf)
+- B1 First start: after the language chooser the main window shrinks from the 80% default (1536x864) to the board layout's natural size 1007x718: app-twm.tcl `geometry` (<<TwmGeometry>> {1005 689 605 451 0 0 none}) calls fitWindow+wm geometry. Mid-session language change does not shrink. Undoes b2dfb4cc6's first-start fix.
+
+### P1 follow-up (same day): where the extra :0 time goes
+- App CPU during startup is the same on :0 and Xvfb (2.3 s vs 2.1 s). On :0, Xwayland used 1.35-2.35 s of CPU and gnome-shell used **4.5 s of CPU** during one 14 s startup+settle.
+- Rootful `Xwayland :5 -decorate` + openbox on the same GPU: mapped at 2.5-3.0 s, board tab switch 0.55 s (Xvfb: 2.0-2.3 s / 0.44 s). So glamor/NVIDIA rendering is not the cost. The cost is rootless Xwayland under Mutter (gnome-shell work per X damage/window), which agrees with the earlier memory notes (tk-xwayland-slow-dialogs).
+- X request counts for a startup on :0 (gdb hit counters): XGetImage 375, XPutImage 927, XCreatePixmap 1175, XCopyArea 1890, XFillRectangle 4695, XCreateWindow 750, XSync 1327, XftFontOpenPattern 128.
+- Tried: skip the `update idletasks` in splash::print "Opening main window..." so the first paint happens after map. Worse (mapped 6.7 s vs 5.4 s): painting while withdrawn is cheaper than painting a mapped window under Mutter. Reverted.
+- False lead: the trace-based proc profiler (docs/perf/procprof.tcl) showed ai::provider::parseModels at 8.3 s; it is 36 ms without traces (recursive json procs inflate under execution traces). Use procprof only for call counts.
+- Status: environment-bound. App code can only shave by drawing less; the large lever is the desktop (log out/in to reset gnome-shell, extension bisect outside ddterm, or an Xorg/other compositor session).

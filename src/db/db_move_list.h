@@ -116,7 +116,10 @@ private:
 								bool forDisplay) const;
 
 	unsigned	m_size;
-	Move		m_buffer[Maximum_Moves];
+	// A union member is not default-constructed: only the first m_size
+	// moves are ever read or copied, and zeroing all 522 (4 KB) on every
+	// construction cost ~20% of PGN import (a MoveList per SAN piece move).
+	union { Move m_buffer[Maximum_Moves]; };
 };
 
 typedef MoveBuffer<position::Maximum_Moves>	MoveList;
