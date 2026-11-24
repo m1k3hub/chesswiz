@@ -6,6 +6,12 @@ them per caller; launch `src/tkchesswiz -encoding utf-8 docs/perf/wrap.tcl`,
 dump with `send Chesswiz profdump`, env PROFOUT=file), docs/perf/poll.tcl
 (time-to-mapped probe: `wish docs/perf/poll.tcl $(date +%s%3N)`).
 
+## Summary (end of the 2026-11-24 session)
+- Startup on the desktop is slow mostly because of GNOME: the app uses the same CPU as under Xvfb, while gnome-shell (Mutter, rootless Xwayland) burns ~4.5 s CPU during one start. Same GPU with rootful Xwayland+openbox: 2.5-3.0 s to the window vs 5.4 s. App fixes: one board build at startup instead of two; first-start window size bug fixed.
+- Biggest app wins: CQL 6 search 2.4x (6.3 -> 2.5 s / 108k games), PGN import 2.4x (2.2 -> 0.9 s / 21.8k games, UI path 3.3 -> 1.55 s with the old C++), move stepping 2.2x (31 -> 14 ms/step), header wildcard search 4-10x, engine start -0.65 s.
+- Needs your decision: engine default threads (cpus-1), HTTPS keepalive (20-26 ms UI block per request), assertions policy (full -DNREQ measured), CQL6 parallel decode, figurine leak.
+- Regression check: full app suite on a worktree build, every failure identical on the pre-session build; later changes tested file by file.
+
 ## P1 Startup on the GNOME/Xwayland desktop (:0)
 - Before the 2026-11-24 reboot: >45 s (each X window ~200 ms, degraded gnome-shell). After reboot: main window mapped at 4.8-5.4 s on :0 vs 2.0-2.3 s on Xvfb, same HOME.
 - Plain X round-trip on :0 is 24 us, so not latency. Drawing is ~5x slower on :0: canvas image draw 0.9 ms vs 0.17 ms (Xvfb); semi-transparent photo 2.5 ms vs 0.75 ms (Tk reads the background back with XGetImage to blend alpha; GPU readback under Xwayland/glamor); text 1.4 ms vs 0.28 ms.
@@ -60,3 +66,11 @@ Not changed (your call):
 - Time to main window: current 7.6-8.2 s vs pre-session build 8.4-8.9 s (about -0.7 s). Absolute numbers are higher than at 06:08 (5.4 s) because the machine was loaded (agy runs) and gnome-shell is 7.5 h older (20 frames+map 189 -> 247 ms).
 - Settled (last large repaint done): 11.0-13.9 s vs 13.3-13.8 s; noisy.
 - Regression sweep: all 361 app test files (minus dialog_place/reachability) on a worktree build of cadd15bdb; the 11 files with failures fail identically on the pre-session build 853489efe (2 time out on both). Later commits were tested file by file.
+
+## P2 Game load from the list (found 2026-11-24, after the agy reports)
+- ::game::new + update for a plain game from a 108,850-game base: ~130 ms on Xvfb (8 loads). Per load: pgn::add 33 ms (gamebar entry + game::switch callbacks that render notation/board), MediaDestroy 32 ms + besideSettle 32 ms (also on close), Jev offer ranking 26 ms, game::switch 22 ms.
+- Fixed: media Stop ran a full beside-dialog re-plan on every game switch even with no player and no inset (mediainset::hide now reports whether it hid anything). ~130 -> ~117 ms per load.
+- Not changed: every HTTPS connection blocks the Tcl thread ~20-26 ms in tls::socket (OpenSSL context + CA store per connection; plain TCP is 0.8 ms; -cafile/-cadir don't help). ai::provider::request uses -keepalive 0 deliberately; reusing connections (keepalive) would remove it for the Jev offer ranking that runs on every game load. Network-behaviour change, left for you.
+- Idle (C1): 60 s idle on the Board tab with a 100k base open: 130 ms CPU (0.2%), one 1 Hz timer (displayWatch). Fine.
+- Memory (C2): 50 game loads, 50 tab switches, 10 open/close of a 100k base, 8 resizes: RSS 358 -> 367 MB; images +104, all created once on first use (no growth in later rounds); widgets and timers flat. No leak found besides the figurine one noted above.
+- agy area C stalled (a hung shell command) and was stopped; C1/C2 above were measured here instead.

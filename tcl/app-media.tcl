@@ -1772,8 +1772,12 @@ proc application::media::MediaDestroy {} {
 	# and delayed the re-plan that follows Stop. The stop now only asks mpv
 	# to quit; it finishes on its own threads (VAL-TST-004).
 	try {
-		::mediainset::hide
-		if {[llength [info commands ::util::place::besideSettle]]} {
+		set hidden [::mediainset::hide]
+		# Every game switch stops the media; with no player and no inset
+		# there is nothing to re-plan (~30 ms per game load).
+		if {($hidden eq "" || $hidden
+			|| ([info exists Priv(inprocess)] && $Priv(inprocess)))
+			&& [llength [info commands ::util::place::besideSettle]]} {
 			::util::place::besideSettle
 		}
 	} finally {

@@ -200,6 +200,7 @@ proc ::mediainset::Show {} {
 }
 
 
+# Returns 1 when something was shown and is now hidden, else 0.
 proc ::mediainset::hide {} {
 	variable Collapsed
 	set Collapsed 0
@@ -219,7 +220,7 @@ proc ::mediainset::hide {} {
 		&& ($::application::board::ReservePixels == 0
 			|| $::application::board::ReserveKind eq "dialog")} {
 		Unwatch
-		return
+		return 0
 	}
 
 	set pane [Pane]
@@ -237,7 +238,7 @@ proc ::mediainset::hide {} {
 		set ::application::board::ReserveSide {}
 		set ::application::board::ReservePixels 0
 		set ::application::board::ReserveKind auto
-		return
+		return 1
 	}
 	::application::board::setReserve {} 0
 	FrameView 0
@@ -252,6 +253,7 @@ proc ::mediainset::hide {} {
 	if {[llength [info commands ::util::place::besideVideoChanged]]} {
 		catch { ::util::place::besideVideoChanged 1 }
 	}
+	return 1
 }
 
 
