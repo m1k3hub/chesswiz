@@ -1401,12 +1401,19 @@ proc focuszoom::windowResized {twm} {
 
 # Same traversal as twm::ZoomSashes; session-only, never part of the layout.
 proc focuszoom::Snapshot {twm} {
+	# Runs on every move step (reflow::rememberExpanded). A twm keeps its
+	# panedwindows as direct children (panes are managed, not reparented);
+	# floating windows are toplevels that may hold more. Walking every
+	# content widget (~400) cost ~3.7 ms per call.
 	set result {}
 	set queue [winfo children $twm]
 	while {[llength $queue]} {
 		set queue [lassign $queue w]
-		lappend queue {*}[winfo children $w]
-		if {![string match *Panedwindow [winfo class $w]]} { continue }
+		set class [winfo class $w]
+		if {![string match *Panedwindow $class]} {
+			if {[winfo toplevel $w] eq $w} { lappend queue {*}[winfo children $w] }
+			continue
+		}
 		set coords {}
 		for {set i 0} {$i < [llength [$w panes]] - 1} {incr i} {
 			lappend coords [$w sash coord $i]

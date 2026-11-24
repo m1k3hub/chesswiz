@@ -563,10 +563,21 @@ proc getPath {w} {
 }
 
 
+# Snap the view to a whole line once the pending scroll has been laid out.
+# Called on every move step: coalesce into one idle callback per widget
+# instead of a synchronous update idletasks (a full layout+paint) per step.
 proc adjustLinePosition {w} {
-	update idletasks
-	set sb [winfo parent $w].sb
-	::widget::textLineScroll $w moveto [lindex [$sb get] 0]
+	variable AdjustPending
+	if {[info exists AdjustPending($w)]} { return }
+	set AdjustPending($w) [after idle [namespace code [list AdjustLinePosition $w]]]
+}
+
+
+proc AdjustLinePosition {w} {
+	variable AdjustPending
+	unset -nocomplain AdjustPending($w)
+	if {![winfo exists $w]} { return }
+	::widget::textLineScroll $w moveto [lindex [$w yview] 0]
 }
 
 

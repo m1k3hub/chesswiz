@@ -2337,7 +2337,11 @@ proc UpdatePinState {tree} {
 
 	if {![info exists Vars(widget:button:pin)]} { return }
 	set state [expr {[llength [BestLine $tree]] ? "normal" : "disabled"}]
-	::toolbar::childconfigure $Vars(widget:button:pin) -state $state
+	# Runs on every PV update: configure only on a change.
+	set pin $Vars(widget:button:pin)
+	if {[catch {::toolbar::childcget $pin -state} current] || $current ne $state} {
+		::toolbar::childconfigure $pin -state $state
+	}
 }
 
 

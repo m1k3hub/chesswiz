@@ -462,7 +462,12 @@ proc childconfigure {w args} {
 		SetupTooltips $w
 		if {"-state" in $args} { Tooltip hide $w }
 	}
-	RefreshRegistryLabels
+	# A state change (8x per move step) can only have changed this button's
+	# label (a toggle sets its tooltip variable, then configures the button).
+	set labelKeys {-tooltip -tooltipvar -text -textvariable}
+	set all 0
+	foreach {key val} $args { if {$key in $labelKeys} { set all 1 } }
+	if {$all} { RefreshRegistryLabels } else { RefreshRegistryLabels $w }
 }
 
 
@@ -980,12 +985,15 @@ proc ::toolbar::RegistryCommand {toolbar w command {label ""}} {
 
 # Resolve the native tooltip after mc has finished updating derived variables.
 # Some tooltips are replaced at runtime (start/stop, enable/disable).
-proc ::toolbar::RefreshRegistryLabels {} {
+proc ::toolbar::RefreshRegistryLabels {{only {}}} {
 	variable Specs
 	set changed 0
-	foreach children [array names Specs children:*] {
+	set pattern children:*
+	if {$only ne ""} { set pattern children:[winfo parent $only] }
+	foreach children [array names Specs $pattern] {
 		set toolbar [string range $children 9 end]
 		foreach w $Specs($children) {
+			if {$only ne "" && $w ne $only} { continue }
 			set key registry:$w:$toolbar
 			if {![info exists Specs($key)] || ![winfo exists $w]} { continue }
 			set label ""
@@ -996,9 +1004,21 @@ proc ::toolbar::RefreshRegistryLabels {} {
 				set label $Specs(tooltip:$w:$toolbar)
 			}
 			if {$label eq ""} { catch {set label [$w cget -text]} }
-			if {$label ne "" && [dict exists $::action::Registry $Specs($key)]} {
-				dict set ::action::Registry $Specs($key) label [::action::plainText [string trim $label]]
-				set changed 1
+			# Called on every childconfigure (8x per move step): convert and
+			# publish only labels that changed since the last refresh.
+			set id $Specs($key)
+			if {[info exists Specs(rawlabel:$key)] && $Specs(rawlabel:$key) eq $label
+				&& [dict exists $::action::Registry $id label]
+				&& [dict get $::action::Registry $id label] eq $Specs(plainlabel:$key)} { continue }
+			if {$label ne "" && [dict exists $::action::Registry $id]} {
+				set plain [::action::plainText [string trim $label]]
+				set Specs(rawlabel:$key) $label
+				set Specs(plainlabel:$key) $plain
+				if {![dict exists $::action::Registry $id label]
+					|| [dict get $::action::Registry $id label] ne $plain} {
+					dict set ::action::Registry $id label $plain
+					set changed 1
+				}
 			}
 		}
 	}
