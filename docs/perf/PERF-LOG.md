@@ -55,3 +55,8 @@ Not changed (your call):
 - Pre-existing failures (also on the pre-session build 853489efe): test_app_pane_zoom2.tcl pane-zoom2-user-events (full-file run), test_app_ask.tcl ask-field-present, test_app_board_media_layout.tcl (all 26).
 - Figurine leak (agy-B B5): board-pieceset.tcl unregisterFigurines decrements an undeclared BoardSizeDict, so figurine photos are never freed (12 per board size used). Fixing it needs app-board.tcl's register/unregister bookkeeping fixed first (it would unregister a size it just registered). Not changed.
 - Header search / A3 legacy CQL re-parse per game: deliberate (per-game counters); not changed.
+
+### P1 re-measure after the fixes (08:45, desktop :0, real HOME, interleaved)
+- Time to main window: current 7.6-8.2 s vs pre-session build 8.4-8.9 s (about -0.7 s). Absolute numbers are higher than at 06:08 (5.4 s) because the machine was loaded (agy runs) and gnome-shell is 7.5 h older (20 frames+map 189 -> 247 ms).
+- Settled (last large repaint done): 11.0-13.9 s vs 13.3-13.8 s; noisy.
+- Regression sweep: all 361 app test files (minus dialog_place/reachability) on a worktree build of cadd15bdb; the 11 files with failures fail identically on the pre-session build 853489efe (2 time out on both). Later commits were tested file by file.
