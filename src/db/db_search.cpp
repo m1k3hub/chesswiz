@@ -273,27 +273,13 @@ SearchPosition::match(GameInfo const& info) const
 bool
 SearchPlayerName::match(GameInfo const& info) const
 {
-	char const* white = info.playerName(color::White);
-	char const* black = info.playerName(color::Black);
-
-	if (m_exact)
-	{
-		switch (m_mode)
-		{
-			case White: return ::strcasecmp(white, m_name.content()) == 0;
-			case Black: return ::strcasecmp(black, m_name.content()) == 0;
-			case Any:   return ::strcasecmp(white, m_name.content()) == 0
-							 || ::strcasecmp(black, m_name.content()) == 0;
-		}
-	}
-
 	switch (m_mode)
 	{
-		case White: return m_name.match(white);
-		case Black: return m_name.match(black);
+		case White: return m_memo.match(m_name, m_exact, info.playerName(color::White));
+		case Black: return m_memo.match(m_name, m_exact, info.playerName(color::Black));
 		case Any:
-			return	m_name.match(white)
-				||	m_name.match(black);
+			return	m_memo.match(m_name, m_exact, info.playerName(color::White))
+				||	m_memo.match(m_name, m_exact, info.playerName(color::Black));
 	}
 
 	return false;
@@ -303,27 +289,21 @@ SearchPlayerName::match(GameInfo const& info) const
 bool
 SearchEventName::match(GameInfo const& info) const
 {
-	if (m_exact)
-		return ::strcasecmp(info.event(), m_name.content()) == 0;
-	return m_name.match(info.event());
+	return m_memo.match(m_name, m_exact, info.event());
 }
 
 
 bool
 SearchSiteName::match(GameInfo const& info) const
 {
-	if (m_exact)
-		return ::strcasecmp(info.site(), m_name.content()) == 0;
-	return m_name.match(info.site());
+	return m_memo.match(m_name, m_exact, info.site());
 }
 
 
 bool
 SearchAnnotatorName::match(GameInfo const& info) const
 {
-	if (m_exact)
-		return ::strcasecmp(info.annotator(), m_name.content()) == 0;
-	return m_name.match(info.annotator());
+	return m_memo.match(m_name, m_exact, info.annotator());
 }
 
 

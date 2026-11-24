@@ -38,6 +38,9 @@
 #include "m_ref_counted_ptr.h"
 #include "m_vector.h"
 
+#include <unordered_map>
+#include <strings.h>
+
 namespace db {
 
 class Database;
@@ -184,6 +187,32 @@ private:
 	uint16_t m_idn;
 };
 
+// Glob results per name-table entry. A name is stored once and every game
+// refers to that entry, so a search over N games needs one glob match per
+// distinct name instead of one per game (and side). Searches run on one
+// thread; the memo lives as long as the Search object.
+class NameMatchMemo
+{
+public:
+
+	bool match(util::Pattern const& pattern, bool exact, mstl::string const& name) const
+	{
+		// An exact name is a plain strcasecmp, cheaper than the lookup.
+		if (exact)
+			return ::strcasecmp(name.c_str(), pattern.content().c_str()) == 0;
+		auto i = m_cache.find(&name);
+		if (i != m_cache.end())
+			return i->second;
+		bool result = pattern.match(name);
+		m_cache.emplace(&name, result);
+		return result;
+	}
+
+private:
+
+	mutable std::unordered_map<mstl::string const*, bool> m_cache;
+};
+
 class SearchPlayerName : public Search
 {
 public:
@@ -204,6 +233,7 @@ private:
 	Mode m_mode;
 	bool m_exact;
 	util::Pattern m_name;
+	NameMatchMemo m_memo;
 };
 
 class SearchEventName : public Search
@@ -218,6 +248,7 @@ private:
 
 	bool m_exact;
 	util::Pattern m_name;
+	NameMatchMemo m_memo;
 };
 
 class SearchSiteName : public Search
@@ -232,6 +263,7 @@ private:
 
 	bool m_exact;
 	util::Pattern m_name;
+	NameMatchMemo m_memo;
 };
 
 class SearchAnnotatorName : public Search
@@ -246,6 +278,7 @@ private:
 
 	bool m_exact;
 	util::Pattern m_name;
+	NameMatchMemo m_memo;
 };
 
 class SearchEco : public Search
