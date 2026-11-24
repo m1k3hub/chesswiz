@@ -707,6 +707,9 @@ proc locked? {gamebar id} {
 
 proc unlocked? {gamebar id} {
 	variable Specs
+	# The scratch position (no game open) has no tab, so nothing is unlocked:
+	# Load Game Number failed here when no game was open.
+	if {![info exists Specs(state:$id:$gamebar)]} { return 0 }
 	return [expr {$Specs(state:$id:$gamebar) eq "unlocked"}]
 }
 

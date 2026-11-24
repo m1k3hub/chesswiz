@@ -482,7 +482,7 @@ proc ::menu::DefineTree {} {
 			[list cascade Explain "" [list \
 				[list cmd menu.analysis.explain.position ExplainPosition "" {::menu::ModulePresent ai}] \
 				[list cmd menu.analysis.explain.line ExplainLine "" {::menu::ModulePresent ai}] \
-				[list cmd menu.analysis.explain.move ExplainMove "" {::menu::ModulePresent ai}] \
+				[list cmd menu.analysis.explain.move ExplainMove "" {::menu::ModulePresent ai} ::menu::HasCurrentMove] \
 				[list cmd menu.analysis.explain.comment ExplainComment "" {::menu::ModulePresent ai}] \
 			]] \
 			[list cmd menu.analysis.annotate AnnotateGameWithAI "" {::menu::ModulePresent annotate}] \
@@ -1122,6 +1122,15 @@ proc ::menu::DbWritable {} {
 proc ::menu::EngineRunning {} {
 	if {[catch { set running [::application::analysis::Running] }]} { return 0 }
 	return [expr {[llength $running] ? 1 : 0}]
+}
+# Explain > Move needs a move: at the start of a game there is none.
+proc ::menu::HasCurrentMove {} {
+	if {![ModulePresent ai]} { return 0 }
+	set pos [::scidb::game::current]
+	if {![info exists ::application::pgn::Vars(current:$pos)]} { return 0 }
+	set key [set ::application::pgn::Vars(current:$pos)]
+	if {$key eq "" || [catch { ::scidb::game::query move $key } san]} { return 0 }
+	return [expr {$san ne ""}]
 }
 proc ::menu::GameOver {} {
 	if {[catch { ::scidb::game::query over } over]} { return 0 }

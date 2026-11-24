@@ -233,7 +233,8 @@ proc open {twm id layoutVariant layoutName} {
 	grid columnconfigure $rt {1} -minsize [expr {$(width) + $padding}]
 	grid rowconfigure $rt {1} -minsize [expr {$(height) + $padding}]
 
-	set title [set [namespace parent]::twm::mc::ManageLayouts]
+	# the menu label ends in an ellipsis; a window title does not
+	set title [regsub {(\.\.\.|…)$} [set [namespace parent]::twm::mc::ManageLayouts] ""]
 	if {$layoutVariant ne "normal"} {
 		append title " \[$::mc::VariantName([[namespace parent]::twm::toVariant $layoutVariant])\]"
 	}

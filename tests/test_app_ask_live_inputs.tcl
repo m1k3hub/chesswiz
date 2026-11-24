@@ -29,7 +29,7 @@ foreach {variable id value} {
 
 foreach {kind command id} {
     module ::ai::brief::ask menu.training.brief
-    alias ::application::ai::explainSelection menu.analysis.explain.move
+    alias ::application::ai::explainLine menu.analysis.explain.line
 } {
     tcltest::test ask-live-command-$kind {actual module and alias entry points update warm rows} -setup {
         ::application::ai::configure -provider stub -model {}
