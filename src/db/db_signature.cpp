@@ -55,6 +55,13 @@ __attribute__((init_priority(65534)))
 #endif
 Hash pawnStructureHash;
 
+// The same set as a flat bitset: a key is 4*BitLength = 20 bits, so 2^20
+// bits (128 KB) hold every key. Tree searches query it four times per
+// game; the chained hash (1.5 MB) missed the L2 cache on most lookups.
+enum { PawnKeyBits = 4*BitLength };
+static uint64_t pawnStructureBits[(1u << PawnKeyBits)/64];
+static bool usePawnStructureBits = false;
+
 static void
 #if __GNUC_PREREQ(4,7) // internal compiler error
 __attribute__((constructor(65535)))
@@ -112,6 +119,9 @@ isReachablePawnStructure(uint32_t hash)
 		return true;
 
 #ifdef USE_HASH
+
+	if (__builtin_expect(::usePawnStructureBits, 1))
+		return hash < (1u << PawnKeyBits) && (::pawnStructureBits[hash >> 6] >> (hash & 63)) & 1;
 
 	return ::pawnStructureHash.has_key(hash);
 
@@ -247,8 +257,21 @@ Signature::initialize()
 
 	::pawnStructureHash.rebuild(unsigned((U_NUMBER_OF(PawnProgressTable))*(250.0/Hash::Load)));
 
+	bool fits = true;
+
 	for (unsigned i = 0; i < U_NUMBER_OF(PawnProgressTable); ++i)
-		::pawnStructureHash.insert_unique(PawnProgressTable[i], true);
+	{
+		uint32_t key = PawnProgressTable[i];
+
+		::pawnStructureHash.insert_unique(key, true);
+
+		if (key < (1u << PawnKeyBits))
+			::pawnStructureBits[key >> 6] |= uint64_t(1) << (key & 63);
+		else
+			fits = false;
+	}
+
+	::usePawnStructureBits = fits;
 
 //	::fprintf(stderr, "collisions: %u\n", pawnStructureHash.count_collisions());
 //	::fprintf(stderr, "max. bucket length: %u\n", pawnStructureHash.max_bucket_length());
