@@ -1580,6 +1580,14 @@ proc RebuildBoard {canv width height {force false}} {
 		# Service input/timers before the bounded rendering batch. Draining
 		# only idle work can chain multiple Windows paints without a tick.
 		if {[winfo exists .application] && [winfo ismapped .application]} { ::update }
+		# The update can deliver a newer size (a pane opened with the tab
+		# resizes the board). Build that one instead of the stale size and
+		# rebuilding right after.
+		if {[info exists PendingRebuild] && [lindex $PendingRebuild 0] eq $canv} {
+			lassign $PendingRebuild canv width height pendingForce
+			set force [expr {$force || $pendingForce}]
+			unset PendingRebuild
+		}
 		RebuildBoardNow $canv $width $height $force
 	} finally {
 		set Rebuilding 0
