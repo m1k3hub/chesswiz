@@ -2200,6 +2200,19 @@ proc ComputeCoordFont {w size} {
 	if {$Dim(fontsize) == $size} { return $Dim(font) }
 	set delta [expr {min(6, int(($size - 10)/3.0 + 0.5) + 2)}]
 	set Dim(fontsize) $size
+	# The search below loads and measures fonts (~25 ms per board resize);
+	# its result depends only on these inputs.
+	variable CoordFontCache
+	set key [list $Defaults(coords-font-family) $size $Dim(offset) [tk scaling]]
+	if {[info exists CoordFontCache($key)]} { return [set Dim(font) $CoordFontCache($key)] }
+	set Dim(font) [ComputeCoordFontSearch $w $size $delta]
+	return [set CoordFontCache($key) $Dim(font)]
+}
+
+
+proc ComputeCoordFontSearch {w size delta} {
+	variable Defaults
+	variable Dim
 
 	while {$size >= 6} {
 		set Dim(font) [list $Defaults(coords-font-family) $size]

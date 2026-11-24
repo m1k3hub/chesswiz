@@ -74,3 +74,5 @@ Not changed (your call):
 - Idle (C1): 60 s idle on the Board tab with a 100k base open: 130 ms CPU (0.2%), one 1 Hz timer (displayWatch). Fine.
 - Memory (C2): 50 game loads, 50 tab switches, 10 open/close of a 100k base, 8 resizes: RSS 358 -> 367 MB; images +104, all created once on first use (no growth in later rounds); widgets and timers flat. No leak found besides the figurine one noted above.
 - agy area C stalled (a hung shell command) and was stopped; C1/C2 above were measured here instead.
+- Figurine leak measured: 40 distinct window sizes add 48 figurine photos and ~1 MB RSS; repeats add nothing. Bounded by distinct sizes; left as noted.
+- B5 board resize: coordinate-font search memoised (family, size, border offset, tk scaling): 127-130 -> 120-123 ms per resize between cached sizes (Xvfb).
