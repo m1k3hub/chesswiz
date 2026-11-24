@@ -1793,10 +1793,14 @@ proc SortColumn {path id dir {rating {}}} {
 	variable ${path}::Vars
 	variable ${path}::Options
 
-	::widget::busyCursor on
 	set base [::scrolledtable::base $path]
 	set variant [::scrolledtable::variant $path]
 	set view [{*}$Vars(viewcmd) $base $variant]
+	# The busy cursor forces two repaints (~70 ms); a sort of fewer than
+	# 250,000 games finishes sooner than that.
+	set busy 1
+	catch { set busy [expr {[::scidb::view::count games $base $variant $view] >= 250000}] }
+	if {$busy} { ::widget::busyCursor on }
 	if {[string length $rating]} {
 		set ratings [list $rating $rating]
 	} else {
@@ -1825,7 +1829,7 @@ proc SortColumn {path id dir {rating {}}} {
 	if {$selection >= 0} {
 		set selection [::scidb::db::get gameIndex $number $view $base $variant]
 	}
-	::widget::busyCursor off
+	if {$busy} { ::widget::busyCursor off }
 	::scrolledtable::updateColumn $path $selection $see
 }
 
