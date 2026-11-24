@@ -27,3 +27,22 @@ dump with `send Chesswiz profdump`, env PROFOUT=file), docs/perf/poll.tcl
 - Tried: skip the `update idletasks` in splash::print "Opening main window..." so the first paint happens after map. Worse (mapped 6.7 s vs 5.4 s): painting while withdrawn is cheaper than painting a mapped window under Mutter. Reverted.
 - False lead: the trace-based proc profiler (docs/perf/procprof.tcl) showed ai::provider::parseModels at 8.3 s; it is 36 ms without traces (recursive json procs inflate under execution traces). Use procprof only for call counts.
 - Status: environment-bound. App code can only shave by drawing less; the large lever is the desktop (log out/in to reset gnome-shell, extension bisect outside ddterm, or an Xorg/other compositor session).
+
+## Fix status (2026-11-24, unattended session)
+Area reports: docs/perf/agy-A.md (database), docs/perf/agy-B.md (interactive GUI), by agy / Gemini 4 Neon. Every fix below was re-measured here (Xvfb, 3 runs) before commit.
+
+| ID | Fix | Before -> after | Commit |
+|---|---|---|---|
+| B1 (bug) | first start: initial layout no longer shrinks the 80% window | 1007x718 -> 1536x864 | 1a7601f5a |
+| A1 | PGN reader: no ftell/lseek per line; MoveList not zero-filled | import 21.8k games 2216 -> 1290 ms | 0ea259923 |
+| A1 | import log/progress repaint throttled to 50 ms | UI import 3.3 s -> 1.55 s | 1732123e4 |
+| A2/A8 | per-move isValidMove re-checks only with -DM_SLOW_CHECKS | CQL6 100k 6.3 -> 2.5 s; import 1.33 -> 0.91 s | 6fa64ea94 |
+| B1 | stepping: toolbar label refresh, focuszoom snapshot, line snap, pin | 31 -> 14 ms/step | e47013f34 |
+| B2 | UCI: skip options still at the engine default | first PV 1.50 -> 0.86 s (1T), 2.82 -> 2.13 s (47T) | 2b36e8d0c |
+
+Not changed (your call):
+- Assertions stay on for the beta (configure). A full -DNREQ build measured: import 0.80 s, CQL6 2.6 s, i.e. the six slow checks above were nearly all of the cost.
+- CQL6 -DASSERTIONS (worker AssertPos): only ~5% now; kept as a corruption guard.
+- CQL6 producer still decodes on the Tcl thread (now ~2.5 s/100k). Parallel decoding needs a thread-safe codec per worker (agy-A A2 fix 3); medium/high risk.
+- Engine default threads = cpus-1 (47 here): +1.3 s analysis start and 2x slower stepping while analysing vs 4 threads. A cap trades strength.
+- Pre-existing failure: test_app_pane_zoom2.tcl pane-zoom2-user-events fails in a full-file run with or without these changes (passes alone).

@@ -400,7 +400,8 @@ proc refresh {{regardFontSize no}} {
 	for {set i 0} {$i < 9} {incr i} {
 		::pgn::setup::setupStyle editor $i
 		::pgn::setup::configureText $Vars(frame:$i)
-		::scidb::game::refresh $i
+		# The active game is laid out once, below, when the font size counts.
+		if {!$regardFontSize || $i != $Vars(index)} { ::scidb::game::refresh $i }
 	}
 
 	set Vars(charwidth) [font measure [$Vars(pgn:0) cget -font] "0"]
