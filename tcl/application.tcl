@@ -761,6 +761,7 @@ proc RestoreWindowGeometry {app} {
 		lassign [GeometrySize $default] dw dh
 		if {$gw ne "" && $dw > $gw && $dh > $gh} {
 			set geometry [::util::place::fitWindow $app $default]
+			set Vars(window:defaultSize) 1
 		}
 		if {[BelowMinimum? $geometry]} {
 			set geometry [::util::place::fitWindow $app [DefaultNormalGeometry $app]]

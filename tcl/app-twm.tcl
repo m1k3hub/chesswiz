@@ -427,7 +427,17 @@ proc geometry {{data {}}} {
 		# A later layout resize must validate the position against its NEW size,
 		# including while withdrawn. Never rely on stale winfo dimensions.
 		if {[wm state .application] eq "zoomed"} { return }
-		regexp {^[0-9]+x[0-9]+(.*)$} [wm geometry .application] -> position
+		regexp {^([0-9]+)x([0-9]+)(.*)$} [wm geometry .application] -> curW curH position
+		# First start sized the window to 80% of the work area. The initial
+		# layout's natural request is smaller; it must not shrink that window
+		# (it may still grow it). A layout the user loads clears the flag.
+		if {[info exists Vars(window:defaultSize)] && $Vars(window:defaultSize)} {
+			set width [expr {max($width, $curW)}]
+			set height [expr {max($height, $curH)}]
+			if {$maxwidth}  { set width [expr {min($width, $maxwidth)}] }
+			if {$maxheight} { set height [expr {min($height, $maxheight)}] }
+			set geometry ${width}x${height}
+		}
 		set geometry [::util::place::fitWindow .application "${geometry}${position}"]
 	}
 
@@ -1281,6 +1291,8 @@ proc LoadLayout {twm layoutVariant name mode {initial false}} {
 	variable Options
 
 	if {[string length $name] == 0} { return false }
+	# A layout the user loads may size the window again.
+	if {!$initial} { set Vars(window:defaultSize) 0 }
 
 	set id $Vars($twm:id)
 	set file [makeFilename $id $layoutVariant $name]
