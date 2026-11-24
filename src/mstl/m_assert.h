@@ -51,6 +51,18 @@ struct assertion_failure_exception : public exception
 
 #endif
 
+// Checks that re-validate a move with full legal-move generation (and
+// isIntoCheck) for every decoded, exported or printed move. They cost more
+// than the decoding itself (CQL 6 search 6.3 s -> ~3 s, PGN import -25% on a
+// 100k-game base), so they run only in builds with -DM_SLOW_CHECKS.
+#if defined(NREQ) || !defined(M_SLOW_CHECKS)
+# define M_REQUIRE_SLOW(expr)
+# define M_ASSERT_SLOW(expr)
+#else
+# define M_REQUIRE_SLOW(expr)	M_REQUIRE(expr)
+# define M_ASSERT_SLOW(expr)	M_ASSERT(expr)
+#endif
+
 } // namespace mstl
 
 #endif // _mstl_assert_included

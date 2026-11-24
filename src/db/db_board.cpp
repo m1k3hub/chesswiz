@@ -1351,7 +1351,7 @@ Board::removeIllegalTo(Move move, uint64_t& b, variant::Type variant) const
 Move&
 Board::prepareForPrint(Move& move, variant::Type variant, Representation representation) const
 {
-	M_REQUIRE(isValidMove(move, variant, move::AllowIllegalMove));
+	M_REQUIRE_SLOW(isValidMove(move, variant, move::AllowIllegalMove));
 
 	if (!move.isPrintable())
 	{

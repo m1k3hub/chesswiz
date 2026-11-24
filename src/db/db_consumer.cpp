@@ -472,7 +472,7 @@ Consumer::putMove(Move const& move,
 						Comment const& comment,
 						MarkSet const& marks)
 {
-	M_REQUIRE(terminated() || board().isValidMove(move, m_useVariant));
+	M_REQUIRE_SLOW(terminated() || board().isValidMove(move, m_useVariant));
 
 	if (m_terminated)
 		return;
@@ -520,7 +520,7 @@ Consumer::putMove(Move const& move,
 void
 Consumer::putMove(Move const& move)
 {
-	M_REQUIRE(terminated() || board().isValidMove(move, m_useVariant));
+	M_REQUIRE_SLOW(terminated() || board().isValidMove(move, m_useVariant));
 
 	if (m_terminated)
 		return;

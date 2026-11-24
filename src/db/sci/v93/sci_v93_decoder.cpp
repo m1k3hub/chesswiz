@@ -365,7 +365,7 @@ Decoder::decodeMove(Byte value, Move& move)
 
 	board.prepareUndo(move);
 	move.setColor(board.sideToMove());
-	M_ASSERT(board.isValidMove(move, m_variant));
+	M_ASSERT_SLOW(board.isValidMove(move, m_variant));
 	move.setLegalMove();
 	board.doMove(move, m_variant);
 
