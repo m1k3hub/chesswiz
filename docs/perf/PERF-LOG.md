@@ -39,10 +39,19 @@ Area reports: docs/perf/agy-A.md (database), docs/perf/agy-B.md (interactive GUI
 | A2/A8 | per-move isValidMove re-checks only with -DM_SLOW_CHECKS | CQL6 100k 6.3 -> 2.5 s; import 1.33 -> 0.91 s | 6fa64ea94 |
 | B1 | stepping: toolbar label refresh, focuszoom snapshot, line snap, pin | 31 -> 14 ms/step | e47013f34 |
 | B2 | UCI: skip options still at the engine default | first PV 1.50 -> 0.86 s (1T), 2.82 -> 2.13 s (47T) | 2b36e8d0c |
+| B3 | notation: active game laid out once on font/style refresh | pgn::refresh 1: 570 -> 330 ms (300-move annotated game) | 1213eef1f |
+| B6 | notation setup dialog: unchanged Cancel skips relayout | Cancel 1.1 s -> 0.4 s | 8bb34421b |
+| B7 | assistant pane: no layout reload when already beside the board | re-show ~380 -> ~260 ms | aaf7f5b3e |
+| A6 | header search: glob memo per name-table entry | player *sen* 78 -> 21 ms, event 33 -> 3 ms (108k) | cadd15bdb |
+| A4 | game list sort: busy cursor only for 250k+ views | sort clicks -55 ms (e.g. 143 -> 91 ms, 108k) | 280373a04 |
+| A5 | tree: pawn-structure set as 128 KB bitset | 12 cold searches 544k: ~1.27 -> ~1.20 s | 896e1c283 |
+| P1 | startup: board built once (stale size dropped) | one board/piece build instead of two | da01dc831 |
 
 Not changed (your call):
 - Assertions stay on for the beta (configure). A full -DNREQ build measured: import 0.80 s, CQL6 2.6 s, i.e. the six slow checks above were nearly all of the cost.
 - CQL6 -DASSERTIONS (worker AssertPos): only ~5% now; kept as a corruption guard.
 - CQL6 producer still decodes on the Tcl thread (now ~2.5 s/100k). Parallel decoding needs a thread-safe codec per worker (agy-A A2 fix 3); medium/high risk.
 - Engine default threads = cpus-1 (47 here): +1.3 s analysis start and 2x slower stepping while analysing vs 4 threads. A cap trades strength.
-- Pre-existing failure: test_app_pane_zoom2.tcl pane-zoom2-user-events fails in a full-file run with or without these changes (passes alone).
+- Pre-existing failures (also on the pre-session build 853489efe): test_app_pane_zoom2.tcl pane-zoom2-user-events (full-file run), test_app_ask.tcl ask-field-present, test_app_board_media_layout.tcl (all 26).
+- Figurine leak (agy-B B5): board-pieceset.tcl unregisterFigurines decrements an undeclared BoardSizeDict, so figurine photos are never freed (12 per board size used). Fixing it needs app-board.tcl's register/unregister bookkeeping fixed first (it would unregister a size it just registered). Not changed.
+- Header search / A3 legacy CQL re-parse per game: deliberate (per-game counters); not changed.
