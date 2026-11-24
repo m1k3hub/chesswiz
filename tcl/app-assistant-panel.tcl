@@ -320,9 +320,13 @@ proc ::application::assistant::panel::PlaceBesideBoard {twm} {
 	if {![llength $Stash]} { return }
 	set children [MapLayout $children insert]
 	if {!$Placed} { return }
-	set layout [list $root $attrs $children]
-	catch { $twm load $layout }
-	update idletasks
+	set placed [list $root $attrs $children]
+	# Already beside the board (the idle second call, a repeated Show):
+	# reloading the same layout rebuilds every pane and the board.
+	if {$placed ne $layout} {
+		catch { $twm load $placed }
+		update idletasks
+	}
 	catch { ::application::openPane assistant false }
 	return
 }
