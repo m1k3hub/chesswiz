@@ -1248,7 +1248,8 @@ proc ConfigureEditor {} {
 	::scidb::game::release 10
 	::scidb::game::switch $position
 	::scidb::tree::freeze 0
-	refresh
+	# An unchanged Cancel leaves every notation pane as it was.
+	if {[::pgn::setup::dialogChanged?]} { refresh }
 
 	set Vars(current:$position) ""
 	ProcessGoto $position [::scidb::game::position key] $Vars(successor:$position)

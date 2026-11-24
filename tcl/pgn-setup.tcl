@@ -596,6 +596,7 @@ proc openSetupDialog {parent context position args} {
 	variable Recent
 
 	::font::copyFonts $context setup
+	set [namespace current]::DialogChanged 1
 
 	array set Revert_Options [array get Options]
 	array set Revert_Colors [array get Colors]
@@ -794,6 +795,13 @@ proc RevertOptions {context position close} {
 	variable [namespace parent]::${context}::Colors
 	variable Priv
 
+	# Cancel with nothing previewed or applied needs no relayout of every
+	# notation pane (~0.4 s for a long annotated game).
+	set unchanged [expr {$Priv(applied) == 0
+		&& [SameArray Options Revert_Options]
+		&& [SameArray Colors Revert_Colors]
+		&& [SameArray ::font::Options Revert_Fonts]}]
+
 	array set Options [array get Revert_Options]
 	array set Colors [array get Revert_Colors]
 
@@ -811,7 +819,10 @@ proc RevertOptions {context position close} {
 	array set ::font::Options [array get Revert_Fonts]
 
 	if {$close} {
-		foreach cxt $ContextList { ::pgn::${cxt}::refresh yes }
+		set [namespace current]::DialogChanged [expr {!$unchanged}]
+		if {!$unchanged} {
+			foreach cxt $ContextList { ::pgn::${cxt}::refresh yes }
+		}
 		DoClose $context $position
 	} else {
 		::font::registerTextFonts setup $styles
@@ -819,6 +830,23 @@ proc RevertOptions {context position close} {
 		::font::registerSymbolFonts setup
 		FinishReset $context $position
 	}
+}
+
+
+# Whether the last setup dialog changed (or may have changed) anything.
+proc dialogChanged? {} {
+	variable DialogChanged
+	return [expr {![info exists DialogChanged] || $DialogChanged}]
+}
+
+
+proc SameArray {a b} {
+	upvar 1 $a A $b B
+	if {[array size A] != [array size B]} { return 0 }
+	foreach {k v} [array get A] {
+		if {![info exists B($k)] || $B($k) ne $v} { return 0 }
+	}
+	return 1
 }
 
 
