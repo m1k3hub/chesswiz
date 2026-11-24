@@ -400,6 +400,7 @@ void
 uci::Engine::protocolStart(bool isProbing)
 {
 	addVariant(variant::Normal);
+	m_sentOptions.clear(); // a new engine process starts at its defaults
 
 	// tell the engine we are using the UCI protocol
 	if (!m_uciAlreadySent)
@@ -1319,6 +1320,14 @@ uci::Engine::sendOptions()
 				break;
 		}
 
+		// A fresh engine process already runs with its reported defaults.
+		// Re-sending them is not free: Stockfish reloads its 98 MB network
+		// for EvalFile and re-probes the NUMA topology for NumaPolicy
+		// (~0.8 s of the analysis start). Once sent, keep sending.
+		if (val == opt.dflt && m_sentOptions.find(opt.name) == m_sentOptions.end())
+			continue;
+
+		m_sentOptions[opt.name] = val;
 		msg.assign("setoption name ", 15);
 		msg.append(opt.name);
 

@@ -34,6 +34,7 @@
 #include "db_move_list.h"
 
 #include "m_string.h"
+#include "m_map.h"
 
 namespace app {
 namespace uci {
@@ -117,6 +118,8 @@ private:
 	bool					m_usedAnalyseModeBefore;
 	bool					m_clearHashOnTheFly;
 	bool					m_uciAlreadySent;
+	// Options sent to the running engine process, by name.
+	mstl::map<mstl::string,mstl::string> m_sentOptions;
 };
 
 } // namespace uci
