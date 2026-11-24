@@ -76,3 +76,8 @@ Not changed (your call):
 - agy area C stalled (a hung shell command) and was stopped; C1/C2 above were measured here instead.
 - Figurine leak measured: 40 distinct window sizes add 48 figurine photos and ~1 MB RSS; repeats add nothing. Bounded by distinct sizes; left as noted.
 - B5 board resize: coordinate-font search memoised (family, size, border offset, tk scaling): 127-130 -> 120-123 ms per resize between cached sizes (Xvfb).
+
+## A1.4 Import with many distinct names (open, recommended next)
+- 100k synthetic games, 19 MB PGN each: names repeated (500 players, 300 events) 0.90 s; every player and event distinct (~200k players, 100k events) 5.5 s. gdb samples during the distinct-name import: 24/32 in memmove under mstl::vector::insert from Namebase::insertPlayer. Each new name is inserted into a sorted vector (src/db/db_namebase.cpp, insertPlayer/insertEvent/insertSite), so import time grows with distinct names squared: ~1M distinct players (a Lichess month) would take minutes.
+- Design: keep m_list sorted for readers but buffer new entries during an import: a hash (name -> entry) for lookups plus an unsorted append list, merged into m_list with one sort+merge when the import finishes or before the first index-based read (every accessor in db_namebase.ipp/.cpp would call a flush). Touches ~90 uses of m_list and the id/order bookkeeping saved in .scn, so it needs a careful change and round-trip tests (import -> save -> reload -> byte compare). Not attempted unattended.
+- Repro: docs/perf/bench-import.tcl with ::BPGN set to the distinct-name PGN (generator in the session notes: random 9-digit names per game).
