@@ -358,6 +358,19 @@ proc makeBasicFrame {path} {
 	grid rowconfigure $path {2 4} -minsize $::theme::pady
 
 	bind $path.layout <Destroy> +[namespace code { forgetTextures }]
+	bind $path.layout <Destroy> +[namespace code { ReleaseFigurines }]
+	set Vars(registered) {}
+}
+
+
+# The preview's material values hold one figurine size; give it back when
+# the dialog closes, or every opening adds a registration that is never freed.
+proc ReleaseFigurines {} {
+	variable Vars
+
+	if {[info exists Vars(registered)] && [llength $Vars(registered)]} {
+		::board::pieceset::unregisterFigurines {*}$Vars(registered)
+	}
 	set Vars(registered) {}
 }
 

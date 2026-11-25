@@ -45,6 +45,21 @@ tcltest::test figurine-release {resizes do not accumulate figurine photos} -body
 	list [expr {[llength [lsort -unique $sizes]] > 1}] [expr {[FigurineCount] - $base}] [DeadCheckIcons]
 } -result {1 0 {}}
 
+tcltest::test figurine-release-board-style {the Board Style dialog gives its figurines back} -body {
+	set before $::board::pieceset::FigurineDict
+	foreach round {1 2} {
+		after 100 { ::action::run menu.board.setup }
+		set ::figDialogDone 0
+		after 2000 { set ::figDialogDone 1 }
+		vwait ::figDialogDone
+		set dlg .application.boardConfigDialog
+		if {![winfo exists $dlg]} { error "Board Style dialog did not open" }
+		$dlg.cancel invoke
+		update
+	}
+	expr {$::board::pieceset::FigurineDict eq $before}
+} -result 1
+
 tcltest::test default-pieceset-wizard {unknown sets fall back to Wizard} -body {
 	lindex [::board::pieceset::lookup NoSuchSet] 0
 } -result Wizard

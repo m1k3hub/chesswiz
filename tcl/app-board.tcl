@@ -440,6 +440,20 @@ proc build {w width height} {
 	::scidb::db::subscribe gameClose [namespace current]::GameClosed
 	::scidb::db::subscribe databaseSwitch [namespace current]::DatabaseSwitched
 	::scidb::db::subscribe dbInfo [namespace current]::UpdateInfo
+
+	# A reopened pane is built with the start position; show the open game.
+	after idle [namespace code ShowCurrentGame]
+}
+
+
+proc ShowCurrentGame {} {
+	variable Vars
+
+	if {![info exists Vars(widget:frame)] || ![winfo exists $Vars(widget:frame)]} { return }
+	set position [::scidb::game::current]
+	if {$position < 0 || $position >= 9 || ![::scidb::game::query $position open?]} { return }
+	GameSwitched2 $position
+	::scidb::game::refresh $position -immediate
 }
 
 
@@ -579,6 +593,7 @@ proc CanvasDestroyed {w} {
 			set Vars(after) ""
 		}
 		HoldFigurines {}
+		Unsubscribe 0
 	}
 	activate $w 0
 }
