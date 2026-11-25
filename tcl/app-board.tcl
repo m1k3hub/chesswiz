@@ -170,7 +170,6 @@ proc build {w width height} {
 	set Vars(autoplay) 0
 	set Vars(active) 0
 	set Vars(material) {}
-	set Vars(figurines) {}
 	set Vars(subscribe:list) {}
 	set Vars(subscribe:info) {}
 	set Vars(current:game) {}
@@ -579,6 +578,7 @@ proc CanvasDestroyed {w} {
 			after cancel $Vars(after)
 			set Vars(after) ""
 		}
+		HoldFigurines {}
 	}
 	activate $w 0
 }
@@ -1195,8 +1195,48 @@ proc Preload {width height} {
 	::board::registerSize $Dim(squaresize:Normal)
 	::board::setupSquares $Dim(squaresize:Normal)
 	::board::setupPieces $Dim(squaresize:Normal)
-	::board::pieceset::registerFigurines $Dim(piece:size) $layout(material-bar)
-	::board::pieceset::registerFigurines $Dim(piece:size) 0
+	HoldFigurines [WantedFigurines]
+}
+
+
+# Figurine sizes (piece:size, material-bar) the current layout shows.
+proc WantedFigurines {} {
+	variable ::board::layout
+	variable Vars
+	variable Dim
+
+	set wanted {}
+	set size $Dim(piece:size)
+	if {$size > 0 && (![info exists Vars(layout)] || $Vars(layout) in {Normal ThreeCheck})} {
+		lappend wanted [list $size $layout(material-bar)]
+		if {$layout(material-bar)} { lappend wanted [list $size 0] }
+	}
+	return $wanted
+}
+
+
+# Hold exactly the given figurine sizes: register the new ones first, move
+# the check-count icons onto them, then release the ones no longer wanted.
+proc HoldFigurines {wanted} {
+	variable Vars
+	variable Dim
+
+	if {![info exists Vars(figurines)]} { set Vars(figurines) {} }
+	foreach key $wanted {
+		if {$key ni $Vars(figurines)} { ::board::pieceset::registerFigurines {*}$key }
+	}
+	if {[info exists Vars(widget:frame)] && [winfo exists $Vars(widget:frame)]
+		&& [list $Dim(piece:size) 0] in $wanted} {
+		set canv $Vars(widget:frame)
+		foreach item [$canv find withtag checks] {
+			set c [expr {[string match chw-* [lindex [$canv gettags $item] 1]] ? "w" : "b"}]
+			$canv itemconfigure $item -image photo_Piece(figurine,0,${c}k,$Dim(piece:size))
+		}
+	}
+	foreach key $Vars(figurines) {
+		if {$key ni $wanted} { ::board::pieceset::unregisterFigurines {*}$key }
+	}
+	set Vars(figurines) $wanted
 }
 
 
@@ -1658,21 +1698,7 @@ proc RebuildBoardNow {canv width height {force false}} {
 		$Vars(widget:border) configure -background [$canv cget -background]
 	}
 
-	# Hold exactly the figurine sizes this layout needs: register the new
-	# ones first, then release the ones no longer wanted (never one just taken).
-	set wanted {}
-	if {$Vars(layout) eq "Normal" || $Vars(layout) eq "ThreeCheck"} {
-		set pieceSize $Dim(piece:size)
-		lappend wanted [list $pieceSize $layout(material-bar)]
-		if {$layout(material-bar)} { lappend wanted [list $pieceSize 0] }
-	}
-	foreach key $wanted {
-		if {$key ni $Vars(figurines)} { ::board::pieceset::registerFigurines {*}$key }
-	}
-	foreach key $Vars(figurines) {
-		if {$key ni $wanted} { ::board::pieceset::unregisterFigurines {*}$key }
-	}
-	set Vars(figurines) $wanted
+	HoldFigurines [WantedFigurines]
 
 	if {$squareSize != $Dim($sqsize) || $edgeThickness != $Dim(edgethickness)} {
 		foreach l $Layouts {

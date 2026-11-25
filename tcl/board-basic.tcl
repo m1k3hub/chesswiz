@@ -222,7 +222,7 @@ array set Default {
 
 	square-style	Default
 	piece-style		Default
-	piece-set		Wizard
+	piece-set		Merida
 }
 set Default(identifier) $defaultId
 set Default(version) [set [namespace parent]::Version]
