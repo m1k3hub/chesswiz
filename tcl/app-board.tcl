@@ -170,8 +170,7 @@ proc build {w width height} {
 	set Vars(autoplay) 0
 	set Vars(active) 0
 	set Vars(material) {}
-	set Vars(registered:0) {}
-	set Vars(registered:1) {}
+	set Vars(figurines) {}
 	set Vars(subscribe:list) {}
 	set Vars(subscribe:info) {}
 	set Vars(current:game) {}
@@ -1659,27 +1658,21 @@ proc RebuildBoardNow {canv width height {force false}} {
 		$Vars(widget:border) configure -background [$canv cget -background]
 	}
 
-	set inuse(0) 0
-	set inuse(1) 0
+	# Hold exactly the figurine sizes this layout needs: register the new
+	# ones first, then release the ones no longer wanted (never one just taken).
+	set wanted {}
 	if {$Vars(layout) eq "Normal" || $Vars(layout) eq "ThreeCheck"} {
 		set pieceSize $Dim(piece:size)
-		catch { set inuse(0) [image inuse photo_Piece(figurine,0,wq,$pieceSize)] }
-		catch { set inuse(1) [image inuse photo_Piece(figurine,1,wq,$pieceSize)] }
-		if {!$inuse($layout(material-bar))} {
-			::board::pieceset::registerFigurines $pieceSize $layout(material-bar)
-			set Vars(registered:$layout(material-bar)) [list $pieceSize $layout(material-bar)]
-		}
-		if {!$inuse(0)} {
-			::board::pieceset::registerFigurines $pieceSize 0
-			set Vars(registered:0) [list $pieceSize $layout(material-bar)]
-		}
+		lappend wanted [list $pieceSize $layout(material-bar)]
+		if {$layout(material-bar)} { lappend wanted [list $pieceSize 0] }
 	}
-	if {!$inuse(0) && [llength $Vars(registered:0)]} {
-		::board::pieceset::unregisterFigurines {*}$Vars(registered:0)
+	foreach key $wanted {
+		if {$key ni $Vars(figurines)} { ::board::pieceset::registerFigurines {*}$key }
 	}
-	if {!$inuse(1) && [llength $Vars(registered:1)]} {
-		::board::pieceset::unregisterFigurines {*}$Vars(registered:1)
+	foreach key $Vars(figurines) {
+		if {$key ni $wanted} { ::board::pieceset::unregisterFigurines {*}$key }
 	}
+	set Vars(figurines) $wanted
 
 	if {$squareSize != $Dim($sqsize) || $edgeThickness != $Dim(edgethickness)} {
 		foreach l $Layouts {

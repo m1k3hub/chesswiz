@@ -42,7 +42,7 @@ variable RegExpPieceScale		{scidb:scale=\"([0-9]*[.]?[0-9]+)\"}
 variable RegExpTranslation		{scidb:translate=\"([+-]?[0-9]*[.]?[0-9]+),([+-]?[0-9]*[.]?[0-9]+)\"}
 
 # Piece sets removed for licence reasons, and the set that takes their place.
-# Sets not listed here fall back to Merida.
+# Sets not listed here fall back to Wizard (or Merida).
 array set Replaced {
 	Alpha Chessnut Berlin Chessnut Cheq Chessnut Segoe Chessnut Clarity Chessnut
 	ChessCube Chessnut Aquarium Chessnut Eyes Fantasy Skulls Fantasy
@@ -62,7 +62,7 @@ proc dropRemovedSets {} {
 if {[info exists ::board_PieceSet]} { dropRemovedSets }
 
 # Returns the definition of the named piece set; a removed or unknown set
-# falls back to its replacement (or Merida) so that old settings keep working.
+# falls back to its replacement (Wizard, else Merida) so that old settings keep working.
 proc lookup {name} {
 	variable Replaced
 
@@ -70,6 +70,7 @@ proc lookup {name} {
 	if {$i < 0 && [info exists Replaced($name)]} {
 		set i [lsearch -exact -index 0 $::board_PieceSet $Replaced($name)]
 	}
+	if {$i < 0} { set i [lsearch -exact -index 0 $::board_PieceSet Wizard] }
 	if {$i < 0} { set i [lsearch -exact -index 0 $::board_PieceSet Merida] }
 	return [lindex $::board_PieceSet $i]
 }
@@ -225,7 +226,8 @@ proc unregisterFigurines {size dontUseContour} {
 	variable FigurineDict
 
 	set key $size,$dontUseContour
-	if {[dict get [dict incr BoardSizeDict $key -1] $key] == 0} {
+	if {[dict get [dict incr FigurineDict $key -1] $key] == 0} {
+		dict unset FigurineDict $key
 		set prefix figurine,$dontUseContour
 		foreach p {wk bk wq wr wb wn wp bq br bb bn bp} { image delete photo_Piece($prefix,$p,$size) }
 	}
