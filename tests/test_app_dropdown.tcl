@@ -160,11 +160,13 @@ tcltest::test dropdown-state-r16-database-tab {R16 greys the whole Board cascade
 	set old ""
 	catch { set old [.application.nb select] }
 	catch { ::application::switchTab database }
-	set boardEnabled [dict get [::menu::state menu.board.setup] enabled]
-	set boardVisible [dict get [::menu::state menu.board.setup] visible]
+	set boardEnabled [dict get [::menu::state menu.board.set_start_board] enabled]
+	set boardVisible [dict get [::menu::state menu.board.set_start_board] visible]
+	# Board Style lives under View, so it stays usable on the database tab.
+	set styleEnabled [dict get [::menu::state menu.board.setup] enabled]
 	if {$old ne ""} { catch { .application.nb select $old } }
-	list $boardVisible $boardEnabled
-} -result {1 0}
+	list $boardVisible $boardEnabled $styleEnabled
+} -result {1 0 1}
 
 tcltest::test dropdown-state-module-absent {an absent optional module has no drop-down entry} -body {
 	::capability::Override studyplan 0

@@ -453,7 +453,7 @@ proc ::context::Declare {} {
 	Item c1.copy_fen			"Copy FEN"					C1
 	Item c1.copy_diagram		"Copy Diagram"				C1
 	Item c1.edit_annotation		"Edit Annotation…"			{C1 C2} {Control-a Ctrl+A}
-	Item c1.board_setup			"Board Setup…"				C1 {} {} {![BoardSetupOpen]}
+	Item c1.board_setup			"Board Style…"				C1 {} {} {![BoardSetupOpen]}
 	Define C1 {
 		ask -
 		c1.set_start_board
@@ -850,7 +850,7 @@ proc ::context::Declare {} {
 
 	# --- C9: a pane header (per-pane table) -----------------------
 	Item c9.appearance		"Appearance"				C9
-	Item c9.board_setup		"Board Setup…"				C9
+	Item c9.board_setup		"Board Style…"				C9
 	Item c9.tablebase		"Show Tablebase"			C9 {} {[::capability::present tablebase]}
 	Item c9.flip_board		"Flip Board"				C9
 	Item c9.start_position	"Start Position"			C9

@@ -131,7 +131,6 @@ MENU Board
   ENTRY Flip Board Ctrl+F
   ENTRY Insert Null Move Ctrl+0
   SEP
-  ENTRY Board Setup…
   ENTRY Appearance ▸
     SUBMENU Appearance
       ENTRY side to move
@@ -249,6 +248,7 @@ MENU View
   SEP
   ENTRY Theme ▸
   ENTRY Colors ▸
+  ENTRY Board Style…
   ENTRY Icon Size ▸
   ENTRY Language ▸
   SEP

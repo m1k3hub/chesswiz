@@ -304,8 +304,8 @@ tcltest::test rules-real-state {R1-R5, R8, R9, R11, R14-R16 pass with real state
 	set old ""
 	catch { set old [.application.nb select] }
 	::application::switchTab database
-	set boardVisible [::scidb::test::rules::Visible menu.board.setup]
-	set boardEnabled [::scidb::test::rules::Enabled menu.board.setup]
+	set boardVisible [::scidb::test::rules::Visible menu.board.set_start_board]
+	set boardEnabled [::scidb::test::rules::Enabled menu.board.set_start_board]
 	if {$old ne ""} { catch { .application.nb select $old } }
 	lappend out [list R16a $boardVisible $boardEnabled]
 	if {$boardVisible != 1 || $boardEnabled != 0} { set ok 0; lappend failed R16a }

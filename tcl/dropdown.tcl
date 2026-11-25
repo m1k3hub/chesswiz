@@ -129,7 +129,7 @@ set NationalLists "National / correspondence lists…"
 	set SetStartPosition				"Set Start Position…"
 	set FlipBoard						"Flip Board"
 	set InsertNullMove					"Insert Null Move"
-	set BoardSetup						"Board Setup…"
+	set BoardSetup						"Board Style…"
 	set Appearance						"Appearance"
 	set AppSideToMove					"side to move"
 	set AppMaterialValues			"material values/bar"
@@ -450,7 +450,6 @@ proc ::menu::DefineTree {} {
 			[list cmd board-flip FlipBoard "Control-f"] \
 			[list cmd board-null-move InsertNullMove "Control-0"] \
 			[list sep] \
-			[list cmd menu.board.setup BoardSetup] \
 			[list cascade Appearance "" [list \
 				[list cmd menu.board.appearance.side AppSideToMove] \
 				[list cmd menu.board.appearance.material AppMaterialValues] \
@@ -566,6 +565,7 @@ proc ::menu::DefineTree {} {
 			[list sep] \
 			[list cascade Theme "" dynamic] \
 			[list cascade Colors "" dynamic] \
+			[list cmd menu.board.setup BoardSetup] \
 			[list cascade IconSize "" dynamic] \
 			[list cascade Language "" dynamic] \
 			[list sep] \

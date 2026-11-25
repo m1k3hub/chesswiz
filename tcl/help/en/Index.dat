@@ -12,7 +12,7 @@ set Index {
   { B
     {
       {{Board markers} {Mark-Palette-Dialog.html} {}}
-      {{Board Setup} {Board-Setup-Dialog.html} {}}
+      {{Board Style} {Board-Setup-Dialog.html} {}}
       {{Browsing games} {Game-Browser.html} {}}
     }
   }
