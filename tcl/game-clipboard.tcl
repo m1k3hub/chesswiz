@@ -281,7 +281,7 @@ proc ::game::clipboard::DoPaste {cargs} {
 
 proc ::game::clipboard::Register {} {
 	::action::register game.copy [dict create \
-		label game.copy \
+		label {Copy Games to Clipboard} \
 		object {} \
 		args {
 			{base {type string default {}}}
@@ -295,7 +295,7 @@ proc ::game::clipboard::Register {} {
 		doc "Copy games into the Chesswiz game clipboard so they can be pasted elsewhere. With no arguments it copies the game on the board; with base, variant and numbers it copies those games; optionally also paste them into 'database'." \
 	]
 	::action::register game.paste [dict create \
-		label game.paste \
+		label {Paste Games from Clipboard} \
 		object {} \
 		args {
 			{base {type string default {}}}

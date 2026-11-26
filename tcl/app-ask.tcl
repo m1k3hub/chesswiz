@@ -230,6 +230,7 @@ proc ::application::ask::Build {notebook} {
 	set Priv(frame) $frame
 	set Priv(placeholder) $placeholder
 	set Priv(mic) $mic
+	FitPlaceholder
 	set Priv(notebook) $notebook
 	set Priv(filtered) ""
 	set Priv(lastTheme) [list [::theme::currentTheme] [::theme::isDark]]
@@ -272,6 +273,20 @@ proc ::application::ask::PlaceholderText {} {
 		set text [string map {Ctrl+ Cmd+ Strg+ Cmd+} $text]
 	}
 	return $text
+}
+
+# Make the field wide enough for its whole placeholder in the current font.
+proc ::application::ask::FitPlaceholder {} {
+	variable Priv
+	if {![info exists Priv(placeholder)] || ![winfo exists $Priv(placeholder)]} { return }
+	set font [$Priv(placeholder) cget -font]
+	if {$font eq ""} { set font TkDefaultFont }
+	set px [expr {[font measure $font [$Priv(placeholder) cget -text]] + 16}]
+	set efont [expr {[winfo class $Priv(entry)] eq "Entry" ? [$Priv(entry) cget -font] : "TkTextFont"}]
+	set zero [font measure $efont 0]
+	if {$zero < 1} { set zero 1 }
+	$Priv(entry) configure -width [expr {max(20, int(ceil(double($px)/$zero)))}]
+	after idle {catch ::application::PlaceMenues}
 }
 
 # Keep the placeholder visible exactly while the field is empty.
@@ -598,6 +613,7 @@ proc ::application::ask::Relabel {} {
 	}
 	if {[info exists Priv(placeholder)] && [winfo exists $Priv(placeholder)]} {
 		$Priv(placeholder) configure -text [PlaceholderText]
+		FitPlaceholder
 	}
 	if {[info exists Priv(frame)] && [winfo exists $Priv(frame)]} {
 		if {[winfo exists $Priv(frame).mode]} {
@@ -900,10 +916,27 @@ proc ::application::ask::PopulateRows {text} {
 		}
 		set seen {}
 		foreach row $Priv(commands) { dict set seen [dict get $row action] 1 }
+		# Context-menu copies of a command (c1.flip_board, c9.flip_board,
+		# board-flip) share its label: list it once, preferring the row
+		# that shows a shortcut.
+		set palette {}
+		set byLabel {}
 		foreach paletteRow [::action::labels asklist $text] {
 			lassign $paletteRow id label accel enabled visible
 			if {[string match command.* $id] || [dict exists $seen $id]} { continue }
 			dict set seen $id 1
+			if {[dict exists $byLabel $label]} {
+				set i [dict get $byLabel $label]
+				if {$accel ne "" && [lindex $palette $i 2] eq ""} {
+					lset palette $i $paletteRow
+				}
+				continue
+			}
+			dict set byLabel $label [llength $palette]
+			lappend palette $paletteRow
+		}
+		foreach paletteRow $palette {
+			lassign $paletteRow id label accel enabled visible
 			lappend Priv(commands) [dict create id $id action $id args {} missing {} \
 				template {} label $label input $text palette 1]
 			lappend Priv(rows) [list $id $label $accel $enabled $visible]

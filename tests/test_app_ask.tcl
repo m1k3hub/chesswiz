@@ -166,7 +166,7 @@ tcltest::test ask-field-present {the Ask field exists with its placeholder} -bod
 		[[::application::ask::Entry] cget -textvariable] \
 		[set ::application::ask::mc::Placeholder] \
 		[::application::ask::PlaceholderState]
-} -result {1 ::application::ask::Query {Ask or tell Chesswiz what to do (Ctrl+K)} {}}
+} -result {1 ::application::ask::Query {Type a command (Ctrl+K)} {}}
 
 tcltest::test ask-first-in-tab-order {Tab from the main window reaches the Ask field first} -body {
 	set next [tk_focusNext .application]

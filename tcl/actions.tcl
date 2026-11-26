@@ -1565,7 +1565,14 @@ proc ::action::_BuildAskRows {ctxObjects ctxMenus ctxIds} {
 			set hit 0
 		}
 		if {!$hit} {
-			set label [markupLabel $rawLabel]
+			# Assistant tools are labelled with their tool name (print,
+			# tablebase); show what they do instead of the bare id.
+			set shown $rawLabel
+			set what [dict get $record what]
+			if {[regexp {^[a-z0-9_.]+$} $shown] && $what ne "" && ![string match *%* $what]} {
+				set shown [string toupper [string index $what 0]][string range $what 1 end]
+			}
+			set label [markupLabel $shown]
 			set plain [plainText $label]
 			set visible [string tolower $plain]
 			set search $plain

@@ -2411,7 +2411,7 @@ proc application::media::DoOpenStream {cargs} {
 }
 
 ::action::register open_stream [dict create \
-	label open_stream \
+	label {Open Stream…} \
 	object {} \
 	args {{url {type string default {} description {a stream link; leave empty to open the dialog}}}} \
 	handler ::application::media::DoOpenStream \
