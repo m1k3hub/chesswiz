@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased — board style, piece sets and desktop fixes
+
+- **Wizard** is the default piece set; unknown or empty saved set names fall
+  back to it, and the Piece Set tab highlights the set in use.
+- Piece sets and board colours moved to **View ▸ Board Style…**; the dialog
+  title matches the menu, every piece set shows a preview, and the preview
+  board leaves room for the side-to-move and material column.
+- Figurine photos are released on board resize, pane reopen and dialog close
+  (no more growth per window size). A reopened board pane shows the open game.
+- Font size: at the smallest size you can enlarge again, at the largest you
+  can shrink again.
+- Analysis pane says "engine" instead of "motor"/"locomotive" (English,
+  Spanish, Italian, Hungarian, Swedish).
+- The Ask strip buttons (Speak, Ask, Aliases) fit at large desktop fonts.
+- Assistant: "1 game found"; a bare "Normal" suggestion reads "New Game".
+- Drop-down cascades are filled before their first post, so they open on
+  screen.
+
 ## Unreleased — Save as ChessBase 2CBH
 
 - Database Export offers **ChessBase 2CBH (Save as)** for legal standard and

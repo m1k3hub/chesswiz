@@ -9,7 +9,7 @@ dump with `send Chesswiz profdump`, env PROFOUT=file), docs/perf/poll.tcl
 ## Summary (end of the 2026-11-24 session)
 - Startup on the desktop is slow mostly because of GNOME: the app uses the same CPU as under Xvfb, while gnome-shell (Mutter, rootless Xwayland) burns ~4.5 s CPU during one start. Same GPU with rootful Xwayland+openbox: 2.5-3.0 s to the window vs 5.4 s. App fixes: one board build at startup instead of two; first-start window size bug fixed.
 - Biggest app wins: CQL 6 search 2.4x (6.3 -> 2.5 s / 108k games), PGN import 2.4x (2.2 -> 0.9 s / 21.8k games, UI path 3.3 -> 1.55 s with the old C++), move stepping 2.2x (31 -> 14 ms/step), header wildcard search 4-10x, engine start -0.65 s.
-- Needs your decision: engine default threads (cpus-1), HTTPS keepalive (20-26 ms UI block per request), assertions policy (full -DNREQ measured), CQL6 parallel decode, figurine leak.
+- Needs your decision: engine default threads (cpus-1), HTTPS keepalive (20-26 ms UI block per request), assertions policy (full -DNREQ measured), CQL6 parallel decode. (Figurine leak: fixed 2026-11-25, see below.)
 - Regression check: full app suite on a worktree build, every failure identical on the pre-session build; later changes tested file by file.
 
 ## P1 Startup on the GNOME/Xwayland desktop (:0)
@@ -60,7 +60,7 @@ Not changed (your call):
 - Engine default threads = cpus-1 (47 here): +1.3 s analysis start and 2x slower stepping while analysing vs 4 threads. A cap trades strength.
 - Pre-existing failures (also on the pre-session build 853489efe): test_app_pane_zoom2.tcl pane-zoom2-user-events (full-file run), test_app_ask.tcl ask-field-present, test_app_board_media_layout.tcl (all 26), test_app_nlsearch.tcl nls-checkargs, test_app_toolbar_knowledge.tcl knowledge-plain-words-guard, test_app_dropdown.tcl dropdown-fixture-structure, test_app_menu_removed_extras.tcl, test_app_menu_reseal_term22b.tcl (2), test_app_menu_toolset.tcl, test_app_dialog_place.tcl dlg-v14-d-video-stop-regrows-board; test_app_cql6.tcl and test_app_media_stop_state.tcl time out (900 s) on both.
 - Final check on HEAD 32b1f0429: 62 board/media/database/tree/pane/layout/engine/notation/import/search files; the only failures are pre-existing ones above.
-- Figurine leak (agy-B B5): board-pieceset.tcl unregisterFigurines decrements an undeclared BoardSizeDict, so figurine photos are never freed (12 per board size used). Fixing it needs app-board.tcl's register/unregister bookkeeping fixed first (it would unregister a size it just registered). Not changed.
+- Figurine leak (agy-B B5): board-pieceset.tcl unregisterFigurines decrements an undeclared BoardSizeDict, so figurine photos are never freed (12 per board size used). Fixed 2026-11-25 (ea1763400, c7d24c222): board resizes release every figurine size no longer shown, check-count icons stay live, the Board Style dialog returns its figurines. Tests: test_app_figurine_release.tcl, test_app_board_reopen.tcl.
 - Header search / A3 legacy CQL re-parse per game: deliberate (per-game counters); not changed.
 
 ### P1 re-measure after the fixes (08:45, desktop :0, real HOME, interleaved)
@@ -75,7 +75,7 @@ Not changed (your call):
 - Idle (C1): 60 s idle on the Board tab with a 100k base open: 130 ms CPU (0.2%), one 1 Hz timer (displayWatch). Fine.
 - Memory (C2): 50 game loads, 50 tab switches, 10 open/close of a 100k base, 8 resizes: RSS 358 -> 367 MB; images +104, all created once on first use (no growth in later rounds); widgets and timers flat. No leak found besides the figurine one noted above.
 - agy area C stalled (a hung shell command) and was stopped; C1/C2 above were measured here instead.
-- Figurine leak measured: 40 distinct window sizes add 48 figurine photos and ~1 MB RSS; repeats add nothing. Bounded by distinct sizes; left as noted.
+- Figurine leak measured: 40 distinct window sizes add 48 figurine photos and ~1 MB RSS; repeats add nothing. Bounded by distinct sizes. Fixed since: repeated resizes now add 0 figurine photos.
 - B5 board resize: coordinate-font search memoised (family, size, border offset, tk scaling): 127-130 -> 120-123 ms per resize between cached sizes (Xvfb).
 
 ## A1.4 Import with many distinct names (open, recommended next)
