@@ -508,7 +508,7 @@ tcltest::test panel-live-language-switch {suggestion labels follow en->de->en af
 		update idletasks
 		set expected {}
 		foreach {id button} $::application::assistant::panel::Buttons {
-			lappend expected [::action::displayLabel [dict get [::action::get $id] label]]
+			lappend expected [::application::assistant::panel::SuggestLabel $id]
 		}
 		set actual [::scidb::test::panel::labels]
 		lappend labels $actual

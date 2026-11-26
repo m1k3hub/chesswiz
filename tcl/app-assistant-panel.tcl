@@ -33,6 +33,7 @@ namespace eval mc {
 
 set StartupGreeting	"I can run Chesswiz for you. Pick a suggestion below, or ask in your own words."
 set Hide				"Hide"
+set NewGame			"New Game"
 set NoModelHint		"No model is connected yet. Open Tools > Choose Model\u2026 to connect one; the suggestions above work without one."
 
 } ;# namespace mc
@@ -123,7 +124,7 @@ proc ::application::assistant::panel::Render {} {
 	set i 0
 	foreach id [SuggestIds] {
 		if {[catch { set rec [::action::get $id] }]} { continue }
-		set label [::action::displayLabel [dict get $rec label]]
+		set label [SuggestLabel $id $rec]
 		set b [ttk::button $Frame.s[incr i] -text $label -style Toolbutton \
 			-command [list ::application::assistant::panel::Run $id]]
 		pack $b -side top -fill x -pady 1
@@ -140,6 +141,15 @@ proc ::application::assistant::panel::Render {} {
 	} else {
 		set Retries 0
 	}
+}
+
+
+# A suggestion's text: the action's label, except for bare cascade rows
+# ("Normal" under File > New) that need the context their menu gives.
+proc ::application::assistant::panel::SuggestLabel {id {rec {}}} {
+	if {$id eq "menu.file.new.normal"} { return $::application::assistant::panel::mc::NewGame }
+	if {$rec eq ""} { set rec [::action::get $id] }
+	return [::action::displayLabel [dict get $rec label]]
 }
 
 

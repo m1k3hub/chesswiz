@@ -1138,6 +1138,7 @@
 ### application::assistant::panel ###################################
 ::application::assistant::panel::mc::StartupGreeting	"Én tudom vezetni a Chesswizt Ön helyett. Válasszon egy javaslatot lent, vagy kérdezzen saját szavaival."
 ::application::assistant::panel::mc::Hide				"Elrejtés"
+::application::assistant::panel::mc::NewGame			"Új játszma"
 ::application::assistant::panel::mc::NoModelHint		"Még nincs modell csatlakoztatva. Nyissa meg az Eszközök > Modell kiválasztása\u2026 menüpontot; a fenti javaslatok modell nélkül is működnek."
 
 ### application::assistant::offers #####################################
@@ -1515,7 +1516,7 @@
 ::application::analysis::mc::Pause			"Pause" ;# NEW
 ::application::analysis::mc::Resume			"Resume" ;# NEW
 ::application::analysis::mc::LockEngine			"Lock engine to current position" ;# NEW
-::application::analysis::mc::CloseEngine		"Power down motor" ;# NEW
+::application::analysis::mc::CloseEngine		"Stop engine" ;# NEW
 ::application::analysis::mc::MultipleVariations		"Multiple variations (multi-pv)" ;# NEW
 ::application::analysis::mc::HashFullness		"Hash fullness" ;# NEW
 ::application::analysis::mc::NodesPerSecond		"Nodes per second" ;# NEW
@@ -1532,15 +1533,15 @@
 ::application::analysis::mc::DidNotReceivePong		"Engine is not responding to \"ping\" command - Engine aborted" ;# NEW
 ::application::analysis::mc::SearchMateNotSupported	"This engine is not supporting search for mate." ;# NEW
 ::application::analysis::mc::EngineIsPausing		"This engine is currently pausing." ;# NEW
-::application::analysis::mc::PressEngineButton		"Use the locomotive for starting a motor." ;# NEW
+::application::analysis::mc::PressEngineButton		"Press the engine button to start an engine." ;# NEW
 ::application::analysis::mc::Stopped			"stopped" ;# NEW
 ::application::analysis::mc::OpponentsView		"Opponents view" ;# NEW
 ::application::analysis::mc::InsertMoveAsComment	"Insert move as comment" ;# NEW
 ::application::analysis::mc::SetupEvalEdges		"Setup evaluation edges" ;# NEW
 ::application::analysis::mc::InvalidEdgeValues		"Invalid edge values." ;# NEW
 ::application::analysis::mc::MustBeAscending		"The values must be strictly ascending as in the examples." ;# NEW
-::application::analysis::mc::StartMotor			"Start motor" ;# NEW
-::application::analysis::mc::StartOfMotorFailed		"Start of motor failed"
+::application::analysis::mc::StartMotor			"Start engine" ;# NEW
+::application::analysis::mc::StartOfMotorFailed		"The engine failed to start"
 ::application::analysis::mc::WineIsNotInstalled		"'Wine' is not (properly) installed" ;# NEW
 
 ::application::analysis::mc::LinesPerVariation		"Lines per variation" ;# NEW

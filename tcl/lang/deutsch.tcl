@@ -1133,6 +1133,7 @@
 ### application::assistant::panel ###################################
 ::application::assistant::panel::mc::StartupGreeting	"Ich kann Chesswiz f\u00fcr Sie bedienen. W\u00e4hlen Sie unten einen Vorschlag oder fragen Sie in eigenen Worten."
 ::application::assistant::panel::mc::Hide				"Ausblenden"
+::application::assistant::panel::mc::NewGame			"Neue Partie"
 ::application::assistant::panel::mc::NoModelHint		"Es ist noch kein Modell verbunden. \u00d6ffnen Sie Werkzeuge > Modell w\u00e4hlen\u2026, um eines zu verbinden; die Vorschl\u00e4ge oben funktionieren auch ohne."
 
 ### application::assistant::offers #####################################

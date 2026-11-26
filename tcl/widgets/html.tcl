@@ -195,8 +195,10 @@ proc incrFontSize {size incr} {
 	set min [lindex $sizes 0]
 	set max [lindex $sizes end]
 
-	if {$size == $min} { return $min }
-	if {$size == $max} { return $max }
+	# Only the step past an end is refused: the smallest size must still
+	# grow and the largest still shrink.
+	if {$size <= $min && $incr < 0} { return $min }
+	if {$size >= $max && $incr > 0} { return $max }
 
 	set i [lsearch $sizes $size]
 	if {$i == -1} {

@@ -1543,7 +1543,10 @@ proc ConfigureBoard {} {
 	set squareSize $Options(squareSize)
 
 	# compute dimensions ###########################
-	set x1 [expr {($w - 4*$squareSize)/2}]
+	# The side-to-move marks and material values sit right of the border
+	# (gap 7 + 19 wide): centre board and that column together, or they
+	# fall off the canvas. BuildBoard uses the same offset.
+	set x1 [expr {($w - 4*$squareSize - 26)/2}]
 	set y1 [expr {($h - 4*$squareSize)/2}]
 	set x2 [expr {$x1 + 4*$squareSize}]
 	set y2 [expr {$y1 + 4*$squareSize}]
@@ -1686,7 +1689,7 @@ proc DrawBoard {h w} {
 	[namespace parent]::setupSquares $squareSize
 
 	# compute dimensions ###########################
-	set x1 [expr {($w - 4*$squareSize)/2}]
+	set x1 [expr {($w - 4*$squareSize - 26)/2}]
 	set y1 [expr {($h - 4*$squareSize)/2}]
 	set x2 [expr {$x1 + 4*$squareSize}]
 	set y2 [expr {$y1 + 4*$squareSize}]

@@ -959,6 +959,7 @@
 ### application::assistant::panel ###################################
 ::application::assistant::panel::mc::StartupGreeting	"I can run Chesswiz for you. Pick a suggestion below, or ask in your own words."
 ::application::assistant::panel::mc::Hide				"Hide"
+::application::assistant::panel::mc::NewGame			"New Game"
 ::application::assistant::panel::mc::NoModelHint		"No model is connected yet. Open Tools > Choose Model\u2026 to connect one; the suggestions above work without one."
 
 ### application::assistant::offers #####################################
@@ -1393,7 +1394,7 @@
 ::application::analysis::mc::Pause							"Pause"
 ::application::analysis::mc::Resume							"Resume"
 ::application::analysis::mc::LockEngine					"Lock engine to current position"
-::application::analysis::mc::CloseEngine					"Power down motor"
+::application::analysis::mc::CloseEngine					"Stop engine"
 ::application::analysis::mc::MultipleVariations			"Multiple variations (multi-pv)"
 ::application::analysis::mc::HashFullness					"Hash fullness"
 ::application::analysis::mc::NodesPerSecond				"Nodes per second"
@@ -1410,15 +1411,15 @@
 ::application::analysis::mc::DidNotReceivePong			"Engine is not responding to \"ping\" command - Engine aborted"
 ::application::analysis::mc::SearchMateNotSupported	"This engine is not supporting search for mate."
 ::application::analysis::mc::EngineIsPausing				"This engine is currently pausing."
-::application::analysis::mc::PressEngineButton			"Use the locomotive for starting a motor."
+::application::analysis::mc::PressEngineButton			"Press the engine button to start an engine."
 ::application::analysis::mc::Stopped						"stopped"
 ::application::analysis::mc::OpponentsView				"Opponents view"
 ::application::analysis::mc::InsertMoveAsComment		"Insert move as comment"
 ::application::analysis::mc::SetupEvalEdges				"Setup evaluation edges"
 ::application::analysis::mc::InvalidEdgeValues			"Invalid edge values."
 ::application::analysis::mc::MustBeAscending				"The values must be strictly ascending as in the examples."
-::application::analysis::mc::StartMotor					"Start motor"
-::application::analysis::mc::StartOfMotorFailed			"Start of motor failed"
+::application::analysis::mc::StartMotor					"Start engine"
+::application::analysis::mc::StartOfMotorFailed			"The engine failed to start"
 ::application::analysis::mc::WineIsNotInstalled			"'Wine' is not (properly) installed"
 
 ::application::analysis::mc::LinesPerVariation			"Lines per variation"

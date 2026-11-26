@@ -720,7 +720,9 @@ proc updatePieceSet {w} {
 	variable [namespace parent]::theme::style
 	variable Listbox
 
-	$Listbox select [lsearch -exact -index 0 $::board_PieceSet $style(piece-set)]
+	# An empty or removed name is drawn with the fallback set: show that one.
+	set name [lindex [lookup $style(piece-set)] 0]
+	$Listbox select [lsearch -exact -index 0 $::board_PieceSet $name]
 }
 
 } ;# namespace pieceset

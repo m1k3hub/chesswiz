@@ -184,13 +184,18 @@ proc ::application::ask::Build {notebook} {
 			-textvariable ::application::ask::Query]
 		set Priv(blinkPaused) 0
 	}
+	# The strip is only as tall as the notebook tabs: no vertical padding,
+	# or large desktop fonts cut the button labels.
+	ttk::style configure AskStrip.TButton -padding {6 0}
 	set mic [ttk::button $frame.mic -text $::application::ask::mc::Mic \
-		-takefocus 0 -command ::application::speech::toggle]
-	ttk::button $frame.mode -text $::application::ask::mc::AskQuestion -takefocus 0 -command ::application::ask::ToggleMode
-	ttk::button $frame.alias -text $::application::ask::mc::Aliases -takefocus 0 -command ::application::ask::Aliases
+		-style AskStrip.TButton -takefocus 0 -command ::application::speech::toggle]
+	ttk::button $frame.mode -text $::application::ask::mc::AskQuestion -style AskStrip.TButton \
+		-takefocus 0 -command ::application::ask::ToggleMode
+	ttk::button $frame.alias -text $::application::ask::mc::Aliases -style AskStrip.TButton \
+		-takefocus 0 -command ::application::ask::Aliases
  pack $frame.alias -side right
  pack $frame.mode -side right
-	pack $mic -side right -padx {2 2} -pady 1
+	pack $mic -side right -padx {2 2}
 	# Own mouse gestures; the class binding invokes -command only on release.
 	bind $mic <ButtonPress-1> {::application::speech::Press %W; break}
 	bind $mic <ButtonRelease-1> {::application::speech::Release %W; break}
@@ -206,7 +211,7 @@ proc ::application::ask::Build {notebook} {
 		-text [PlaceholderText] \
 		-foreground [expr {[::theme::isDark] ? "#8b949e" : "grey"}] \
 		-background $placeholderBg]
-	place $placeholder -in $entry -relx 0 -x 4 -rely 0.5 -anchor w
+	place $placeholder -in $entry -relx 0 -x 4 -rely 0.5 -anchor w -relwidth 1 -width -8
 	bind $placeholder <ButtonPress-1> ::application::ask::Focus
 	bind $frame <<ThemeChanged>> [namespace code ThemeChanged]
 
@@ -280,7 +285,7 @@ proc ::application::ask::PlaceholderState {} {
 			place forget $Priv(placeholder)
 		}
 	} elseif {[winfo manager $Priv(placeholder)] ne "place"} {
-		place $Priv(placeholder) -in $Priv(entry) -relx 0 -x 4 -rely 0.5 -anchor w
+		place $Priv(placeholder) -in $Priv(entry) -relx 0 -x 4 -rely 0.5 -anchor w -relwidth 1 -width -8
 	}
 }
 
@@ -639,7 +644,8 @@ proc ::application::ask::Place {menuX height} {
 
 	if {![info exists Priv(frame)] || ![winfo exists $Priv(frame)]} { return }
 	if {![info exists Width]} { set Width 380 }
-	set width $Width
+	# The Speak button and translated labels can need more than the default.
+	set width [expr {max($Width, [winfo reqwidth $Priv(frame)])}]
 	set x [expr {$menuX - $width - 4}]
 	# never cover the notebook tabs on the left
 	set left 286
@@ -661,9 +667,15 @@ proc ::application::ask::SyncMic {} {
 	::tooltip::tooltip $Priv(mic) ::application::ask::Priv(micHint)
 	if {[llength [info commands ::application::speech::available]] \
 	 && [::application::speech::available]} {
-		if {[manager::place? $Priv(mic)] eq ""} { pack $Priv(mic) -side right -padx {2 2} -pady 1 }
+		if {[manager::place? $Priv(mic)] eq ""} {
+			pack $Priv(mic) -side right -padx {2 2}
+			after idle { catch ::application::PlaceMenues }
+		}
 	} else {
-		catch { pack forget $Priv(mic) }
+		if {[manager::place? $Priv(mic)] ne ""} {
+			pack forget $Priv(mic)
+			after idle { catch ::application::PlaceMenues }
+		}
 	}
 }
 
