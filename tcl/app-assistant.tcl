@@ -3657,7 +3657,7 @@ proc ::application::assistant::DoSearchGames {criteria} {
 
 	set LastSearch [list $base $variant $query $summary]
 	set LastSearchCriteria $criteria
-	set lines [list "searched [::util::databaseName $base no] for: $summary" "$count games found"]
+	set lines [list "searched [::util::databaseName $base no] for: $summary" "$count [expr {$count == 1 ? "game" : "games"}] found"]
 	if {$count} {
 		lappend lines "first [llength $games] (game list unchanged; call show_search to display these matches):"
 		foreach game $games { lappend lines "  $game" }

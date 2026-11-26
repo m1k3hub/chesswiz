@@ -659,8 +659,7 @@ proc makePieceSelectionFrame {parent visible} {
 		if {[info exists data(sample,24pt,200x34)]} {
 			set img [image create photo -data $data(sample,24pt,200x34)]
 		} else {
-			# the newer sets have no preview: list them by name
-			set img [image create photo -width 200 -height 34]
+			set img [RenderSample $pieceSet]
 		}
 		$Listbox insert [list $img $name]
 		lappend contents [list $img]
@@ -674,6 +673,30 @@ proc makePieceSelectionFrame {parent visible} {
 	pack $Listbox -expand yes -fill both
 
 	return $Listbox
+}
+
+
+# Sets without a stored sample get one drawn from their own pieces:
+# white king to pawn, then the black king, 30px each in a 200x34 strip.
+proc RenderSample {pieceSet} {
+	set img [image create photo -width 200 -height 34]
+	set pieces {wk wq wr wb wn bk}
+	set prefix "sample,"
+	foreach p $pieces { image create photo photo_Piece($prefix$p,30) -width 30 -height 30 }
+	if {[catch {
+		MakePieces $prefix $pieceSet $pieces 30 1.0 1.0 no 0.0 \
+			{{} {}} {{} {}} {{} {}} {{} {}} {{} {}} 0.5 linear no
+	}]} {
+		foreach p $pieces { catch { image delete photo_Piece($prefix$p,30) } }
+		return $img
+	}
+	set x 2
+	foreach p $pieces {
+		$img copy photo_Piece($prefix$p,30) -to $x 2
+		image delete photo_Piece($prefix$p,30)
+		incr x 33
+	}
+	return $img
 }
 
 

@@ -59,7 +59,7 @@ close $f
 } -result {{{Kasparov, Garry}} {{Karvina 5th}}}
 ::tcltest::test command-effect-search {Enter searches the real name index and retains exact criteria} -body {
  set message [::commandEffects::run {find games player Kasparov wins white} 15]
- list [string match {*1 games found*} $message] [dict get $::application::assistant::LastSearchCriteria player]
+ list [string match {*1 game found*} $message] [dict get $::application::assistant::LastSearchCriteria player]
 } -result {1 {Kasparov, Garry}}
 ::tcltest::test command-effect-game {Enter loads the requested game on the board} -body {
  ::commandEffects::run {open game 1 at move 2 white} 16

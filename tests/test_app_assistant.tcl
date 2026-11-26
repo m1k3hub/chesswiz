@@ -722,7 +722,7 @@ tcltest::test assistant-search-games {search_games combines player, colour, resu
 		[::scidb::test::assistant::search {result 1-0}] \
 		[::scidb::test::assistant::search {to 2021.06}] \
 		[lindex [split [::application::assistant::runTool search_games {player {carlsen, m} color white result loss}] \n] 0]
-} -match glob -result {{{2 games found} {{2021.01.01 Carlsen, Magnus - Anand, Viswanathan 1-0 B90, Assistant} {2023.01.01 Carlsen, Henrik - Carlsen, Magnus 0-1 C60, Assistant}}} {{1 games found} {{2022.01.01 Anand, Viswanathan - Carlsen, Magnus 1/2-1/2 B92, Assistant}}} {{2 games found} *} {{1 games found} {{2022.01.01 Anand*B92*}}} {searched * for: ECO B90-B99; from 2022 to 2023.06} {{1 games found} {{2021.01.01 Carlsen, Magnus*}}} {{1 games found} {{2021.01.01*}}} {searched * for: games of Carlsen, Magnus with white, lost}}
+} -match glob -result {{{2 games found} {{2021.01.01 Carlsen, Magnus - Anand, Viswanathan 1-0 B90, Assistant} {2023.01.01 Carlsen, Henrik - Carlsen, Magnus 0-1 C60, Assistant}}} {{1 game found} {{2022.01.01 Anand, Viswanathan - Carlsen, Magnus 1/2-1/2 B92, Assistant}}} {{2 games found} *} {{1 game found} {{2022.01.01 Anand*B92*}}} {searched * for: ECO B90-B99; from 2022 to 2023.06} {{1 game found} {{2021.01.01 Carlsen, Magnus*}}} {{1 game found} {{2021.01.01*}}} {searched * for: games of Carlsen, Magnus with white, lost}}
 
 tcltest::test assistant-search-refused {search_games checks its criteria} -body {
 	list [::application::assistant::runTool search_games {}] \

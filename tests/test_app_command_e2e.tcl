@@ -59,11 +59,11 @@ proc ::commandE2E::checkState {number} {
   12 {return [::commandE2E::called compact_database]}
   13 {return [expr {[::commandE2E::called convert_database] && [dict get [::commandE2E::argsOf convert_database] format] eq "sci"}]}
   14 {return [expr {[string length $::commandE2E::Message] > 0}]}
-  15 {return [expr {[string match {*games found*} $::commandE2E::Message] && [::scidb::view::count games $::commandE2E::Fixture Normal 0] > 0}]}
+  15 {return [expr {[string match {*found*} $::commandE2E::Message] && [::scidb::view::count games $::commandE2E::Fixture Normal 0] > 0}]}
   16 {return [expr {[lindex [::scidb::game::sink? [::scidb::game::current]] 2] == 11}]}
   17 {return [expr {[lindex [::scidb::game::sink? [::scidb::game::current]] 2] == 1}]}
   18 {return [::commandE2E::called similar_games]}
-  19 {return [expr {[string match {*games found*} $::commandE2E::Message]}]}
+  19 {return [expr {[string match {*found*} $::commandE2E::Message]}]}
   20 {return [expr {[llength [lmap {token row} $::commandline::Pending {
    if {[dict get $row action] eq "find_similar"} {set token}}]] > 0}]}
   21 {return [::commandE2E::called open_search]}

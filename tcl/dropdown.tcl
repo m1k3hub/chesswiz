@@ -1247,6 +1247,14 @@ proc ::menu::RefreshTopStates {menu} {
 		incr i
 		if {$i > $last} { break }
 		catch { $menu entryconfigure $i -state [TopEntryState [lindex $top 1]] }
+		# Tk places a cascade from its size before its -postcommand runs, so
+		# a never-filled (empty) cascade first opened past the screen's right
+		# edge. Fill it once now; its own -postcommand still refreshes it.
+		set sub ""
+		catch { set sub [$menu entrycget $i -menu] }
+		if {$sub ne "" && [winfo exists $sub] && [$sub index end] in {"" none}} {
+			catch { FillTop [lindex $top 1] $sub }
+		}
 	}
 }
 
