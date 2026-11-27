@@ -10,9 +10,11 @@ ENGINE_DIR="${4:-$BUILD/build/engines-macos}"
 case "$APP" in *.app) ;; *) echo 'APP_DIR must end in .app' >&2; exit 2;; esac
 SIGN_ID="${CHESSWIZ_SIGN_ID:--}"
 VERSION="${CHESSWIZ_VERSION:-1.0}"
-[ -f "$SYSROOT/cacert.pem" ] && [ -f "$SYSROOT/lib/json/pkgIndex.tcl" ]
-[ -f "$SYSROOT/lib/sha1/pkgIndex.tcl" ]
-[ -x "$ENGINE_DIR/stockfish-chesswiz" ]
+need() { [ -e "$1" ] || { echo "make-macos-app: missing $1 ($2)" >&2; exit 1; }; }
+need "$SYSROOT/cacert.pem" "run scripts/build-macos-tls.sh"
+need "$SYSROOT/lib/json/pkgIndex.tcl" "run scripts/build-macos-tls.sh"
+need "$SYSROOT/lib/sha1/pkgIndex.tcl" "run scripts/build-macos-tls.sh"
+need "$ENGINE_DIR/stockfish-chesswiz" "run scripts/build-macos-engines.sh"
 TLS=("$SYSROOT"/lib/tls*)
 [ -f "${TLS[0]}/pkgIndex.tcl" ]
 mkdir -p "$(dirname "$APP")"

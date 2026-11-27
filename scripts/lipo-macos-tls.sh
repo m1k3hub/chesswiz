@@ -26,7 +26,7 @@ for lib in libssl.a libcrypto.a "tls$TCLTLS_VER/tcltls.dylib"; do
 done
 if [ "$OUT" != "$ARM" ]; then
     cp "$ARM/lib/tls$TCLTLS_VER/"*.tcl "$OUT/lib/tls$TCLTLS_VER/"
-    cp -R "$ARM/lib/json" "$OUT/lib/"
+    cp -R "$ARM/lib/json" "$ARM/lib/sha1" "$OUT/lib/"
     cp "$ARM/cacert.pem" "$OUT/"
 fi
 install_name_tool -id @rpath/tcltls.dylib "$OUT/lib/tls$TCLTLS_VER/tcltls.dylib"

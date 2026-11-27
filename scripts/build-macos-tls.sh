@@ -50,8 +50,11 @@ fi
 rm -rf "$PREFIX/lib/tls$TCLTLS_VER"
 mv "$PREFIX/lib/tcltls$TCLTLS_VER" "$PREFIX/lib/tls$TCLTLS_VER"
 tar xf "$CACHE/$TCLLIB_TARBALL" -C "$WORK"
-mkdir -p "$PREFIX/lib/json"
-cp "$WORK/tcllib-$TCLLIB_VER/modules/json/"*.tcl "$PREFIX/lib/json/"
+# json, and sha1 (it also installs sha256, which the knowledge pack hash needs)
+for m in json sha1; do
+    rm -rf "$PREFIX/lib/$m"; mkdir -p "$PREFIX/lib/$m"
+    cp "$WORK/tcllib-$TCLLIB_VER/modules/$m/"*.tcl "$PREFIX/lib/$m/"
+done
 cp "$CACHE/$CACERT_FILE" "$PREFIX/"
 printf '%s\n' "$OPENSSL_VER" > "$PREFIX/lib/openssl-build-version"
-echo "TLS, json, CA roots installed: $PREFIX ($ARCH)"
+echo "TLS, json, sha1, CA roots installed: $PREFIX ($ARCH)"
