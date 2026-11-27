@@ -1,6 +1,6 @@
 # Chesswiz feature catalog
 
-Generated on 2026-11-27 from the live action registry (`::action::Registry`, 838 actions) of master, with descriptions from the registry and from `tcl/knowledge.tcl`. Regenerate it rather than editing the catalog by hand; the findings in section 2 are written by hand.
+Generated on 2026-11-27 from the live action registry (`::action::Registry`, 847 actions) of master, with descriptions from the registry and from `tcl/knowledge.tcl`. Regenerate it rather than editing the catalog by hand; the findings in section 2 are written by hand.
 
 ## 1. How features are reached
 
@@ -8,57 +8,65 @@ Every user-visible operation is a registered action. One feature can have severa
 
 | Surface | Actions | How you use it |
 |---|---|---|
-| Main menu | 186 | **Main Menu** button, top right. Ten menus: File, Edit, Game, Database, Board, Analysis, Training, Tools, View, Help. |
-| Right-click menus | 339 | Twelve context menus (C1–C12), section 3.3. Each starts with *What can I do here?*, which asks the assistant about that object. |
-| Keyboard shortcuts | 38 | Listed per entry; all are rebindable under Edit ▸ Keyboard Preferences…. |
+| Main menu | 188 | **Main Menu** button, top right. Ten menus: File, Edit, Game, Database, Board, Analysis, Training, Tools, View, Help. |
+| Right-click menus | 346 | Twelve context menus (C1–C12), section 3.3. Each starts with *What can I do here?*, which asks the assistant about that object. |
+| Keyboard shortcuts | 39 | Listed per entry; all are rebindable under Edit ▸ Keyboard Preferences…. |
 | Toolbars | 82 | Pane toolbars (board, notation, analysis, tree, database switcher, …). |
 | Tournament Director | 27 | Tools ▸ Tournament Director… workspace. |
 | Typed commands | 25 | Type in the Ask field (Ctrl+K): *open database …*, *find games …*, *play engine* … |
-| Assistant tools | 120 | Used by the AI assistant when you ask in plain language. Those that need no arguments also appear as suggestions in the Ask field. |
-| Developer tools | 12 | Only with `--ai-debug` or `SCIDB_AI_DEBUG=1`. |
+| Assistant tools | 117 | Used by the AI assistant when you ask in plain language. Those that need no arguments also appear as suggestions in the Ask field. |
+| Developer tools | 15 | Only with `--ai-debug` or `SCIDB_AI_DEBUG=1`. |
 
 The Ask field (top right, Ctrl+K) searches every runnable action by name and description, so anything in this catalog that needs no arguments can also be started by typing its name.
 
 ## 2. Findings
 
-Reviewed 2026-11-27 against the registry above and the Tcl sources. A feature counts as *accessible* when a menu, right-click menu, toolbar, key or workspace button reaches it. The Ask field and the assistant reach almost everything, but a user has to know a feature exists before they can type its name.
+Reviewed 2026-11-27 against the registry above and the Tcl sources; the fixes listed here landed the same day. A feature counts as *accessible* when a menu, right-click menu, toolbar, key or workspace button reaches it. The Ask field and the assistant reach almost everything, but a user has to know a feature exists before they can type its name.
 
-### 2.1 Features users can't reach without the assistant, but should
+### 2.1 Features that only the assistant could reach
 
-| Feature | Today | Suggested place |
+| Feature | Before | Now |
 |---|---|---|
-| **Print the current game** (`print`, `::print::game`) | Assistant only. File ▸ Export can write a PDF, but there is no Print command. | Game ▸ Print… (Ctrl+P) and the notation pane menu |
-| **Assistant Preferences** (`app.preferences.assistant`) | Ask field and assistant only. `app-ask.tcl` keeps it out of the menu on purpose, so a frozen menu-test fixture stays unchanged. | Edit ▸ Preferences ▸ Assistant…, next to Engines (and update the fixture) |
-| **Tournament Director: import a TRF report** (`td.import_trf`) | Assistant only. The workspace can export TRF16/TRF26 but can't import. | Workspace Event tab ▸ Import TRF… |
-| **Tournament Director: prizes** (`td.prizes`) | Assistant only | Standings tab ▸ Prizes… |
-| **Tournament Director: find a FIDE player** (`td.lookup_player`) | Assistant only. `td.register_fide` has a button but no search. | Players tab ▸ Find FIDE player… |
-| **Tournament Director: audit journal** (`td.audit`) | Assistant only. Swaps are "audited", but the user can't see the log. | Event tab ▸ Audit log… |
-| **Find a video lesson for this position** (`find_lesson`) | Assistant only | Board right-click menu |
-| **Transcribe a media file** (`transcribe_media`) | Assistant only | Media right-click menu (C7) |
-| **Label a move as a novelty** (`novelty_label`) | Assistant only. The game list's *Novelty* flag is a different, manual feature. | Notation right-click menu (C2) ▸ Is this a novelty? |
-| **Player statistics / position-type profile** (`player_stats`, `structure_profile`) | Assistant, or typed commands *player statistics* / *player structures* | Player right-click menu (C5) and player card |
-| **Save a position search as a pattern** (`save_pattern`) | Assistant only | Position search dialog ▸ Save as pattern |
-| **Focus zoom: Focus follows size, Zoom ratio, Pin board size, Focus follows size on resize** (`view.focus_*`) | Registered with drop-down order `00.*`, so the menu never shows them; reachable only by typing in the Ask field. Maximise / Restore Pane has Ctrl+Shift+Z and the pane-header menu. | View ▸ Panes ▸ Focus Zoom submenu |
-| **Time-control breakdown** (`event_types`) | Assistant only | Database ▸ Reports (next to Trends) |
+| **Print the current game** | Assistant only; File ▸ Export could write a PDF, but there was no Print command | **Game ▸ Print Game…** (Ctrl+P) |
+| **Assistant Preferences** | Ask field and assistant only; kept out of the menu so a frozen fixture stayed unchanged | **Edit ▸ Preferences ▸ Assistant…**. The help and the speech-setup message point there. |
+| **Focus zoom** (Focus follows size, … on resize, Zoom ratio, Pin board size) | Registered with order `00.*`, so no menu showed them | **View ▸ Panes ▸ Focus Zoom**. Maximise / Restore Pane (Ctrl+Shift+Z) sits next to it. |
+| **Tournament Director: import a TRF report** | Assistant only | Event tab ▸ **Import TRF…** |
+| **Tournament Director: audit journal** | Assistant only | Event tab ▸ **Audit log…** |
+| **Tournament Director: find a FIDE player** | Assistant only | Players tab ▸ **Find in FIDE list**, which fills the FIDE ID field for *Register from FIDE list* |
+| **Tournament Director: prizes** | Assistant only | Standings tab ▸ prize amounts, system and **Compute prizes** |
+| **Find a video lesson for this position** | Assistant only | Board right-click ▸ **Find Video Lesson** |
+| **Is this move a novelty?** | Assistant only | Notation right-click ▸ **Is This a Novelty?** |
+| **Player statistics / position types** | Assistant or typed commands | Player right-click ▸ **Player Statistics**, **Position Types** |
+| **Transcribe a media file** | Assistant only | Media right-click ▸ **Transcribe** |
 
-Also worth adding: the Tournament Director's hard-coded English button labels ("Crosstable", "Print standings", "Swap colours (audited)", "Export TRF16") bypass the `mc::` translation tables, so they stay English in every language.
+The right-click rows show the assistant tool's answer in the Report pane. Each new label is translated into all six languages.
 
-### 2.2 Features users can reach, but probably shouldn't
+Not changed:
+- **Save a position search as a pattern** (`save_pattern`) stays assistant-only. It saves the search the user just accepted in the assistant's plain-language position search, so it has no meaning outside that conversation.
+- **Time-control breakdown** (`event_types`) was already reachable as Database ▸ Reports ▸ Time Control. The first version of this review missed that.
 
-| Feature | Today | Why it's a problem | Suggestion |
-|---|---|---|---|
-| **Hand an issue to the coding agent** (`handoff_issue`) | An assistant tool for every user (`ai 1`). It does nothing unless `SCIDB_AI_HANDOFF_CMD` is set. | It's a developer workflow that runs an external program on the user's machine. Being gated by an environment variable is safe today, but it doesn't belong in a release build's tool list. | Make it `ai debug` |
-| **Error triage and issues** (`triage_errors`, `list_issues`) | Assistant tools for every user, and Ask-field suggestions ("triage the error log", "list the issues") | Developer bookkeeping; the results mean nothing to a chess player. | `ai debug`, or keep for the assistant but hide from the Ask list |
-| **Tool log, classifier status, application state** (`tool_log`, `classifier_status`, `app_state`) | Ask-field suggestions for every user | Internal diagnostics shown next to chess features | Keep for the assistant, hide from the Ask list |
-| **Run any action / run a job by name** (`run_action`, `run_job`) | Assistant tools for every user | `run_action` bypasses each action's own surface (all actions are already exposed individually). Each run keeps its own confirmation gate. | Keep, but confirm that `confirm 1` and `bulk` gates also apply when the action runs through `run_action` (they do today, via `ConfirmHook`); document it. |
-| **`eval_tcl`, `proc_source`, `read_variable`, `release_grab`, `cancel_timer`, …** | Debug mode only (`--ai-debug` / `SCIDB_AI_DEBUG=1`) | Correctly gated | No change. Never enable debug mode in a shipped config. |
+Also fixed in the Tournament Director workspace:
+- About 70 hard-coded English labels now come from `::td::ui::mc`, translated into all six languages.
+- Export TRF16/TRF26 called `td.export` without the required file name, so it couldn't work. It now asks for the file.
+- Errors now appear in a dialog. The unused `Safe` helper read a variable nothing set; it is fixed and now wraps every button.
 
-### 2.3 Gaps the review found but didn't count as features
+### 2.2 Features users could reach but shouldn't
 
-- **Header right-click menus** (C10) show the column name as a disabled submenu with an arrow, which looks like a broken submenu. Sorting lives in the game-row menu (C3) instead. Consider adding Sort Ascending/Descending to C10 as well, since most users try the column header first.
-- **No click-to-sort** on table column headers (upstream behaviour).
-- **The player list's "latest rating" option** still prefers the 2013 dictionary over game ratings. The highest rating was fixed in `354fd82ad`.
-- **Duplicate entry points:** many features exist as a main-menu row, one or two right-click rows and an assistant tool (Flip Board has three). This works, but the Ask list now merges rows with the same label (`ec0a46df5`) to keep it readable.
+| Feature | Now |
+|---|---|
+| **Hand an issue to the coding agent** (`handoff_issue`) | Debug only (`ai debug`) |
+| **Error triage and the issue list** (`triage_errors`, `list_issues`) | Debug only |
+| **Tool log, classifier status, application state** (`tool_log`, `classifier_status`, `app_state`) | Still available to the assistant, but no longer suggested in the Ask field (registry field `asklist 0`) |
+| **Run any action / run a job by name** (`run_action`, `run_job`) | Unchanged. Confirmation and bulk gates apply through `ConfirmHook` and `BulkHook`, so these add no new power. |
+| **Developer tools** (`eval_tcl`, `proc_source`, `read_variable`, …) | Unchanged; already debug only (`--ai-debug` / `SCIDB_AI_DEBUG=1`) |
+
+### 2.3 Other review items
+
+- **Column header menu (C10)** now has **Sort Ascending** and **Sort Descending** for the game, player, event and site tables. The column title above them stays a disabled submenu row, because the menu tests require titles to be structural rows rather than commands.
+- **Player ratings:** the highest *and* the latest rating now prefer the games when the bundled 2013 dictionary is older (`src/db/db_namebase_entry.cpp`).
+- **Repeated labels in the Ask field** (Flip Board ×3) are by design. Every action, right-click copies included, must stay reachable by its own label (`test_app_menu_changed_labels`).
+- **German strings** that named the removed "Extras > KI" menu now name Werkzeuge > Modell wählen….
+- **Still open:** the frozen assistant-tool baseline (`tests/fixtures/assistant-tools-baseline.json`) disagrees with the `open_view` and `search_games` descriptions changed on 2026-11-14/16. Refreshing it is a review decision, so it's left for the owner.
 
 ## 3. Catalog
 
@@ -67,15 +75,10 @@ Each row: where to find it, its shortcut, and what it does.
 ### 3.1 Main menu
 
 
-#### Registered for the menu but not placed in it
+#### Donate button (top strip)
 
 | Menu path | Key | How it works |
 |---|---|---|
-| Maximise / Restore Pane — *not placed in any menu* | Ctrl+Shift+Z | Maximise the active pane or restore the workspace arrangement. Use this to concentrate temporarily on a single view. |
-| Focus follows size — *not placed in any menu* |  | Toggle automatic pane enlargement as focus moves. Use this when the view you are working in should gain space. |
-| Zoom ratio — *not placed in any menu* |  | Cycle the size ratio used when focus enlarges a pane. Use this to adjust how much extra space the active pane receives. |
-| Pin board size — *not placed in any menu* |  | Toggle whether automatic pane zoom preserves the board's size. Use this to keep the board stable while other panes gain space. |
-| Focus follows size on resize — *not placed in any menu* |  | Toggle growing the focused pane whenever the window is resized. Use this to keep giving the view you are working in more space as the window changes size. |
 | ♥ Donate button (top strip) ▸ Donate |  | — |
 | ♥ Donate button (top strip) ▸ Ko-fi |  | — |
 | ♥ Donate button (top strip) ▸ PayPal |  | — |
@@ -115,6 +118,7 @@ Each row: where to find it, its shortcut, and what it does.
 | Edit ▸ Preferences ▸ Engines… |  | Open the engine preferences. When adjusting the application's engine-related preferences. |
 | Edit ▸ Preferences ▸ PGN export options… |  | Open the portable game notation export options. When exported game text needs different formatting or included details. |
 | Edit ▸ Preferences ▸ Private Player Card… |  | Edit your own private player card. When updating the private identity used for your own games. |
+| Edit ▸ Preferences ▸ Assistant… |  | Open the assistant preferences: model, speech input and how the assistant answers. Use this to change how the assistant behaves or set up speech input. |
 
 #### Game
 
@@ -133,6 +137,7 @@ Each row: where to find it, its shortcut, and what it does.
 | Game ▸ Copy Game |  | Copy the current game into the temporary clipboard database. Use this to retain a working copy before changing games. |
 | Game ▸ Export Game… | Ctrl+E | Export the game on the board. When sharing the game currently on the board in another format. |
 | Game ▸ Export ▸ Upload to Lichess Study… |  | Open the study-upload dialog for the current game. Use this to share the game through a Lichess study. |
+| Game ▸ Print Game… | Ctrl+P | Print the game on the board, through a PDF sent to the printer or PDF viewer. Use this when you want a paper or PDF copy of the loaded game. |
 | Game ▸ History ▸ Clear History |  | Clear the app's recent-game history through the main menu. Use this to remove the list of previously visited games. |
 | Game ▸ Close Game |  | Close the game on the board. When the loaded game no longer needs to occupy a game slot. |
 | Game ▸ paste last clipbase game |  | Read clipboard notation as the current game. Use this to load a game copied as portable game text. |
@@ -262,6 +267,11 @@ Each row: where to find it, its shortcut, and what it does.
 
 | Menu path | Key | How it works |
 |---|---|---|
+| View ▸ Panes ▸ Maximise / Restore Pane | Ctrl+Shift+Z | Maximise the active pane or restore the workspace arrangement. Use this to concentrate temporarily on a single view. |
+| View ▸ Panes ▸ Focus Zoom ▸ Focus follows size |  | Toggle automatic pane enlargement as focus moves. Use this when the view you are working in should gain space. |
+| View ▸ Panes ▸ Focus Zoom ▸ Focus follows size on resize |  | Toggle growing the focused pane whenever the window is resized. Use this to keep giving the view you are working in more space as the window changes size. |
+| View ▸ Panes ▸ Focus Zoom ▸ Zoom ratio |  | Cycle the size ratio used when focus enlarges a pane. Use this to adjust how much extra space the active pane receives. |
+| View ▸ Panes ▸ Focus Zoom ▸ Pin board size |  | Toggle whether automatic pane zoom preserves the board's size. Use this to keep the board stable while other panes gain space. |
 | View ▸ Layout ▸ Save Layout |  | Save the current pane layout. When you want to return later to the current pane arrangement. |
 | View ▸ Layout ▸ Save Layout As… |  | Open the dialog for saving the workspace under a layout name. Use this to preserve a new pane arrangement for later use. |
 | View ▸ Layout ▸ Manage Layouts... |  | Manage the saved pane layouts. When organizing the arrangements you have saved. |
@@ -333,6 +343,7 @@ Each row: where to find it, its shortcut, and what it does.
 | Copy Diagram |  | Copy a picture of the current position to the clipboard. Use this to include the board in another document. |
 | Copy FEN |  | Copy the current position as position text to the clipboard. Use this to transfer the exact board position to another chess tool. |
 | Edit Annotation… |  | Open the symbol editor for the current move. Use this to mark a move as good, bad or interesting. |
+| Find Video Lesson |  | Find video lessons that cover the board position and play the first match in the media pane. Use this to watch a lesson about the position on the board. |
 | Flip Board |  | Turn the clicked board around so the other side is at the bottom. Use this to study the position from the opponent's side. |
 | Insert Null Move |  | Insert a turn without a piece move at the current position. Use this to test a threat as if the opponent had passed. |
 | Set Start Board… |  | Open the piece-placement editor from the clicked board. Use this to enter a position that does not begin with the usual arrangement. |
@@ -368,6 +379,7 @@ Each row: where to find it, its shortcut, and what it does.
 | Marks Palette… |  | Open the palette for colored board marks and arrows. Use this to draw attention to squares or plans in the position. |
 | Edit Move Information… |  | Open the editor for information attached to the current move. Use this to change recorded analysis or clock details for a move. |
 | New Main Line |  | Promote the selected continuation into the game's main line. Use this when the alternative should become the principal continuation. |
+| Is This a Novelty? |  | Label the current move against master practice: known, novelty, side line or transposition. Use this to check whether a move in the game is new. |
 | Promote Variation |  | Raise the current variation above its competing continuation. Use this when organizing the preferred order of alternatives. |
 | Redo … |  | Reapply the last undone change to the game notation. Use this after undoing an edit you want to keep. |
 | Remove Variation |  | Delete the current alternative line from the game. Use this to remove analysis you no longer want to retain. |
@@ -472,6 +484,7 @@ Each row: where to find it, its shortcut, and what it does.
 | Insights |  | Show insights about the player selected in the table. Use this to review that player's patterns and tendencies. |
 | Prep Report |  | Open the preparation report for the selected player. Use this when gathering material about an opponent. |
 | Show Player Card |  | Open the information card for the selected player. Use this to inspect that player's recorded details. |
+| Player Statistics |  | Show the player's statistics in the active database: results by colour, score, Elo range and most played openings. Use this to see how a player has done in the database. |
 | Open URL |  | Show available web links for the selected player. Use this to visit a source associated with the player record. |
 | Prep Report… |  | Open an opponent-preparation report for the selected player. Use this before studying how to face that player. |
 | Save as Working Set |  | Save a filtered working set for the selected player, event or site. Use this to retain the matching games as a named collection. |
@@ -518,6 +531,7 @@ Each row: where to find it, its shortcut, and what it does.
 | Type |  | Sort the selected player table by type in descending order. Use this to reorder the current named table. |
 | Sort (ascending) |  | Choose a column to sort the named table in ascending order. Use this to choose how the selected table is ordered. |
 | Sort (descending) |  | Choose a column to sort the named table in descending order. Use this to choose how the selected table is ordered. |
+| Position Types |  | Show which kinds of position the player's games reach and how the player scores in them. Use this to see a player's strong and weak position types. |
 
 #### C6: An engine line in the analysis pane
 
@@ -568,6 +582,7 @@ Each row: where to find it, its shortcut, and what it does.
 | Position follow |  | Let the media video follow the board position. When selecting a move should seek to its moment in the video. |
 | Timeline |  | Let the media video follow its own timeline. When watching the video continuously should advance the game alongside it. |
 | Sync Options |  | Choose how a video in the media pane follows the game moves (not file or cloud syncing). When the video and the moves should follow one another differently. |
+| Transcribe |  | Transcribe the speech of this media file with the local speech-to-text engine. Use this to read what is said in a lesson or video. |
 
 #### C8: A row in the opening tree
 
@@ -668,6 +683,8 @@ Each row: where to find it, its shortcut, and what it does.
 | Hide |  | Hide the selected table column. Use this to remove a field you do not need to see. |
 | Optimize Columns |  | Choose widths that fit the selected table's contents. Use this when displayed values need more suitable widths. |
 | Show Column |  | Show the list of hidden or available table columns. Use this to bring an omitted field back into view. |
+| Sort Ascending |  | Sort the table by this column, smallest first. Use this to order the rows by the clicked column. |
+| Sort Descending |  | Sort the table by this column, largest first. Use this to order the rows by the clicked column, largest first. |
 | Squeeze Columns |  | Reduce table-column widths using the compact sizing mode. Use this when fitting more fields on screen matters. |
 
 #### C11: A comment in the comment editor
@@ -901,33 +918,33 @@ Open with Tools ▸ Tournament Director…. Entries marked *assistant only* have
 
 | Operation | In the workspace | How it works |
 |---|---|---|
-| Tournament audit | *assistant only* | Return immutable journal records, including commands, revisions, idempotency keys and before/after state. |
+| Tournament audit | yes | Return immutable journal records, including commands, revisions, idempotency keys and before/after state. |
 | Record bye | yes | Record a requested, zero-point, full-point or pairing-allocated bye with explicit points and category. |
 | Check pairings | yes | Check a round's pairings against C.04.3 criteria and the Dutch pairing helper without changing tournament state. |
 | Correct result | yes | Correct a completed result without rewriting audit history; published standings gain a new publication revision. |
 | Create tournament | yes | Create a C.05 round robin for humans or engines. Preview with commit false, then commit at the supplied revision. For an engine event it can also pair and play every round from a named opening, an opening code range or a list of moves. |
-| Tournament crosstable | *assistant only* | Return the event crosstable as text, or open its journal-backed HTML view. |
+| Tournament crosstable | Standings tab ▸ Crosstable | Return the event crosstable as text, or open its journal-backed HTML view. |
 | Enter result | yes | Enter a played or forfeit result for a pending human pairing. |
 | Export tournament | yes | Save the tournament's games, its crosstable as a web page, or a FIDE TRF16/TRF26 rating report to a file you name. |
 | Finish tournament | yes | Finish an event when every non-bye game is complete and return the final standings. |
-| Import tournament report | *assistant only* | Create a tournament journal from a FIDE TRF16 or TRF26 report file. |
-| Find FIDE player | *assistant only* | Find a player by exact name or FIDE number in the installed rating list. |
+| Import tournament report | yes | Create a tournament journal from a FIDE TRF16 or TRF26 report file. |
+| Find FIDE player | yes | Find a player by exact name or FIDE number in the installed rating list. |
 | Override pairing | yes | Change seats in a pending pairing with a required reason and C.04.3 checker report; prohibited overrides require a human TD ruling and stay marked non-compliant. |
 | Pair round | yes | Preview or commit Berger pairings for one round, or all rounds when round is zero. |
 | Print tournament sheet | yes | Format or save the tournament pairings, standings or crosstable for printing as a web page, plain text or a printable document. |
-| Compute and record prizes | *assistant only* | Compute and record tournament and category prize allocations using the Hort system, equal tie splitting or indivisible rank order, enforcing one prize per player and recording prize payments. |
+| Compute and record prizes | yes | Compute and record tournament and category prize allocations using the Hort system, equal tie splitting or indivisible rank order, enforcing one prize per player and recording prize payments. |
 | Publish standings | yes | Append an immutable publication snapshot; later corrections create another publication revision. |
 | Redo tournament command | yes | Redo an undone domain command at the current revision without deleting audit history. |
 | Register players | yes | Register human or configured engine players before pairings are published. |
 | Register FIDE player | yes | Copy a player's identity and rating into this event, keeping a dated record for later review. |
 | Record arbiter ruling | yes | Evaluate and record a human TD or arbiter ruling under Laws of Chess 2023 with setting, supervision regime, clock penalty and optional appeal status. |
-| Tournament standings | *assistant only* | Compute exact C.07 standings and every tiebreak breakdown. |
+| Tournament standings | Standings tab | Compute exact C.07 standings and every tiebreak breakdown. |
 | Start tournament | yes | Start or resume an event and schedule engine games with bounded concurrency. |
-| Tournament status | *assistant only* | Show the event's revision, current round, how many players and pairings it has, how it is saved, and whether undo or redo is available. |
+| Tournament status | Event tab (status lines) | Show the event's revision, current round, how many players and pairings it has, how it is saved, and whether undo or redo is available. |
 | Stop tournament | yes | Stop all event engine processes and preserve completed games; running attempts become pending. |
 | Undo tournament command | yes | Undo the latest reversible domain command at the current revision without deleting audit history. |
 | Withdraw player | yes | Withdraw a player before or after pairing; applies C.05 annulment or forfeits in round robins, and Swiss withdrawal handling. |
-| Tournament Director workspace | *assistant only* | Open the Event, Players, Pairings, Results and Standings workspace, close it, or select a tab. |
+| Tournament Director workspace | Tools ▸ Tournament Director… | Open the Event, Players, Pairings, Results and Standings workspace, close it, or select a tab. |
 
 ### 3.6 Typed commands (Ask field)
 
@@ -970,7 +987,7 @@ The assistant calls these when you ask for something in plain language (Tools �
 | `annot-marks` | Right-click a move ▸ Marks Palette… | Draw arrows and coloured squares on the board. Use this when you want to highlight squares or show an idea on the board. |
 | `annot-palette` | Right-click the board ▸ Edit Annotation… | Open the annotation palette for the current move. Use this when you want to mark a move as good, bad, interesting or dubious. |
 | `annotate_game` | Analysis ▸ Annotate Game with AI… | Annotate a game with comments and marks. Use this when you want a reviewed and commented game. |
-| `app.preferences.assistant` | — (no menu row; Ask field only) | Open the assistant preferences. When you want to change how the assistant behaves. |
+| `app.preferences.assistant` | Edit ▸ Preferences ▸ Assistant… | Open the assistant preferences. When you want to change how the assistant behaves. |
 | `app_state` | — | Report which database, game and tab are open. Use this when you want to know what Chesswiz is doing now. |
 | `check_results` | Training ▸ Check Game Results… | Check whether game results in the database are wrong. Use this when you suspect results do not match the moves. |
 | `classifier_status` | — | Show which service chooses actions for simple requests and whether it is responding. When checking how Chesswiz chooses actions for simple requests. |
@@ -993,34 +1010,32 @@ The assistant calls these when you ask for something in plain language (Tools �
 | `engine_evaluate` | Analysis pane | Ask the chess engine directly (no analysis pane needed) for the best moves in a position and their scores: the current board or a supplied position description. When you need an engine assessment without opening an analysis pane. |
 | `engine_options` | Analysis pane ▸ Set Up Engine… | The options of an engine's profile (default 'Default') as the Options dialog shows them: name, type, value, default and range or choices. Threads, hash and the number of lines are not options here; start_engine sets them. When checking which settings and values an engine profile supports. |
 | `engine_play` | Training ▸ Play Against Engine… | Let the engine play its best moves on the board, starting an engine if none runs. Use this to watch a computer continue the game from the current position. |
-| `event_types` | — | The kinds of time control (classical, rapid, blitz, bullet, correspondence, simul, training) of the latest games in the active database, or of one player's games. A deterministic rule reads the TimeControl tag and the event name; games the rule cannot place are counted as 'unclear' (no model is consulted). Read-only. 'player' limits it to one player; 'games' is how many of the latest games to read (default 500). When comparing the time controls represented in a player's recent games. |
+| `event_types` | Database ▸ Reports ▸ Time Control | The kinds of time control (classical, rapid, blitz, bullet, correspondence, simul, training) of the latest games in the active database, or of one player's games. A deterministic rule reads the TimeControl tag and the event name; games the rule cannot place are counted as 'unclear' (no model is consulted). Read-only. 'player' limits it to one player; 'games' is how many of the latest games to read (default 500). When comparing the time controls represented in a player's recent games. |
 | `explain_game_result` | Game bar ▸ Explain this game | Explain a game result in plain language. Use this when you want to know why a game ended as it did. |
 | `explain_position` | Analysis ▸ Explain ▸ Position | Explain the current position in plain language. Use this when you want a verbal assessment of the position. |
 | `export_database` | File ▸ Export | Export games from a database to a portable game notation file. Use this when you want to save or share games outside Chesswiz. |
 | `factcheck_annotations` | Analysis ▸ Fact-Check Annotations | Check stored game comments against the positions they describe. When imported or personal notes may contradict the positions they describe. |
 | `find_capability` | — | Find the Chesswiz operations that can perform a task. When you know your task but need to find which operations can perform it. |
-| `find_lesson` | — | Find a video lesson for the current opening position. Use this when you want a lesson or clip about this position. |
+| `find_lesson` | Board right-click ▸ Find Video Lesson | Find a video lesson for the current opening position. Use this when you want a lesson or clip about this position. |
 | `find_positions` | — (typed command *find games*) | Find positions in the database that match a pattern. Use this when you want positions with a piece on a square or a material pattern. |
 | `find_similar` | Right-click a game ▸ Games Like This… | Find games with positions like the one on the board ('games like this one', 'similar positions') in the active database; the application writes the pattern search, so no cql_help is needed. 'aspects' says what must be alike: pawns (the pawn structure, both sides), material (the same pieces), pieces (kings and pieces on the same squares); default pawns alone. The game on the board is left out of the results. 'tolerance' lets up to 0, 1 or 2 pawns per side stand elsewhere (default 0). 'colours' both also finds the structure with the colours reversed. Same two steps as find_positions: mode sample first (the user sees diagrams and the search in the Report pane; ask whether that is what they meant), then mode all. Header fields narrow the games first. When you want examples of games that reached positions resembling the board. |
 | `game-new` | File ▸ New | Start a new game on the board. Use this when you want to play or enter a fresh game. |
 | `game.copy` | Right-click a game ▸ Copy Game | Copy games into the Chesswiz game clipboard so they can be pasted elsewhere. With no arguments it copies the game on the board; with base, variant and numbers it copies those games; optionally also paste them into 'database'. When transferring selected games through the application clipboard. |
 | `game.paste` | Right-click a game ▸ Paste Game(s) | Paste exactly the games in the game clipboard into the database that has focus (or 'base'); read-only and unsupported variants are refused. When clipboard games should be added to a writable destination collection. |
 | `goto_move` | Click the move in the notation | Navigate the game already on the board to a full move number. With after white or black show the position after that side's move; omit after for before White's move. Keeps the current game and edits. Use instead of repeated nav-forward/nav-back calls. When the discussion refers to a numbered move in the loaded game. |
-| `handoff_issue` | — | Start the configured coding agent on an issue found by triage, to fix it in the Chesswiz sources. Only when the user asks for it. When a recorded problem is ready to send to the coding assistant. Asks for confirmation first. |
 | `help.close` | Help window close button | Close the Help window after reading the manual. Use this to return to your game after consulting a manual page. |
 | `import_games` | Tools ▸ Import Games… | Import games from a portable game notation file into a database. Use this when you have games in a portable game notation file and want them in Chesswiz. Asks for confirmation first. |
 | `install_chessbase_fonts` | Tools ▸ Install Legacy Fonts… | Install the figurine chess fonts from a Windows font directory. When suitable figurine fonts are available in a Windows font folder. Asks for confirmation first. |
 | `layout.delete` | View ▸ Layout ▸ Manage Layouts… | Delete a saved layout by name without opening the layout manager. When a saved arrangement is obsolete and should no longer be offered. Asks for confirmation first. |
 | `layout.rename` | View ▸ Layout ▸ Manage Layouts… | Rename a saved layout by name without opening the layout manager. When a saved arrangement needs a more recognizable name. Asks for confirmation first. |
 | `list_engines` | Edit ▸ Preferences ▸ Engines… | The chess engines Chesswiz can run: the ones bundled with Chesswiz and the ones the user added. For each: name, version, protocol, variants, rating, threads, hash and line limits, its program and whether that program is there. Also which analysis panes run which engine. When choosing among the engine programs already available to the application. |
-| `list_issues` | — | List recorded bugs, showing the newest reports first. When reviewing the bugs recorded by error triage. |
 | `list_open_databases` | Database switcher | List the databases currently open, and which one is active. When checking which collection is active among several open databases. |
 | `maintenance_report` | Database ▸ Maintenance (individual commands) | Open the database overview, duplicate-game report or opening coverage report. When deciding whether a database needs cleanup or duplicate review. |
 | `nav-enter-var` | Board navigation buttons | Move to the next available variation at the board position. Use this to explore another branch while playing through analysis. |
 | `nav-fast-back` | Board navigation buttons | Move the board backward by ten half-moves. Use this to review an earlier stretch of the game quickly. |
 | `nav-fast-forward` | Board navigation buttons | Move the board forward by ten half-moves. Use this to skip ahead while reviewing a long game. |
 | `new_game` | File ▸ New | Start a new, empty game on the board. Use this when you want a fresh board to play or analyse. |
-| `novelty_label` | — | Check whether a move is known in the available master games. When checking whether a position is represented in the available precedent index. |
+| `novelty_label` | Notation right-click ▸ Is This a Novelty? | Check whether a move is known in the available master games. When checking whether a position is represented in the available precedent index. |
 | `open_database` | File ▸ Open | Open a Chesswiz database file, or switch to a database that is already open. Use this to load a saved collection or select another open database as the active database. |
 | `open_game` | Double-click a game in the list | Load a game onto the board by number, or a player's most recent game. When selecting a known game number or a player's latest game for review. |
 | `open_play_engine` | Training ▸ Play Against Engine… | Open the Play Against Engine setup dialog, optionally selecting the user's colour. Use for requests to open Play Against Engine or play as Black/White. This only opens the dialog; the user presses Start to begin the game. When setting your color before starting a computer opponent. |
@@ -1032,17 +1047,17 @@ The assistant calls these when you ask for something in plain language (Tools �
 | `opening_score` | Tree pane | Results of an opening in the active database, by opening classification code: 'B90' (one code), 'B9' (B90-B99), 'B' (B00-B99) or a range 'B90-B99'. When comparing results for an opening code or family in the active collection. |
 | `opponent_brief` | Training ▸ Opponent Brief… | Open the opponent brief in the Report pane. Use this when the preparation report should be shown. |
 | `pane` | View ▸ Panes | Show, hide, dock or undock a pane. Use this when a pane is closed or in the wrong place. |
-| `player_stats` | — (typed command *player statistics*) | Show a player's record and statistics. Use this when you want a player's results and rating. |
+| `player_stats` | Player right-click ▸ Player Statistics | Show a player's record and statistics. Use this when you want a player's results and rating. |
 | `position_moves` | Tree pane | The moves played from the position on the board in the tree's database (if none is set, the active database becomes it): for each move the games, share, score for the side to move, draws, average Elo, last year played and best player. Answers 'what is played here', 'what scores best' and 'is this move a novelty' (a move missing from the list is new to that database). When choosing a continuation based on games that reached the board position. |
 | `prepare_against` | Training ▸ Opponent Brief… | Prepare against a named opponent with statistics, openings and weaknesses. Use this before a game against a known player. |
-| `print` | — (File ▸ Export can write PDF; no Print command) | Print the current board game to a PDF and send it to the platform printer or PDF viewer. Load a requested game first with open_game. Returns an error if printing fails. When you want a paper or PDF copy of the loaded game. |
+| `print` | Game ▸ Print Game… (Ctrl+P) | Print the current board game to a PDF and send it to the platform printer or PDF viewer. Load a requested game first with open_game. Returns an error if printing fails. When you want a paper or PDF copy of the loaded game. |
 | `recent_errors` | View ▸ Show Log… | List the most recent errors Chesswiz recorded. Use this when something went wrong just now. |
 | `remember_me` | related: Edit ▸ Preferences ▸ Private Player Card… | Remember who the user is: their name as it is written in their games, e.g. 'Thomas, Michael'. Call it when the user tells you their name; from then on I, me and my games mean that player. An empty name forgets it. When reports should recognize which games and player name are yours. |
 | `remove_engine` | Edit ▸ Preferences ▸ Engines… | Remove an engine from the engine list (its program stays on disk). Not while it runs in a pane. Only when the user asks for it. When an engine should disappear from the chooser while its program remains installed. Asks for confirmation first. |
 | `repertoire_check` | Database ▸ Reports ▸ Repertoire Report… | Check the user's opening repertoire against their games. Use this when the user wants to find gaps in their repertoire. |
 | `run_action` | Every menu entry | Run a Chesswiz operation found by capability discovery. When capability discovery has identified the operation and the information it needs. |
 | `run_job` | — | Prepare for an opponent, review your games, check your repertoire or create training positions in a series of steps. When preparation or review needs several supported operations in sequence. |
-| `save_pattern` | — | Save the last position search and its accepted examples under a short name. When a successful position search should be reusable under a memorable name. |
+| `save_pattern` | — (part of the assistant's position search) | Save the last position search and its accepted examples under a short name. When a successful position search should be reusable under a memorable name. |
 | `save_working_set` | Right-click a player/event ▸ Save Working Set… | Save the games the game list shows (after show_search, or a find_positions/find_similar run in mode all) as a new Scidb database next to the active one, a working set, and open it. Chesswiz asks the user for its name; 'name' is the suggestion. Only when the user asks to keep or save the selection. When search results should become a separate collection for later work. Asks for confirmation first. |
 | `search_games` | Database ▸ Search | Find games in your database by player, opening, tournament or result. Use this to find a player’s games, an opening or a tournament, or to narrow the search by colour and result. |
 | `set_engine_option` | Analysis pane ▸ Set Up Engine… | Change an option of an engine's profile (default 'Default'), checked against its type and range; engine_options lists them. Running panes of that engine restart with it. The change is saved. When a known engine setting needs a new value within its supported range. |
@@ -1051,14 +1066,13 @@ The assistant calls these when you ask for something in plain language (Tools �
 | `similar_games` | Right-click a game ▸ Games Like This… | Find the games of the active database that share the most opening half-moves with one game and narrate why they are alike. When looking for games that share the early moves of a selected game. |
 | `start_engine` | Analysis pane engine button | Start the chess engine on the current position. Use this when you want engine analysis. |
 | `stop_engine` | Analysis pane ▸ Close Engine | Stop the analysing engine. When live analysis is no longer needed. |
-| `structure_profile` | — (typed command *player structures*) | Which kinds of position a player's games reach and how the player scores in them, found exactly by Chesswiz's pattern matcher in the active database: isolated queen's pawn, opposite-coloured bishops, queenless middlegames, rook and pawn endings, kings on opposite wings. Counts and scores come from the database. 'colour' limits it to the games with that colour; 'games' is how many of the latest games to read (default 200). When preparing against a player by studying recurring pawn structures and results. |
+| `structure_profile` | Player right-click ▸ Position Types | Which kinds of position a player's games reach and how the player scores in them, found exactly by Chesswiz's pattern matcher in the active database: isolated queen's pawn, opposite-coloured bishops, queenless middlegames, rook and pawn endings, kings on opposite wings. Counts and scores come from the database. 'colour' limits it to the games with that colour; 'games' is how many of the latest games to read (default 200). When preparing against a player by studying recurring pawn structures and results. |
 | `study_plan` | Training ▸ Study Plan… | Build a study plan from the user's games. Use this when the user wants to improve with a training plan. |
 | `switch_tab` | Information / Database / Board tabs | Switch the main window to the board tab, the database tab (game list) or another tab. When the next task belongs in another main application workspace. |
 | `tablebase` | Board pane menu ▸ Show Tablebase | Look up the endgame tablebase for the current position. Use this when you want perfect play in an endgame. |
 | `tool_log` | — | List the recent operations the assistant attempted and their results. When checking what the assistant attempted and whether those operations succeeded. |
 | `training_set` | Training ▸ Training Set from Games… | Make a training set of positions from the database. Use this when you want puzzles or positions to practise. |
-| `transcribe_media` | — | The transcript of a media file (the speech of an audio lesson or a video), as plain text, from the local speech-to-text engine. Read-only; nothing is stored. Use it when the user asks what is said in a lesson, or wants its text. Long transcripts are cut; the answer starts with a short summary. When you want readable speech from a recorded lesson. |
-| `triage_errors` | — | Group newly recorded problems and create a report for each suspected bug. When newly recorded errors need categorization and issue reports. |
+| `transcribe_media` | Media right-click ▸ Transcribe | The transcript of a media file (the speech of an audio lesson or a video), as plain text, from the local speech-to-text engine. Read-only; nothing is stored. Use it when the user asks what is said in a lesson, or wants its text. Long transcripts are cut; the answer starts with a short summary. When you want readable speech from a recorded lesson. |
 | `update_player_data` | Database ▸ Player ▸ Update Rating Data… | Update the rating data of the players in the database. Use this when you want current FIDE ratings for your players. Asks for confirmation first. |
 | `view.dialog.close` | The dialog's own buttons | Close a named information or preferences dialog. Unsaved form fields are discarded. When an information or preferences window has served its purpose. |
 | `voice_status` | Speak button | Show the status of voice input. Use this when you want to talk to Chesswiz instead of typing. |
@@ -1070,7 +1084,9 @@ The assistant calls these when you ask for something in plain language (Tools �
 | `cancel_timer` | Cancel a scheduled task. When a scheduled task should no longer run. Asks for confirmation first. |
 | `child_processes` | The processes started by this program (helpers, leftover players). When investigating a helper program that may still be running. |
 | `eval_tcl` | Run a debugging instruction and report its result. When investigating a problem in a debugging session. Asks for confirmation first. |
+| `handoff_issue` | Start the configured coding agent on an issue found by triage, to fix it in the Chesswiz sources. Only when the user asks for it. When a recorded problem is ready to send to the coding assistant. Asks for confirmation first. |
 | `hang_dumps` | Read the diagnostic reports saved when the program stopped responding. Use this when investigating a frozen application. |
+| `list_issues` | List recorded bugs, showing the newest reports first. When reviewing the bugs recorded by error triage. |
 | `list_procs` | Find internal operations by name. Use this when investigating which part of Chesswiz performs an operation. |
 | `loop_health` | Show how long Chesswiz stopped responding and when those delays occurred. When investigating pauses or delayed input in the interface. |
 | `media_state` | Show the current media file, playback progress, duration and volume. When diagnosing playback, volume, or the current media position. |
@@ -1078,6 +1094,7 @@ The assistant calls these when you ask for something in plain language (Tools �
 | `read_variable` | Read a named internal setting or group of settings. When investigating settings during a debugging session. |
 | `release_grab` | Free the mouse from a window that is preventing clicks elsewhere. When a window prevents you from clicking the rest of Chesswiz. Asks for confirmation first. |
 | `timers` | List scheduled tasks and open connections. When investigating delayed work or a connection that remains open. |
+| `triage_errors` | Group newly recorded problems and create a report for each suspected bug. When newly recorded errors need categorization and issue reports. |
 | `ui_state` | Show open windows, their sizes and positions, and which window receives typing and mouse clicks. When investigating window placement or a window that prevents normal interaction. |
 
 ### 3.9 Controls the assistant can operate

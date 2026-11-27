@@ -258,6 +258,13 @@ dict for {name entry} $Actions {
 	]
 }
 
+# Internal diagnostics: the assistant may call them, the Ask field does not
+# suggest them next to chess features.
+foreach _id {app_state classifier_status tool_log} {
+	if {[dict exists $::action::Registry $_id]} { dict set ::action::Registry $_id asklist 0 }
+}
+unset -nocomplain _id
+
 # Wire registry hooks for confirm/bulk/debug gates.
 # Assistant path uses ConfirmDialog; menu path uses ::dialog::question directly.
 set ::action::ConfirmHook ::application::assistant::ConfirmDialog

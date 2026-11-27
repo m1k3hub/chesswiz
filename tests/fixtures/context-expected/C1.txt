@@ -12,4 +12,6 @@ Copy FEN
 Copy Diagram
 Edit Annotation… (Ctrl+A)
 ---
+Find Video Lesson
+---
 Board Style…

@@ -3,6 +3,7 @@ Ask about this media entry...
 Play
 ---
 Open Report
+Transcribe
 Open Stream…
 Open in External Player
 ---

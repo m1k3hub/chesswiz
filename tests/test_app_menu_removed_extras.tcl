@@ -725,7 +725,6 @@ tcltest::test menu-paths-stale {the paths the reseal removed no longer resolve} 
 		en {Main Menu > Setup > Engines}
 		en {Main Menu > Setup > Keyboard Preferences}
 		en {Main Menu > Search}
-		en {Preferences > Assistant}
 		en {Maintenance > Advanced Search}
 		en {Maintenance > Pattern Search}
 		en {Maintenance > Mark As > Openings}

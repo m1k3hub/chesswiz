@@ -44,6 +44,7 @@ MENU Edit
       ENTRY Engines…
       ENTRY PGN export options…
       ENTRY Private Player Card…
+      ENTRY Assistant…
 
 MENU Game
   ENTRY New Game ▸ Ctrl+Shift+G
@@ -74,6 +75,7 @@ MENU Game
       ENTRY merge from game tab
   ENTRY Export Game… Ctrl+E
   ENTRY Upload to Lichess Study…
+  ENTRY Print Game… Ctrl+P
   SEP
   ENTRY Game History ▸
     SUBMENU Game History
@@ -100,6 +102,7 @@ MENU Database
       ENTRY Trends…
   ENTRY Maintenance ▸
     SUBMENU Maintenance
+      ENTRY Fix player names…
       ENTRY Compact…
       ENTRY Strip Move Information…
       ENTRY Strip PGN Tags…
@@ -114,6 +117,7 @@ MENU Database
   SEP
   ENTRY Player Data ▸
     SUBMENU Player Data
+      ENTRY National / correspondence lists…
       ENTRY Update Rating Data…
       ENTRY Check Name Spellings…
 
@@ -236,6 +240,14 @@ MENU View
       ENTRY report
       ENTRY assistant
       ENTRY explorer
+      SEP
+      ENTRY Maximise / Restore Pane Ctrl+Shift+Z
+      ENTRY Focus Zoom ▸
+        SUBMENU Focus Zoom
+          ENTRY Focus follows size
+          ENTRY Focus follows size on resize
+          ENTRY Zoom ratio
+          ENTRY Pin board size
   ENTRY Layout ▸
     SUBMENU Layout
       ENTRY Load Layout ▸

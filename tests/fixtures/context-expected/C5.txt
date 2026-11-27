@@ -5,6 +5,8 @@ Show Player Card
 ---
 Prep Report…
 Insights…
+Player Statistics
+Position Types
 ---
 Open URL ▸
 ---

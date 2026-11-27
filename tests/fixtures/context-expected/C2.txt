@@ -18,6 +18,7 @@ Edit Move Information…
 Annotate ▸ (prefix/infix/suffix symbols)
 ---
 Explain Move
+Is This a Novelty?
 ---
 Insert Diagram
 Insert Diagram from Black

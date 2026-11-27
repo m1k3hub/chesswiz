@@ -25,7 +25,11 @@ tcltest::test player-highest-not-below-games {the player list never shows less t
 		set info [scidb::db::get playerInfo $i 0 $b Normal -ratings {Elo DWZ} -federation Country -usebase 0]
 		set name [lindex $info 0]
 		if {[lindex $info 4 2] ne "Elo" || ![dict exists $best $name]} { continue }
-		if {abs([lindex $info 4 0]) < [dict get $best $name]} { lappend low $i }
+		set top [dict get $best $name]
+		if {abs([lindex $info 4 0]) < $top} { lappend low $i }
+		# latest from a stale dictionary: hundreds of points below the games
+		set latest [expr {abs([lindex $info 4 1])}]
+		if {$latest > 0 && $latest < $top - 300} { lappend low $i }
 	}
 	list [expr {[dict size $best] > 100}] [llength $low]
 } -result {1 0}

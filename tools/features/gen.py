@@ -119,7 +119,7 @@ w("### 3.1 Main menu\n")
 menu = sorted([r for r in rows if r.get("dropdown")], key=lambda r: [int(x) for x in r["dropdown"].split(".")])
 cur = None
 for r in menu:
-    top = TOPS.get(r["dropdown"].split(".")[0], "Registered for the menu but not placed in it")
+    top = TOPS.get(r["dropdown"].split(".")[0], "Donate button (top strip)")
     if top != cur:
         cur = top
         w(f"\n#### {top}\n\n| Menu path | Key | How it works |\n|---|---|---|")
@@ -156,7 +156,9 @@ w("")
 w("### 3.5 Tournament Director\n\nOpen with Tools ▸ Tournament Director…. Entries marked *assistant only* have no button in the workspace.\n\n| Operation | In the workspace | How it works |\n|---|---|---|")
 tdui = open(sys.argv[3], encoding="latin-1").read()
 for r in sorted([r for r in rows if r["id"].startswith("td.")], key=lambda r: r["id"]):
-    inui = "yes" if re.search(re.escape(r["id"]) + r"\b", tdui) else "*assistant only*"
+    shown = {"td.standings": "Standings tab", "td.crosstable": "Standings tab ▸ Crosstable",
+             "td.status": "Event tab (status lines)", "td.workspace": "Tools ▸ Tournament Director…"}
+    inui = shown.get(r["id"]) or ("yes" if re.search(re.escape(r["id"]) + r"\b", tdui) else "*assistant only*")
     w(f"| {label(r)} | {inui} | {how(r)} |")
 w("")
 

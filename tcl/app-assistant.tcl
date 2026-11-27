@@ -448,13 +448,13 @@ variable Actions {
 		::application::assistant::DoToolLog
 	}
 	triage_errors {
-		0 0 "triage the error log"
+		0 1 "triage the error log"
 		"Have the error log triaged now: new error groups are classified (bug, environment, user, noise) and every bug gets an issue file. Runs in the background; the result is posted here when it is done."
 		{{"type":"object","properties":{}}}
 		::application::assistant::DoTriage
 	}
 	list_issues {
-		0 0 "list the issues"
+		0 1 "list the issues"
 		"The bugs found by error triage, newest first: issue id, severity, summary and file."
 		{{"type":"object","properties":{}}}
 		::application::assistant::DoListIssues
@@ -556,7 +556,7 @@ variable Actions {
 		::application::assistant::DoTranscribeMedia
 	}
 	handoff_issue {
-		1 0 "hand issue %s to the coding agent"
+		1 1 "hand issue %s to the coding agent"
 		"Start the configured coding agent on an issue found by triage, to fix it in the Chesswiz sources. Only when the user asks for it."
 		{{"type":"object","properties":{"issue":{"type":"string","description":"the issue id, 8 hex digits"}},"required":["issue"]}}
 		::application::assistant::DoHandoff

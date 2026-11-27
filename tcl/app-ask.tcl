@@ -916,27 +916,10 @@ proc ::application::ask::PopulateRows {text} {
 		}
 		set seen {}
 		foreach row $Priv(commands) { dict set seen [dict get $row action] 1 }
-		# Context-menu copies of a command (c1.flip_board, c9.flip_board,
-		# board-flip) share its label: list it once, preferring the row
-		# that shows a shortcut.
-		set palette {}
-		set byLabel {}
 		foreach paletteRow [::action::labels asklist $text] {
 			lassign $paletteRow id label accel enabled visible
 			if {[string match command.* $id] || [dict exists $seen $id]} { continue }
 			dict set seen $id 1
-			if {[dict exists $byLabel $label]} {
-				set i [dict get $byLabel $label]
-				if {$accel ne "" && [lindex $palette $i 2] eq ""} {
-					lset palette $i $paletteRow
-				}
-				continue
-			}
-			dict set byLabel $label [llength $palette]
-			lappend palette $paletteRow
-		}
-		foreach paletteRow $palette {
-			lassign $paletteRow id label accel enabled visible
 			lappend Priv(commands) [dict create id $id action $id args {} missing {} \
 				template {} label $label input $text palette 1]
 			lappend Priv(rows) [list $id $label $accel $enabled $visible]
@@ -1350,7 +1333,7 @@ namespace eval application {
 namespace eval speech {
 
 namespace eval mc {
-set Install		"Speech input needs sherpa-onnx-offline and a sherpa-onnx model folder (or whisper-cli with a ggml model), and arecord or ffmpeg. Set them in the Assistant Preferences\u2026 dialog."
+set Install		"Speech input needs sherpa-onnx-offline and a sherpa-onnx model folder (or whisper-cli with a ggml model), and arecord or ffmpeg. Set them in Edit > Preferences > Assistant\u2026."
 set InstallMac	"macOS uses the system dictation: turn it on in System Settings > Keyboard > Dictation, then press the dictation key (or Fn Fn)."
 set InstallWin	"Windows uses the system dictation: press Win+H while the Ask field has focus."
 set Listening	"Recording… click to cancel"

@@ -82,6 +82,7 @@ namespace eval menu::mc {
 	set MergeGameTab					"merge from game tab"
 	set ExportGame						"Export Game…"
 	set UploadStudy						"Upload to Lichess Study…"
+	set PrintGame						"Print Game…"
 	set GameHistory					"Game History"
 	set RecentGames					"recent games"
 	set ClearHistory					"Clear History"
@@ -266,6 +267,8 @@ set NationalLists "National / correspondence lists…"
 	set ContactBugReport				"Bug Report"
 	set ContactFeatureRequest		"Feature Request"
 	set MenuPrivatePlayerCard		"Private Player Card…"
+	set MenuAssistantPreferences	"Assistant…"
+	set FocusZoomMenu					"Focus Zoom"
 	set StartStopEngine				"Start / Stop Engine"
 
 	# View panes (dynamic rows; labels frozen in the fixture)
@@ -360,6 +363,7 @@ proc ::menu::DefineTree {} {
 				[list cmd menu.edit.preferences.engines MenuEngines] \
 				[list cmd menu.edit.preferences.pgn PgnExportOptions] \
 				[list cmd menu.edit.preferences.player MenuPrivatePlayerCard] \
+				[list cmd menu.edit.preferences.assistant MenuAssistantPreferences] \
 			]] \
 		]] \
 		[list cascade Game "" [list \
@@ -391,6 +395,7 @@ proc ::menu::DefineTree {} {
 			]] \
 			[list cmd game-export ExportGame "Control-e" {::menu::GameLoaded}] \
 			[list cmd menu.game.export.study UploadStudy "" {::menu::GameLoaded}] \
+			[list cmd menu.game.print PrintGame "Control-p" {::menu::GameLoaded}] \
 			[list sep] \
 			[list cascade GameHistory "" [list \
 				[list dyn RecentGames] \
@@ -554,6 +559,14 @@ proc ::menu::DefineTree {} {
 				[list dyn PaneReport] \
 				[list dyn PaneAssistant] \
 				[list dyn PaneExplorer] \
+				[list sep] \
+				[list cmd view.pane_zoom MaximisePane "Control-Shift-Z"] \
+				[list cascade FocusZoomMenu "" [list \
+					[list cmd view.focus_zoom FocusZoom] \
+					[list cmd view.focus_follows_size FocusFollowsSize] \
+					[list cmd view.focus_ratio FocusZoomRatio] \
+					[list cmd view.focus_pin FocusZoomPinBoard] \
+				]] \
 			]] \
 			[list cascade Layout "" [list \
 				[list cascade LoadLayout "" dynamic] \
@@ -800,6 +813,16 @@ proc ::menu::UpdateAccelerators {menu} {
 # ----------------------------------------------------------------------
 # Registration. Every command row becomes one registry action.
 # ----------------------------------------------------------------------
+# The drop-down order RegisterTree gave a row, or a fallback for rows
+# registered outside the tree.
+proc ::menu::TreeOrder {id fallback} {
+	if {[dict exists $::action::Registry $id]} {
+		set order [dict get [::action::get $id] dropdown]
+		if {$order ne "" && ![string match 00.* $order]} { return $order }
+	}
+	return $fallback
+}
+
 proc ::menu::Register {id label {accel ""} {visible ""} {enabled ""} {order ""}} {
 	variable DropdownOrder
 
@@ -2385,11 +2408,11 @@ proc ::menu::RegisterExtras {} {
 			doc "[string totitle $operation] a saved layout by name without opening the layout manager." \
 			handler [list ::menu::RunNamedLayoutMutation $operation]]
 	}
-	Register view.pane_zoom [MC MaximisePane] "Control-Shift-Z" "" "" "00.001"
-	Register view.focus_zoom [MC FocusZoom] "" "" "" "00.002"
-	Register view.focus_ratio [MC FocusZoomRatio] "" "" "" "00.003"
-	Register view.focus_pin [MC FocusZoomPinBoard] "" "" "" "00.004"
-	Register view.focus_follows_size "Focus follows size on resize" "" "" "" "00.005"
+	Register view.pane_zoom [MC MaximisePane] "Control-Shift-Z" "" "" [::menu::TreeOrder view.pane_zoom 00.001]
+	Register view.focus_zoom [MC FocusZoom] "" "" "" [::menu::TreeOrder view.focus_zoom 00.002]
+	Register view.focus_ratio [MC FocusZoomRatio] "" "" "" [::menu::TreeOrder view.focus_ratio 00.003]
+	Register view.focus_pin [MC FocusZoomPinBoard] "" "" "" [::menu::TreeOrder view.focus_pin 00.004]
+	Register view.focus_follows_size "Focus follows size on resize" "" "" "" [::menu::TreeOrder view.focus_follows_size 00.005]
 	dict set ::action::Registry view.focus_follows_size label [MC FocusFollowsSize]
 	dict set ::action::Registry view.focus_follows_size enabled {expr {[::menu::PaneTWM] ne ""}}
 	foreach {id label} {opening_line OpeningLine engine_play EnginePlay set_position SetStartPosition} {
@@ -3323,6 +3346,11 @@ proc ::menu::Do {id} {
 		menu.view.panes.report { return [::menu::TogglePaneId report] }
 		menu.view.panes.assistant { return [::menu::TogglePaneId assistant] }
 		menu.view.panes.explorer { return [::menu::TogglePaneId explorer] }
+		menu.edit.preferences.assistant { return [::application::ask::Preferences] }
+		menu.game.print {
+			set pdf [::print::game .application]
+			return [expr {$pdf ne "" && [file isfile $pdf]}]
+		}
 		view.pane_zoom {
 			::application::switchTab board
 			return [::application::TogglePaneZoom {} [PaneTWM]]

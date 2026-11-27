@@ -307,7 +307,7 @@
   },
   {
     "confirm": 1,
-    "debug": 0,
+    "debug": 1,
     "description": "Start the configured coding agent on an issue found by triage, to fix it in the Chesswiz sources. Only when the user asks for it.",
     "handler": "::application::assistant::DoHandoff",
     "name": "handoff_issue",
@@ -352,7 +352,7 @@
   },
   {
     "confirm": 0,
-    "debug": 0,
+    "debug": 1,
     "description": "The bugs found by error triage, newest first: issue id, severity, summary and file.",
     "handler": "::application::assistant::DoListIssues",
     "name": "list_issues",
@@ -748,7 +748,7 @@
   },
   {
     "confirm": 0,
-    "debug": 0,
+    "debug": 1,
     "description": "Have the error log triaged now: new error groups are classified (bug, environment, user, noise) and every bug gets an issue file. Runs in the background; the result is posted here when it is done.",
     "handler": "::application::assistant::DoTriage",
     "name": "triage_errors",

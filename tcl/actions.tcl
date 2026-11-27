@@ -1512,6 +1512,8 @@ proc ::action::_BuildAskRows {ctxObjects ctxMenus ctxIds} {
 		set record [get $id]
 
 		if {[dict get $record ai] eq "debug"} { continue }
+		# Diagnostics kept for the assistant but not offered to the user.
+		if {[dict exists $record asklist] && ![dict get $record asklist]} { continue }
 		# The context menus' assistant row is not a runnable action.
 		if {$id eq "context.ask"} { continue }
 

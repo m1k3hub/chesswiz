@@ -7,6 +7,109 @@ if {[llength [info commands ::util::source]]} { ::util::source td-ui }
 package require Tcl 8.6
 package require Tk 8.6
 
+namespace eval ::td::ui::mc {
+	set Title	"Tournament Director"
+	set Tab_event	"Event"
+	set Tab_players	"Players"
+	set Tab_pairings	"Pairings"
+	set Tab_results	"Results"
+	set Tab_standings	"Standings"
+	set Start	"Start"
+	set Stop	"Stop"
+	set Undo	"Undo"
+	set Redo	"Redo"
+	set Publish	"Publish"
+	set Finish	"Finish"
+	set ImportTrf	"Import TRF\u2026"
+	set AuditLog	"Audit log\u2026"
+	set NewEvent	"New event"
+	set Name	"Name"
+	set TimeControl	"Time control"
+	set Opening	"Opening"
+	set SeatKind	"Seat kind"
+	set Engines	"Engines"
+	set System	"System"
+	set StartImmediately	"Start immediately"
+	set PreviewCreate	"Preview and create"
+	set FideId	"FIDE ID"
+	set RegisterFide	"Register from FIDE list"
+	set FindFide	"Find in FIDE list"
+	set FideHint	"FIDE ID or exact name"
+	set Round	"Round"
+	set RecordBye	"Record bye"
+	set WithdrawSelected	"Withdraw selected"
+	set Register	"Register"
+	set PairRound	"Pair round (0 = all)"
+	set SwapColours	"Swap colours (audited)"
+	set CheckPairings	"Check pairings"
+	set PrintPairings	"Print pairings"
+	set TdRuling	"TD ruling"
+	set SignedBy	"Signed by"
+	set CorrectionReason	"Correction reason"
+	set EnterResult	"Enter result"
+	set CorrectResult	"Correct result"
+	set RulingFrame	"Arbiter ruling & appeal"
+	set Setting	"Setting"
+	set Pace	"Pace"
+	set Regime	"Regime"
+	set Incident	"Incident"
+	set Offence	"Offence #"
+	set OpponentCanMate	"Opponent can mate"
+	set ClaimedInTime	"Claimed in time"
+	set ClaimValid	"Claim valid"
+	set CheckmateOnBoard	"Checkmate on board"
+	set DefaultMin	"Default min"
+	set LateMin	"Late min"
+	set ApplyResult	"Apply result"
+	set Appeal	"Appeal"
+	set Committee	"Committee"
+	set Deadline	"Deadline"
+	set Deposit	"Deposit"
+	set Arbiter	"Arbiter"
+	set Decision	"Decision"
+	set RecordRuling	"Record ruling"
+	set Crosstable	"Crosstable"
+	set PrintStandings	"Print standings"
+	set PrintCrosstable	"Print crosstable"
+	set ExportTrf16	"Export TRF16\u2026"
+	set ExportTrf26	"Export TRF26\u2026"
+	set Prizes	"Prizes"
+	set PrizeSystem	"Split"
+	set ComputePrizes	"Compute prizes"
+	set NoTournament	"No tournament selected"
+	set Journal	"Journal: %s"
+	set Status	"Status: %s"
+	set Revision	"Revision: %s; publication revision: %s"
+	set RoundOf	"Round: %s / %s"
+	set Store	"Store: %s"
+	set Compliant	"Compliant: %s; violations: %s"
+	set Bye	"BYE"
+	set TrfFiles	"TRF files"
+	set AllFiles	"All files"
+	set Col_number	"No."
+	set Col_name	"Name"
+	set Col_kind	"Kind"
+	set Col_rating	"Rating"
+	set Col_withdrawn	"Withdrawn"
+	set Col_id	"ID"
+	set Col_round	"Round"
+	set Col_white	"White"
+	set Col_black	"Black"
+	set Col_status	"Status"
+	set Col_result	"Result"
+	set Col_category	"Category"
+	set Col_rank	"Rank"
+	set Col_score	"Score"
+	set Col_directEncounter	"Direct encounter"
+	set Col_sonnebornBerger	"Sonneborn-Berger"
+	set Col_koya	"Koya"
+	set Col_gamesWon	"Wins"
+	set Col_gamesWonWithBlack	"Wins with Black"
+	set Col_progressive	"Progressive"
+	set Col_aro	"ARO"
+	set Col_tpr	"TPR"
+}
+
 namespace eval ::td::ui {
 	variable Dialog {}
 	variable Path {}
@@ -33,12 +136,13 @@ proc ::td::ui::Mutate {id domain} {
 	return $result
 }
 
+# Run a button's command; show an error in a dialog instead of a bgerror.
 proc ::td::ui::Safe {script} {
-	if {[catch {uplevel 1 $script} err]} {
-		catch {::dialog::error -parent [DialogOrApp] -message "Tournament Director" -detail $err}
+	if {[catch {uplevel #0 $script} result]} {
+		catch {::dialog::error -parent [DialogOrApp] -message [T Title] -detail $result}
 		return {}
 	}
-	return $::td::ui::Result
+	return $result
 }
 proc ::td::ui::DialogOrApp {} { variable Dialog; return [expr {$Dialog ne "" && [winfo exists $Dialog] ? $Dialog : .application}] }
 
@@ -51,7 +155,7 @@ proc ::td::ui::Open {path {tab event}} {
 	if {$Dialog ne "" && [winfo exists $Dialog]} { raise $Dialog; Select $tab; return $Dialog }
 	set Dialog .application.tournamentDirector
 	toplevel $Dialog -class Scidb
-	wm title $Dialog "Tournament Director"
+	wm title $Dialog [T Title]
 	wm transient $Dialog .application
 	wm withdraw $Dialog
 	wm protocol $Dialog WM_DELETE_WINDOW ::td::ui::Close
@@ -60,7 +164,7 @@ proc ::td::ui::Open {path {tab event}} {
 	pack $Notebook -fill both -expand yes -padx 6 -pady 6
 	foreach name {event players pairings results standings} {
 		ttk::frame $Notebook.$name
-		$Notebook add $Notebook.$name -text [string totitle $name]
+		$Notebook add $Notebook.$name -text [T Tab_$name]
 	}
 	BuildEvent $Notebook.event
 	BuildPlayers $Notebook.players
@@ -94,14 +198,17 @@ proc ::td::ui::BuildEvent {f} {
 	foreach key {path status revision round backend} { ttk::label $f.current.$key -justify left; pack $f.current.$key -anchor w }
 	ttk::frame $f.buttons
 	pack $f.buttons -fill x -pady 5
-	foreach {text command} {Start Start Stop Stop Undo Undo Redo Redo Publish Publish Finish Finish} {
-		ttk::button $f.buttons.[string tolower $text] -text $text -command [list ::td::ui::$command]
-		pack $f.buttons.[string tolower $text] -side left -padx 3
+	foreach command {Start Stop Undo Redo Publish Finish} {
+		ttk::button $f.buttons.[string tolower $command] -text [T $command] -command [list ::td::ui::Safe ::td::ui::$command]
+		pack $f.buttons.[string tolower $command] -side left -padx 3
 	}
-	ttk::labelframe $f.new -text "New event"
+	ttk::button $f.buttons.audit -text [T AuditLog] -command [list ::td::ui::Safe ::td::ui::ShowAudit]
+	ttk::button $f.buttons.import -text [T ImportTrf] -command [list ::td::ui::Safe ::td::ui::ImportTrf]
+	pack $f.buttons.import $f.buttons.audit -side right -padx 3
+	ttk::labelframe $f.new -text [T NewEvent]
 	pack $f.new -fill x -pady 8
-	foreach {label key value} {Name name {Thematic event} {Time control} time_control 3+2 Opening opening {London System}} {
-		ttk::label $f.new.label_$key -text $label
+	foreach {label key value} {Name name {Thematic event} TimeControl time_control 3+2 Opening opening {London System}} {
+		ttk::label $f.new.label_$key -text [T $label]
 		ttk::entry $f.new.$key -width 32 -textvariable ::td::ui::Fields($key)
 		set Fields($key) $value
 		grid $f.new.label_$key -row 0 -column 0 -sticky w
@@ -111,15 +218,15 @@ proc ::td::ui::BuildEvent {f} {
 	grid forget $f.new.label_time_control $f.new.time_control $f.new.label_opening $f.new.opening
 	grid $f.new.label_time_control -row 1 -column 0 -sticky w; grid $f.new.time_control -row 1 -column 1 -sticky ew
 	grid $f.new.label_opening -row 2 -column 0 -sticky w; grid $f.new.opening -row 2 -column 1 -sticky ew
-	ttk::label $f.new.kindlabel -text "Seat kind"; ttk::combobox $f.new.kind -state readonly -values {engine human} -textvariable ::td::ui::Fields(kind); set Fields(kind) engine
-	ttk::label $f.new.countlabel -text "Engines"; ttk::spinbox $f.new.count -from 2 -to 16 -textvariable ::td::ui::Fields(engine_count); set Fields(engine_count) 4
-	ttk::label $f.new.systemlabel -text "System"; ttk::combobox $f.new.system -state readonly -values {round-robin double-round-robin swiss} -textvariable ::td::ui::Fields(system); set Fields(system) double-round-robin
-	ttk::checkbutton $f.new.start -text "Start immediately" -variable ::td::ui::Fields(start); set Fields(start) 1
+	ttk::label $f.new.kindlabel -text [T SeatKind]; ttk::combobox $f.new.kind -state readonly -values {engine human} -textvariable ::td::ui::Fields(kind); set Fields(kind) engine
+	ttk::label $f.new.countlabel -text [T Engines]; ttk::spinbox $f.new.count -from 2 -to 16 -textvariable ::td::ui::Fields(engine_count); set Fields(engine_count) 4
+	ttk::label $f.new.systemlabel -text [T System]; ttk::combobox $f.new.system -state readonly -values {round-robin double-round-robin swiss} -textvariable ::td::ui::Fields(system); set Fields(system) double-round-robin
+	ttk::checkbutton $f.new.start -text [T StartImmediately] -variable ::td::ui::Fields(start); set Fields(start) 1
 	grid $f.new.kindlabel -row 3 -column 0 -sticky w; grid $f.new.kind -row 3 -column 1 -sticky w
 	grid $f.new.countlabel -row 4 -column 0 -sticky w; grid $f.new.count -row 4 -column 1 -sticky w
 	grid $f.new.systemlabel -row 5 -column 0 -sticky w; grid $f.new.system -row 5 -column 1 -sticky w
 	grid $f.new.start -row 6 -column 1 -sticky w
-	ttk::button $f.new.create -text "Preview and create" -command ::td::ui::Create
+	ttk::button $f.new.create -text [T PreviewCreate] -command [list ::td::ui::Safe ::td::ui::Create]
 	grid $f.new.create -row 7 -column 1 -sticky e -pady 5
 	grid columnconfigure $f.new 1 -weight 1
 }
@@ -149,9 +256,14 @@ proc ::td::ui::Redo {} { Mutate td.redo {} }
 proc ::td::ui::Publish {} { Mutate td.publish {} }
 proc ::td::ui::Finish {} { Mutate td.finish {} }
 
+proc ::td::ui::T {key} {
+	if {[info exists ::td::ui::mc::$key]} { return [set ::td::ui::mc::$key] }
+	return $key
+}
+
 proc ::td::ui::MakeTree {f columns} {
 	set tree [ttk::treeview $f.tree -columns $columns -show headings -selectmode browse]
-	foreach column $columns { $tree heading $column -text [string totitle $column]; $tree column $column -width 110 }
+	foreach column $columns { $tree heading $column -text [T Col_$column]; $tree column $column -width 110 }
 	pack $tree -fill both -expand yes
 	return $tree
 }
@@ -163,19 +275,22 @@ proc ::td::ui::BuildPlayers {f} {
 	ttk::combobox $f.add.kind -state readonly -values {human engine} -textvariable ::td::ui::Fields(player_kind)
 	set Fields(player_name) {}; set Fields(player_kind) human
     ttk::frame $f.fide; pack $f.fide -fill x
-    ttk::label $f.fide.label -text "FIDE ID"
+    ttk::label $f.fide.label -text [T FideId]
     ttk::entry $f.fide.id -textvariable ::td::ui::Fields(fide_id)
     set Fields(fide_id) {}
-    ttk::button $f.fide.add -text "Register from FIDE list" -command ::td::ui::RegisterFide
-    pack $f.fide.label $f.fide.id $f.fide.add -side left
+    ttk::button $f.fide.add -text [T RegisterFide] -command [list ::td::ui::Safe ::td::ui::RegisterFide]
+    ttk::button $f.fide.find -text [T FindFide] -command [list ::td::ui::Safe ::td::ui::FindFide]
+    ttk::label $f.fide.found -justify left
+    pack $f.fide.label $f.fide.id $f.fide.find $f.fide.add $f.fide.found -side left -padx 2
+    ::tooltip::tooltip $f.fide.id [T FideHint]
 	ttk::frame $f.bye; pack $f.bye -fill x
-	ttk::label $f.bye.rlabel -text "Round"
+	ttk::label $f.bye.rlabel -text [T Round]
 	ttk::spinbox $f.bye.round -from 1 -to 99 -width 5 -textvariable ::td::ui::Fields(bye_round); set Fields(bye_round) 1
 	ttk::combobox $f.bye.cat -state readonly -values {requested-bye zero-point-bye full-point-bye pairing-bye} -textvariable ::td::ui::Fields(bye_category); set Fields(bye_category) requested-bye
-	ttk::button $f.bye.record -text "Record bye" -command ::td::ui::RecordBye
-	ttk::button $f.bye.withdraw -text "Withdraw selected" -command ::td::ui::WithdrawSelected
+	ttk::button $f.bye.record -text [T RecordBye] -command [list ::td::ui::Safe ::td::ui::RecordBye]
+	ttk::button $f.bye.withdraw -text [T WithdrawSelected] -command [list ::td::ui::Safe ::td::ui::WithdrawSelected]
 	pack $f.bye.rlabel $f.bye.round $f.bye.cat $f.bye.record $f.bye.withdraw -side left -padx 2
-	ttk::button $f.add.button -text "Register" -command ::td::ui::Register
+	ttk::button $f.add.button -text [T Register] -command [list ::td::ui::Safe ::td::ui::Register]
 	pack $f.add.name -side left -fill x -expand yes; pack $f.add.kind -side left; pack $f.add.button -side left
 }
 proc ::td::ui::RecordBye {} {
@@ -198,11 +313,11 @@ proc ::td::ui::BuildPairings {f} {
 	MakeTree $f {id round white black status result}
 	ttk::frame $f.buttons; pack $f.buttons -fill x
 	ttk::spinbox $f.buttons.round -from 0 -to 1000 -textvariable ::td::ui::Fields(pair_round); set Fields(pair_round) 0
-	ttk::button $f.buttons.pair -text "Pair round (0 = all)" -command ::td::ui::PairRound
-	ttk::button $f.buttons.swap -text "Swap colours (audited)" -command ::td::ui::Swap
-	ttk::button $f.buttons.check -text "Check pairings" -command ::td::ui::CheckPairings
-	ttk::button $f.buttons.print -text "Print pairings" -command [list ::td::ui::PrintView pairings]
-	ttk::label $f.buttons.rlabel -text "TD ruling"
+	ttk::button $f.buttons.pair -text [T PairRound] -command [list ::td::ui::Safe ::td::ui::PairRound]
+	ttk::button $f.buttons.swap -text [T SwapColours] -command [list ::td::ui::Safe ::td::ui::Swap]
+	ttk::button $f.buttons.check -text [T CheckPairings] -command [list ::td::ui::Safe ::td::ui::CheckPairings]
+	ttk::button $f.buttons.print -text [T PrintPairings] -command [list ::td::ui::Safe [list ::td::ui::PrintView pairings]]
+	ttk::label $f.buttons.rlabel -text [T TdRuling]
 	ttk::entry $f.buttons.ruling -width 24 -textvariable ::td::ui::Fields(override_ruling); set Fields(override_ruling) {}
 	pack $f.buttons.round $f.buttons.pair $f.buttons.swap $f.buttons.check $f.buttons.print $f.buttons.rlabel $f.buttons.ruling -side left -padx 2
 	ttk::label $f.checker -justify left -wraplength 1000
@@ -217,14 +332,14 @@ proc ::td::ui::Swap {} {
 	foreach q [dg [State] pairings {}] { if {[dict get $q id] eq [Selected $tree]} { set p $q } }
 	set result [Mutate td.override_pairing [dict create pairing [dict get $p id] white [dict get $p black] black [dict get $p white] reason "Manual colour swap in TD workspace" ruling $Fields(override_ruling)]]
 	if {[winfo exists $Notebook.pairings.checker]} {
-		$Notebook.pairings.checker configure -text "Compliant: [dg $result compliant 1]; violations: [llength [dg $result violations {}]]"
+		$Notebook.pairings.checker configure -text [format [T Compliant] [dg $result compliant 1] [llength [dg $result violations {}]]]
 	}
 }
 proc ::td::ui::CheckPairings {} {
 	variable Notebook; variable Fields; variable Path
 	set res [::action::run td.check_pairings [dict create path $Path round $Fields(pair_round)]]
 	if {[winfo exists $Notebook.pairings.checker]} {
-		$Notebook.pairings.checker configure -text "Compliant: [dg $res compliant 1]; violations: [dg $res violations {}]"
+		$Notebook.pairings.checker configure -text [format [T Compliant] [dg $res compliant 1] [llength [dg $res violations {}]]]
 	}
 	return $res
 }
@@ -237,52 +352,52 @@ proc ::td::ui::BuildResults {f} {
 	ttk::entry $f.edit.signed -textvariable ::td::ui::Fields(signed_by)
     ttk::entry $f.edit.reason -textvariable ::td::ui::Fields(result_reason)
     set Fields(signed_by) {}; set Fields(result_reason) {}
-    ttk::label $f.edit.signedlabel -text "Signed by"
-    ttk::label $f.edit.reasonlabel -text "Correction reason"
+    ttk::label $f.edit.signedlabel -text [T SignedBy]
+    ttk::label $f.edit.reasonlabel -text [T CorrectionReason]
     pack $f.edit.signedlabel $f.edit.signed $f.edit.reasonlabel $f.edit.reason -side left
-	ttk::button $f.edit.enter -text "Enter result" -command ::td::ui::EnterResult
-	ttk::button $f.edit.correct -text "Correct result" -command ::td::ui::CorrectResult
+	ttk::button $f.edit.enter -text [T EnterResult] -command [list ::td::ui::Safe ::td::ui::EnterResult]
+	ttk::button $f.edit.correct -text [T CorrectResult] -command [list ::td::ui::Safe ::td::ui::CorrectResult]
 	pack $f.edit.result -side left; pack $f.edit.category -side left; pack $f.edit.enter -side left; pack $f.edit.correct -side left
-	ttk::labelframe $f.ruling -text "Arbiter ruling & appeal"; pack $f.ruling -fill x -pady 4
-	ttk::label $f.ruling.slabel -text "Setting"
+	ttk::labelframe $f.ruling -text [T RulingFrame]; pack $f.ruling -fill x -pady 4
+	ttk::label $f.ruling.slabel -text [T Setting]
 	ttk::combobox $f.ruling.setting -width 9 -state readonly -values {otb local engine platform} -textvariable ::td::ui::Fields(ruling_setting); set Fields(ruling_setting) otb
-	ttk::label $f.ruling.plabel -text "Pace"
+	ttk::label $f.ruling.plabel -text [T Pace]
 	ttk::combobox $f.ruling.pace -width 9 -state readonly -values {standard rapid blitz} -textvariable ::td::ui::Fields(ruling_pace); set Fields(ruling_pace) standard
-	ttk::label $f.ruling.rlabel -text "Regime"
+	ttk::label $f.ruling.rlabel -text [T Regime]
 	ttk::combobox $f.ruling.regime -width 9 -state readonly -values {standard A4 A5 B2 B3} -textvariable ::td::ui::Fields(ruling_regime); set Fields(ruling_regime) standard
-	ttk::label $f.ruling.ilabel -text "Incident"
+	ttk::label $f.ruling.ilabel -text [T Incident]
 	ttk::combobox $f.ruling.incident -width 18 -state readonly -values {illegal-move gui-illegal-attempt flag-fall draw-claim-3fold draw-claim-50move 75-move fivefold late-arrival} -textvariable ::td::ui::Fields(ruling_incident); set Fields(ruling_incident) illegal-move
-	ttk::label $f.ruling.olabel -text "Offence #"
+	ttk::label $f.ruling.olabel -text [T Offence]
 	ttk::spinbox $f.ruling.offence -from 1 -to 10 -width 4 -textvariable ::td::ui::Fields(ruling_offence_count); set Fields(ruling_offence_count) 1
 	grid $f.ruling.slabel $f.ruling.setting $f.ruling.plabel $f.ruling.pace $f.ruling.rlabel $f.ruling.regime $f.ruling.ilabel $f.ruling.incident $f.ruling.olabel $f.ruling.offence -row 0 -padx 2 -pady 2 -sticky w
 
-	ttk::checkbutton $f.ruling.can_mate -text "Opponent can mate" -variable ::td::ui::Fields(ruling_opponent_can_mate); set Fields(ruling_opponent_can_mate) 1
-	ttk::checkbutton $f.ruling.claimed -text "Claimed in time" -variable ::td::ui::Fields(ruling_claimed_in_time); set Fields(ruling_claimed_in_time) 1
-	ttk::checkbutton $f.ruling.claim_valid -text "Claim valid" -variable ::td::ui::Fields(ruling_claim_valid); set Fields(ruling_claim_valid) 1
-	ttk::checkbutton $f.ruling.checkmate -text "Checkmate on board" -variable ::td::ui::Fields(ruling_checkmate_on_board); set Fields(ruling_checkmate_on_board) 0
-	ttk::label $f.ruling.dflabel -text "Default min"
+	ttk::checkbutton $f.ruling.can_mate -text [T OpponentCanMate] -variable ::td::ui::Fields(ruling_opponent_can_mate); set Fields(ruling_opponent_can_mate) 1
+	ttk::checkbutton $f.ruling.claimed -text [T ClaimedInTime] -variable ::td::ui::Fields(ruling_claimed_in_time); set Fields(ruling_claimed_in_time) 1
+	ttk::checkbutton $f.ruling.claim_valid -text [T ClaimValid] -variable ::td::ui::Fields(ruling_claim_valid); set Fields(ruling_claim_valid) 1
+	ttk::checkbutton $f.ruling.checkmate -text [T CheckmateOnBoard] -variable ::td::ui::Fields(ruling_checkmate_on_board); set Fields(ruling_checkmate_on_board) 0
+	ttk::label $f.ruling.dflabel -text [T DefaultMin]
 	ttk::spinbox $f.ruling.default_min -from 0 -to 240 -width 5 -textvariable ::td::ui::Fields(ruling_default_time_minutes); set Fields(ruling_default_time_minutes) 0
-	ttk::label $f.ruling.ltlabel -text "Late min"
+	ttk::label $f.ruling.ltlabel -text [T LateMin]
 	ttk::spinbox $f.ruling.late_min -from 0 -to 240 -width 5 -textvariable ::td::ui::Fields(ruling_late_minutes); set Fields(ruling_late_minutes) 1
 	grid $f.ruling.can_mate $f.ruling.claimed $f.ruling.claim_valid $f.ruling.checkmate $f.ruling.dflabel $f.ruling.default_min $f.ruling.ltlabel $f.ruling.late_min -row 1 -padx 2 -pady 2 -sticky w
 
-	ttk::label $f.ruling.arlabel -text "Apply result"
+	ttk::label $f.ruling.arlabel -text [T ApplyResult]
 	ttk::combobox $f.ruling.apply_result -width 8 -state readonly -values {{} 1-0 0-1 1/2-1/2 0-0} -textvariable ::td::ui::Fields(ruling_apply_result); set Fields(ruling_apply_result) {}
-	ttk::label $f.ruling.aslabel -text "Appeal"
+	ttk::label $f.ruling.aslabel -text [T Appeal]
 	ttk::combobox $f.ruling.appeal_status -width 24 -state readonly -values {none provisional-pending-appeal upheld overturned} -textvariable ::td::ui::Fields(ruling_appeal_status); set Fields(ruling_appeal_status) none
-	ttk::label $f.ruling.aclabel -text "Committee"
+	ttk::label $f.ruling.aclabel -text [T Committee]
 	ttk::entry $f.ruling.appeal_committee -width 16 -textvariable ::td::ui::Fields(ruling_appeal_committee); set Fields(ruling_appeal_committee) {}
-	ttk::label $f.ruling.adlabel -text "Deadline"
+	ttk::label $f.ruling.adlabel -text [T Deadline]
 	ttk::entry $f.ruling.appeal_deadline -width 11 -textvariable ::td::ui::Fields(ruling_appeal_deadline); set Fields(ruling_appeal_deadline) 0
-	ttk::label $f.ruling.aplabel -text "Deposit"
+	ttk::label $f.ruling.aplabel -text [T Deposit]
 	ttk::entry $f.ruling.appeal_deposit -width 10 -textvariable ::td::ui::Fields(ruling_appeal_deposit); set Fields(ruling_appeal_deposit) {}
 	grid $f.ruling.arlabel $f.ruling.apply_result $f.ruling.aslabel $f.ruling.appeal_status $f.ruling.aclabel $f.ruling.appeal_committee $f.ruling.adlabel $f.ruling.appeal_deadline $f.ruling.aplabel $f.ruling.appeal_deposit -row 2 -padx 2 -pady 2 -sticky w
 
-	ttk::label $f.ruling.alabel -text "Arbiter"
+	ttk::label $f.ruling.alabel -text [T Arbiter]
 	ttk::entry $f.ruling.arbiter -width 16 -textvariable ::td::ui::Fields(ruling_arbiter); set Fields(ruling_arbiter) {}
-	ttk::label $f.ruling.declabel -text "Decision"
+	ttk::label $f.ruling.declabel -text [T Decision]
 	ttk::entry $f.ruling.decision -width 32 -textvariable ::td::ui::Fields(ruling_decision); set Fields(ruling_decision) {}
-	ttk::button $f.ruling.btn -text "Record ruling" -command ::td::ui::RecordRuling
+	ttk::button $f.ruling.btn -text [T RecordRuling] -command [list ::td::ui::Safe ::td::ui::RecordRuling]
 	grid $f.ruling.alabel $f.ruling.arbiter $f.ruling.declabel -row 3 -padx 2 -pady 2 -sticky w
 	grid $f.ruling.decision -row 3 -column 3 -columnspan 5 -padx 2 -pady 2 -sticky ew
 	grid $f.ruling.btn -row 3 -column 8 -columnspan 2 -padx 2 -pady 2 -sticky e
@@ -314,15 +429,21 @@ proc ::td::ui::EnterResult {} { ResultCommand td.enter_result }
 proc ::td::ui::CorrectResult {} { ResultCommand td.correct_result }
 
 proc ::td::ui::BuildStandings {f} {
+	variable Fields
 	MakeTree $f {rank name score directEncounter sonnebornBerger koya gamesWon gamesWonWithBlack progressive aro tpr}
 	bind $f.tree <<TreeviewSelect>> ::td::ui::Breakdown
 	ttk::frame $f.btns; pack $f.btns -fill x
-	ttk::button $f.btns.cross -text "Crosstable" -command ::td::ui::OpenCrosstable
-	ttk::button $f.btns.print_s -text "Print standings" -command [list ::td::ui::PrintView standings]
-	ttk::button $f.btns.print_c -text "Print crosstable" -command [list ::td::ui::PrintView crosstable]
-	ttk::button $f.btns.trf16 -text "Export TRF16" -command [list ::td::ui::ExportTrf trf16]
-	ttk::button $f.btns.trf26 -text "Export TRF26" -command [list ::td::ui::ExportTrf trf26]
+	ttk::button $f.btns.cross -text [T Crosstable] -command [list ::td::ui::Safe ::td::ui::OpenCrosstable]
+	ttk::button $f.btns.print_s -text [T PrintStandings] -command [list ::td::ui::Safe [list ::td::ui::PrintView standings]]
+	ttk::button $f.btns.print_c -text [T PrintCrosstable] -command [list ::td::ui::Safe [list ::td::ui::PrintView crosstable]]
+	ttk::button $f.btns.trf16 -text [T ExportTrf16] -command [list ::td::ui::Safe [list ::td::ui::ExportTrf trf16]]
+	ttk::button $f.btns.trf26 -text [T ExportTrf26] -command [list ::td::ui::Safe [list ::td::ui::ExportTrf trf26]]
 	pack $f.btns.cross $f.btns.print_s $f.btns.print_c $f.btns.trf16 $f.btns.trf26 -side right -padx 2
+	ttk::label $f.btns.plabel -text [T Prizes]
+	ttk::entry $f.btns.prizes -width 18 -textvariable ::td::ui::Fields(prizes); set Fields(prizes) {1000 500 250}
+	ttk::combobox $f.btns.psystem -width 11 -state readonly -values {hort split indivisible} -textvariable ::td::ui::Fields(prize_system); set Fields(prize_system) hort
+	ttk::button $f.btns.prize -text [T ComputePrizes] -command [list ::td::ui::Safe ::td::ui::Prizes]
+	pack $f.btns.plabel $f.btns.prizes $f.btns.psystem $f.btns.prize -side left -padx 2
 	ttk::label $f.breakdown -justify left -wraplength 1000
 	pack $f.breakdown -fill x
 }
@@ -334,7 +455,87 @@ proc ::td::ui::PrintView {view} {
 proc ::td::ui::ExportTrf {format} {
 	variable Path
 	if {$Path eq ""} { error "no tournament selected" }
-	return [::action::run td.export [dict create path $Path format $format overwrite 1]]
+	set file [tk_getSaveFile -parent [DialogOrApp] -defaultextension .trf \
+		-initialfile "[file rootname [file tail $Path]].trf" \
+		-filetypes [list [list [T TrfFiles] {.trf .txt}] [list [T AllFiles] *]]]
+	if {$file eq ""} { return {} }
+	set result [::action::run td.export [dict create path $Path format $format filename $file overwrite 1]]
+	if {[string match "error:*" $result]} { error $result }
+	return $result
+}
+
+# Create a tournament from a FIDE TRF16/TRF26 report and show it.
+proc ::td::ui::ImportTrf {} {
+	variable Path
+	set file [tk_getOpenFile -parent [DialogOrApp] \
+		-filetypes [list [list [T TrfFiles] {.trf .txt}] [list [T AllFiles] *]]]
+	if {$file eq ""} { return {} }
+	set key [Key import]
+	set path [::td::store::DefaultPath [file rootname [file tail $file]] $key]
+	set args [dict create path $path filename $file commit 0 expected_revision 0 idempotency $key]
+	set preview [::action::run td.import_trf $args]
+	if {[string match "error:*" $preview]} { error $preview }
+	dict set args commit 1
+	set result [::action::run td.import_trf $args]
+	if {[string match "error:*" $result]} { error $result }
+	set Path $path
+	::td::event::Open $Path
+	Refresh
+	return $result
+}
+
+# The journal's commands, newest first, in a read-only window.
+proc ::td::ui::ShowAudit {} {
+	variable Path
+	if {$Path eq ""} { error "no tournament selected" }
+	set records [::action::run td.audit [dict create path $Path]]
+	if {[string match "error:*" $records]} { error $records }
+	set w [DialogOrApp].audit
+	catch { destroy $w }
+	toplevel $w -class Scidb
+	wm title $w "[T Title] \u2013 [string trimright [T AuditLog] \u2026]"
+	text $w.t -width 100 -height 30 -wrap word -yscrollcommand [list $w.s set]
+	ttk::scrollbar $w.s -command [list $w.t yview]
+	pack $w.s -side right -fill y
+	pack $w.t -side left -fill both -expand yes
+	foreach record [lreverse $records] {
+		set when [dg $record created {}]
+		if {[string is integer -strict $when]} { set when [clock format $when -format "%Y-%m-%d %H:%M:%S"] }
+		$w.t insert end "#[dg $record seq ?]  $when  [dg $record command ?]  (revision [dg $record revision ?])\n"
+		$w.t insert end "    [dg $record args {}]\n\n"
+	}
+	$w.t configure -state disabled
+	return [llength $records]
+}
+
+# Look a player up in the installed FIDE list by ID or exact name.
+proc ::td::ui::FindFide {} {
+	variable Fields
+	variable Notebook
+	set query [string trim $Fields(fide_id)]
+	if {[string is integer -strict $query]} {
+		set row [::action::run td.lookup_player [dict create fide_id $query]]
+	} else {
+		set row [::action::run td.lookup_player [dict create name $query]]
+	}
+	if {[string match "error:*" $row]} { error $row }
+	set Fields(fide_id) [dict get $row fide_id]
+	set text "[dict get $row name]  [dg $row title {}]  [dg $row federation {}]  [dg $row rating {}]"
+	$Notebook.players.fide.found configure -text [string trim $text]
+	return $row
+}
+
+proc ::td::ui::Prizes {} {
+	variable Fields
+	variable Notebook
+	set result [Mutate td.prizes [dict create prizes $Fields(prizes) system $Fields(prize_system)]]
+	set text ""
+	foreach key {text allocations} {
+		if {[dict exists $result $key]} { set text [dict get $result $key]; break }
+	}
+	if {$text eq ""} { set text $result }
+	$Notebook.standings.breakdown configure -text $text
+	return $result
 }
 proc ::td::ui::OpenCrosstable {} { variable Path; ::crosstable::OpenTD .application $Path }
 proc ::td::ui::Breakdown {} {
@@ -360,16 +561,16 @@ proc ::td::ui::Refresh {} {
 	if {$Dialog eq "" || ![winfo exists $Dialog]} { return }
 	set state [State]
 	if {$state eq ""} {
-		$Notebook.event.current.name configure -text "No tournament selected"
+		$Notebook.event.current.name configure -text [T NoTournament]
 		return
 	}
 	set status [dict get $state status]
 	$Notebook.event.current.name configure -text "[dict get $state name] — [dict get $state id]"
-	$Notebook.event.current.path configure -text "Journal: $Path"
-	$Notebook.event.current.status configure -text "Status: $status"
-	$Notebook.event.current.revision configure -text "Revision: [dict get $state revision]; publication revision: [dg $state publication_revision 0]"
-	$Notebook.event.current.round configure -text "Round: [dg $state current_round 1] / [dg $state rounds 0]"
-	$Notebook.event.current.backend configure -text "Store: [::td::store::Backend]"
+	$Notebook.event.current.path configure -text [format [T Journal] $Path]
+	$Notebook.event.current.status configure -text [format [T Status] $status]
+	$Notebook.event.current.revision configure -text [format [T Revision] [dict get $state revision] [dg $state publication_revision 0]]
+	$Notebook.event.current.round configure -text [format [T RoundOf] [dg $state current_round 1] [dg $state rounds 0]]
+	$Notebook.event.current.backend configure -text [format [T Store] [::td::store::Backend]]
 	foreach tree [list $Notebook.players.tree $Notebook.pairings.tree $Notebook.results.tree $Notebook.standings.tree] {
 		foreach row [$tree children {}] { $tree delete $row }
 	}
@@ -377,8 +578,8 @@ proc ::td::ui::Refresh {} {
 		$Notebook.players.tree insert {} end -id [dict get $p id] -values [list [dict get $p number] [dict get $p name] [dict get $p kind] [dg $p rating {}] [dg $p withdrawn 0]]
 	}
 	foreach p [dg $state pairings {}] {
-		set white [expr {[dict get $p white] eq "" ? "BYE" : [dict get [::td::model::Player $state [dict get $p white]] name]}]
-		set black [expr {[dict get $p black] eq "" ? "BYE" : [dict get [::td::model::Player $state [dict get $p black]] name]}]
+		set white [expr {[dict get $p white] eq "" ? [T Bye] : [dict get [::td::model::Player $state [dict get $p white]] name]}]
+		set black [expr {[dict get $p black] eq "" ? [T Bye] : [dict get [::td::model::Player $state [dict get $p black]] name]}]
 		$Notebook.pairings.tree insert {} end -id [dict get $p id] -values [list [dict get $p id] [dict get $p round] $white $black [dg $p status pending] [dg $p result *]]
 		$Notebook.results.tree insert {} end -id [dict get $p id] -values [list [dict get $p id] [dict get $p round] $white $black [dg $p result *] [dg $p category played]]
 	}

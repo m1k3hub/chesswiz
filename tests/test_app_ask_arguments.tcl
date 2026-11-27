@@ -72,6 +72,7 @@ proc ::scidb::test::term1ask::ReferenceIds {} {
 	foreach id [dict keys $::action::Registry] {
 		set record [::action::get $id]
 		if {[dict get $record ai] eq "debug"} { continue }
+		if {[dict exists $record asklist] && ![dict get $record asklist]} { continue }
 		if {$id eq "context.ask"} { continue }
 		set ctx [dict get $record context]
 		if {[llength $ctx] && [dict get $record dropdown] eq "" \

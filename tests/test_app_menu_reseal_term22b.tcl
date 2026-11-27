@@ -314,7 +314,7 @@ tcltest::test term22b-aqua-placeholder {the Ask placeholder says Cmd+K on aqua a
 	catch { ::scidb::test::term22b::RealAqua }
 	::scidb::test::term22b::Clean
 	catch { ::menu::SwitchLanguage $::scidb::test::term22b::savedLang }
-} -result {1 1 1 {Ask or tell Chesswiz what to do (Cmd+K)} {Chesswiz fragen oder sagen, was zu tun ist (Cmd+K)}}
+} -result {1 1 1 {Type a command (Cmd+K)} {Befehl eingeben (Cmd+K)}}
 
 # Put the installed share directory back for the files that follow.
 if {[info exists ::scidb::test::term22b::savedShare]} {

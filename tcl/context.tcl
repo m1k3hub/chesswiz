@@ -89,6 +89,8 @@ namespace eval ::context {
 		c10.auto_stretch ::table::mc::AutoStretchColumn
 		c10.configure ::table::mc::Configure
 		c10.fill_column ::table::mc::FillColumn
+		c10.sort_asc ::gamestable::mc::SortAscending
+		c10.sort_desc ::gamestable::mc::SortDescending
 		c10.fit ::table::mc::FitColumns
 		c10.hide ::table::mc::Hide
 		c10.optimize ::table::mc::OptimizeColumns
@@ -454,6 +456,7 @@ proc ::context::Declare {} {
 	Item c1.copy_diagram		"Copy Diagram"				C1
 	Item c1.edit_annotation		"Edit Annotation…"			{C1 C2} {Control-a Ctrl+A}
 	Item c1.board_setup			"Board Style…"				C1 {} {} {![BoardSetupOpen]}
+	Item c1.find_lesson			"Find Video Lesson"			C1
 	Define C1 {
 		ask -
 		c1.set_start_board
@@ -467,6 +470,8 @@ proc ::context::Declare {} {
 		c1.copy_fen
 		c1.copy_diagram
 		c1.edit_annotation
+		-
+		c1.find_lesson
 		-
 		c1.board_setup
 	}
@@ -489,6 +494,7 @@ proc ::context::Declare {} {
 	Item c2.annot.infix			"Infix symbols"				C2
 	Item c2.annot.suffix		"Suffix symbols"			C2
 	Item c2.explain_move		"Explain Move"				C2
+	Item c2.novelty				"Is This a Novelty?"			C2
 	Item c2.insert_diagram		"Insert Diagram"			C2
 	Item c2.insert_diagram_black "Insert Diagram from Black" C2
 	Item c2.strip				"Strip"						C2
@@ -528,6 +534,7 @@ proc ::context::Declare {} {
 		{cascade c2.annotate {c2.annot.prefix c2.annot.infix c2.annot.suffix}}
 		-
 		c2.explain_move
+		c2.novelty
 		-
 		c2.insert_diagram
 		c2.insert_diagram_black
@@ -682,6 +689,8 @@ proc ::context::Declare {} {
 	Item c5.player_card		"Show Player Card"			C5 {} {[::capability::present playercard]}
 	Item c5.prep_report		"Prep Report…"				C5
 	Item c5.insights			"Insights…"					C5 {} {[::capability::present insights]}
+	Item c5.player_stats		"Player Statistics"			C5
+	Item c5.structure_profile	"Position Types"				C5
 	Item c5.player_url		"Open URL"					C5
 	Item c5.event_table		"Show Tournament Table…"	C5
 	Item c5.event_url			"Open URL"					C5
@@ -697,6 +706,8 @@ proc ::context::Declare {} {
 		-
 		c5.prep_report
 		c5.insights
+		c5.player_stats
+		c5.structure_profile
 		-
 		{cascade c5.player_url {}}
 		-
@@ -792,6 +803,7 @@ proc ::context::Declare {} {
 	# --- C7: a media entry ----------------------------------------
 	Item c7.play			"Play"						C7
 	Item c7.open_report		"Open Report"				C7
+	Item c7.transcribe		"Transcribe"					C7
 	Item c7.open_stream		"Open Stream…"				C7 {} {[::capability::present stream]}
 	Item c7.external			"Open in External Player"	C7
 	Item c7.show_in_board	"Show in Board"				C7
@@ -804,6 +816,7 @@ proc ::context::Declare {} {
 		c7.play
 		-
 		c7.open_report
+		c7.transcribe
 		c7.open_stream
 		c7.external
 		-
@@ -1128,6 +1141,8 @@ proc ::context::Declare {} {
 	}
 
 	# --- C10: a table column header -------------------------------
+	Item c10.sort_asc			"Sort Ascending"				C10
+	Item c10.sort_desc			"Sort Descending"			C10
 	Item c10.show_column		"Show Column"				C10
 	Item c10.fill_column		"Fill Column"				C10
 	Item c10.hide				"Hide"						C10
@@ -1140,6 +1155,9 @@ proc ::context::Declare {} {
 		ask
 		-
 		{header column}
+		-
+		c10.sort_asc
+		c10.sort_desc
 		-
 		{cascade c10.show_column {}}
 		c10.fill_column
@@ -2333,6 +2351,10 @@ proc ::context::ObjectRule {id object {visibilityOnly 0}} {
 		return [list 1 [expr {[::game::clipboard::reason $base $variant] eq ""}]]
 	}
 	if {$id eq "c4.save_changes" && [::menu::TrialMode]} { return {0 0} }
+	if {$id in {c10.sort_asc c10.sort_desc}} {
+		set ok [expr {[SortOwner $object] ne ""}]
+		return [list $ok $ok]
+	}
 	if {$id in {c3.sort_column c3.sort_asc c3.sort_desc c3.sort.column c3.sort.asc c3.sort.desc}} {
 		set sortable [expr {[dict exists $object sortable] ? [dict get $object sortable] : [::menu::Sortable]}]
 		return [list $sortable $sortable]
@@ -2630,6 +2652,32 @@ proc ::context::Deliver {cid record} {
 # These fields identify the selected item; parent/view/variant have defaults.
 # Shared by dispatch and capability lookup so availability never promises a
 # callback whose identifying input is absent.
+# Show an assistant tool's answer, started from a context-menu row, in the
+# Report pane under the row's label.
+# The sortable table (namespace and path) behind a C10 column header, or "".
+proc ::context::SortOwner {object} {
+	if {![dict exists $object table] || ![dict exists $object column]} { return "" }
+	if {[dict exists $object sortable] && ![dict get $object sortable]} { return "" }
+	set table [dict get $object table]
+	if {![string match *.table.top.table $table]} { return "" }
+	set path [string range $table 0 end-[string length .table.top.table]]
+	foreach ns {gamestable playertable eventtable sitetable} {
+		if {[namespace exists ::${ns}::$path] && [llength [info commands ::${ns}::SortColumn]]} {
+			return [list $ns $path]
+		}
+	}
+	return ""
+}
+
+proc ::context::ShowToolResult {id result} {
+	if {[string match "error:*" $result]} { error [string trim [string range $result 6 end]] }
+	set title [L $id]
+	set body [string map {& &amp; < &lt; > &gt;} $result]
+	set html "<html><body><h2>[string map {& &amp; < &lt; > &gt;} $title]</h2><pre style='white-space: pre-wrap'>$body</pre></body></html>"
+	::application::report::showHtmlData .application $title $html
+	return $result
+}
+
 proc ::context::RequiredFields {id} {
 	switch -glob -- $id {
 		c12.copy_game - c12.copy_clipboard - c12.export { return {id} }
@@ -2641,7 +2689,8 @@ proc ::context::RequiredFields {id} {
 		c3.delete - c3.flag.* - c3.edit_characteristics { return {base index} }
 		c4.readonly - c4.properties - c4.open_new_tab - c4.close - c4.save_changes - c4.maintenance.compact - c4.export.* { return {base} }
 		c5.sort.* { return {kind sortTable} }
-		c5.site_url - c5.player_card - c5.prep_report { return {name} }
+		c5.site_url - c5.player_card - c5.prep_report - c5.player_stats - c5.structure_profile { return {name} }
+		c7.transcribe { return {path} }
 		c5.event_url - c5.event_table - c5.player.prep - c5.insights - c5.player.insights { return {base variant index} }
 		c5.open_switcher - c5.save_working_set - c5.filtered.open_switcher - c5.filtered.save_working_set { return {base variant kind name} }
 		c6.copy_fen { return {} }
@@ -3013,6 +3062,27 @@ proc ::context::Command {id object} {
 			return "opened player preparation report"
 		}
 		c5.prep_report { return [::action::run open_view [list kind prep_report name [dict get $object name]]] }
+		c5.player_stats {
+			return [ShowToolResult c5.player_stats [::action::run player_stats [dict create name [dict get $object name]]]]
+		}
+		c5.structure_profile {
+			return [ShowToolResult c5.structure_profile [::action::run structure_profile [dict create player [dict get $object name]]]]
+		}
+		c7.transcribe {
+			return [ShowToolResult c7.transcribe [::action::run transcribe_media [dict create path [dict get $object path]]]]
+		}
+		c1.find_lesson {
+			return [ShowToolResult c1.find_lesson [::action::run find_lesson [dict create play 1]]]
+		}
+		c2.novelty {
+			set key ""
+			catch { set key $::application::pgn::Vars(current:[::scidb::game::current]) }
+			if {$key eq ""} { error "No current move is available." }
+			set san [::scidb::game::query move $key]
+			set fen [::scidb::game::query movefen $key]
+			if {$san eq ""} { error "No current move is available." }
+			return [ShowToolResult c2.novelty [::action::run novelty_label [dict create fen $fen san $san]]]
+		}
 		c5.insights - c5.player.insights { ::insights::show [dict get $object parent] [dict get $object base] [dict get $object variant] [dict get $object index] }
 		c5.open_switcher - c5.save_working_set - c5.filtered.open_switcher - c5.filtered.save_working_set {
 			set base [dict get $object base]
@@ -3128,6 +3198,11 @@ proc ::context::Command {id object} {
 		c8.analyze { ::application::analysis::AnalyzePosition [dict get $object table] [dict get $object row] }
 		c8.copy_line { clipboard clear; clipboard append [TreeLine $object] }
 		c8.save_line { SaveTreeLine $object }
+		c10.sort_asc - c10.sort_desc {
+			lassign [SortOwner $object] ns path
+			if {$ns eq ""} { error "this column cannot be sorted" }
+			::${ns}::SortColumn $path [dict get $object column] [expr {$id eq "c10.sort_desc" ? "descending" : "ascending"}]
+		}
 		c10.fill_column {
 			set tree [dict get $object table].t
 			$tree column configure tail -visible [expr {![$tree column cget tail -visible]}]

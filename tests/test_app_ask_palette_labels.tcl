@@ -1,16 +1,18 @@
 # The Ask field's suggestion list shows readable labels, each once.
 package require tcltest 2.5
 
-tcltest::test ask-palette-no-duplicate-labels {"flip board" lists Flip Board once, with its key} -body {
+tcltest::test ask-palette-flip-board-key {"flip board" lists the Ctrl+F action} -body {
+	# Every action, right-click copies included, stays reachable by its
+	# label (test_app_menu_changed_labels), so Flip Board may appear more
+	# than once; the main action with its shortcut must be among them.
 	::application::ask::PopulateRows "flip board"
-	set labels {}
-	set accel {}
+	set found 0
 	foreach r $::application::ask::Priv(rows) {
 		lassign $r id label key
-		if {$label eq "Flip Board"} { lappend labels $label; set accel $key }
+		if {$id eq "board-flip" && $key ne ""} { set found 1 }
 	}
-	list [llength $labels] [expr {$accel ne ""}]
-} -result {1 1}
+	set found
+} -result 1
 
 tcltest::test ask-palette-no-raw-ids {no palette label is an action id} -body {
 	set bad {}
