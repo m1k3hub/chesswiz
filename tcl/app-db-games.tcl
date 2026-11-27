@@ -249,7 +249,7 @@ proc BuildPane {twm frame uid width height} {
 
 	set cb [::toolbar::add $tbGameNo searchentry \
 		-type number \
-		-width 12 \
+		-width [expr {max(12, [string length $mc::GameNumber] + 3)}] \
 		-usehistory no \
 		-parent $tb \
 		-ghosttextvar [namespace current]::mc::GameNumber \
