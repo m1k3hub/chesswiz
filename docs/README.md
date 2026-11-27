@@ -27,6 +27,8 @@ beside its code: `tests/README.md`, `opening-report/`, `media-console/`,
 
 ## features
 
+- [FEATURES.md](FEATURES.md) — Every Chesswiz feature: where to find it, how it works, and which ones are hard to reach or shouldn't be reachable
+
 - [annotated-game-display-plan.md](features/annotated-game-display-plan.md) — Plan: Display Annotated Chess Games
 - [BOARD_3D_DESIGN.md](features/BOARD_3D_DESIGN.md) — 3D Chessboard — Design and Plan
 - [CHESSBASE_SHORTCUTS.md](features/CHESSBASE_SHORTCUTS.md) — ChessBase shortcut research and Chesswiz mapping
