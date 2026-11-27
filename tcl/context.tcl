@@ -1951,6 +1951,12 @@ proc ::context::AddRow {menu id object} {
 	if {[llength $keys] >= 2} { set accel [lindex $keys 1] }
 
 	set label [L $id]
+	# C3: the rows inside Sort by this Column / Sort Ascending / Sort
+	# Descending name the clicked column ("Date"), not "Ascending".
+	if {$id in {c3.sort.column c3.sort.asc c3.sort.desc} && [dict exists $object column]} {
+		set var ::gamestable::mc::F_[string toupper [dict get $object column] 0 0]
+		if {[info exists $var]} { set label [set $var] }
+	}
 	# C3: several selected rows read "Copy Games" (VAL-CTX-005).
 	if {$id eq "c3.copy_game" && [dict exists $object count]
 			&& [dict get $object count] > 1} {
