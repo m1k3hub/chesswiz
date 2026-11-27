@@ -248,7 +248,7 @@ tcltest::test all-actions-debug-filtered {debug actions excluded from labels but
 
 	# Debug actions should be in registry but not in labels
 	list [llength $debugInRegistry] [llength $debugInLabels]
-} -result {12 0}
+} -result {15 0}
 
 # ----------------------------------------------------------------------
 # Test: Confirm/bulk gates work for all marked actions

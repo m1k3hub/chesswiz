@@ -1252,6 +1252,8 @@ proc ConfigureEditor {} {
 	if {[::pgn::setup::dialogChanged?]} { refresh }
 
 	set Vars(current:$position) ""
+	# No game open (position -1): nothing to redraw.
+	if {![info exists Vars(successor:$position)]} { return }
 	ProcessGoto $position [::scidb::game::position key] $Vars(successor:$position)
 }
 

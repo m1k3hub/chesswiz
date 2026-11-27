@@ -43,4 +43,4 @@ Also fixed in the Tournament Director workspace:
 - **Player ratings:** the highest *and* the latest rating now prefer the games when the bundled 2013 dictionary is older (`src/db/db_namebase_entry.cpp`).
 - **Repeated labels in the Ask field** (Flip Board ×3) are by design. Every action, right-click copies included, must stay reachable by its own label (`test_app_menu_changed_labels`).
 - **German strings** that named the removed "Extras > KI" menu now name Werkzeuge > Modell wählen….
-- **Still open:** the frozen assistant-tool baseline (`tests/fixtures/assistant-tools-baseline.json`) disagrees with the `open_view` and `search_games` descriptions changed on 2026-11-14/16. Refreshing it is a review decision, so it's left for the owner.
+- **Assistant-tool baseline** (`tests/fixtures/assistant-tools-baseline.json`): the `open_view` and `search_games` schemas were refreshed to the 2026-11-14/16 versions (`search_games` gained `site`).
