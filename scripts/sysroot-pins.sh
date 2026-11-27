@@ -18,12 +18,15 @@ CACERT_FILE=cacert.pem
 
 TCL_URL=https://prdownloads.sourceforge.net/tcl/${TCL_TARBALL}
 TK_URL=https://prdownloads.sourceforge.net/tcl/${TK_TARBALL}
-ZLIB_URL=https://zlib.net/fossils/${ZLIB_TARBALL}
+# zlib.net refuses GitHub runners (returns a challenge page); the GitHub release asset is the same tarball.
+ZLIB_URL=https://github.com/madler/zlib/releases/download/v${ZLIB_VER}/${ZLIB_TARBALL}
 EXPAT_URL=https://github.com/libexpat/libexpat/releases/download/R_2_6_4/${EXPAT_TARBALL}
 TCLLIB_URL=https://core.tcl-lang.org/tcllib/uv/${TCLLIB_TARBALL}
 OPENSSL_URL=https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VER}/${OPENSSL_TARBALL}
 TCLTLS_URL=https://core.tcl-lang.org/tcltls/uv/${TCLTLS_TARBALL}
-CACERT_URL=https://curl.se/ca/cacert.pem
+# A dated snapshot: curl.se/ca/cacert.pem changes in place, which breaks the pin.
+CACERT_DATE=2026-11-05
+CACERT_URL=https://curl.se/ca/cacert-${CACERT_DATE}.pem
 
 TCL_SHA256=a3903371efcce8a405c5c245d029e9f6850258a60fa3761c4d58995610949b31
 TK_SHA256=e4982df6f969c08bf9dd858a6891059b4a3f50dc6c87c10abadbbe2fc4838946
@@ -33,5 +36,5 @@ TCLLIB_SHA256=590263de0832ac801255501d003441a85fb180b8ba96265d50c4a9f92fde2534
 
 OPENSSL_SHA256=603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a
 TCLTLS_SHA256=e84e2b7a275ec82c4aaa9d1b1f9786dbe4358c815e917539ffe7f667ff4bc3b4
-CACERT_SHA256=a41b5d356aea97a529fe27e0f7316d2f9d946d75927476cf9cf1b90637d00505
+CACERT_SHA256=427c064216761a1e72a8b30f0d954d08cb6e4435a82091fb865afd20c8497285
 

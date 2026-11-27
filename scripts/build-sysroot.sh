@@ -454,7 +454,7 @@ write_manifest() {
         echo "  tcllib $TCLLIB_VER sha256:$TCLLIB_SHA256 ($TCLLIB_URL)"
         echo "  openssl $OPENSSL_VER sha256:$OPENSSL_SHA256 ($OPENSSL_URL)"
         echo "  tcltls $TCLTLS_VER sha256:$TCLTLS_SHA256 ($TCLTLS_URL)"
-        echo "  cacert 2026-09-25 sha256:$CACERT_SHA256 ($CACERT_URL)"
+        echo "  cacert $CACERT_DATE sha256:$CACERT_SHA256 ($CACERT_URL)"
         echo
         echo "layout:"
         echo "  include/        public headers (tcl.h, tk.h, zlib.h, X11/*) + flattened private headers"

@@ -354,7 +354,7 @@ $(TEST_DIR)test_mstl_core: $(TEST_DIR)test_mstl_core.cpp $(SRC_DIR)/mstl/m_strin
 		-Wno-format-security -Wno-cpp \
 		-I$(SRC_DIR) -I$(SRC_DIR)/mstl -I$(SRC_DIR)/sys -I$(SRC_DIR)/util $(TEST_TCL_INCLUDE) \
 		-o $@ $< $(SRC_DIR)/mstl/m_string.cpp \
-		$(SRC_DIR)/mstl/libmstl.a $(SRC_DIR)/sys/libsys.a $(SRC_DIR)/mstl/libmstl.a -lpthread -ltcl$(TCL_VERSION)
+		$(SRC_DIR)/mstl/libmstl.a $(SRC_DIR)/sys/libsys.a $(SRC_DIR)/mstl/libmstl.a -lpthread $(TEST_TCL_LIBS)
 
 # ZStream zip reading with tellg per line (macOS funopen read-ahead).
 $(TEST_DIR)test_zstream_tell: $(TEST_DIR)test_zstream_tell.cpp $(SRC_DIR)/util/libutil.a
@@ -362,7 +362,7 @@ $(TEST_DIR)test_zstream_tell: $(TEST_DIR)test_zstream_tell.cpp $(SRC_DIR)/util/l
 	@$(CXX) -std=c++17 -O1 -g -DBROKEN_LINKER_HACK=1 -Wno-cpp \
 		-I$(SRC_DIR) -I$(SRC_DIR)/mstl -I$(SRC_DIR)/util $(TEST_TCL_INCLUDE) -o $@ $< \
 		$(SRC_DIR)/util/libutil.a $(SRC_DIR)/util/minizip/libminizip.a \
-		$(SRC_DIR)/sys/libsys.a $(SRC_DIR)/mstl/libmstl.a -lpthread -ltcl$(TCL_VERSION) $(or $(ZZIPLIB_LIB),-lzzip) -lz
+		$(SRC_DIR)/sys/libsys.a $(SRC_DIR)/mstl/libmstl.a -lpthread $(TEST_TCL_LIBS) $(or $(ZZIPLIB_LIB),-lzzip) -lz
 
 # LzoByteStream is not in libutil (nothing uses it yet), so its sources
 # and minilzo are compiled in; u_byte_stream.cpp wins over the archive's.
@@ -375,7 +375,7 @@ $(TEST_DIR)test_lzo_stream: $(TEST_DIR)test_lzo_stream.cpp $(SRC_DIR)/util/u_lzo
 		-o $@ $< $(SRC_DIR)/util/u_lzo_byte_stream.cpp $(SRC_DIR)/util/u_lzo.cpp \
 		$(SRC_DIR)/util/u_byte_stream.cpp $@-minilzo.o \
 		$(SRC_DIR)/util/libutil.a $(SRC_DIR)/sys/libsys.a $(SRC_DIR)/mstl/libmstl.a \
-		-lpthread -ltcl$(TCL_VERSION) -lz
+		-lpthread $(TEST_TCL_LIBS) -lz
 	@rm -f $@-minilzo.o
 
 $(TEST_DIR)test_corr_duration: $(TEST_DIR)test_corr_duration.cpp

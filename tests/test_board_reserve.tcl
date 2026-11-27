@@ -126,6 +126,10 @@ tcltest::test board-reserve-pure-idempotent {inset callbacks can re-request an e
     list [::application::board::setReserve right 300] [expr {$count == $::application::board::rebuildCount}]
 } -result {1 1}
 proc pack {args} { set ::brPack $args }
+# No Tk: the pane has no folded Media button (ApplyReserve3D checks for one).
+if {[info commands winfo] eq ""} {
+    proc winfo {cmd args} { switch $cmd { parent { return .pane } exists { return 0 } default { return {} } } }
+}
 tcltest::test board-reserve-pure-3d {visible 3D frame reserves each side and reports full pane resize dimensions} -body {
     set ::application::board::Vars(3d) 1
     set ::application::board::Vars(3dwin) .visible3d
