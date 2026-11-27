@@ -9,8 +9,16 @@ permissions:
   contents: read
 jobs:
   linux:
+    name: linux (app tests ${{ matrix.shard }}/8)
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
+    # 370+ app test files outgrew one 45-minute job: each shard builds and runs
+    # every 8th file (run_app_tests.tcl -shard K/N); shard 1 also runs the
+    # Tcl and C++ suites.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
       - uses: actions/checkout@v7
       - name: Install Linux dependencies
@@ -25,9 +33,10 @@ jobs:
       - run: make -j4
       # The app tests run against the installed share files.
       - run: sudo make install
-      - run: xvfb-run -a make -C tests tcl
+      - if: matrix.shard == 1
+        run: xvfb-run -a make -C tests tcl
       # The outer Xvfb supplies DISPLAY; suppress the Makefile's nested Xvfb.
-      - run: xvfb-run -a make -C tests app-tcl XVFB_RUN=
+      - run: xvfb-run -a make -C tests app-tcl XVFB_RUN= APP_TCL_ARGS="-shard ${{ matrix.shard }}/8"
   windows-cross:
     runs-on: ubuntu-24.04
     timeout-minutes: 90

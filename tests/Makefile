@@ -17,9 +17,9 @@ XVFB_RUN := xvfb-run -a -s '-screen 0 1920x1080x24' </dev/null
 # surface the tests describe instead of a bare X server without a WM.
 APP_WM := $(shell command -v openbox 2>/dev/null)
 ifeq ($(APP_WM),)
-APP_TCL_RUN = $(SRC_DIR)/tkchesswiz $(TEST_DIR)run_app_tests.tcl -verbose
+APP_TCL_RUN = $(SRC_DIR)/tkchesswiz $(TEST_DIR)run_app_tests.tcl -verbose $(APP_TCL_ARGS)
 else
-APP_TCL_RUN = bash -c '$(APP_WM) >/dev/null 2>&1 & sleep 1; exec $(SRC_DIR)/tkchesswiz $(TEST_DIR)run_app_tests.tcl -verbose'
+APP_TCL_RUN = bash -c '$(APP_WM) >/dev/null 2>&1 & sleep 1; exec $(SRC_DIR)/tkchesswiz $(TEST_DIR)run_app_tests.tcl -verbose $(APP_TCL_ARGS)'
 endif
 # The classifier-mechanics tests use a stand-in classifier with no
 # calibration; the calibration gate itself is tested with this unset

@@ -159,14 +159,16 @@ set argc $argcCopy
 set matchPattern "*"
 set verbose 0
 set filePattern "test_app_*.tcl"
+set shard ""
 
 for {set i 0} {$i < [llength $argv]} {incr i} {
     switch -glob -- [lindex $argv $i] {
         -match { incr i; set matchPattern [lindex $argv $i] }
         -file { incr i; set filePattern [lindex $argv $i] }
+        -shard { incr i; set shard [lindex $argv $i] }
         -verbose { set verbose 1 }
         -help {
-            puts "Usage: tests/run_app_tests.tcl [-match PATTERN] [-file GLOB] [-verbose]"
+            puts "Usage: tests/run_app_tests.tcl [-match PATTERN] [-file GLOB] [-shard K/N] [-verbose]"
             catch { destroy .application }
             catch { destroy . }
             return
@@ -175,6 +177,15 @@ for {set i 0} {$i < [llength $argv]} {incr i} {
 }
 
 set testFiles [lsort [glob -nocomplain -directory $::scidb::test::app::testDir $filePattern]]
+# -shard K/N (1 <= K <= N): every Nth file from the K-th, for parallel CI jobs.
+if {$shard ne ""} {
+    if {![regexp {^([0-9]+)/([0-9]+)$} $shard -> shardK shardN] || $shardK < 1 || $shardK > $shardN} {
+        error "-shard wants K/N with 1 <= K <= N, got \"$shard\""
+    }
+    set picked {}
+    for {set j [expr {$shardK - 1}]} {$j < [llength $testFiles]} {incr j $shardN} { lappend picked [lindex $testFiles $j] }
+    set testFiles $picked
+}
 
 set ::scidb::test::app::reportHandle [open $::scidb::test::app::reportFile w]
 
