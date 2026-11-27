@@ -135,21 +135,26 @@ NamebasePlayer::playerLatestElo() const
 uint16_t
 NamebasePlayer::playerHighestRating(rating::Type type) const
 {
-	if (m_player)
-	{
-		int16_t rating = m_player->highestRating(type);
-
-		if (rating)
-			return mstl::abs(rating);
-	}
+	uint16_t base;
 
 	if (type != rating::Any)
-		return m_rating[type];
+		base = m_rating[type];
+	else if (m_ratingType != rating::Last)
+		base = m_rating[m_ratingType];
+	else
+		base = m_rating[rating::Elo];
 
-	if (m_ratingType != rating::Last)
-		return m_rating[m_ratingType];
+	// The player dictionary can be years older than the games (the shipped
+	// list is from 2013): the highest rating is the higher of the two.
+	if (m_player)
+	{
+		uint16_t rating = mstl::abs(m_player->highestRating(type));
 
-	return m_rating[rating::Elo];
+		if (rating > base)
+			return rating;
+	}
+
+	return base;
 }
 
 
@@ -211,15 +216,17 @@ NamebasePlayer::isPlayerRating(rating::Type type) const
 uint16_t
 NamebasePlayer::playerHighestRating() const
 {
+	uint16_t base = m_ratingType == rating::Last ? 0 : m_rating[m_ratingType];
+
 	if (m_player)
 	{
-		int16_t rating = m_player->highestRating();
+		uint16_t rating = mstl::abs(m_player->highestRating());
 
-		if (rating)
-			return mstl::abs(rating);
+		if (rating > base)
+			return rating;
 	}
 
-	return m_ratingType == rating::Last ? 0 : m_rating[m_ratingType];
+	return base;
 }
 
 
