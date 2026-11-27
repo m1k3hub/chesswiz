@@ -33,6 +33,13 @@ namespace eval ::scidb::test::objects {
         c5.insights {capability insights is absent; no insights backend is shipped}
         c6.add_sequence {requires an end-of-line position; fixture deliberately remains mid-game}
         c9.report.family {requires an HTML report header; the C9 fixture selects the notation pane}
+        c1.find_lesson {searches for a video lesson online; no network in this fixture (row: test_app_feature_access)}
+        c2.novelty {shows an assistant tool's report in the Report pane (row: test_app_feature_access)}
+        c5.player_stats {shows an assistant tool's report in the Report pane (row: test_app_feature_access)}
+        c5.structure_profile {shows an assistant tool's report in the Report pane (row: test_app_feature_access)}
+        c7.transcribe {requires a speech-recognition model; none is installed in this fixture}
+        c10.sort_asc {sorting is checked by test_app_feature_access and test_app_context_sort_labels}
+        c10.sort_desc {sorting is checked by test_app_feature_access and test_app_context_sort_labels}
         c9.report.size {requires an HTML report header; the C9 fixture selects the notation pane}
         c9.report.zoom {requires an HTML report header; the C9 fixture selects the notation pane}
     }

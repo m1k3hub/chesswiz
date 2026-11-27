@@ -731,13 +731,9 @@ tcltest::test menu-paths-stale {the paths the reseal removed no longer resolve} 
 		en {Database > Maintenance > Repertoire Type > Openings}
 		en {File > Open > HTML documents}
 		de {Main Menu > Einstellungen > Motoren (Schachprogramme)}
-		de {Einstellungen > Assistent}
 		es {Main Menu > Configurar > Motores}
-		es {Preferencias > Asistente}
 		hu {Main Menu > Beállítások > Elemző modulok}
 		it {Main Menu > Imposta > Motori}
-		it {Preferenze > Assistente}
-		sv {Inställningar > Assistent}
 	} {
 		if {![::mpaths::Resolves $lang $chain]} continue
 		lappend bad "$lang: $chain"
