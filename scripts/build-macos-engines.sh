@@ -54,7 +54,10 @@ lipo -info "$OUT/sjeng-chesswiz"
 # otherwise the slices cross-built on Linux by build-macos-reckless.sh
 # (copied into OUT_DIR as reckless-x86_64 / reckless-arm64) are combined.
 RK_SLICES=()
-if command -v cargo >/dev/null; then
+if [ ! -f "$ROOT/engines/reckless/Cargo.toml" ]; then
+    # engines/ is gitignored and Reckless is not committed (CI checkouts lack it).
+    echo "build-macos-engines: Reckless source not present; skipping it" >&2
+elif command -v cargo >/dev/null; then
     RK="$ROOT/build/reckless-macos"
     mkdir -p "$RK"
     rsync -a --delete --exclude target --exclude reckless-chesswiz --exclude reckless-scidb \
