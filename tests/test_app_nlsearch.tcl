@@ -205,7 +205,7 @@ tcltest::test nls-checkargs {search_games takes a pattern alone, refuses an unkn
 	list [::application::assistant::CheckArgs search_games {pattern en_passant}] \
 		[catch {::application::assistant::CheckArgs search_games {pattern windmill}} e] \
 		[string match "pattern must be one of: checkmate, *" $e]
-} -result {{criteria {player {} color any result {} opponent {} eco {} from {} to {} event {} min_elo {} both_min_elo {} pattern en_passant}} 1 1}
+} -result {{criteria {player {} color any result {} opponent {} eco {} from {} to {} event {} site {} min_elo {} both_min_elo {} pattern en_passant}} 1 1}
 
 tcltest::test nls-query {the template is the last term of the AND} -body {
 	set f $::scidb::test::nls::Fixture

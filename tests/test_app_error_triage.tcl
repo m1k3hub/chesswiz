@@ -174,6 +174,9 @@ tcltest::test triage-assistant-tools {triage, issue list and a confirmed handoff
 	::scidb::test::triage::setup
 	set ::scidb::test::triage::Asked {}
 	set savedConfirm $::application::assistant::Priv(confirm)
+	# triage, issue list and handoff are debug-only tools
+	set savedDebug $::application::assistant::Priv(debug)
+	set ::application::assistant::Priv(debug) 1
 	proc ::scidb::test::triage::deny {what} { lappend ::scidb::test::triage::Asked $what; return 0 }
 	set ::application::assistant::Priv(confirm) ::scidb::test::triage::deny
 } -body {
@@ -202,6 +205,7 @@ tcltest::test triage-assistant-tools {triage, issue list and a confirmed handoff
 		$bad [::application::assistant::runTool triage_errors {}]
 } -cleanup {
 	set ::application::assistant::Priv(confirm) $savedConfirm
+	set ::application::assistant::Priv(debug) $savedDebug
 	::scidb::test::triage::cleanup
 } -result [list 1 1 1 1 {{hand issue ID to the coding agent}} {error: no issue 00000000} {no new errors to triage}]
 

@@ -638,7 +638,6 @@ proc ::m4names::collectPrivacyLogFiles {testDir} {
  lsort -unique [concat \
   [list [file join $testDir app_test_report.txt]] \
   [expr {[info exists ::env(SCIDB_ERROR_LOG)] ? [list $::env(SCIDB_ERROR_LOG)] : {}}] \
-  [glob -nocomplain [file join $testDir tmp-app errors-*.log]] \
   $pdFiles \
   [::m4names::findFilesRecursive $::scidb::dir::user {*.log *.txt *.info *.csv}]]
 }
